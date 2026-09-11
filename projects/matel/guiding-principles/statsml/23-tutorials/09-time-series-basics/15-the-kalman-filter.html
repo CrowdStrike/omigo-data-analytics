@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Kalman Filter</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The Kalman Filter</h1>
+<p class="subtitle">When your prediction is noisy and your measurement is noisy, blend them — weighted by how much you trust each — and the blend beats both</p>
+
+<div class="card-section">
+    <h2>A Jumpy GPS on a Steady Van</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">noisy sensor</span><span class="tag green">prediction + measurement</span></div>
+                <ul>
+                    <li><b>The van</b> — a delivery van drives a straight road at a steady 10 m/s, so it gains 10 m each second</li>
+                    <li><b>The GPS</b> — each fix jumps 4–7 m off the true spot: at second 2 the van is at 20 m, GPS says 26</li>
+                    <li><b>The prediction</b> — "last estimate + 10 m" is a free second opinion that the van's physics gives us</li>
+                    <li><b>The blend</b> — each second the filter nudges its own prediction partway toward the new GPS fix</li>
+                    <li><b>The payoff</b> — raw GPS is off by 5.8 m on average; the blended track is off by about 1.2 m</li>
+                </ul>
+                <p class="example">At second 4 the filter predicts 39.7 m, GPS shouts 47 m, and the filter settles on 41.7 m — closer to the truth (40 m) than either one.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> This loop — predict from a model, measure with a sensor, blend the two by trust — is the Kalman filter. The definition is just the recipe the van already used.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Second of Blending, by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">kalman gain</span></div>
+                <ul>
+                    <li><b>Two guesses</b> — at second 4 the model predicts 39.7 m (±4.8 m) and the GPS reads 47.0 m (±8.0 m)</li>
+                    <li><b>Trust ratio</b> — the gain K = 23 / (23 + 64) ≈ 0.27, from the two variances 4.8² ≈ 23 and 8.0² = 64</li>
+                    <li><b>The nudge</b> — estimate = 39.7 + 0.27 × (47.0 − 39.7) = 39.7 + 2.0 = 41.7 m</li>
+                    <li><b>Sharper than both</b> — the blended spread shrinks to ±4.1 m, tighter than either input alone</li>
+                    <li><b>Noisier sensor, smaller K</b> — a worse GPS lowers K, so the filter leans more on its prediction</li>
+                </ul>
+                <p class="example">The true position was 40.0 m — the GPS was 7.0 m off, the blend only 1.7 m off, and you can redo every step above with a pocket calculator.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The gain K = (prediction variance) / (prediction variance + measurement variance) is the whole trick: it says what fraction of the disagreement to concede to the sensor.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Gain Is a Trust Dial That Settles</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">rule of thumb</span><span class="tag blue">where it's used</span></div>
+                <ul>
+                    <li><b>Start humble</b> — at second 0 the filter has no history, so it swallows the first GPS fix whole (K = 1.00)</li>
+                    <li><b>Gains fall</b> — K runs 1.00, 0.52, 0.37, 0.30, 0.27, then eases down and settles near 0.22</li>
+                    <li><b>Steady state</b> — once history has built up, each new GPS fix moves the estimate only about 22%</li>
+                    <li><b>Self-tuning</b> — nobody picked 0.22; it falls out of the model noise and sensor noise levels</li>
+                    <li><b>Everywhere</b> — GPS navigation, rocket guidance, robot vacuums, and asset trackers run this loop</li>
+                </ul>
+                <p class="example">Apollo-era engineers used exactly this recipe to steer to the Moon with sensors far noisier than a phone's GPS.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The Kalman gain is recomputed every step from the running uncertainties — that adaptive weighting, not any magic constant, is what makes the filter optimal for linear models with Gaussian noise.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Model Can Lie: When the Van Parks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">model mismatch</span></div>
+                <ul>
+                    <li><b>The park</b> — at second 5 the van stops at 50 m, but the filter's model still adds 10 m every second</li>
+                    <li><b>The overshoot</b> — estimates sail past: 58.9, 63.2, 68.6, 71.6 m while the van sits parked at 50 m</li>
+                    <li><b>Why it drifts</b> — with K ≈ 0.22, each GPS fix cancels only a fifth of the model's phantom +10 m</li>
+                    <li><b>Smooth ≠ true</b> — the filtered line stays clean and confident even while it is 21.6 m wrong</li>
+                    <li><b>The fix</b> — real filters estimate velocity as part of the state, or raise K when GPS keeps disagreeing</li>
+                </ul>
+                <p class="example">For four straight seconds the GPS hovers near 50 m, yet the filter splits the difference with its stale model and drifts 21.6 m past the parked van.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading the smooth Kalman line as ground truth. The filter is only as good as its motion model — feed it "always +10 m/s" and it produces confidently wrong estimates the moment the van behaves differently.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: truth, GPS fixes, and Kalman estimate over ten seconds
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var truePos = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
+    var gps = [4, 6, 26, 24, 47, 44, 66, 63, 86, 84];        // GPS noise hardcoded, illustrative
+    var kalman = [4.0, 9.9, 22.1, 29.7, 41.7, 49.8, 61.3, 69.4, 80.9, 89.4];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Van, Three Tracks: Truth, GPS, Kalman (illustrative)', w / 2, 24);
+
+    var x0 = 60, plotW = 600, baseY = 245, chH = 190, top = baseY - chH;
+    var yMax = 95;
+    function xOf(t) { return x0 + t / 9 * plotW; }
+    function yOf(v) { return baseY - v / yMax * chH; }
+
+    // grid + y ticks
+    var yTicks = [0, 25, 50, 75];
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(x0 + plotW, ty); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), x0 - 8, ty + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 9; t++) ctx.fillText(String(t), xOf(t), baseY + 16);
+    ctx.fillText('seconds', x0 + plotW / 2, baseY + 32);
+
+    // true line: dashed mute
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i), y = yOf(truePos[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('true position', xOf(9) - 8, yOf(90) + 16);
+
+    // GPS fixes: orange dots
+    ctx.fillStyle = P.orange;
+    for (var i = 0; i < 10; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(gps[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('raw GPS', xOf(2) + 9, yOf(26) - 6);
+
+    // Kalman line with dots
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i), y = yOf(kalman[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < 10; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(kalman[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Kalman estimate', xOf(9) - 8, yOf(89.4) - 10);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('GPS off 5.8 m avg → filter off 1.2 m avg', x0 + 14, top + 18);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('van moves +10 m/s; GPS noise hardcoded, illustrative', x0 + plotW, h - 8);
+});
+
+// c2: three bell curves — prediction, GPS measurement, fused estimate
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Second 4: Blending Two Uncertain Guesses', w / 2, 24);
+
+    var x0 = 60, x1 = 680, baseY = 250;
+    var mMin = 22, mMax = 70;
+    function xOf(m) { return x0 + (m - mMin) / (mMax - mMin) * (x1 - x0); }
+
+    // curves: fused peak tops at y=70 (i.e. height baseY-70 = 180); others scale by 4.1/sigma
+    var fusedPeakH = baseY - 70; // 180
+    var curves = [
+        { mean: 39.7, sigma: 4.8, peakH: fusedPeakH * (4.1 / 4.8), stroke: P.blue, fill: 'rgba(42,120,214,0.12)', lw: 2.5 },
+        { mean: 47.0, sigma: 8.0, peakH: fusedPeakH * (4.1 / 8.0), stroke: P.orange, fill: 'rgba(217,89,38,0.10)', lw: 2.5 },
+        { mean: 41.7, sigma: 4.1, peakH: fusedPeakH, stroke: P.green, fill: 'rgba(0,131,0,0.12)', lw: 3 }
+    ];
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+    var ticks = [25, 30, 35, 40, 45, 50, 55, 60];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = xOf(ticks[i]);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillText(String(ticks[i]), tx, baseY + 20);
+    }
+
+    // draw curves: y = peak × exp(−((x−mean)²)/(2σ²)) sampled at 1 px steps
+    for (var c = 0; c < curves.length; c++) {
+        var cv = curves[c];
+        ctx.beginPath();
+        ctx.moveTo(x0, baseY);
+        for (var px = x0; px <= x1; px++) {
+            var m = mMin + (px - x0) / (x1 - x0) * (mMax - mMin);
+            var yv = cv.peakH * Math.exp(-((m - cv.mean) * (m - cv.mean)) / (2 * cv.sigma * cv.sigma));
+            ctx.lineTo(px, baseY - yv);
+        }
+        ctx.lineTo(x1, baseY);
+        ctx.closePath();
+        ctx.fillStyle = cv.fill; ctx.fill();
+        ctx.strokeStyle = cv.stroke; ctx.lineWidth = cv.lw;
+        ctx.beginPath();
+        for (var px = x0; px <= x1; px++) {
+            var m = mMin + (px - x0) / (x1 - x0) * (mMax - mMin);
+            var yv = cv.peakH * Math.exp(-((m - cv.mean) * (m - cv.mean)) / (2 * cv.sigma * cv.sigma));
+            px === x0 ? ctx.moveTo(px, baseY - yv) : ctx.lineTo(px, baseY - yv);
+        }
+        ctx.stroke();
+    }
+
+    // labels above peaks
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('prediction 39.7 ±4.8', xOf(39.7) - 60, baseY - curves[0].peakH - 12);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('GPS 47.0 ±8.0', xOf(47.0) + 60, baseY - curves[1].peakH - 12);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('blend 41.7 ±4.1', xOf(41.7), baseY - curves[2].peakH - 10);
+
+    // gain arrow along y=95 from x(39.7) to x(41.7)
+    var ax = xOf(39.7), bx = xOf(41.7), ay = 95;
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx - 6, ay); ctx.stroke();
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath(); ctx.moveTo(bx, ay); ctx.lineTo(bx - 8, ay - 4); ctx.lineTo(bx - 8, ay + 4); ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('K = 0.27 of the gap', (ax + bx) / 2, ay - 8);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the blend is tighter than either input', x1, h - 8);
+});
+
+// c3: Kalman gain per second, decaying to a steady-state floor
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var gains = [1.00, 0.52, 0.37, 0.30, 0.27, 0.25, 0.24, 0.23, 0.23, 0.22];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Kalman Gain per Second: From 'Trust the Sensor' to 'Mostly Trust Myself'", w / 2, 24);
+
+    var x0 = 60, plotW = 600, baseY = 245, chH = 185, top = baseY - chH;
+    var yMax = 1.05;
+    function yOf(v) { return baseY - v / yMax * chH; }
+
+    // grid + y ticks
+    var yTicks = [0, 0.25, 0.5, 0.75, 1.0];
+    var yTickLabs = ['0', '0.25', '0.5', '0.75', '1.0'];
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(x0 + plotW, ty); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yTickLabs[i], x0 - 8, ty + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+
+    // bars
+    var slotW = plotW / 10, barW = 44;
+    for (var i = 0; i < 10; i++) {
+        var bx = x0 + i * slotW + (slotW - barW) / 2;
+        var by = yOf(gains[i]);
+        ctx.fillStyle = 'rgba(42,120,214,0.45)';
+        ctx.fillRect(bx, by, barW, baseY - by);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, barW, baseY - by);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gains[i].toFixed(2), bx + barW / 2, by - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(String(i), bx + barW / 2, baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('seconds', x0 + plotW / 2, baseY + 32);
+
+    // steady-state line at K = 0.22
+    var sy = yOf(0.22);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, sy); ctx.lineTo(x0 + plotW, sy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('steady state K ≈ 0.22', x0 + plotW - 6, sy - 8);
+
+    // annotation with arrow to first bar
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('second 0: no history, take the GPS whole', x0 + 78, top + 24);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0 + 74, top + 20); ctx.lineTo(x0 + slotW / 2 + 12, yOf(1.0) - 14); ctx.stroke();
+    ctx.fillStyle = P.orange;
+    var axx = x0 + slotW / 2 + 12, axy = yOf(1.0) - 14;
+    ctx.beginPath(); ctx.moveTo(axx - 4, axy - 8); ctx.lineTo(axx, axy); ctx.lineTo(axx + 4, axy - 9); ctx.closePath(); ctx.fill();
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('gain recomputed each step from the uncertainties', x0 + plotW, h - 8);
+});
+
+// c4: the van parks at second 5 — fixed motion model overshoots
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var truePos = [0, 10, 20, 30, 40, 50, 50, 50, 50, 50];
+    var gps = [4, 6, 26, 24, 47, 44, 56, 44, 53, 47];
+    var kalman = [4.0, 9.9, 22.1, 29.7, 41.7, 49.8, 58.9, 63.2, 68.6, 71.6];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Van Parks at 50 m — the Fixed Motion Model Sails Past', w / 2, 24);
+
+    var x0 = 60, plotW = 600, baseY = 245, chH = 190, top = baseY - chH;
+    var yMax = 80;
+    function xOf(t) { return x0 + t / 9 * plotW; }
+    function yOf(v) { return baseY - v / yMax * chH; }
+
+    // parked region shading, seconds 5-9
+    ctx.fillStyle = 'rgba(217,89,38,0.08)';
+    ctx.fillRect(xOf(5), top, xOf(9) - xOf(5), baseY - top);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('van parked', (xOf(5) + xOf(9)) / 2, top + 14);
+
+    // grid + y ticks
+    var yTicks = [0, 20, 40, 60, 80];
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(x0 + plotW, ty); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), x0 - 8, ty + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 9; t++) ctx.fillText(String(t), xOf(t), baseY + 16);
+    ctx.fillText('seconds', x0 + plotW / 2, baseY + 32);
+
+    // true line
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i), y = yOf(truePos[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('true position', xOf(8.7), yOf(50) + 16);
+
+    // GPS dots
+    ctx.fillStyle = P.orange;
+    for (var i = 0; i < 10; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(gps[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('raw GPS', xOf(2) + 9, yOf(26) - 6);
+
+    // Kalman line: magenta
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i), y = yOf(kalman[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.magenta;
+    for (var i = 0; i < 10; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(kalman[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('filter (model: always +10 m/s)', xOf(9) - 10, yOf(71.6) - 10);
+
+    // gap bracket at second 9
+    var gx = xOf(9), gy1 = yOf(50), gy2 = yOf(71.6);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gx + 8, gy1); ctx.lineTo(gx + 14, gy1); ctx.lineTo(gx + 14, gy2); ctx.lineTo(gx + 8, gy2);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('21.6 m wrong, still smooth', gx - 4, (gy1 + gy2) / 2 + 28);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same gain schedule as above; only the van changed', x0 + plotW, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

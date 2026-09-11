@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bayesian Optimization</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Bayesian Optimization</h1>
+<p class="subtitle">When every trial is slow and expensive, fit a cheap belief model to the results so far and let its uncertainty choose the next experiment — few trials, smart guesses</p>
+
+<div class="card-section">
+    <h2>Twelve Batches of Cookies, One Oven Dial</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">surrogate model</span><span class="tag orange">expensive trials</span></div>
+                <ul>
+                    <li><b>The bakery</b> — a baker tunes oven temperature (150&ndash;210&deg;C) for taste score 0&ndash;10; each batch takes an hour</li>
+                    <li><b>Three tries so far</b> — 155&deg;C scored 4.6, 175&deg;C scored 7.8, 200&deg;C scored 6.8</li>
+                    <li><b>The belief curve</b> — a smooth guess (the surrogate) threads the three scores it has actually seen</li>
+                    <li><b>The uncertainty band</b> — the band is zero at tried temperatures and widens between them</li>
+                    <li><b>The definition</b> — Bayesian optimization: model results so far, then test where the model looks best</li>
+                    <li><b>The prize</b> — the hidden true curve peaks at 185&deg;C with score 9.0 — untried and inside a wide band</li>
+                </ul>
+                <p class="example">At 175&deg;C the band is zero (we baked there, it was 7.8); at 185&deg;C the belief says ~7.6 give or take 1.1 — maybe great, maybe not.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> After three batches the baker does not know the taste curve — but the surrogate says where it is known, where it is guessed, and how unsure each guess is.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Picking the Fourth Batch</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">acquisition function</span></div>
+                <ul>
+                    <li><b>The question</b> — with one hour to spend, which temperature should batch 4 use?</li>
+                    <li><b>The score</b> — an acquisition score rates each temperature: high mean AND high uncertainty both help</li>
+                    <li><b>Read it off</b> — the score peaks at 0.62 at 185&deg;C (illustrative units); the tried temps score near 0</li>
+                    <li><b>Why 185</b> — its mean 7.6 is close to the best seen (7.8) and its band &plusmn;1.1 leaves room above it</li>
+                    <li><b>The payoff</b> — batch 4 at 185&deg;C bakes a 9.0 — a new best found on the fourth try</li>
+                    <li><b>The loop</b> — refit the surrogate with the new point, rescore, pick again; that is the whole algorithm</li>
+                </ul>
+                <p class="example">165&deg;C has a wider band (&plusmn;1.2) but a lower mean (6.4), so it scores 0.35 — promising, yet 185&deg;C's 0.62 wins the hour.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The acquisition function turns "where should I experiment next?" into arithmetic: it trades off the surrogate's mean (exploit) against its band (explore) at every candidate.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Tuning a Model Feels Like Baking</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">hyperparameter tuning</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>Same shape</b> — swap oven &deg;C for learning rate and taste for validation accuracy: same problem</li>
+                    <li><b>Expensive black box</b> — one training run can cost hours of GPU time; you cannot try everything</li>
+                    <li><b>Grid search</b> — marches 150, 155, 160... blindly; it reached the 9.0 recipe on batch 8</li>
+                    <li><b>Random search</b> — lucky early (6.8 first try) but wandered; it hit 9.0 on batch 11</li>
+                    <li><b>Bayesian optimization</b> — used every result to aim the next trial; it hit 9.0 on batch 4</li>
+                    <li><b>Rule of thumb</b> — the slower one trial is, the more it pays to think between trials</li>
+                </ul>
+                <p class="example">A tuning job at one training run per hour: BO finished by lunch (4 runs); grid search needed a full working day (8 runs).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Grid and random search never look at their own results; Bayesian optimization spends a little math between trials to save a lot of expensive trials.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Greedy Baker's Trap</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">explore vs exploit</span></div>
+                <ul>
+                    <li><b>The trap</b> — always baking right next to the current best is exploitation only, not Bayesian optimization</li>
+                    <li><b>Two-peak curve</b> — this dough has a chewy peak, 7.2 at 165&deg;C, and a taller crispy peak, 9.0 at 200&deg;C</li>
+                    <li><b>Greedy run</b> — batches at 160, 165, 170, 175 score 6.4, 7.2, 6.6, 5.6 — stuck circling 7.2 forever</li>
+                    <li><b>Balanced run</b> — batches at 155, 170, 185, 200 score 5.2, 6.6, 5.4, 9.0 — the wide band pulled it right</li>
+                    <li><b>Why it works</b> — untried regions keep wide bands, so their acquisition scores stay competitive</li>
+                </ul>
+                <p class="example">The greedy baker never bakes above 175&deg;C because nearby scores look best — and never learns the 9.0 recipe exists at 200&deg;C.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating "sample near the best point so far" as Bayesian optimization. Without the uncertainty band pushing exploration, you converge fast — to the wrong peak.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+var TEMPS = [150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210];
+var TRUE1 = [4.0, 4.6, 5.3, 6.1, 6.9, 7.8, 8.6, 9.0, 8.7, 7.9, 6.8, 5.5, 4.2];
+var MEAN = [4.2, 4.6, 5.4, 6.4, 7.3, 7.8, 7.8, 7.6, 7.3, 7.0, 6.8, 6.4, 5.9];
+var BAND = [0.9, 0.0, 0.8, 1.2, 0.9, 0.0, 0.7, 1.1, 1.2, 0.9, 0.0, 0.9, 1.4];
+var OBS = [[155, 4.6], [175, 7.8], [200, 6.8]];
+
+// c1: surrogate mean + band + hidden true curve after 3 batches
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What the Baker Believes After 3 Batches (illustrative)', w / 2, 24);
+
+    var ox = 60, pw = 620, baseY = 250, chH = 190;
+    function xOf(t) { return ox + (t - 150) / 60 * pw; }
+    function yOf(v) { return baseY - v / 10 * chH; }
+
+    // band polygon: mean + hw forward, mean - hw backward
+    ctx.beginPath();
+    for (var i = 0; i < 13; i++) {
+        var x = xOf(TEMPS[i]), y = yOf(MEAN[i] + BAND[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    for (var i = 12; i >= 0; i--) {
+        ctx.lineTo(xOf(TEMPS[i]), yOf(MEAN[i] - BAND[i]));
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(42,120,214,0.18)'; ctx.fill();
+
+    // surrogate mean
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 13; i++) {
+        var x = xOf(TEMPS[i]), y = yOf(MEAN[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // true curve (dashed mute)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath();
+    for (var i = 0; i < 13; i++) {
+        var x = xOf(TEMPS[i]), y = yOf(TRUE1[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('true taste curve (hidden)', xOf(185), yOf(9.0) - 10);
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 150; t <= 210; t += 10) ctx.fillText(String(t), xOf(t), baseY + 16);
+    ctx.fillText('oven °C', ox + pw / 2, baseY + 32);
+    ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, yOf(0) + 4);
+    ctx.fillText('5', ox - 8, yOf(5) + 4);
+    ctx.fillText('10', ox - 8, yOf(10) + 4);
+
+    // observed dots
+    var obsLabs = ['4.6', '7.8', '6.8'];
+    for (var i = 0; i < 3; i++) {
+        var x = xOf(OBS[i][0]), y = yOf(OBS[i][1]);
+        ctx.fillStyle = P.ink;
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(obsLabs[i], x, y - 12);
+    }
+
+    // annotation near 185
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('band still wide here —', xOf(185) + 12, yOf(7.6) + 26);
+    ctx.fillText('the 9.0 peak could be hiding', xOf(185) + 12, yOf(7.6) + 42);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('band = surrogate uncertainty; zero at tried temperatures', ox + pw, h - 4);
+});
+
+// c2: stacked panels — surrogate on top, acquisition score below
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Acquisition Score Picks Batch 4: 185°C (illustrative)', w / 2, 24);
+
+    var ox = 60, pw = 620;
+    function xOf(t) { return ox + (t - 150) / 60 * pw; }
+
+    // top panel: taste 3-10 mapped to y 160 (=3) .. 40 (=10)
+    var tTop = 40, tBot = 160;
+    function yT(v) { return tBot - (v - 3) / 7 * (tBot - tTop); }
+
+    // band
+    ctx.beginPath();
+    for (var i = 0; i < 13; i++) {
+        var x = xOf(TEMPS[i]), y = yT(MEAN[i] + BAND[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    for (var i = 12; i >= 0; i--) {
+        ctx.lineTo(xOf(TEMPS[i]), yT(MEAN[i] - BAND[i]));
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(42,120,214,0.18)'; ctx.fill();
+
+    // best-so-far dashed line at 7.8
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yT(7.8)); ctx.lineTo(ox + pw, yT(7.8)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('best so far 7.8', ox + pw, yT(7.8) - 4);
+
+    // mean line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (var i = 0; i < 13; i++) {
+        var x = xOf(TEMPS[i]), y = yT(MEAN[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // observed dots
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = P.ink;
+        ctx.beginPath(); ctx.arc(xOf(OBS[i][0]), yT(OBS[i][1]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // top panel label
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('belief (mean ± band)', ox + 6, tTop + 12);
+
+    // bottom panel: acquisition, score 0-0.7 mapped to y 275 (=0) .. 195 (=0.7)
+    var aTop = 195, aBot = 275;
+    function yA(v) { return aBot - v / 0.7 * (aBot - aTop); }
+    var ACQ = [0.10, 0.00, 0.12, 0.35, 0.28, 0.02, 0.30, 0.62, 0.55, 0.25, 0.01, 0.18, 0.30];
+
+    // filled area
+    ctx.beginPath();
+    ctx.moveTo(xOf(TEMPS[0]), yA(0));
+    for (var i = 0; i < 13; i++) ctx.lineTo(xOf(TEMPS[i]), yA(ACQ[i]));
+    ctx.lineTo(xOf(TEMPS[12]), yA(0));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,131,0,0.25)'; ctx.fill();
+
+    // acquisition line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (var i = 0; i < 13; i++) {
+        var x = xOf(TEMPS[i]), y = yA(ACQ[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // bottom baseline + shared x ticks
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox, aBot); ctx.lineTo(ox + pw, aBot); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 150; t <= 210; t += 10) ctx.fillText(String(t), xOf(t), aBot + 16);
+
+    // bottom panel label
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('acquisition score', ox + 6, aTop + 4);
+
+    // acquisition peak dot
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(185), yA(0.62), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0.62', xOf(185) + 10, yA(0.62) + 4);
+
+    // vertical arrow from acquisition peak up into the top panel
+    var ax = xOf(185);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, yA(0.62) - 8); ctx.lineTo(ax, tBot + 8); ctx.stroke();
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(ax, tBot);
+    ctx.lineTo(ax - 5, tBot + 10);
+    ctx.lineTo(ax + 5, tBot + 10);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('bake batch 4 at 185°C', ax + 12, tBot + 24);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('score is near 0 where we already baked — nothing left to learn there', ox + pw, h - 4);
+});
+
+// c3: best-so-far comparison — BO vs grid vs random
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Best Score Found vs Batches Used (illustrative)', w / 2, 24);
+
+    var ox = 60, pw = 590, baseY = 245, chH = 180;
+    function xOf(b) { return ox + (b - 1) / 11 * pw; }
+    function yOf(v) { return baseY - (v - 3) / 7 * chH; }
+
+    var bo = [4.6, 7.8, 7.8, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0];
+    var grid = [4.0, 4.6, 5.3, 6.1, 6.9, 7.8, 8.6, 9.0, 9.0, 9.0, 9.0, 9.0];
+    var rnd = [6.8, 6.8, 7.9, 7.9, 7.9, 8.6, 8.6, 8.6, 8.7, 8.7, 9.0, 9.0];
+
+    // reference line at 9.0
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(9.0)); ctx.lineTo(ox + pw, yOf(9.0)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('best possible 9.0', ox + pw, yOf(9.0) - 5);
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var b = 1; b <= 12; b++) ctx.fillText(String(b), xOf(b), baseY + 16);
+    ctx.fillText('batches baked', ox + pw / 2, baseY + 32);
+    ctx.textAlign = 'right';
+    var yTicks = [4, 6, 8, 10];
+    for (var i = 0; i < yTicks.length; i++) ctx.fillText(String(yTicks[i]), ox - 8, yOf(yTicks[i]) + 4);
+
+    function drawStep(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        ctx.moveTo(xOf(1), yOf(vals[0]));
+        for (var i = 1; i < 12; i++) {
+            ctx.lineTo(xOf(i + 1), yOf(vals[i - 1]));
+            ctx.lineTo(xOf(i + 1), yOf(vals[i]));
+        }
+        ctx.stroke();
+        ctx.fillStyle = color;
+        for (var i = 0; i < 12; i++) {
+            ctx.beginPath(); ctx.arc(xOf(i + 1), yOf(vals[i]), 4, 0, 2 * Math.PI); ctx.fill();
+        }
+    }
+    drawStep(grid, P.orange);
+    drawStep(rnd, P.violet);
+    drawStep(bo, P.blue);
+
+    // legend top-left inside plot
+    var lx = ox + 14, ly = baseY - chH + 14;
+    var legend = [['Bayesian opt', P.blue], ['grid search', P.orange], ['random search', P.violet]];
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = legend[i][1];
+        ctx.fillRect(lx, ly + i * 18 - 8, 14, 10);
+        ctx.fillText(legend[i][0], lx + 20, ly + i * 18);
+    }
+
+    // annotations
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('BO: 9.0 in 4 batches', xOf(4) + 8, yOf(9.0) - 12);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('grid: batch 8', xOf(8), yOf(9.0) + 24);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('random: batch 11', xOf(11), yOf(9.0) + 42);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same oven, same hidden curve, same budget — only the strategy differs', ox + pw, h - 4);
+});
+
+// c4: exploit-only vs explore+exploit on a two-peak curve
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Bakers, Same Two-Peak Dough (illustrative)', w / 2, 24);
+
+    var TRUE2 = [4.0, 5.2, 6.4, 7.2, 6.6, 5.6, 5.0, 5.4, 6.5, 8.0, 9.0, 8.2, 6.5];
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function drawPanel(px, heading, headColor, dots, dotColor) {
+        var pw2 = 280, baseY = 245, chH = 175;
+        function xOf(t) { return px + (t - 150) / 60 * pw2; }
+        function yOf(v) { return baseY - (v - 3) / 7 * chH; }
+
+        // axes
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw2, baseY); ctx.stroke();
+
+        // true curve dashed
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath();
+        for (var i = 0; i < 13; i++) {
+            var x = xOf(TEMPS[i]), y = yOf(TRUE2[i]);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // dots
+        ctx.fillStyle = dotColor;
+        for (var i = 0; i < dots.length; i++) {
+            ctx.beginPath(); ctx.arc(xOf(dots[i][0]), yOf(dots[i][1]), 6, 0, 2 * Math.PI); ctx.fill();
+        }
+
+        // heading
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(heading, px + pw2 / 2, 48);
+
+        return { xOf: xOf, yOf: yOf, baseY: baseY, pw2: pw2 };
+    }
+
+    // left panel: exploit only
+    var lp = drawPanel(55, 'exploit only: bake near the best', '#444',
+        [[160, 6.4], [165, 7.2], [170, 6.6], [175, 5.6]], P.orange);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stuck at 7.2 —', lp.xOf(178), lp.yOf(7.6));
+    ctx.fillText('never tries 200°C', lp.xOf(178), lp.yOf(7.6) + 16);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all 4 batches crowd one peak', 55 + lp.pw2 / 2, h - 8);
+
+    // right panel: explore + exploit
+    var rp = drawPanel(400, 'explore + exploit: band pulls outward', '#444',
+        [[155, 5.2], [170, 6.6], [185, 5.4], [200, 9.0]], P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('wide band at 200°C → tried it → 9.0', rp.xOf(207), rp.yOf(9.0) - 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 batches spread, tall peak found', 400 + rp.pw2 / 2, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

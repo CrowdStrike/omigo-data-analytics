@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>State-Space Models</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>State-Space Models</h1>
+<p class="subtitle">Every series is two things at once — a hidden state that evolves smoothly and the noisy readings you actually see; a state-space model recovers the line from the dots</p>
+
+<div class="card-section">
+    <h2>The Bathroom Scale You Can't Quite Trust</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">hidden state</span><span class="tag orange">observed noise</span></div>
+                <ul>
+                    <li><b>The ritual</b> — you weigh in every morning for 14 days; the scale says 183.0, 180.3, 181.8, ...</li>
+                    <li><b>Hidden state</b> — your true weight is real but never seen; it drifts 181.6 → 179.0 lb (−0.2/day)</li>
+                    <li><b>Observed noise</b> — each reading = true weight + scale error, bouncing as much as ±1.8 lb a day</li>
+                    <li><b>Two rules</b> — a state rule (weight drifts slowly) and an observation rule (the scale adds error)</li>
+                    <li><b>The job</b> — recover the hidden line from the noisy dots; that pair of rules is a state-space model</li>
+                </ul>
+                <p class="example">Day 7 reads 182.2 and day 8 reads 178.9 — you did not lose 3.3 lb overnight; the hidden weight moved only 0.2.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A state-space model splits a time series into a hidden state that evolves by a simple rule and noisy observations of it. You see the dots; you want the line.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Predict, Peek, Nudge — One Update by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">predict &amp; correct</span></div>
+                <ul>
+                    <li><b>Start</b> — yesterday's best estimate of your true weight is 180.0 lb (numbers rounded for hand math)</li>
+                    <li><b>Predict</b> — the state rule says weight drifts −0.2 lb/day, so today's prediction is 179.8</li>
+                    <li><b>Peek</b> — the scale reads 181.0; the gap between reading and prediction is +1.2 lb</li>
+                    <li><b>Nudge</b> — trust the scale 25%: move a quarter of the gap, +0.3, giving today's estimate 180.1</li>
+                    <li><b>Repeat</b> — next day: predict 179.9, read 178.7, gap −1.2, nudge −0.3, estimate 179.6</li>
+                    <li><b>The gain</b> — the 25% trust knob is the gain: a noisier scale earns a smaller gain and smaller nudges</li>
+                </ul>
+                <p class="example">Day three is the same arithmetic: predict 179.4, read 180.2, gap +0.8, nudge +0.2, estimate 179.6.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Filtering is predict-then-correct: run the state rule forward, then move a fixed fraction of the way toward the new reading. This recipe is a Kalman filter with a fixed gain.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Diagram, Many Famous Names</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">unifying framework</span><span class="tag orange">kalman &amp; HMM</span></div>
+                <ul>
+                    <li><b>The pattern</b> — hidden states x1 → x2 → x3 → x4 evolve by a rule; each xt emits one noisy reading yt</li>
+                    <li><b>Kalman filter</b> — continuous state like the weight example; runs GPS, rockets, and sensor fusion</li>
+                    <li><b>HMM</b> — hidden Markov model: the same picture with a categorical state, e.g. asleep vs awake</li>
+                    <li><b>Exponential smoothing</b> — the classic forecaster is a state-space model whose one state is the level</li>
+                    <li><b>Filtering vs smoothing</b> — filtering estimates today from the past; smoothing revisits day 5 with hindsight</li>
+                    <li><b>Forecasting</b> — run the state rule forward with no new readings left to nudge you</li>
+                </ul>
+                <p class="example">A GPS chip, a speech recognizer, and a demand forecaster all draw this exact two-row diagram — only the meaning of x changes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Kalman filters, HMMs, exponential smoothing, and structural time-series models are one framework: pick what the hidden state is, how it moves, and how noisily you observe it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It's Not Just a Fancy Moving Average</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">moving average</span></div>
+                <ul>
+                    <li><b>The shortcut</b> — a 5-day moving average also smooths the dots, so why bother with a model?</li>
+                    <li><b>It lags</b> — the average of days 1–5 describes day 3; every MA point trails the drifting truth</li>
+                    <li><b>It can't start</b> — no MA exists until day 5; the filter produces an estimate from day 1</li>
+                    <li><b>It can't forecast</b> — an MA has no state rule; the filter predicts tomorrow: 178.75 − 0.2 ≈ 178.6</li>
+                    <li><b>No uncertainty</b> — a full state-space model also tracks how sure it is; an average cannot</li>
+                    <li><b>Similar lines</b> — the two curves can look alike, but only one explains the data and extends it</li>
+                </ul>
+                <p class="example">On day 14 the MA still reads 179.24 — roughly where the true weight was two days earlier — while the filter sits at 178.75 and already has tomorrow's forecast.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating any smooth line through noisy data as the same thing. A moving average describes the past; a state-space model explains the series and can predict beyond it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// true weight and readings (readings = true weight + fixed noise offsets)
+var trueW = [181.6, 181.4, 181.2, 181.0, 180.8, 180.6, 180.4, 180.2, 180.0, 179.8, 179.6, 179.4, 179.2, 179.0];
+var readings = [183.0, 180.3, 181.8, 179.4, 182.0, 180.2, 182.2, 178.9, 180.2, 178.9, 181.1, 178.8, 180.1, 177.3];
+
+// c1: 14 noisy scale readings as dots over the smooth hidden true-weight line
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('14 Mornings on the Scale: Noisy Readings vs Hidden True Weight (illustrative)', w / 2, 24);
+
+    var x0 = 60, plotW = 620, baseY = 250, chH = 195, top = baseY - chH;
+    var yMin = 176.5, yMax = 183.5;
+    function xOf(day) { return x0 + (day - 1) / 13 * plotW; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * chH; }
+
+    // grid + y ticks
+    var yTicks = [177, 179, 181, 183];
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(x0 + plotW, ty); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), x0 - 8, ty + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    // day numbers
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 1; d <= 14; d++) ctx.fillText(String(d), xOf(d), baseY + 16);
+
+    // readings: thin zig-zag line then dots
+    ctx.strokeStyle = 'rgba(42,120,214,0.35)'; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (var i = 0; i < 14; i++) {
+        var x = xOf(i + 1), y = yOf(readings[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < 14; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i + 1), yOf(readings[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // true weight: dashed ink line
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.setLineDash([6, 4]); ctx.beginPath();
+    for (var i = 0; i < 14; i++) {
+        var x = xOf(i + 1), y = yOf(trueW[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // annotations
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('reading drops 3.3 lb overnight', xOf(7.5), yOf(178.9) + 24);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hidden weight drifts just −0.2 lb/day', xOf(14) - 4, yOf(179.0) - 12);
+
+    // legend (top right)
+    var lgx = x0 + plotW - 210, lgy = top + 14;
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(lgx, lgy - 4, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('scale reading (observed)', lgx + 10, lgy);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(lgx - 5, lgy + 14); ctx.lineTo(lgx + 5, lgy + 14); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#444';
+    ctx.fillText('true weight (hidden)', lgx + 10, lgy + 18);
+});
+
+// c2: three-day predict / peek / nudge ladder
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Mornings of Predict → Peek → Nudge (gain = 25%)', w / 2, 24);
+
+    var x0 = 60, baseY = 250, chH = 195, top = baseY - chH;
+    var yMin = 178, yMax = 182;
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * chH; }
+
+    // grid + y ticks
+    var yTicks = [178, 179, 180, 181, 182];
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(680, ty); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), x0 - 8, ty + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.stroke();
+
+    var days = [
+        { name: 'day B', cx: 200, pred: 179.8, read: 181.0, est: 180.1 },
+        { name: 'day C', cx: 400, pred: 179.9, read: 178.7, est: 179.6 },
+        { name: 'day D', cx: 600, pred: 179.4, read: 180.2, est: 179.6 }
+    ];
+
+    for (var i = 0; i < days.length; i++) {
+        var d = days[i];
+        var yp = yOf(d.pred), yr = yOf(d.read), ye = yOf(d.est);
+
+        // dashed vertical connector prediction <-> reading
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(d.cx, yp); ctx.lineTo(d.cx, yr); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // green arrow from prediction toward reading, stopping at the estimate
+        ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(d.cx, yp); ctx.lineTo(d.cx, ye); ctx.stroke();
+        var dir = ye > yp ? 1 : -1;
+        ctx.fillStyle = P.green;
+        ctx.beginPath();
+        ctx.moveTo(d.cx, ye);
+        ctx.lineTo(d.cx - 5, ye - dir * 8);
+        ctx.lineTo(d.cx + 5, ye - dir * 8);
+        ctx.closePath(); ctx.fill();
+
+        // prediction: open blue circle
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5; ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(d.cx, yp, 7, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+        // reading: magenta dot
+        ctx.fillStyle = P.magenta;
+        ctx.beginPath(); ctx.arc(d.cx, yr, 6, 0, 2 * Math.PI); ctx.fill();
+        // estimate: green square
+        ctx.fillStyle = P.green;
+        ctx.fillRect(d.cx - 7, ye - 7, 14, 14);
+
+        // value labels
+        ctx.font = '12px system-ui';
+        ctx.fillStyle = P.blue; ctx.textAlign = 'right';
+        ctx.fillText(d.pred.toFixed(1), d.cx - 14, yp + 4);
+        ctx.fillStyle = P.magenta; ctx.textAlign = 'right';
+        ctx.fillText(d.read.toFixed(1), d.cx - 14, yr + 4);
+        ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(d.est.toFixed(1), d.cx + 14, ye + 4);
+
+        // day label
+        ctx.fillStyle = '#444'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(d.name, d.cx, baseY + 18);
+    }
+
+    // legend (top left)
+    var lgx = x0 + 16, lgy = top + 14;
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5; ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(lgx, lgy - 4, 6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('prediction', lgx + 12, lgy);
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath(); ctx.arc(lgx, lgy + 14, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444';
+    ctx.fillText('scale reading', lgx + 12, lgy + 18);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(lgx - 5, lgy + 27, 10, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('estimate (25% nudge)', lgx + 12, lgy + 36);
+
+    // annotation under day B
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('estimate = prediction + 0.25 × gap', 200, baseY - 6);
+});
+
+// c3: two-row state-space diagram — hidden chain on top, readings below
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The State-Space Diagram: Hidden Chain on Top, Noisy Readings Below', w / 2, 24);
+
+    var centers = [140, 300, 460, 620];
+    var boxW = 96, boxH = 44, boxY = 105, circY = 215, circR = 24;
+    var stateLabs = ['x1 181.6', 'x2 181.4', 'x3 181.2', 'x4 181.0'];
+    var obsLabs = ['y1 183.0', 'y2 180.3', 'y3 181.8', 'y4 179.4'];
+
+    function roundRect(x, y, rw, rh, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + rw - r, y);
+        ctx.arcTo(x + rw, y, x + rw, y + r, r);
+        ctx.lineTo(x + rw, y + rh - r);
+        ctx.arcTo(x + rw, y + rh, x + rw - r, y + rh, r);
+        ctx.lineTo(x + r, y + rh);
+        ctx.arcTo(x, y + rh, x, y + rh - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    function arrowHead(x, y, angle, size, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+        ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+        ctx.closePath(); ctx.fill();
+    }
+
+    // transition arrows (behind boxes)
+    for (var i = 0; i < 3; i++) {
+        var xa = centers[i] + boxW / 2, xb = centers[i + 1] - boxW / 2;
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(xa, boxY); ctx.lineTo(xb - 8, boxY); ctx.stroke();
+        arrowHead(xb, boxY, 0, 10, P.violet);
+    }
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('state rule: drift −0.2 + noise', (centers[1] + centers[2]) / 2, boxY - 32);
+
+    // state boxes
+    for (var i = 0; i < 4; i++) {
+        roundRect(centers[i] - boxW / 2, boxY - boxH / 2, boxW, boxH, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(stateLabs[i], centers[i], boxY + 5);
+    }
+
+    // emission arrows
+    for (var i = 0; i < 4; i++) {
+        var ya = boxY + boxH / 2, yb = circY - circR;
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(centers[i], ya); ctx.lineTo(centers[i], yb - 8); ctx.stroke();
+        arrowHead(centers[i], yb, Math.PI / 2, 10, P.green);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('observation rule: + scale error', centers[3] + 12, (boxY + boxH / 2 + circY - circR) / 2 + 4);
+
+    // observation circles
+    for (var i = 0; i < 4; i++) {
+        ctx.beginPath(); ctx.arc(centers[i], circY, circR, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(obsLabs[i], centers[i], circY + 5);
+    }
+
+    // annotation left of bottom row
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('you only ever', 10, circY - 2);
+    ctx.fillText('see this row', 10, circY + 14);
+
+    // caption strip
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Kalman filter · HMM · exponential smoothing · structural models — same diagram, different state', w / 2, 280);
+});
+
+// c4: moving average vs state-space filter on the same 14 mornings
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Moving Average vs State-Space Filter on the Same 14 Mornings', w / 2, 24);
+
+    var x0 = 60, plotW = 620, baseY = 250, chH = 195, top = baseY - chH;
+    var yMin = 176.5, yMax = 183.5;
+    function xOf(day) { return x0 + (day - 1) / 14 * plotW; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * chH; }
+
+    // trailing 5-day MA (days 5–14) and filter estimate (gain 0.25, drift −0.2, start 181.5)
+    var ma5 = [181.30, 180.74, 181.12, 180.54, 180.70, 180.08, 180.26, 179.58, 179.82, 179.24];
+    var filt = [181.50, 181.05, 181.09, 180.52, 180.74, 180.45, 180.74, 180.13, 180.00, 179.57, 179.80, 179.40, 179.43, 178.75];
+
+    // grid + y ticks
+    var yTicks = [177, 179, 181, 183];
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(x0 + plotW, ty); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), x0 - 8, ty + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 1; d <= 15; d++) ctx.fillText(String(d), xOf(d), baseY + 16);
+
+    // faint reading dots
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    for (var i = 0; i < 14; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i + 1), yOf(readings[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // true weight dashed
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath();
+    for (var i = 0; i < 14; i++) {
+        var x = xOf(i + 1), y = yOf(trueW[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // trailing 5-day MA, days 5-14
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i + 5), y = yOf(ma5[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // filter estimate, days 1-14
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 14; i++) {
+        var x = xOf(i + 1), y = yOf(filt[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // forecast dot at day 15
+    var xf = xOf(15), yf = yOf(178.55);
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(14), yOf(178.75)); ctx.lineTo(xf, yf); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.violet;
+    ctx.beginPath(); ctx.arc(xf, yf, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("tomorrow's forecast ≈ 178.6", xf - 10, yf + 20);
+
+    // annotations
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('MA starts day 5 and trails the drift', xOf(5) - 20, yOf(181.30) - 12);
+    ctx.fillStyle = P.green;
+    ctx.fillText('filter runs from day 1', xOf(1) + 4, yOf(181.50) + 22);
+
+    // legend (top right)
+    var lgx = x0 + plotW - 150, lgy = top + 12;
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.beginPath(); ctx.arc(lgx, lgy - 4, 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.fillText('readings', lgx + 10, lgy);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(lgx - 5, lgy + 10); ctx.lineTo(lgx + 5, lgy + 10); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#444'; ctx.fillText('true weight', lgx + 10, lgy + 14);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(lgx - 5, lgy + 24); ctx.lineTo(lgx + 5, lgy + 24); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.fillText('5-day MA', lgx + 10, lgy + 28);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(lgx - 5, lgy + 38); ctx.lineTo(lgx + 5, lgy + 38); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.fillText('filter estimate', lgx + 10, lgy + 42);
+    ctx.fillStyle = P.violet;
+    ctx.beginPath(); ctx.arc(lgx, lgy + 52, 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.fillText('forecast', lgx + 10, lgy + 56);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

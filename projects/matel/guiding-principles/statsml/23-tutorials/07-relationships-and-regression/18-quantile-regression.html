@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantile Regression</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Quantile Regression</h1>
+<p class="subtitle">Ordinary regression predicts the average outcome — quantile regression draws the line for the 90th percentile, the line you need when the promise is "on time 9 times out of 10"</p>
+
+<div class="card-section">
+    <h2>One Delivery App, Two Lines Through the Same Dots</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">90th percentile</span><span class="tag green">mean vs quantile</span></div>
+                <ul>
+                    <li><b>The promise</b> — a delivery app must quote a time that is right for 9 orders out of 10</li>
+                    <li><b>The data</b> — 24 past orders: three delivery times in minutes at each distance 1–8 km</li>
+                    <li><b>Mean line</b> — the average time is 12 + 3&times;km, so 27 min at 5 km; half the dots sit above it</li>
+                    <li><b>q90 line</b> — quantile regression fits 12 + 4&times;km, aiming to keep 9 in 10 dots at or below</li>
+                    <li><b>Definition (after the example)</b> — it fits a chosen percentile of y at each x, not the average</li>
+                    <li><b>Two questions</b> — the mean answers "typical time"; the q90 line answers "safe promise"</li>
+                </ul>
+                <p class="example">At 5 km the mean line says 27 minutes — but quoting 27 would leave roughly half the orders arriving late.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The mean line predicts the center of the dots; quantile regression draws the line for whichever percentile your question actually needs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Finding the 32-Minute Promise by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">pinball loss</span></div>
+                <ul>
+                    <li><b>The slice</b> — all 12 five-km orders on record, sorted: 21, 23, 24, 25, 26, 26, 27, 28, 29, 30, 32, 33 min</li>
+                    <li><b>Tilted penalty</b> — a promise pays 0.9 per minute late but only 0.1 per minute early</li>
+                    <li><b>Try 27 (the mean)</b> — late minutes 17 &times; 0.9 plus early minutes 17 &times; 0.1 = 17.0 penalty</li>
+                    <li><b>Try 32</b> — late 1 &times; 0.9 plus early 61 &times; 0.1 = 7.0, the lowest of any candidate promise</li>
+                    <li><b>Read it off</b> — 32 is the 11th of the 12 sorted values, i.e. the sample 90th percentile</li>
+                    <li><b>On time</b> — promising 32 gets 11 of 12 orders on time; promising 27 gets only 7 of 12</li>
+                </ul>
+                <p class="example">Under the tilted loss, candidate promises 27, 30, 32, 34 score 17.0, 8.6, 7.0, 8.4 — the dip lands exactly at 32.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Minimizing a 0.9/0.1 tilted ("pinball") loss lands exactly on the 90th percentile — the asymmetric penalty is the whole trick behind quantile regression.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why a Flat Buffer on the Mean Fails</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">widening spread</span><span class="tag red">failure mode</span></div>
+                <ul>
+                    <li><b>The shortcut</b> — "fit the mean, add 5 minutes" gives one flat buffer for every distance</li>
+                    <li><b>Widening spread</b> — times scatter about &plusmn;1 min at 1 km but about &plusmn;8 min at 8 km</li>
+                    <li><b>Too loose near</b> — at 1 km the buffer quotes 20 min when 16 already covers 9 in 10</li>
+                    <li><b>Too tight far</b> — at 6–8 km the slowest orders (36, 40, 44 min) blow past the mean+5 line</li>
+                    <li><b>q90 adapts</b> — the quantile line's gap over the mean grows from 1 min to 8 min by itself</li>
+                    <li><b>Same pattern</b> — delivery promises, hospital wait targets, server latency p99, flood levels</li>
+                </ul>
+                <p class="example">The same +5 buffer that wastes 4 minutes on a 1-km order still lets the 44-minute 8-km order arrive late.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> When the spread of outcomes changes across x, no constant offset on the mean can track a percentile — quantile regression learns the widening funnel itself.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Percentile Is Not a Confidence Interval</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">CI vs quantile</span></div>
+                <ul>
+                    <li><b>The mix-up</b> — a 90% confidence interval for the mean is not the 90th percentile of orders</li>
+                    <li><b>CI shrinks</b> — with 10, 100, 1,000 orders the mean's 95% CI is &plusmn;2.1, &plusmn;0.7, &plusmn;0.2 minutes</li>
+                    <li><b>q90 stays</b> — the 90th percentile sits near 32 min no matter how many orders you collect</li>
+                    <li><b>Different targets</b> — the CI is uncertainty about the average; q90 is spread of real orders</li>
+                    <li><b>The trap</b> — quoting "mean + CI" (about 27.2 min at n=1,000) still leaves 5 of 12 late</li>
+                </ul>
+                <p class="example">With a million orders the CI collapses to a hair around 27 minutes, yet one order in four still takes longer than 29.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a tight confidence band as "orders won't vary much." More data sharpens your estimate of the mean; it does nothing to shrink how much deliveries actually vary.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// the 24 delivery times: three times per distance 1-8 km
+var DELIV = [
+    { d: 1, t: [14, 15, 16] },
+    { d: 2, t: [16, 18, 20] },
+    { d: 3, t: [18, 21, 24] },
+    { d: 4, t: [21, 23, 28] },
+    { d: 5, t: [23, 26, 32] },
+    { d: 6, t: [25, 29, 36] },
+    { d: 7, t: [27, 32, 40] },
+    { d: 8, t: [29, 35, 44] }
+];
+
+// c1: scatter with mean line and q90 line
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ox = 60, baseY = 250, pw = 600, ph = 195;
+    function xOf(d) { return ox + d / 9 * pw; }
+    function yOf(t) { return baseY - t / 50 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('24 Past Deliveries: Mean Line vs 90th-Percentile Line (illustrative)', w / 2, 24);
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 1; d <= 8; d++) {
+        ctx.fillText(d + ' km', xOf(d), baseY + 16);
+    }
+    // y ticks
+    ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    for (var t = 0; t <= 50; t += 10) {
+        ctx.fillText(String(t), ox - 8, yOf(t) + 4);
+    }
+
+    // mean line: t = 12 + 3d
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(0.5), yOf(12 + 3 * 0.5)); ctx.lineTo(xOf(8.5), yOf(12 + 3 * 8.5)); ctx.stroke();
+    // q90 line: t = 12 + 4d
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(0.5), yOf(12 + 4 * 0.5)); ctx.lineTo(xOf(8.5), yOf(12 + 4 * 8.5)); ctx.stroke();
+
+    // dots
+    ctx.fillStyle = 'rgba(42,120,214,0.75)';
+    for (var i = 0; i < DELIV.length; i++) {
+        for (var j = 0; j < 3; j++) {
+            ctx.beginPath(); ctx.arc(xOf(DELIV[i].d), yOf(DELIV[i].t[j]), 4.5, 0, 2 * Math.PI); ctx.fill();
+        }
+    }
+
+    // line labels at right ends
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('mean = 12 + 3×km', xOf(8.5), yOf(12 + 3 * 8.5) + 18);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('q90 = 12 + 4×km', xOf(8.5), yOf(12 + 4 * 8.5) - 8);
+
+    // annotation upper left
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the slowest orders ride the q90 line', ox + 20, 62);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same 24 dots — two lines answer two different questions', w / 2, h - 6);
+});
+
+// c2: tilted (pinball) loss (left) and total loss for four candidate promises (right)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A 0.9/0.1 Penalty Finds the 90th Percentile', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // left panel: tilted loss
+    var lox = 55, lw = 280, baseY = 240, chH = 175;
+    function lxOf(e) { return 195 + e / 10 * (lw / 2); } // error -10..+10, 0 at x=195
+    function lyOf(p) { return baseY - p / 9 * chH; }     // penalty 0..9
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lox, baseY - chH); ctx.lineTo(lox, baseY); ctx.lineTo(lox + lw, baseY); ctx.stroke();
+
+    // early arm: (0,0) -> (-10, 1.0), green
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(lxOf(0), lyOf(0)); ctx.lineTo(lxOf(-10), lyOf(1.0)); ctx.stroke();
+    // late arm: (0,0) -> (+10, 9.0), magenta
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(lxOf(0), lyOf(0)); ctx.lineTo(lxOf(10), lyOf(9.0)); ctx.stroke();
+
+    // arm labels
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('early: 0.1 per min', lox + 8, lyOf(1.0) - 12);
+    ctx.fillStyle = P.magenta; ctx.textAlign = 'right';
+    ctx.fillText('late: 0.9 per min', lxOf(10) - 4, lyOf(7.5));
+
+    // ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('−10', lxOf(-10), baseY + 16);
+    ctx.fillText('0', lxOf(0), baseY + 16);
+    ctx.fillText('+10', lxOf(10), baseY + 16);
+    ctx.fillText('the tilted (pinball) loss for q = 0.9', lox + lw / 2, h - 8);
+
+    // right panel: candidate losses
+    var rox = 400, rw = 280;
+    var candidates = [27, 30, 32, 34];
+    var losses = [17.0, 8.6, 7.0, 8.4];
+    function ryOf(v) { return baseY - v / 18 * chH; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rox, baseY - chH); ctx.lineTo(rox, baseY); ctx.lineTo(rox + rw, baseY); ctx.stroke();
+
+    var bw = 44, gap = (rw - 4 * bw) / 5;
+    for (var i = 0; i < 4; i++) {
+        var bx = rox + gap + i * (bw + gap);
+        var bh = losses[i] / 18 * chH;
+        ctx.fillStyle = candidates[i] === 32 ? 'rgba(0,131,0,0.5)' : 'rgba(42,120,214,0.45)';
+        ctx.fillRect(bx, baseY - bh, bw, bh);
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(losses[i].toFixed(1), bx + bw / 2, baseY - bh - 6);
+        ctx.font = '12px system-ui';
+        ctx.fillText('promise ' + candidates[i], bx + bw / 2, baseY + 16);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('lowest at 32 = the 90th percentile', rox + rw / 2, 56);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('total tilted loss on the 12 deliveries at 5 km', rox + rw / 2, h - 8);
+});
+
+// c3: scatter with mean, flat mean+5 buffer, and q90 lines
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ox = 60, baseY = 250, pw = 600, ph = 195;
+    function xOf(d) { return ox + d / 9 * pw; }
+    function yOf(t) { return baseY - t / 50 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Flat Buffer vs a Quantile Line', w / 2, 24);
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 1; d <= 8; d++) {
+        ctx.fillText(d + ' km', xOf(d), baseY + 16);
+    }
+    ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    for (var t = 0; t <= 50; t += 10) {
+        ctx.fillText(String(t), ox - 8, yOf(t) + 4);
+    }
+
+    // mean line: t = 12 + 3d, 2px
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(0.5), yOf(12 + 3 * 0.5)); ctx.lineTo(xOf(8.5), yOf(12 + 3 * 8.5)); ctx.stroke();
+    // flat buffer: t = 17 + 3d, gray dashed
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(xOf(0.5), yOf(17 + 3 * 0.5)); ctx.lineTo(xOf(8.5), yOf(17 + 3 * 8.5)); ctx.stroke();
+    ctx.setLineDash([]);
+    // q90 line: t = 12 + 4d, 3px orange
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(0.5), yOf(12 + 4 * 0.5)); ctx.lineTo(xOf(8.5), yOf(12 + 4 * 8.5)); ctx.stroke();
+
+    // dots (red for the three late-under-buffer points)
+    var lateUnderBuffer = { '6:36': true, '7:40': true, '8:44': true };
+    for (var i = 0; i < DELIV.length; i++) {
+        for (var j = 0; j < 3; j++) {
+            var dd = DELIV[i].d, tt = DELIV[i].t[j];
+            if (lateUnderBuffer[dd + ':' + tt]) {
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath(); ctx.arc(xOf(dd), yOf(tt), 5.5, 0, 2 * Math.PI); ctx.fill();
+            } else {
+                ctx.fillStyle = 'rgba(42,120,214,0.75)';
+                ctx.beginPath(); ctx.arc(xOf(dd), yOf(tt), 4.5, 0, 2 * Math.PI); ctx.fill();
+            }
+        }
+    }
+
+    // line labels
+    ctx.textAlign = 'right';
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui';
+    ctx.fillText('mean', xOf(8.5), yOf(12 + 3 * 8.5) + 16);
+    ctx.fillStyle = P.mute;
+    ctx.fillText('mean + 5 min', xOf(8.5), yOf(17 + 3 * 8.5) + 14);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('q90', xOf(8.5), yOf(12 + 4 * 8.5) - 8);
+
+    // annotations
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('late under the flat buffer', xOf(6.6), yOf(41));
+    ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('buffer wastes 4 min at 1 km', xOf(1) + 12, yOf(20) + 4);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("a constant offset can't track a widening spread", w / 2, h - 6);
+});
+
+// c4: CI of the mean narrowing (left) vs q90 staying put (right)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Confidence Interval of the Mean vs the 90th Percentile', w / 2, 24);
+
+    var baseY = 240, chH = 175;
+    function yOf(v) { return baseY - (v - 24) / 10 * chH; } // 24-34 minutes
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var nLabs = ['n=10', 'n=100', 'n=1,000'];
+
+    // left panel: CI of the mean
+    var lox = 55, lw = 280;
+    var lxs = [lox + 50, lox + 140, lox + 230];
+    var cis = [2.1, 0.7, 0.2];
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lox, baseY - chH); ctx.lineTo(lox, baseY); ctx.lineTo(lox + lw, baseY); ctx.stroke();
+
+    // y ticks (left panel only)
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    for (var v = 24; v <= 34; v += 2) {
+        ctx.fillText(String(v), lox - 6, yOf(v) + 4);
+    }
+
+    for (var i = 0; i < 3; i++) {
+        var x = lxs[i];
+        var yTop = yOf(27 + cis[i]), yBot = yOf(27 - cis[i]);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, yTop); ctx.lineTo(x, yBot); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - 7, yTop); ctx.lineTo(x + 7, yTop); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - 7, yBot); ctx.lineTo(x + 7, yBot); ctx.stroke();
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(x, yOf(27), 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(nLabs[i], x, baseY + 16);
+    }
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('CI shrinks with data', lox + lw / 2, yOf(31));
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('95% CI of the mean time at 5 km', lox + lw / 2, h - 8);
+
+    // right panel: q90 stays put
+    var rox = 400, rw = 280;
+    var rxs = [rox + 50, rox + 140, rox + 230];
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rox, baseY - chH); ctx.lineTo(rox, baseY); ctx.lineTo(rox + rw, baseY); ctx.stroke();
+
+    // dashed reference line at 32
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(rox + 10, yOf(32)); ctx.lineTo(rox + rw - 10, yOf(32)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(rxs[i], yOf(32), 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(nLabs[i], rxs[i], baseY + 16);
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('q90 stays at 32 —', rox + rw / 2, yOf(29.2));
+    ctx.fillText("real spread doesn't shrink", rox + rw / 2, yOf(29.2) + 18);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('90th percentile of delivery times at 5 km', rox + rw / 2, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

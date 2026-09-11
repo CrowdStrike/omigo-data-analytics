@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARIMA</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>ARIMA</h1>
+<p class="subtitle">ARIMA forecasts a series with three moves — difference away the climb, lean on the last value, and correct for the last miss</p>
+
+<div class="card-section">
+    <h2>One Café, Three Letters</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The café</b> — a café logs daily cups sold for 21 days, climbing from 106 to 175 with wobble</li>
+                    <li><b>The job</b> — forecast day 22 from the history alone; ARIMA is the classic recipe for this</li>
+                    <li><b>AR (autoregression)</b> — busy days follow busy days: today's cups echo yesterday's cups</li>
+                    <li><b>I (integrated)</b> — the steady climb is removed by differencing: model day-to-day changes</li>
+                    <li><b>MA (moving average)</b> — yesterday's forecast miss still carries a hint, so reuse part of it</li>
+                    <li><b>The label</b> — ARIMA(1,1,1) means 1 past value, 1 differencing pass, 1 past miss</li>
+                </ul>
+                <p class="example">Feeding the 21 days into ARIMA(1,1,1) yields a day-22 forecast of about 183 cups.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> ARIMA is three moves in one model: difference away the drift (I), lean on the last value (AR), and correct with the last miss (MA).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The I: Difference Away the Climb</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">differencing</span></div>
+                <ul>
+                    <li><b>Eight days</b> — the café's last eight days: 140, 148, 145, 154, 160, 158, 167, 175 cups</li>
+                    <li><b>Subtract</b> — each day minus the day before gives: +8, −3, +9, +6, −2, +9, +8</li>
+                    <li><b>Drift gone</b> — the levels climb 35 cups in a week; the changes just wobble around +5</li>
+                    <li><b>Why bother</b> — AR and MA assume a series with a stable level; raw climbing levels break them</li>
+                    <li><b>The d</b> — one subtraction pass is d = 1; a series still drifting can be differenced again</li>
+                </ul>
+                <p class="example">The question shifts from "how many cups?" (drifting) to "how many more than yesterday?" (stable).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The I is this differencing step — ARIMA models the changes, then adds them back up ("integrates") to forecast levels.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>AR + MA: Tomorrow's Forecast by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">autoregression</span><span class="tag orange">moving average</span></div>
+                <ul>
+                    <li><b>The recipe</b> — next change = 5 + 0.6 × (last change − 5) + 0.4 × last miss</li>
+                    <li><b>AR term</b> — the last change was +8, which is 3 above the mean, so AR adds 0.6 × 3 = +1.8</li>
+                    <li><b>MA term</b> — the model predicted +6 for day 21 but got +8, a +2 miss: MA adds 0.4 × 2 = +0.8</li>
+                    <li><b>Total</b> — 5 + 1.8 + 0.8 = +7.6 more cups, so day 22 is 175 + 7.6 ≈ 183 cups</li>
+                    <li><b>The weights</b> — 0.6 is the AR(1) coefficient, 0.4 the MA(1) coefficient; fitting picks them</li>
+                </ul>
+                <p class="example">One subtraction, two multiplications, one addition — the whole day-22 forecast fits on a napkin.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> AR reuses the last change, MA reuses the last error; on the differenced series both are one-line arithmetic.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Things Called "Moving Average"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">rule of thumb</span></div>
+                <ul>
+                    <li><b>Two "MA"s</b> — the moving-average smoother and the MA term in ARIMA share a name, nothing else</li>
+                    <li><b>The smoother</b> — averages the last few observed values to draw a calmer line through the data</li>
+                    <li><b>The MA term</b> — feeds the model's own recent forecast misses back into the next forecast</li>
+                    <li><b>Notation</b> — ARIMA(1,1,1) reads: 1 past change (AR), 1 differencing pass (I), 1 past miss (MA)</li>
+                    <li><b>Quick check</b> — a smoother needs only the data; the MA term needs a model that makes errors</li>
+                </ul>
+                <p class="example">An analyst applied a 7-day rolling average thinking it was "the MA part" — it just blurred the series.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming the MA in ARIMA smooths the data. It never touches the raw values — it recycles the model's own forecast errors.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: 21 days of climbing cup sales plus dashed forecast step to day 22
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    // daily cups sold (illustrative); day-22 forecast ≈ 183
+    var cups21 = [106,111,109,117,120,118,126,130,127,133,138,134,137,140,148,145,154,160,158,167,175];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('21 days of cups sold, plus the day-22 ARIMA forecast', w / 2, 24);
+
+    var padL = 58, padR = 60, padT = 46, padB = 44;
+    var x0 = padL, x1 = w - padR, top = padT, baseY = h - padB;
+    var yMin = 90, yMax = 200;
+    function xOf(day) { return x0 + (day - 1) / 21 * (x1 - x0); }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * (baseY - top); }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+    var yTicks = [100, 140, 180];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x0 - 4, ty); ctx.lineTo(x0, ty); ctx.stroke();
+        ctx.fillText(String(yTicks[i]), x0 - 8, ty + 4);
+    }
+    var xTickDays = [1, 7, 14, 21], xTickLabs = ['d1', 'd7', 'd14', 'd21'];
+    ctx.textAlign = 'center';
+    for (var i = 0; i < xTickDays.length; i++) {
+        ctx.fillText(xTickLabs[i], xOf(xTickDays[i]), baseY + 16);
+    }
+
+    // blue series line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (var i = 0; i < 21; i++) {
+        var x = xOf(i + 1), y = yOf(cups21[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // day-21 dot and label
+    var x21 = xOf(21), y21 = yOf(175);
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(x21, y21, 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('175', x21 - 8, y21 - 8);
+
+    // dashed orange forecast segment to day 22
+    var x22 = xOf(22), y22 = yOf(183);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x21, y21); ctx.lineTo(x22, y22); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5; ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(x22, y22, 5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('day 22: ≈183', x22 - 10, y22 - 12);
+
+    // ingredient callouts, upper-left plot area
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = P.green;
+    ctx.fillText('AR: busy days follow busy days', x0 + 14, top + 22);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('I: difference away the climb', x0 + 14, top + 40);
+    ctx.fillStyle = P.magenta;
+    ctx.fillText('MA: reuse yesterday\'s miss', x0 + 14, top + 58);
+
+    // caption
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('daily cups sold (illustrative)', w / 2, h - 8);
+});
+
+// c2: levels drift up (left) vs day-over-day changes as bars (right)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var levels8 = [140, 148, 145, 154, 160, 158, 167, 175]; // days d14–d21
+    var diffs7 = [8, -3, 9, 6, -2, 9, 8];                   // days d15–d21
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Levels drift, changes sit still', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var plotTop = 62, plotH = 168, baseY = plotTop + plotH; // 230
+
+    // ---- left panel: the levels ----
+    var lx = 50, lw = 285;
+    var lyMin = 130, lyMax = 185;
+    function lyOf(v) { return baseY - (v - lyMin) / (lyMax - lyMin) * plotH; }
+    function lxOf(i) { return lx + 15 + i * (lw - 30) / 7; }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the levels', lx + lw / 2, plotTop - 8);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, plotTop); ctx.lineTo(lx, baseY); ctx.lineTo(lx + lw, baseY); ctx.stroke();
+    var lTicks = [140, 160, 180];
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < lTicks.length; i++) {
+        ctx.fillText(String(lTicks[i]), lx - 4, lyOf(lTicks[i]) + 4);
+    }
+
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (var i = 0; i < 8; i++) {
+        var x = lxOf(i), y = lyOf(levels8[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    var dayLabs = ['d14', 'd15', 'd16', 'd17', 'd18', 'd19', 'd20', 'd21'];
+    for (var i = 0; i < 8; i++) {
+        var x = lxOf(i), y = lyOf(levels8[i]);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(levels8[i]), x, y - 8);
+        ctx.fillStyle = '#444';
+        ctx.fillText(dayLabs[i], x, baseY + 14);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cups per day — still climbing', lx + lw / 2, h - 8);
+
+    // ---- right panel: the changes ----
+    var rx = 400, rw = 285;
+    var ryMin = -5, ryMax = 12;
+    function ryOf(v) { return baseY - (v - ryMin) / (ryMax - ryMin) * plotH; }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the changes', rx + rw / 2, plotTop - 8);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, plotTop); ctx.lineTo(rx, baseY); ctx.lineTo(rx + rw, baseY); ctx.stroke();
+    var rTicks = [0, 5, 10];
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < rTicks.length; i++) {
+        ctx.fillText(String(rTicks[i]), rx - 4, ryOf(rTicks[i]) + 4);
+    }
+    // zero line
+    var zeroY = ryOf(0);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, zeroY); ctx.lineTo(rx + rw, zeroY); ctx.stroke();
+
+    var barW = 26;
+    var diffLabs = ['+8', '−3', '+9', '+6', '−2', '+9', '+8'];
+    var diffDays = ['d15', 'd16', 'd17', 'd18', 'd19', 'd20', 'd21'];
+    for (var i = 0; i < 7; i++) {
+        var cx = rx + 25 + i * (rw - 50) / 6;
+        var v = diffs7[i];
+        var yv = ryOf(v);
+        ctx.fillStyle = v >= 0 ? 'rgba(25,158,112,0.55)' : 'rgba(213,81,129,0.55)';
+        if (v >= 0) ctx.fillRect(cx - barW / 2, yv, barW, zeroY - yv);
+        else ctx.fillRect(cx - barW / 2, zeroY, barW, yv - zeroY);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(diffLabs[i], cx, v >= 0 ? yv - 5 : yv + 13);
+        ctx.fillStyle = '#444';
+        ctx.fillText(diffDays[i], cx, baseY + 14);
+    }
+
+    // mean change line at +5
+    var meanY = ryOf(5);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(rx, meanY); ctx.lineTo(rx + rw, meanY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('mean change +5', rx + rw - 4, meanY - 6);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('day-over-day change — one stable level', rx + rw / 2, h - 8);
+});
+
+// c3: waterfall assembling the day-22 change forecast
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    // waterfall pieces (illustrative): base 5.0, AR +1.8, MA +0.8, total +7.6
+    var bars = [
+        { name1: 'mean change', name2: '', from: 0, to: 5.0, fill: 'rgba(42,120,214,0.55)', solid: P.blue, lab: '+5.0' },
+        { name1: 'AR:', name2: '0.6×(8−5)', from: 5.0, to: 6.8, fill: 'rgba(0,131,0,0.5)', solid: P.green, lab: '+1.8' },
+        { name1: 'MA:', name2: '0.4×(+2)', from: 6.8, to: 7.6, fill: 'rgba(74,58,167,0.5)', solid: P.violet, lab: '+0.8' },
+        { name1: 'forecast change', name2: '', from: 0, to: 7.6, fill: 'rgba(217,89,38,0.55)', solid: P.orange, lab: '+7.6' }
+    ];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Building the day-22 forecast: 5 + 1.8 + 0.8 = +7.6 cups', w / 2, 24);
+
+    var padL = 58, padR = 24, padT = 52, padB = 60;
+    var x0 = padL, x1 = w - padR, top = padT, baseY = h - padB; // baseY = 240
+    var yMax = 9;
+    function yOf(v) { return baseY - v / yMax * (baseY - top); }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+    var yTicks = [0, 2, 4, 6, 8];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < yTicks.length; i++) {
+        var ty = yOf(yTicks[i]);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x0 - 4, ty); ctx.lineTo(x0, ty); ctx.stroke();
+        ctx.fillText(String(yTicks[i]), x0 - 8, ty + 4);
+    }
+
+    var slotW = (x1 - x0) / 4, barW = 90;
+    var xs = [];
+    for (var i = 0; i < 4; i++) xs.push(x0 + i * slotW + (slotW - barW) / 2);
+
+    // dashed connectors: bar i top -> bar i+1 start (same y)
+    ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    for (var i = 0; i < 3; i++) {
+        var yTop = yOf(bars[i].to);
+        ctx.beginPath(); ctx.moveTo(xs[i] + barW, yTop); ctx.lineTo(xs[i + 1], yTop); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // bars, value labels, names
+    for (var i = 0; i < 4; i++) {
+        var b = bars[i];
+        var yA = yOf(b.from), yB = yOf(b.to);
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(xs[i], yB, barW, yA - yB);
+        ctx.fillStyle = b.solid; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.lab, xs[i] + barW / 2, yB - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        if (b.name2) {
+            ctx.fillText(b.name1, xs[i] + barW / 2, baseY + 16);
+            ctx.fillText(b.name2, xs[i] + barW / 2, baseY + 31);
+        } else {
+            ctx.fillText(b.name1, xs[i] + barW / 2, baseY + 16);
+        }
+    }
+
+    // annotation, upper right
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('175 cups + 7.6 ≈ 183 cups tomorrow', x1 - 6, top + 14);
+
+    // caption
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('AR(1) weight 0.6, MA(1) weight 0.4 (illustrative)', w / 2, h - 8);
+});
+
+// c4: moving-average smoother (left) vs MA term recycling misses (right)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The smoother averages data; the MA term recycles misses', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var plotTop = 66, plotH = 160, baseY = plotTop + plotH; // 226
+
+    // ---- left panel: moving-average smoother ----
+    var lx = 50, lw = 285;
+    var cups10 = [150, 158, 152, 161, 155, 164, 159, 168, 162, 170];
+    // 3-day averages of cups10, hardcoded
+    var ma3 = [153.3, 157, 156, 160, 159.3, 163.7, 163, 166.7];
+    var lyMin = 145, lyMax = 175;
+    function lyOf(v) { return baseY - (v - lyMin) / (lyMax - lyMin) * plotH; }
+    function lxOf(i) { return lx + 15 + i * (lw - 30) / 9; }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('moving-average smoother', lx + lw / 2, plotTop - 10);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, plotTop); ctx.lineTo(lx, baseY); ctx.lineTo(lx + lw, baseY); ctx.stroke();
+    var lTicks = [150, 160, 170];
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < lTicks.length; i++) {
+        ctx.fillText(String(lTicks[i]), lx - 4, lyOf(lTicks[i]) + 4);
+    }
+
+    // raw cups: blue line width 2 with radius-3 dots
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = lxOf(i), y = lyOf(cups10[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 10; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(lxOf(i), lyOf(cups10[i]), 3, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // 3-day average: aqua line width 3, from the 3rd point onward
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 8; i++) {
+        var x = lxOf(i + 2), y = lyOf(ma3[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3-day average', lxOf(4) + 4, lyOf(ma3[2]) + 20);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a calmer line drawn from the data itself', lx + lw / 2, h - 8);
+
+    // ---- right panel: MA term in ARIMA ----
+    var rx = 400, rw = 285;
+    var misses5 = [3, -2, 4, -1, 2]; // forecast misses (illustrative)
+    var ryMin = -5, ryMax = 6;
+    function ryOf(v) { return baseY - (v - ryMin) / (ryMax - ryMin) * plotH; }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('MA term in ARIMA', rx + rw / 2, plotTop - 10);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, plotTop); ctx.lineTo(rx, baseY); ctx.lineTo(rx + rw, baseY); ctx.stroke();
+    var rTicks = [-4, 0, 4];
+    var rTickLabs = ['−4', '0', '4'];
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < rTicks.length; i++) {
+        ctx.fillText(rTickLabs[i], rx - 4, ryOf(rTicks[i]) + 4);
+    }
+    var zeroY = ryOf(0);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, zeroY); ctx.lineTo(rx + rw, zeroY); ctx.stroke();
+
+    var barW = 30;
+    var missLabs = ['+3', '−2', '+4', '−1', '+2'];
+    var missDays = ['d17', 'd18', 'd19', 'd20', 'd21'];
+    for (var i = 0; i < 5; i++) {
+        var cx = rx + 30 + i * (rw - 60) / 4;
+        var v = misses5[i];
+        var yv = ryOf(v);
+        ctx.fillStyle = v >= 0 ? 'rgba(74,58,167,0.55)' : 'rgba(213,81,129,0.55)';
+        if (v >= 0) ctx.fillRect(cx - barW / 2, yv, barW, zeroY - yv);
+        else ctx.fillRect(cx - barW / 2, zeroY, barW, yv - zeroY);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(missLabs[i], cx, v >= 0 ? yv - 5 : yv + 13);
+        ctx.fillStyle = '#444';
+        ctx.fillText(missDays[i], cx, baseY + 14);
+    }
+
+    // annotation, two lines
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('next forecast adds', rx + rw - 6, plotTop + 18);
+    ctx.fillText('0.4 × the latest miss', rx + rw - 6, plotTop + 34);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('forecast misses (illustrative) — data untouched', rx + rw / 2, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
