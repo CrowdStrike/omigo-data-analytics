@@ -1,6 +1,6 @@
 # Aggregation Hides Detail
 
-**Page type:** detail page (tutorial page: h1 + subtitle, then card-sections each with a two-column table layout — text left 50%, canvas right 50%; last section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial page: h1 + subtitle, then card-sections each with a two-column table layout — text left 50%, canvas right 50%; last section uses a 3-column 50/25/25 layout with two canvases)
 **HTML title tag:** Aggregation Hides Detail
 
 **Subtitle:** A flat total can hide one part doubling and another collapsing — sums cancel stories, so slice before you conclude.
@@ -95,9 +95,9 @@ Tags: `best practice` (green), `common mistake` (red)
 
 **Common confusion:** flat does not mean stable. Flat means the movements summed to zero — and that is a claim you can only test by slicing.
 
-This section uses the 3-column layout: text 38%, two canvases at 31% each.
+This section uses the 3-column layout: text 50%, two canvases at 25% each, so the text/viz split stays 50/50.
 
-### Visualization (canvas `c4a`, 420×340)
+### Visualization (canvas `c4a`, 360×340)
 
 The region slice: two flat lines, story ruled out.
 
@@ -107,7 +107,7 @@ The region slice: two flat lines, story ruled out.
 - **Labels (bold 12px):** violet "North: flat $50k" above the lines; yellow "South: flat $50k" below them.
 - **Annotation (mute `#6b7280`, bold 13px, two centered lines near the top):** "a slice that shows nothing" / "still earns its keep: story ruled out".
 
-### Visualization (canvas `c4b`, 420×340)
+### Visualization (canvas `c4b`, 360×340)
 
 The customer-type slice: a second hidden story.
 
@@ -119,7 +119,7 @@ The customer-type slice: a second hidden story.
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). `<h1>` + `.subtitle`, then four `.card-section` blocks, each an `<h2>` with a bottom border and a `table.layout` row: `.text-col` (50%) with `.tags` pills, one-line `<ul>` bullets opening with `<b>` terms, an italic `.example` line, and a `.key-point` callout; `.viz-col` (50%) holds one canvas. Section 4 uses the 3-column variant: `.text-col3` (38%) plus two `.viz-col3` (31%) cells each holding a 420×340 canvas.
+- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). `<h1>` + `.subtitle`, then four `.card-section` blocks, each an `<h2>` with a bottom border and a `table.layout` row: `.text-col` (50%) with `.tags` pills, one-line `<ul>` bullets opening with `<b>` terms, an italic `.example` line, and a `.key-point` callout; `.viz-col` (50%) holds one canvas. Section 4 uses the 3-column variant: `.text-col3` (50%) plus two `.viz-col3` (25%) cells each holding a 360×340 canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border. `.key-point` background `#f8f9fa`, left border 3px solid `#e74c3c`, 0.9rem; `.example` italic `#555` 0.9rem; `ul` 0.92rem, `li b` in `#1a5276`. Canvas CSS `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px; blue = bg `rgba(26,82,118,0.12)` / `#1a5276`, green = bg `rgba(39,174,96,0.15)` / `#27ae60`, red = bg `rgba(231,76,60,0.12)` / `#e74c3c`, orange = bg `rgba(230,126,34,0.15)` / `#e67e22`.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

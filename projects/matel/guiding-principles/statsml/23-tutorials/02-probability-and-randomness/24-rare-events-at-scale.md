@@ -1,6 +1,6 @@
 # Rare Events at Scale
 
-**Page type:** detail page (tutorial card-sections: h2 with blue underline per section; two-column layout table — text left 50%, canvas right 50%; section 2 uses a 3-column layout 38/31/31 with two canvases)
+**Page type:** detail page (tutorial card-sections: h2 with blue underline per section; two-column layout table — text left 50%, canvas right 50%; section 2 stacks two canvases in its viz cell)
 **HTML title tag:** Rare Events at Scale
 
 **Subtitle:** A one-in-a-million event stops being rare once you try a hundred million times — "practically impossible" times a huge N equals routine
@@ -44,7 +44,7 @@ Split panel: left a schematic dot grid with one hit dot; right a week of daily b
 
 **Key point:** Expected count = probability × tries — the same tiny p gives 0.001, 1, or 100 hits depending only on the tries.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 420×300)
 
 Bar chart (log-scale heights): expected hits ladder as traffic scales.
 
@@ -53,7 +53,7 @@ Bar chart (log-scale heights): expected hits ladder as traffic scales.
 - **Layout:** padding top 58, bottom 66, left 50, right 20; baseline axis `#999`; bars 64px wide, evenly gapped; the 100M/day bar filled orange `#d95926`, others `rgba(26,82,118,0.35)`; hit-count value labels bold 13px `#222` above bars, traffic labels 12px below.
 - **Captions (bottom center):** 12px `#444` "daily traffic (bar height on log scale)"; bold 12px orange "every 10× traffic → 10× hits".
 
-### Visualization (canvas `c2b`, 400×340)
+### Visualization (canvas `c2b`, 420×300)
 
 Bar chart: chance of a zero-hit day at each traffic level.
 
@@ -112,7 +112,7 @@ Two side-by-side framed panels contrasting one user's exposure with the system's
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then 4 `.card-section` blocks, each with an `<h2>` (1.3rem, `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` (width 100%, border-collapse). Sections 1, 3, 4 use one `<tr>` with left `td.text-col` (50%) and right `td.viz-col` (50%, one 720×300 canvas). Section 2 uses the 3-column variant: `td.text-col-3` (38%) plus two viz cells `td.viz-col-3` (31% each) holding canvases `c2a` (420×340) and `c2b` (400×340).
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then 4 `.card-section` blocks, each with an `<h2>` (1.3rem, `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` (width 100%, border-collapse). Every section uses one `<tr>` with left `td.text-col` (50%) and right `td.viz-col` (50%). Sections 1, 3, 4 hold one 720×300 canvas; section 2's viz cell stacks two canvases, `c2a` (420×300) and `c2b` (420×300, `margin-top:12px`).
 - **Text cells:** `.tags` pills, then a `<ul>` of bullets, an italic `.example` line, and a `.key-point` callout.
 - **Page CSS:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `<ul>` 0.92rem; `li b` colored `#1a5276`; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem weight 600, padding 2px 10px, radius 10px; blue = `rgba(26,82,118,0.12)` bg / `#1a5276` text; green = `rgba(39,174,96,0.15)` / `#27ae60`; red = `rgba(231,76,60,0.12)` / `#e74c3c`; orange = `rgba(230,126,34,0.15)` / `#e67e22`.

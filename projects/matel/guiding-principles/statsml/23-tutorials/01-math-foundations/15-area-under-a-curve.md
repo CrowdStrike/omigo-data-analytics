@@ -1,6 +1,6 @@
 # Area Under a Curve
 
-**Page type:** detail page (tutorial layout: 4 card-sections; sections 1, 2, 4 use two-column table.layout 50%/50%, section 3 uses a 3-column layout 38%/31%/31% with two canvases)
+**Page type:** detail page (tutorial layout: 4 card-sections; all sections use a two-column table.layout 50%/50%, section 3 stacks two canvases in its viz cell)
 **HTML title tag:** Area Under a Curve
 
 **Subtitle:** Adding up thin slices to get a total — from distance traveled to probability to the AUC metric
@@ -69,7 +69,7 @@ Riemann-strip chart: six 10-minute rectangles with the smooth curve overlaid.
 
 **Key point:** Distance, probability, and AUC are one idea wearing three outfits — a total computed as area under a curve.
 
-### Visualization (canvas `c3a`, 420×340)
+### Visualization (canvas `c3a`, 420×300)
 
 Probability density curve with a shaded central slice.
 
@@ -79,7 +79,7 @@ Probability density curve with a shaded central slice.
 - **Axis:** gray `#999` baseline; x tick labels at 10, 20, 25, 30, 35, 40, 50; axis caption "delivery time (minutes)" (gray `#444` 12px).
 - **Annotations:** bold magenta `#d55181` 14px centered below the peak: "P(25–35 min)" / "≈ 0.68"; bold 12px `#1a5276` above the peak: "whole curve: area = 1.0".
 
-### Visualization (canvas `c3b`, 400×340)
+### Visualization (canvas `c3b`, 420×300)
 
 ROC curve with the area beneath shaded.
 
@@ -116,9 +116,9 @@ Two side-by-side step-profile panels with equal shaded areas, split by a dashed 
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic page (see `tutorials/CLAUDE.md`): `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout`. Sections 1, 2, 4 use `td.text-col` (50%) + `td.viz-col` (50%); section 3 uses the 3-column variant `td.text-col3` (38%) + two `td.viz-col3` (31% each) holding canvases c3a (420×340) and c3b (400×340).
+- **Template:** tutorials topic page (see `tutorials/CLAUDE.md`): `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout`. Every section uses `td.text-col` (50%) + `td.viz-col` (50%); section 3's viz cell stacks two canvases, c3a (420×300) and c3b (420×300, `margin-top:12px`).
 - **Text column structure:** `.tags` row of colored pill spans (0.72rem bold, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`); then a `<ul>` of one-line bullets each opening with `<b>` in `#1a5276`; one italic `.example` line (`#555`); one `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem) starting with `<strong>Key point:</strong>` or `<strong>Common mistake:</strong>`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%` with `1px solid #e0e0e0` border, 4px radius.
-- **Canvases:** intrinsic 720×300 default; the `setup(id, lw, lh)` helper accepts overrides (c3a 420×340, c3b 400×340). Scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Chart JS palette object: blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Shared `speedAt(m)` piecewise-linear interpolator over speedT/speedV used by c1 and c2. All data arrays hardcoded (no Math.random). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
+- **Canvases:** intrinsic 720×300 default; the `setup(id, lw, lh)` helper accepts overrides (c3a 420×300, c3b 420×300). Scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Chart JS palette object: blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Shared `speedAt(m)` piecewise-linear interpolator over speedT/speedV used by c1 and c2. All data arrays hardcoded (no Math.random). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Site palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`.
 - No nav bar, no back/home links, no cross-page links. In regenerated HTML any card links would use `.html` extensions.
