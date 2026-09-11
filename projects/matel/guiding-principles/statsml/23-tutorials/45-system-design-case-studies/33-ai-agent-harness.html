@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent Harness</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>AI Agent Harness</h1>
+<p class="subtitle">The model only produces text &mdash; everything that makes it an agent is the system around it: assemble the context, run the tool it asked for, append the result, ask again, and know when to stop</p>
+
+<div class="card-section">
+    <h2>The Turn Cycle: Model Asks, Harness Runs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">the loop is the system</span><span class="tag orange">agents</span></div>
+                <ul>
+                    <li><b>The task</b> &mdash; a developer types "fix the failing test" and nothing else happens yet</li>
+                    <li><b>What the model returns</b> &mdash; text naming a tool and its arguments, never the action itself</li>
+                    <li><b>Who acts</b> &mdash; the harness runs the tool in a sandbox; the model never touches the repo</li>
+                    <li><b>A turn</b> &mdash; one model call, the tool it asked for, and that result appended to the context</li>
+                    <li><b>Four parts inside</b> &mdash; a context assembler, a permission gate, a tool router, and a turn log</li>
+                    <li><b>The stop rule</b> &mdash; the loop ends when the model replies with no tool call, or a guard fires</li>
+                    <li><b>Stateless model</b> &mdash; it recalls nothing between calls, so the harness re-sends the whole conversation</li>
+                </ul>
+                <p class="example">The model asks to read <code>test_billing.py</code>, then to run the test, then to edit one line &mdash; three turns, three tool results, all executed by the harness.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The model is a stateless function from text to text &mdash; the harness is the actual system: it owns the context, the tool execution, the sandbox, the stop condition, and the bill.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Context Is Append-Only</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">prefix and tail</span><span class="tag orange">caching</span></div>
+                <ul>
+                    <li><b>The fixed head</b> &mdash; the system prompt plus tool definitions, byte-identical on every turn</li>
+                    <li><b>The growing tail</b> &mdash; each finished turn appends the model's request and the tool's output</li>
+                    <li><b>Never rewritten</b> &mdash; earlier turns are not edited, reordered, or summarized away mid-task</li>
+                    <li><b>Why it matters</b> &mdash; a prefix the provider has already seen costs a small fraction as much</li>
+                    <li><b>The catch</b> &mdash; the match is byte for byte, so a single changed character ends the discount</li>
+                    <li><b>The trap</b> &mdash; a clock or request id in the system prompt voids the hit on every single turn</li>
+                    <li><b>The cost shape</b> &mdash; the conversation is re-sent each turn, so early turns are paid for repeatedly</li>
+                </ul>
+                <p class="example">A timestamp injected into the system prompt changes the first few bytes, so every turn of a long session is billed as brand-new text.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Treat the context as append-only with a frozen head &mdash; that single discipline is what makes an agent affordable, and any harness that rewrites earlier turns throws the saving away.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Sandbox per Live Session</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">deployment</span><span class="tag orange">isolation</span></div>
+                <ul>
+                    <li><b>Sessions are long</b> &mdash; a routine task runs for a minute or two, nearly all of it waiting</li>
+                    <li><b>The sandbox is held</b> &mdash; the tools' files and shell state must survive into the next turn</li>
+                    <li><b>Idle but occupied</b> &mdash; a worker waiting on the model still owns an entire filesystem</li>
+                    <li><b>The scaling unit</b> &mdash; capacity is counted in live sandboxes, not in requests per second</li>
+                    <li><b>Admission control</b> &mdash; a full pool queues new tasks rather than slowing the running ones</li>
+                    <li><b>Why isolate</b> &mdash; the model, not the author, picks the shell command that actually runs</li>
+                    <li><b>Untrusted input</b> &mdash; a file saying "ignore prior instructions" enters the context as text</li>
+                    <li><b>Resumability</b> &mdash; the turn log outlives the worker, so a crash replays instead of restarting</li>
+                </ul>
+                <p class="example">Because sessions are mostly waiting, one host holds many sandboxes at once &mdash; memory and open file handles run out long before CPU does.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An agent session is a long-lived, mostly-idle hold on isolated state, so the thing you provision is a concurrent sandbox and the knob you control is admission.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Loop With No Stop Condition</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">guards</span></div>
+                <ul>
+                    <li><b>The failure</b> &mdash; the model keeps proposing one more check, and nothing in the loop says "enough"</li>
+                    <li><b>Why it compounds</b> &mdash; each turn re-sends every earlier turn, so the latest turns cost the most</li>
+                    <li><b>Not caught by tests</b> &mdash; every individual turn looks reasonable; only the total is absurd</li>
+                    <li><b>The turn cap</b> &mdash; a hard ceiling on the turn count: crude, but it always terminates</li>
+                    <li><b>The budget</b> &mdash; a ceiling on tokens or wall-clock time, for turns that balloon in size not count</li>
+                    <li><b>The duplicate detector</b> &mdash; the same tool, arguments, and result twice running means no progress</li>
+                    <li><b>Cheapest guard first</b> &mdash; it ends a read-test-read-test spin in a few turns rather than at the cap</li>
+                    <li><b>Say it out loud</b> &mdash; report which guard fired; a silent stop is indistinguishable from a finished task</li>
+                </ul>
+                <p class="example">An agent that alternates reading one file and re-running one test can spin indefinitely &mdash; two identical calls in a row is enough evidence to stop.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Trusting the model to decide when it is finished. The guards are not tuning knobs &mdash; they are the difference between a bounded task and an open-ended bill, and the harness must say which guard fired instead of presenting truncated work as done.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.45), y2 - 9 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.45), y2 - 9 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+function box(ctx, x, y, wid, hgt, fill, edge, color, lines, bold, size) {
+    rr(ctx, x, y, wid, hgt, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = edge; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = (bold ? 'bold ' : '') + (size || 12) + 'px system-ui';
+    ctx.textAlign = 'center';
+    var cx = x + wid / 2, cy = y + hgt / 2;
+    if (lines.length === 1) {
+        ctx.fillText(lines[0], cx, cy + 4);
+    } else {
+        ctx.fillText(lines[0], cx, cy - 3);
+        ctx.fillText(lines[1], cx, cy + 13);
+    }
+}
+
+// c1: component diagram of the turn cycle
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Turn Cycle: the Harness Owns Everything Except the Text', w / 2, 24);
+
+    box(ctx, 16, 150, 120, 40, 'rgba(42,120,214,0.15)', P.blue, P.text, ['task: fix the', 'failing test'], false);
+    box(ctx, 250, 44, 200, 40, 'rgba(74,58,167,0.15)', P.violet, P.violet, ['model API — stateless'], true);
+
+    // harness container
+    rr(ctx, 250, 118, 200, 120, 8);
+    ctx.fillStyle = 'rgba(26,82,118,0.07)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('harness', 350, 134);
+
+    var parts = ['context assembler', 'permission gate', 'tool router', 'turn log'];
+    var py = [142, 166, 190, 214];
+    for (var i = 0; i < parts.length; i++) {
+        rr(ctx, 262, py[i], 176, 20, 4);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(parts[i], 350, py[i] + 14);
+    }
+
+    box(ctx, 520, 150, 180, 56, 'rgba(25,158,112,0.15)', P.aqua, P.text, ['tool executor', 'sandbox: read, edit, bash'], false);
+
+    arrow(ctx, 138, 170, 246, 170, P.mute, 2);
+    arrow(ctx, 310, 118, 310, 86, P.mute, 2);
+    arrow(ctx, 390, 84, 390, 116, P.mute, 2);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('full context', 304, 106);
+    ctx.textAlign = 'left';
+    ctx.fillText('tool call', 396, 106);
+
+    arrow(ctx, 452, 168, 516, 168, P.mute, 2);
+    arrow(ctx, 516, 192, 452, 192, P.mute, 2);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('result appended', 484, 216);
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the model asks; only the harness ever acts', w / 2, 262);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('illustrative', 20, h - 8);
+});
+
+// c2: payload structure — frozen head, growing tail
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Every Request: the Same Frozen Head, a Longer Tail', w / 2, 24);
+
+    var rows = [
+        { y: 70,  lab: 'early turn',  turns: 1 },
+        { y: 130, lab: 'middle turn', turns: 6 },
+        { y: 190, lab: 'late turn',   turns: 13 }
+    ];
+    var x0 = 110, bh = 34, sysW = 62, defW = 92, tw = 38;
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(row.lab, 100, row.y + bh / 2 + 4);
+
+        var x = x0;
+        ctx.fillStyle = 'rgba(26,82,118,0.55)';
+        ctx.fillRect(x, row.y, sysW, bh);
+        if (r === 0) {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('system', x + sysW / 2, row.y + bh / 2 + 4);
+        }
+        x += sysW;
+        ctx.fillStyle = 'rgba(74,58,167,0.5)';
+        ctx.fillRect(x, row.y, defW, bh);
+        if (r === 0) {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('tool defs', x + defW / 2, row.y + bh / 2 + 4);
+        }
+        x += defW;
+
+        var tailStart = x;
+        for (var t = 0; t < row.turns; t++) {
+            ctx.fillStyle = 'rgba(42,120,214,0.35)';
+            ctx.fillRect(x, row.y, tw, bh);
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, row.y); ctx.lineTo(x, row.y + bh); ctx.stroke();
+            x += tw;
+        }
+
+        if (r === 2) {
+            // bracket label over the tail
+            ctx.fillStyle = P.ink; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('one block per completed turn', (tailStart + x) / 2, row.y - 8);
+            // cache boundary before the final turn block
+            var bx = x - tw;
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(bx, row.y - 4); ctx.lineTo(bx, row.y + bh + 14); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = P.orange; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('already seen', 120, row.y + bh + 30);
+            ctx.fillText('new', bx + 6, row.y + bh + 30);
+        }
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the head never changes — that is the whole trick', w / 2, 266);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('block widths schematic', w - 10, h - 8);
+});
+
+// c3: deployment — worker pool of held sandboxes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Deployment: the Scaling Unit Is a Held Sandbox, Not a Request', w / 2, 24);
+
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('incoming tasks', 16, 155);
+
+    // admission queue
+    ctx.fillStyle = 'rgba(201,133,0,0.18)';
+    ctx.fillRect(120, 90, 34, 130);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5;
+    ctx.strokeRect(120, 90, 34, 130);
+    ctx.strokeStyle = 'rgba(201,133,0,0.6)'; ctx.lineWidth = 1;
+    for (var i = 1; i <= 6; i++) {
+        var qy = 90 + i * (130 / 7);
+        ctx.beginPath(); ctx.moveTo(124, qy); ctx.lineTo(150, qy); ctx.stroke();
+    }
+    ctx.save();
+    ctx.translate(137, 155); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('admission queue', 0, 4);
+    ctx.restore();
+
+    // worker pool
+    rr(ctx, 210, 80, 300, 150, 8);
+    ctx.fillStyle = 'rgba(26,82,118,0.05)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('session worker pool', 360, 96);
+
+    var wx = [222, 318, 414];
+    for (var i = 0; i < wx.length; i++) {
+        rr(ctx, wx[i], 110, 84, 56, 6);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('harness loop', wx[i] + 42, 126);
+        rr(ctx, wx[i] + 8, 134, 68, 20, 4);
+        ctx.fillStyle = 'rgba(25,158,112,0.18)'; ctx.fill();
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '10px system-ui';
+        ctx.fillText('sandbox', wx[i] + 42, 148);
+    }
+    ctx.fillStyle = P.mute; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('…', 480, 142);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one worker, one sandbox, held for the whole session', 360, 202);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('mostly idle — waiting on the model', 360, 220);
+
+    box(ctx, 540, 70, 180, 34, 'rgba(74,58,167,0.15)', P.violet, P.violet, ['model API (shared)'], true, 11);
+    box(ctx, 540, 170, 180, 34, 'rgba(25,158,112,0.12)', P.aqua, P.text, ['turn log (durable)'], false, 11);
+
+    arrow(ctx, 512, 100, 536, 92, P.mute, 2);
+    arrow(ctx, 536, 108, 512, 116, P.mute, 2);
+    arrow(ctx, 512, 180, 536, 184, P.mute, 2);
+    ctx.fillStyle = P.mute; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replay, don’t restart', 630, 216);
+
+    arrow(ctx, 100, 155, 116, 155, P.mute, 2);
+    arrow(ctx, 156, 155, 206, 155, P.mute, 2);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('shed load at the queue — an accepted session that loses its sandbox loses its work', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('illustrative', 20, h - 8);
+});
+
+// c4: the cycle, unguarded vs gated
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Cycle, With and Without Guards on the Return Path', w / 2, 24);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no guards', 16, 100);
+    ctx.fillText('guarded', 16, 225);
+
+    // row 1
+    box(ctx, 120, 80, 120, 38, 'rgba(74,58,167,0.15)', P.violet, P.text, ['model'], false);
+    box(ctx, 340, 80, 120, 38, 'rgba(25,158,112,0.15)', P.aqua, P.text, ['tool result'], false);
+    arrow(ctx, 242, 99, 336, 99, P.mute, 2);
+    // unbroken return arc
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(400, 118);
+    ctx.bezierCurveTo(400, 142, 180, 142, 180, 118);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(180, 118);
+    ctx.lineTo(175, 129); ctx.lineTo(185, 129);
+    ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('nothing closes the ring —', 700, 94);
+    ctx.fillText('it stops when someone notices', 700, 110);
+
+    // row 2
+    box(ctx, 120, 205, 120, 38, 'rgba(74,58,167,0.15)', P.violet, P.text, ['model'], false);
+    box(ctx, 340, 205, 120, 38, 'rgba(25,158,112,0.15)', P.aqua, P.text, ['tool result'], false);
+    arrow(ctx, 242, 224, 336, 224, P.mute, 2);
+
+    var gates = [
+        { x: 150, lab: 'turn cap' },
+        { x: 254, lab: 'budget' },
+        { x: 358, lab: 'duplicate call' }
+    ];
+    for (var i = 0; i < gates.length; i++) {
+        rr(ctx, gates[i].x, 252, 92, 22, 4);
+        ctx.fillStyle = 'rgba(230,126,34,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gates[i].lab, gates[i].x + 46, 267);
+    }
+    arrow(ctx, 346, 263, 338, 263, P.mute, 1.5);
+    arrow(ctx, 242, 263, 234, 263, P.mute, 1.5);
+    arrow(ctx, 400, 243, 400, 250, P.mute, 2);
+    arrow(ctx, 180, 250, 180, 243, P.mute, 2);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('any gate fires → stop,', 700, 219);
+    ctx.fillText('report the partial answer', 700, 235);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the guard, not the model, is what ends the task', w / 2, 292);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('illustrative', 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

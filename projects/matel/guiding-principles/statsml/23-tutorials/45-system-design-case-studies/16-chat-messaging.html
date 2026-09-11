@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Messaging</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Chat Messaging</h1>
+<p class="subtitle">A billion phones each hold one open connection to a server — the hard part of a messenger is keeping millions of mostly-silent sockets alive, not moving the words</p>
+
+<div class="card-section">
+    <h2>A Billion Phones, One Open Socket Each</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">persistent connections</span><span class="tag orange">Erlang</span></div>
+                <ul>
+                    <li><b>The phone</b> — every online phone keeps one long-lived connection open to a gateway server</li>
+                    <li><b>The silence</b> — that socket is idle almost all day; it exists so the server can push instantly</li>
+                    <li><b>The count</b> — one gateway holds ~2,000,000 open sockets; only ~30,000 carry a message in a given second</li>
+                    <li><b>The history</b> — Erlang-based gateways were publicly reported holding 1M+ connections per server</li>
+                    <li><b>The trade</b> — the scarce resource is memory per idle socket, not CPU for the messages themselves</li>
+                </ul>
+                <p class="example">At the 6pm peak a single gateway holds 2,000,000 open sockets, and 98.5% of them are carrying nothing at that instant.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A mobile messenger is a connection-holding problem first and a message-moving problem second — the server is designed around millions of cheap, mostly-idle sockets.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Message, Two Ticks, Then Blue</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">delivery receipts</span><span class="tag orange">offline queue</span></div>
+                <ul>
+                    <li><b>The send</b> — Asha taps send at t=0; her phone writes the message up its already-open connection</li>
+                    <li><b>One tick</b> — at t=80ms her gateway acks receipt: state becomes "sent" (the server has it)</li>
+                    <li><b>The route</b> — a lookup finds which gateway holds Ben's socket; the message hops there</li>
+                    <li><b>Two ticks</b> — at t=230ms Ben's phone acks the push: state becomes "delivered" (his device has it)</li>
+                    <li><b>Blue ticks</b> — at t=6s Ben opens the chat: state becomes "read"; every tick is a state transition</li>
+                    <li><b>Offline path</b> — if Ben's socket is gone, the message waits in a server queue until he reconnects</li>
+                </ul>
+                <p class="example">Ben's phone is off in a subway; the message sits queued for 42 minutes and flips to two ticks the moment his connection comes back.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Delivery receipts are a tiny state machine per message — sent &rarr; delivered &rarr; read — and each transition is just a small ack flowing back along the same open connections.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Groups Turn One Send into a Thousand Pushes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">fan-out</span><span class="tag green">groups</span><span class="tag orange">scale</span></div>
+                <ul>
+                    <li><b>The group</b> — a group chat is just a member list of devices, not a special kind of channel</li>
+                    <li><b>The fan-out</b> — one message to a 200-member group becomes 199 separate pushes, one per device</li>
+                    <li><b>The growth</b> — pushes per send scale linearly: 8 members &rarr; 7, 200 &rarr; 199, 1,024 &rarr; 1,023</li>
+                    <li><b>The day</b> — a chatty 200-member group at 500 messages/day generates 99,500 pushes/day</li>
+                    <li><b>The lesson</b> — write amplification, not storage, is what caps group size in messenger designs</li>
+                </ul>
+                <p class="example">One "happy birthday" tapped into a 1,024-member group costs the servers 1,023 deliveries before anyone even replies.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Fan-out is the multiplier that turns a modest per-user message rate into the real server load — which is exactly why messengers cap group sizes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Encrypted Does Not Mean the Server Stores Nothing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">encryption</span></div>
+                <ul>
+                    <li><b>The lock</b> — with end-to-end encryption the keys live only on the phones; the server relays ciphertext</li>
+                    <li><b>Still working</b> — the server still routes, queues, and acks — all on bytes it cannot read</li>
+                    <li><b>The header</b> — routing needs metadata: sender, recipient, and timestamp stay visible to the server</li>
+                    <li><b>The queue</b> — offline messages are stored as ciphertext; a database leak exposes no message text</li>
+                    <li><b>The mistake</b> — assuming "encrypted" means the server holds nothing, or can read what it holds</li>
+                </ul>
+                <p class="example">The gateway happily queues Ben's 42-minute-old message without ever knowing whether it says "on my way" or a bank password.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Confusing encryption of the body with invisibility of the envelope — end-to-end encryption blinds the server to content, but the server must still see who is talking to whom, and when, in order to route at all.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.45), y2 - 9 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.45), y2 - 9 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one gateway over 24 hours, open sockets vs active sockets
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var hours = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+    var open = [1.2, 1.0, 0.9, 1.1, 1.5, 1.8, 2.0, 1.9, 1.4];
+    var active = [0.018, 0.015, 0.013, 0.017, 0.022, 0.027, 0.030, 0.028, 0.021];
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(hr) { return ox + hr / 24 * pw; }
+    function yOf(m) { return baseY - m / 2 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Gateway, One Day: 2M Sockets Open, ~30k Talking', w / 2, 24);
+
+    // gridlines + y labels
+    var yTicks = [0.5, 1.0, 1.5];
+    var yLabs = ['0.5M', '1.0M', '1.5M'];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 6, yOf(yTicks[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var xLabs = [0, 6, 12, 18, 24];
+    for (var i = 0; i < xLabs.length; i++) {
+        ctx.fillText(xLabs[i] + 'h', xOf(xLabs[i]), baseY + 16);
+    }
+
+    // open sockets: filled area + line
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), baseY);
+    for (var i = 0; i < hours.length; i++) {
+        ctx.lineTo(xOf(hours[i]), yOf(open[i]));
+    }
+    ctx.lineTo(xOf(24), baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < hours.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(hours[i]), yOf(open[i])) : ctx.lineTo(xOf(hours[i]), yOf(open[i]));
+    }
+    ctx.stroke();
+
+    // active sockets line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < hours.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(hours[i]), yOf(active[i])) : ctx.lineTo(xOf(hours[i]), yOf(active[i]));
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sockets open', xOf(18), yOf(2.0) - 10);
+    ctx.fillStyle = P.green;
+    ctx.fillText('sockets sending right now', xOf(10), yOf(0.017) - 10);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('at the 6pm peak, 98.5% of 2,000,000 sockets are silent', w / 2, 110);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; 1M+ sockets per server matches historical public reports', w - 12, h - 8);
+});
+
+// c2: online delivery path vs offline queue path
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var BW = 130, BH = 44;
+    var lefts = [90, 250, 410, 570];
+
+    function box(x, cy, line1, line2, fill, border) {
+        var y = cy - BH / 2;
+        ctx.fillStyle = fill;
+        roundedRect(ctx, x, y, BW, BH, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+        roundedRect(ctx, x, y, BW, BH, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(line1, x + BW / 2, cy - 3);
+        ctx.fillText(line2, x + BW / 2, cy + 13);
+    }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Sender → Gateway → Gateway → Recipient: Ticks Are State Transitions', w / 2, 24);
+
+    var blueFill = 'rgba(42,120,214,0.15)';
+    var greenFill = 'rgba(0,131,0,0.12)';
+    var orangeFill = 'rgba(217,89,38,0.12)';
+
+    // row 1: Ben online
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Ben online', 20, 60);
+    box(lefts[0], 100, "Asha's phone", 't=0', blueFill, P.blue);
+    box(lefts[1], 100, 'gateway A', 'ack 80ms, ✓ sent', blueFill, P.blue);
+    box(lefts[2], 100, 'gateway B', 'route lookup', blueFill, P.blue);
+    box(lefts[3], 100, "Ben's phone", '230ms, ✓✓ delivered', greenFill, P.green);
+    for (var i = 0; i < 3; i++) {
+        arrow(ctx, lefts[i] + BW, 100, lefts[i + 1], 100, P.mute, 3);
+    }
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('read at t=6s → blue ✓✓', lefts[3] + BW / 2, 140);
+
+    // row 2: Ben offline
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Ben offline', 20, 170);
+    box(lefts[0], 210, "Asha's phone", 't=0', blueFill, P.blue);
+    box(lefts[1], 210, 'gateway A', '✓ sent', blueFill, P.blue);
+    box(lefts[2], 210, 'queue', 'stored 42 min', orangeFill, P.orange);
+    box(lefts[3], 210, 'reconnect →', 'push, ✓✓', greenFill, P.green);
+    for (var i = 0; i < 3; i++) {
+        arrow(ctx, lefts[i] + BW, 210, lefts[i + 1], 210, P.mute, 3);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the acks ride back along the same open sockets', w / 2, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c3: fan-out pushes per send by group size
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pushes = [1, 7, 49, 199, 1023];
+    var pushLabs = ['1', '7', '49', '199', '1,023'];
+    var sizes = ['2', '8', '50', '200', '1,024'];
+    var centers = [130, 250, 370, 490, 610];
+
+    var baseY = 245, ph = 180;
+    function yOf(v) { return baseY - v / 1100 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Send, N−1 Pushes: Fan-Out by Group Size', w / 2, 24);
+
+    // gridlines + y labels
+    var gTicks = [250, 500, 750, 1000];
+    for (var i = 0; i < gTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, yOf(gTicks[i])); ctx.lineTo(660, yOf(gTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gTicks[i]), 52, yOf(gTicks[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    // bars
+    for (var i = 0; i < 5; i++) {
+        var cx = centers[i];
+        var bh = Math.max(pushes[i] / 1100 * ph, 2);
+        var isLast = (i === 4);
+        ctx.fillStyle = isLast ? 'rgba(217,89,38,0.25)' : 'rgba(42,120,214,0.30)';
+        ctx.fillRect(cx - 28, baseY - bh, 56, bh);
+        ctx.strokeStyle = isLast ? P.orange : P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - 28, baseY - bh, 56, bh);
+        ctx.fillStyle = isLast ? P.orange : P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(pushLabs[i], cx, baseY - bh - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(sizes[i], cx, baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('members', 360, baseY + 32);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('200-member group × 500 msgs/day = 99,500 pushes/day', 90, 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('fan-out exact: pushes = members − 1; traffic figures illustrative', w - 12, h - 8);
+});
+
+// c4: readable header vs unreadable body, keys only on the phones
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function box(x, cy, bw, line1, line2, fill, border) {
+        var y = cy - 22;
+        ctx.fillStyle = fill;
+        roundedRect(ctx, x, y, bw, 44, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+        roundedRect(ctx, x, y, bw, 44, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(line1, x + bw / 2, cy - 3);
+        ctx.fillText(line2, x + bw / 2, cy + 13);
+    }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What the Gateway Can and Cannot Read', w / 2, 24);
+
+    // row 1: the envelope
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the envelope', 20, 60);
+    box(170, 95, 220, 'header', 'from: Asha, to: Ben, 14:03', 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ server reads — needed to route', 280, 135);
+    box(430, 95, 220, 'body', '8f3a1c9e2b7d…', 'rgba(74,58,167,0.12)', P.violet);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ server cannot read', 540, 135);
+
+    // row 2: the keys
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the keys', 20, 170);
+    box(90, 205, 170, "Asha's phone", 'encrypts (key on device)', 'rgba(0,131,0,0.12)', P.green);
+    arrow(ctx, 260, 205, 290, 205, P.mute, 3);
+    box(290, 205, 190, 'gateway + offline queue', 'relays ciphertext', 'rgba(107,114,128,0.12)', P.mute);
+    arrow(ctx, 480, 205, 510, 205, P.mute, 3);
+    box(510, 205, 170, "Ben's phone", 'decrypts', 'rgba(0,131,0,0.12)', P.green);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('encryption hides the letter, not the envelope', w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

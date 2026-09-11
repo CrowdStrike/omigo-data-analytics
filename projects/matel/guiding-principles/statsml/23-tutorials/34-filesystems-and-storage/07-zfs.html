@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZFS</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>ZFS</h1>
+<p class="subtitle">ZFS checksums every block it writes and re-checks it on every read — the filesystem that assumes the disk is lying until proven otherwise</p>
+
+<div class="card-section">
+    <h2>The Ledger That Rotted on the Shelf</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">end-to-end checksums</span><span class="tag orange">bit rot</span></div>
+                <ul>
+                    <li><b>The archive</b> — a coffee shop chain keeps five years of daily sales files on one storage box</li>
+                    <li><b>The rot</b> — one night a disk quietly flips a single bit inside a three-year-old sales file</li>
+                    <li><b>The old way</b> — an ordinary filesystem returns the corrupted block as if nothing happened</li>
+                    <li><b>The distrust</b> — ZFS stores a checksum for every block and verifies it on every single read</li>
+                    <li><b>The parent</b> — the checksum lives in the parent block pointer, not next to the data it guards</li>
+                    <li><b>The chain</b> — parents are checksummed by their parents up to the root, a merkle-style tree</li>
+                </ul>
+                <p class="example">The analyst opens the 2023 file in 2026; ZFS re-checks its blocks on the way up and flags the flipped bit before a single wrong number reaches the spreadsheet.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> ZFS (shipped in Solaris, 2005) treats the disk as an unreliable witness — every block read is checked against a checksum stored one level above it, so corruption cannot hide.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Catching a Flipped Bit with One Addition</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">checksum</span></div>
+                <ul>
+                    <li><b>The block</b> — one block holds four daily totals for the week: 120, 95, 140, 88</li>
+                    <li><b>The stored check</b> — at write time the parent pointer records their sum: 120+95+140+88 = 443</li>
+                    <li><b>The flip</b> — months later bit 7 of the last value flips on disk: 88 becomes 216 (+128)</li>
+                    <li><b>The re-check</b> — the read-back sum is 120+95+140+216 = 571, which does not equal 443</li>
+                    <li><b>The repair</b> — ZFS fetches the mirror's copy, verifies it sums to 443, and rewrites the bad block</li>
+                    <li><b>The real thing</b> — production ZFS uses fletcher4 or SHA-256, not a sum; the logic is identical</li>
+                </ul>
+                <p class="example">Read back [120, 95, 140, 216], sum to 571, compare with the stored 443 — one addition exposes the flip, and the mirror copy that sums to 443 replaces it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Verification is just "recompute and compare": stored checksum 443 vs read-back 571 means the disk lied, and a redundant copy that matches 443 is trusted instead.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Scrubbing Years of Data Before It Rots</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">scrub</span><span class="tag orange">data science</span></div>
+                <ul>
+                    <li><b>The threat</b> — flaky cables, firmware bugs, and misdirected writes corrupt data without any error</li>
+                    <li><b>The scrub</b> — a ZFS scrub walks every block in the pool, re-checks it, and repairs from redundancy</li>
+                    <li><b>The schedule</b> — run monthly, corruption is caught while a good copy still exists to heal from</li>
+                    <li><b>RAID-Z</b> — ZFS's own parity RAID, so every repair has checksummed parity blocks to rebuild from</li>
+                    <li><b>Copy-on-write</b> — ZFS never overwrites a live block in place, so a crash can't half-write one</li>
+                    <li><b>The stakes</b> — a silently corrupted training file poisons every model retrained from it</li>
+                </ul>
+                <p class="example">A monthly scrub of the archive quietly repairs a handful of bad blocks a year; the same blocks on a plain filesystem would sit corrupted until someone noticed odd numbers.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Checksums only help if something reads the data — scrub is the routine that reads everything on purpose, turning silent decade-long rot into a monthly repair log line.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>RAID Alone Can't Tell Which Copy Is Right</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">mirrors</span></div>
+                <ul>
+                    <li><b>The confusion</b> — "I have RAID mirrors, so I'm already protected" — RAID copies, it doesn't verify</li>
+                    <li><b>The tie</b> — when two mirror copies disagree, plain RAID has no way to know which one is correct</li>
+                    <li><b>The coin flip</b> — many RAID setups just return whichever copy answered first, right or wrong</li>
+                    <li><b>The referee</b> — ZFS holds the checksum in the parent, an outside witness neither copy can forge</li>
+                    <li><b>Self-healing</b> — the copy matching the checksum wins, and ZFS rewrites the losing copy from it</li>
+                    <li><b>Disk ECC too</b> — a drive's own ECC misses misdirected and phantom writes; end-to-end checks don't</li>
+                </ul>
+                <p class="example">Mirror A returns a block summing to 443 and mirror B one summing to 571; plain RAID may serve B without blinking, while ZFS picks A and heals B on the spot.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating redundancy as integrity. Two disagreeing copies with no checksum is a tie you can lose; the parent-stored checksum is what turns redundancy into repair.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBox(ctx, x, y, w, h, r, fill, edge) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.45), y2 - 9 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.45), y2 - 9 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: same flipped bit, ordinary FS vs ZFS read paths
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Flipped Bit, Two Filesystems: Only One Notices', w / 2, 24);
+
+    var blueFill = 'rgba(42,120,214,0.15)';
+    var redFill = 'rgba(231,76,60,0.12)';
+    var greenFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: ordinary FS (y = 95 center)
+    var y1 = 95;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('ordinary FS', 20, y1 + 4);
+
+    roundBox(ctx, 150, y1 - 20, 180, 40, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('disk block (1 bit flipped)', 240, y1 + 4);
+
+    arrow(ctx, 334, y1, 424, y1, P.mute, 3);
+
+    roundBox(ctx, 430, y1 - 20, 180, 40, 8, redFill, '#e74c3c');
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('returned as-is to the app', 520, y1 + 4);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ silent corruption', 520, y1 + 38);
+
+    // row 2: ZFS (y = 205 center)
+    var y2 = 205;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('ZFS', 20, y2 + 4);
+
+    roundBox(ctx, 150, y2 - 20, 180, 40, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('disk block (1 bit flipped)', 240, y2 + 4);
+
+    arrow(ctx, 334, y2, 354, y2, P.mute, 3);
+
+    roundBox(ctx, 360, y2 - 20, 175, 40, 8, greenFill, P.green);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('verify vs parent checksum', 447.5, y2 + 4);
+
+    arrow(ctx, 539, y2, 554, y2, P.mute, 3);
+
+    roundBox(ctx, 560, y2 - 20, 150, 40, 8, greenFill, P.green);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mismatch — flagged', 635, y2 + 4);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ caught', 635, y2 + 38);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the checksum lives in the parent pointer — bad data can't vouch for itself", w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('flow schematic', w - 12, h - 8);
+});
+
+// c2: written vs read-back daily totals, checksum comparison
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Bit Flips: 88 Becomes 216 and the Sum Betrays It', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 480, plotH = 180;
+    var maxV = 250;
+    function yOf(v) { return baseY - v / maxV * plotH; }
+
+    // gridlines at 50/100/150/200
+    var grids = [50, 100, 150, 200];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[g]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var days = ['Mon', 'Tue', 'Wed', 'Thu'];
+    var written = [120, 95, 140, 88];
+    var readBack = [120, 95, 140, 216];
+    var groupW = plotW / 4, barW = 40;
+
+    for (var i = 0; i < 4; i++) {
+        var gx = ox + i * groupW + groupW / 2;
+
+        // written bar (blue)
+        var wx = gx - barW - 4, wy = yOf(written[i]);
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(wx, wy, barW, baseY - wy);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(wx, wy, barW, baseY - wy);
+        ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(written[i]), wx + barW / 2, wy - 6);
+
+        // read-back bar (aqua, or red for the corrupted day)
+        var rxb = gx + 4, ry = yOf(readBack[i]);
+        var isBad = (i === 3);
+        var edge = isBad ? '#e74c3c' : P.aqua;
+        ctx.fillStyle = isBad ? 'rgba(231,76,60,0.30)' : 'rgba(25,158,112,0.30)';
+        ctx.fillRect(rxb, ry, barW, baseY - ry);
+        ctx.strokeStyle = edge; ctx.lineWidth = 2;
+        ctx.strokeRect(rxb, ry, barW, baseY - ry);
+        ctx.fillStyle = edge;
+        ctx.font = isBad ? 'bold 12px system-ui' : '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(isBad ? '216 (bit 7 flipped)' : String(readBack[i]), rxb + barW / 2, ry - 6);
+
+        // day label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(days[i], gx, baseY + 16);
+    }
+
+    // checksum panel on the right (x=570-710)
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stored: 443', 578, 120);
+    ctx.fillText('read:   571', 578, 142);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(572, 154); ctx.lineTo(708, 154); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('443 ≠ 571', 578, 176);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mirror copy sums to 443 — bad block rewritten', 300, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('totals illustrative; sum stands in for fletcher4/SHA-256', w - 12, h - 8);
+});
+
+// c3: 36 months of bit rot, plain FS vs scrubbed ZFS pool
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('36 Months of Bit Rot: Unchecked It Accumulates, Scrubbed It Stays Zero', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    var maxY = 10;
+    function xOf(m) { return ox + m / 36 * plotW; }
+    function yOf(v) { return baseY - v / maxY * plotH; }
+
+    // gridlines at 2/4/6/8
+    var grids = [2, 4, 6, 8];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[g]), ox - 8, gy + 4);
+    }
+
+    // axes and month ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    for (var m = 0; m <= 36; m += 6) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(m), xOf(m), baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('months', ox + plotW / 2, baseY + 32);
+
+    var months = [0, 6, 12, 18, 24, 30, 36];
+    var plainFS = [0, 1, 3, 4, 6, 8, 9];
+    var zfs = [0, 0, 0, 0, 0, 0, 0];
+
+    // plain FS line (red staircase up)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < months.length; i++) {
+        var x = xOf(months[i]), y = yOf(plainFS[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < months.length; i++) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(xOf(months[i]), yOf(plainFS[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // ZFS line (green, flat on baseline)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < months.length; i++) {
+        var x = xOf(months[i]), y = yOf(zfs[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // scrub ticks above the green line every month
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    for (var m = 1; m <= 36; m += 1) {
+        ctx.beginPath(); ctx.moveTo(xOf(m), baseY - 6); ctx.lineTo(xOf(m), baseY - 22); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('scrub repairs, count resets', xOf(12), baseY - 30);
+
+    // line labels
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('plain filesystem', xOf(7), yOf(2.6));
+    ctx.fillStyle = P.green;
+    ctx.fillText('ZFS + monthly scrub', xOf(20), baseY - 46);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('9 corrupt blocks and nobody knows', xOf(26), 95);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('block counts illustrative', w - 12, h - 8);
+});
+
+// c4: disagreeing mirrors, plain RAID vs ZFS checksum referee
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Mirrors Disagree: Coin Flip vs Checksum Referee', w / 2, 24);
+
+    var blueFill = 'rgba(42,120,214,0.15)';
+    var redFill = 'rgba(231,76,60,0.12)';
+    var greenFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: plain RAID (center y = 95)
+    var y1 = 95;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('plain RAID', 20, y1 + 4);
+
+    roundBox(ctx, 150, y1 - 40, 150, 36, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('copy A: sum 443', 225, y1 - 17);
+
+    roundBox(ctx, 150, y1 + 4, 150, 36, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text;
+    ctx.fillText('copy B: sum 571', 225, y1 + 27);
+
+    roundBox(ctx, 440, y1 - 22, 180, 44, 8, redFill, '#e74c3c');
+    arrow(ctx, 304, y1 - 22, 434, y1 - 6, P.mute, 3);
+    arrow(ctx, 304, y1 + 22, 434, y1 + 6, P.mute, 3);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('serves whichever', 530, y1 - 4);
+    ctx.fillText('answers first', 530, y1 + 12);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ may return 571', 530, y1 + 40);
+
+    // row 2: ZFS (center y = 205)
+    var y2 = 205;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('ZFS', 20, y2 + 4);
+
+    roundBox(ctx, 150, y2 - 40, 150, 36, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('copy A: sum 443', 225, y2 - 17);
+
+    roundBox(ctx, 150, y2 + 4, 150, 36, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text;
+    ctx.fillText('copy B: sum 571', 225, y2 + 27);
+
+    roundBox(ctx, 380, y2 - 18, 160, 36, 8, greenFill, P.green);
+    arrow(ctx, 304, y2 - 22, 374, y2 - 6, P.mute, 3);
+    arrow(ctx, 304, y2 + 22, 374, y2 + 6, P.mute, 3);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('parent checksum = 443', 460, y2 + 4);
+
+    arrow(ctx, 544, y2, 574, y2, P.mute, 3);
+
+    roundBox(ctx, 580, y2 - 18, 130, 36, 8, greenFill, P.green);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('serve A, rewrite B', 645, y2 + 4);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ self-heal', 645, y2 + 34);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('redundancy gives you a second copy; the checksum tells you which copy to trust', w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sums carried over from the worked example, illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

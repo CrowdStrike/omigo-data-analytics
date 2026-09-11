@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diffusion Models</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Diffusion Models</h1>
+<p class="subtitle">Image generators don't paint stroke by stroke — they start from pure static and remove a little noise at a time until a picture is left</p>
+
+<div class="card-section">
+    <h2>From Static to a Picture</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">denoising</span></div>
+                <ul>
+                    <li><b>Training</b> — take a real photo, add noise bit by bit until it's pure static; the model learns to undo one step</li>
+                    <li><b>Generating</b> — start from fresh static and apply that undo step about 50 times; a picture emerges</li>
+                    <li><b>The prompt</b> — the text steers every denoise step toward "a cat on a bike" instead of anything else</li>
+                    <li><b>One skill</b> — the model only ever learns "remove a little noise"; repetition does the painting</li>
+                    <li><b>The name</b> — "diffusion" is the noising direction; generation runs the film backwards</li>
+                </ul>
+                <p class="example">Like a sculptor who "removes everything that isn't the statue" — each pass strips away a little static that isn't the image.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A diffusion model learns one small skill — undo a little noise — and an image is that skill applied dozens of times in a row.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Denoising Three Pixels by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">predict the noise</span></div>
+                <ul>
+                    <li><b>A tiny image</b> — three pixel brightnesses: 80, 40, 10 (0 = black, 100 = white)</li>
+                    <li><b>Add noise</b> — sprinkle +15, −20, +5 onto the pixels: the noisy image reads 95, 20, 15</li>
+                    <li><b>The training pair</b> — input: the noisy 95, 20, 15; target: the noise +15, −20, +5 that was added</li>
+                    <li><b>The model's job</b> — look at a noisy image and predict what noise was sprinkled on it</li>
+                    <li><b>Recover</b> — subtract the predicted noise: 95−15, 20+20, 15−5 gives back 80, 40, 10</li>
+                </ul>
+                <p class="example">Training data is free to make — take any photo, sprinkle known noise, and the right answer is the noise you just sprinkled.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The model never learns "draw a cat" — it learns "spot the noise"; redo the three subtractions and you've run one denoise step.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where Diffusion Shows Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">image generation</span></div>
+                <ul>
+                    <li><b>Text-to-image</b> — the well-known image generators are diffusion models under the hood</li>
+                    <li><b>Beyond images</b> — the same recipe generates video clips, audio, and even molecule shapes</li>
+                    <li><b>Vs LLMs</b> — an LLM writes left to right, one token at a time; diffusion refines the whole canvas each pass</li>
+                    <li><b>The speed dial</b> — fewer denoise steps is faster but rougher; more steps is slower but cleaner</li>
+                    <li><b>Why it won</b> — adding noise is easy, so perfect training pairs can be made from any photo for free</li>
+                </ul>
+                <p class="example">Anything you can add noise to, you can train a denoiser for — a video clip, a sound wave, or a protein shape.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> LLMs generate sequentially, diffusion refines the whole output in repeated passes — two different routes to "generate".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not a Collage of Stored Photos</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">text-to-image</span></div>
+                <ul>
+                    <li><b>No lookup</b> — at generation time there is no image database; only learned patterns in the knobs</li>
+                    <li><b>The static matters</b> — different starting static gives a different picture from the same prompt</li>
+                    <li><b>Same prompt twice</b> — two images, not one; the dice live in the starting noise</li>
+                    <li><b>Steps ≠ resolution</b> — the step count sets how refined the denoising is, not the pixel count</li>
+                    <li><b>Memorization caveat</b> — an image repeated many times in training can be reproduced too closely</li>
+                </ul>
+                <p class="example">Ask for "a lighthouse at sunset" twice and you get two different lighthouses — the prompt steered two different patches of static.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Thinking the model pastes together stored photos — it denoises fresh static using learned patterns; nothing is looked up or cropped.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// deterministic pseudo-random in [0,1) — no Math.random()
+function hash01(i, f) {
+    var v = Math.sin(i * 12.9898 + f * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+}
+
+// draws the sun-over-hill scene inside a frame at (x, y) with side s and alpha a
+function drawScene(ctx, x, y, s, a) {
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = P.blue;
+    ctx.fillRect(x, y, s, s * 0.4);
+    ctx.fillStyle = P.yellow;
+    ctx.beginPath(); ctx.arc(x + s * 0.7, y + s * 0.22, s * 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(x, y + s);
+    ctx.lineTo(x + s * 0.5, y + s * 0.55);
+    ctx.lineTo(x + s, y + s);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+
+// draws n gray noise dots inside a square frame, seeded by frame index f
+function drawNoise(ctx, x, y, s, n, f) {
+    ctx.fillStyle = P.mute;
+    for (var i = 0; i < n; i++) {
+        var nx = x + hash01(i, f) * (s - 2);
+        var ny = y + hash01(i + 1000, f) * (s - 2);
+        ctx.fillRect(nx, ny, 2, 2);
+    }
+}
+
+// c1: five frames, static to clean image
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Image Emerging Over 50 Denoise Steps', w / 2, 24);
+
+    var lefts = [36, 173, 310, 447, 584];
+    var alphas = [0.05, 0.25, 0.55, 0.85, 1.0];
+    var dots = [420, 300, 170, 60, 0];
+    var steps = ['step 0', 'step 10', 'step 25', 'step 40', 'step 50'];
+    var subs = ['pure static', 'shapes hinted', 'scene visible', 'details settle', 'clean image'];
+    var side = 116;
+
+    for (var f = 0; f < 5; f++) {
+        var x = lefts[f], y = 60;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x, y, side, side);
+        drawScene(ctx, x, y, side, alphas[f]);
+        drawNoise(ctx, x, y, side, dots[f], f + 1);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, side, side);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(steps[f], x + side / 2, 200);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(subs[f], x + side / 2, 216);
+        if (f < 4) {
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x + side + 3, 118); ctx.lineTo(lefts[f + 1] - 7, 118); ctx.stroke();
+            arrowHead(ctx, lefts[f + 1] - 3, 118, 0, 6, P.mute);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every arrow is the same learned move: remove a little noise', w / 2, 252);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('frames illustrative; real models denoise a number grid, not dots', w - 12, 290);
+});
+
+// c2: forward add-noise vs backward predict-and-subtract
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Forward: Add Known Noise — Backward: Predict and Subtract It', w / 2, 24);
+
+    // left panel: training pairs
+    roundRect(ctx, 30, 48, 320, 200, 6);
+    ctx.fillStyle = 'rgba(107,114,128,0.05)'; ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('training: noise it, remember the noise', 190, 68);
+
+    var centers = [110, 190, 270];
+    var clean = [80, 40, 10];
+    var noisy = [95, 20, 15];
+    var noise = ['+15', '−20', '+5'];
+    for (var i = 0; i < 3; i++) {
+        var cx = centers[i];
+        var ch = clean[i] * 1.0, nh = noisy[i] * 1.0;
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(cx - 32, 200 - ch, 28, ch);
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(clean[i]), cx - 18, 200 - ch - 4);
+        ctx.fillStyle = P.yellow;
+        ctx.fillRect(cx + 4, 200 - nh, 28, nh);
+        ctx.fillText(String(noisy[i]), cx + 18, 200 - nh - 4);
+        ctx.fillStyle = P.magenta; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(noise[i], cx, 90);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText('px ' + (i + 1), cx, 216);
+    }
+    // legend
+    ctx.textAlign = 'left'; ctx.font = '11px system-ui';
+    ctx.fillStyle = P.blue; ctx.fillRect(60, 229, 11, 9);
+    ctx.fillStyle = '#444'; ctx.fillText('clean', 76, 237);
+    ctx.fillStyle = P.yellow; ctx.fillRect(122, 229, 11, 9);
+    ctx.fillStyle = '#444'; ctx.fillText('noisy', 138, 237);
+    ctx.fillStyle = P.magenta; ctx.fillText('noise added', 190, 237);
+    ctx.textAlign = 'center';
+
+    // right panel: generation
+    roundRect(ctx, 380, 48, 310, 200, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.05)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('generating: predict noise, subtract', 535, 68);
+
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('sees 95 → predicts +15 → 80', 400, 100);
+    ctx.fillText('sees 20 → predicts −20 → 40', 400, 122);
+    ctx.fillText('sees 15 → predicts +5 → 10', 400, 144);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('clean image recovered: 80, 40, 10', 535, 180);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('real generation repeats this ~50 times', 535, 202);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the target is the noise itself — spot it, subtract it, and the image is back', w / 2, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('3-pixel example, numbers exact', w - 12, 292);
+});
+
+// c3: append vs refine lanes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Ways to Generate: Append vs Refine', w / 2, 24);
+
+    // LLM lane
+    roundRect(ctx, 30, 52, 660, 92, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.05)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('LLM: append one token at a time', 48, 74);
+
+    var wLefts = [48, 152, 256, 360, 464];
+    var words = ['The', 'cat', 'sat', 'on', 'the'];
+    ctx.textAlign = 'center';
+    for (var i = 0; i < 5; i++) {
+        roundRect(ctx, wLefts[i], 96, 86, 28, 5);
+        ctx.fillStyle = 'rgba(42,120,214,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = '12px system-ui';
+        ctx.fillText(words[i], wLefts[i] + 43, 115);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        var ax1 = wLefts[i] + 88, ax2 = (i < 4 ? wLefts[i + 1] : 568) - 6;
+        ctx.beginPath(); ctx.moveTo(ax1, 110); ctx.lineTo(ax2, 110); ctx.stroke();
+        arrowHead(ctx, ax2 + 4, 110, 0, 5, P.mute);
+    }
+    ctx.setLineDash([4, 3]);
+    roundRect(ctx, 568, 96, 86, 28, 5);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('mat?', 611, 115);
+
+    // diffusion lane
+    roundRect(ctx, 30, 160, 660, 92, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.05)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('diffusion: refine the whole canvas each pass', 48, 182);
+
+    var cLefts = [48, 214, 380, 546];
+    var cAlphas = [0.15, 0.45, 0.75, 1.0];
+    var cDots = [80, 40, 15, 0];
+    ctx.textAlign = 'center';
+    for (var i = 0; i < 4; i++) {
+        var x = cLefts[i], y = 194, bw = 86, bh = 48;
+        ctx.fillStyle = '#fff'; ctx.fillRect(x, y, bw, bh);
+        // mini scene scaled into the box
+        ctx.save();
+        ctx.globalAlpha = cAlphas[i];
+        ctx.fillStyle = P.blue; ctx.fillRect(x, y, bw, bh * 0.4);
+        ctx.fillStyle = P.yellow;
+        ctx.beginPath(); ctx.arc(x + bw * 0.7, y + bh * 0.24, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = P.green;
+        ctx.beginPath();
+        ctx.moveTo(x, y + bh);
+        ctx.lineTo(x + bw * 0.5, y + bh * 0.55);
+        ctx.lineTo(x + bw, y + bh);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = P.mute;
+        for (var d = 0; d < cDots[i]; d++) {
+            var nx = x + hash01(d, i + 20) * (bw - 2);
+            var ny = y + hash01(d + 500, i + 20) * (bh - 2);
+            ctx.fillRect(nx, ny, 2, 2);
+        }
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, bw, bh);
+        if (i < 3) {
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x + bw + 6, 218); ctx.lineTo(cLefts[i + 1] - 10, 218); ctx.stroke();
+            arrowHead(ctx, cLefts[i + 1] - 6, 218, 0, 5, P.mute);
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+            ctx.fillText('denoise', (x + bw + cLefts[i + 1]) / 2, 210);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the LLM\'s output grows; the diffusion canvas is always full — it just gets cleaner', w / 2, 274);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('lanes simplified', w - 12, 294);
+});
+
+// c4: same prompt, two statics, two pictures
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Prompt, Different Static, Different Picture', w / 2, 24);
+
+    // prompt box
+    roundRect(ctx, 40, 118, 170, 56, 6);
+    ctx.fillStyle = 'rgba(26,82,118,0.08)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('prompt:', 125, 140);
+    ctx.fillText('"lighthouse at sunset"', 125, 158);
+
+    // noise boxes
+    var nb = [[300, 56], [300, 168]];
+    var nLabels = ['static A', 'static B'];
+    for (var i = 0; i < 2; i++) {
+        var x = nb[i][0], y = nb[i][1];
+        ctx.fillStyle = '#fff'; ctx.fillRect(x, y, 96, 96);
+        ctx.fillStyle = P.mute;
+        for (var d = 0; d < 260; d++) {
+            var nx = x + hash01(d, i + 40) * 94;
+            var ny = y + hash01(d + 700, i + 40) * 94;
+            ctx.fillRect(nx, ny, 2, 2);
+        }
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, 96, 96);
+        ctx.fillStyle = P.mute; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(nLabels[i], x + 48, y + 110);
+    }
+
+    // image boxes
+    var ib = [[520, 56], [520, 168]];
+    var iLabels = ['image A', 'image B'];
+    for (var i = 0; i < 2; i++) {
+        var x = ib[i][0], y = ib[i][1];
+        ctx.fillStyle = '#fff'; ctx.fillRect(x, y, 96, 96);
+        // sea band
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(x, y + 64, 96, 32);
+        // sun + lighthouse in two different layouts
+        ctx.fillStyle = P.yellow;
+        if (i === 0) {
+            ctx.beginPath(); ctx.arc(x + 30, y + 28, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = P.magenta; ctx.fillRect(x + 58, y + 38, 12, 48);
+        } else {
+            ctx.beginPath(); ctx.arc(x + 66, y + 40, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = P.magenta; ctx.fillRect(x + 22, y + 30, 12, 48);
+        }
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, 96, 96);
+        ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(iLabels[i], x + 48, y + 110);
+    }
+
+    // arrows
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(210, 132); ctx.lineTo(294, 104); ctx.stroke();
+    arrowHead(ctx, 298, 103, Math.atan2(104 - 132, 294 - 210), 6, P.mute);
+    ctx.beginPath(); ctx.moveTo(210, 160); ctx.lineTo(294, 212); ctx.stroke();
+    arrowHead(ctx, 298, 214, Math.atan2(212 - 160, 294 - 210), 6, P.mute);
+    ctx.beginPath(); ctx.moveTo(400, 104); ctx.lineTo(514, 104); ctx.stroke();
+    arrowHead(ctx, 518, 104, 0, 6, P.mute);
+    ctx.beginPath(); ctx.moveTo(400, 216); ctx.lineTo(514, 216); ctx.stroke();
+    arrowHead(ctx, 518, 216, 0, 6, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('~50 denoise steps', 458, 96);
+    ctx.fillText('~50 denoise steps', 458, 208);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the prompt steers, the static decides the rest — no photo was looked up', w / 2, 284);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sketches illustrative', w - 12, 297);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Kafka</h1>
+<p class="subtitle">The pipeline-sprawl problem &mdash; N data-producing systems wired to M consuming systems meant N&times;M bespoke pipelines; Kafka put one replayable commit log in the middle and cut it to N+M, and that log became a standard piece of infrastructure</p>
+
+<div class="card-section">
+    <h2>Every System Wired to Every Other System</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag red">the pipeline problem</span><span class="tag orange">N&times;M</span></div>
+                <ul>
+                    <li><b>The producers</b> &mdash; metrics, app logs, database changes, click events each pour out of a different system</li>
+                    <li><b>The consumers</b> &mdash; the warehouse, search index, monitoring, and recommendations all want that data</li>
+                    <li><b>The wiring</b> &mdash; every producer-consumer pair got its own bespoke pipeline: 4&times;4 = 16 integrations</li>
+                    <li><b>The fragility</b> &mdash; each pipeline had its own format, its own failure modes, its own backfill script</li>
+                    <li><b>The bill</b> &mdash; adding a 5th consumer means 4 new pipelines (20 total) before it sees any data</li>
+                </ul>
+                <p class="example">Engineers at large data-driven companies have blogged that they kept rebuilding the same fragile point-to-point pipeline &mdash; the mesh grew as producers &times; consumers, faster than any team could maintain.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Point-to-point integration cost multiplies: 4 producers and 4 consumers is already 16 pipelines. The fix has to be structural &mdash; no amount of pipeline-building keeps up with N&times;M.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Log, Every Reader at Its Own Offset</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">offsets</span><span class="tag orange">replay</span></div>
+                <ul>
+                    <li><b>The log</b> &mdash; one append-only sequence of records; a producer only ever appends at the end</li>
+                    <li><b>The offset</b> &mdash; record 12 was just appended; each consumer remembers the offset it has read up to</li>
+                    <li><b>Independence</b> &mdash; the warehouse is at offset 12, search at offset 9: search is 12&minus;9 = 3 records behind</li>
+                    <li><b>Replay</b> &mdash; a brand-new consumer starts at offset 3 (or 0) and catches up by reading old records</li>
+                    <li><b>Retention</b> &mdash; records stay for a set window (say 7 days), consumed or not; reading deletes nothing</li>
+                    <li><b>Partitions</b> &mdash; Kafka splits a topic into many such logs so load spreads across machines</li>
+                </ul>
+                <p class="example">A new monitoring service comes online, sets its offset to 3, replays history, and is caught up by lunch &mdash; no producer changed a line of code.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One write per producer, one independent cursor per consumer &mdash; that is how N&times;M pipelines become N+M integrations, and retention makes replay free.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From In-House Fix to Industry Backbone</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">Kafka</span><span class="tag orange">the log is the truth</span></div>
+                <ul>
+                    <li><b>Open-sourced</b> &mdash; the in-house fix was released as Apache Kafka and became a standard tool</li>
+                    <li><b>The math</b> &mdash; with N producers and M consumers, integrations drop from N&times;M to N+M (exact)</li>
+                    <li><b>Change data capture</b> &mdash; database commit logs stream into Kafka so other systems mirror every change</li>
+                    <li><b>Stream processing</b> &mdash; processors read the log, transform, and write results back as new topics</li>
+                    <li><b>The slogan</b> &mdash; the log is the truth; every database downstream is just a view built from it</li>
+                </ul>
+                <p class="example">A search index, a cache, and a warehouse all replay the same change log &mdash; three "views" that agree because they were materialized from one shared truth.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Kafka outgrew its pipeline-cleanup origin and became a backbone pattern &mdash; change-data-capture, stream processing, and keeping every derived system in sync with the record of what happened.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not Just Another Message Queue</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">queue vs log</span></div>
+                <ul>
+                    <li><b>The confusion</b> &mdash; people file Kafka under "message queue"; a queue deletes a message once consumed</li>
+                    <li><b>The queue</b> &mdash; a classic work queue hands each message to one consumer; a second reader gets nothing</li>
+                    <li><b>The log</b> &mdash; records are removed by the retention clock, never by being read</li>
+                    <li><b>The cursor</b> &mdash; a queue tracks delivery per message; a log stores one offset per consumer group</li>
+                    <li><b>The cost</b> &mdash; treating the log as a queue forfeits its point: no replay, no new-consumer backfill</li>
+                </ul>
+                <p class="example">A team copies events into a second topic "for the new consumer" &mdash; duplicating data the original topic would have replayed from offset 0 for free.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Calling Kafka a message queue. A queue destroys messages on consumption; the log retains them, so any number of consumers &mdash; including ones written next year &mdash; can read the same history independently.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: point-to-point mesh vs central log
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same 8 Systems: 16 Pipelines vs 8', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 50); ctx.lineTo(360, 280); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var producers = ['metrics', 'app logs', 'DB changes', 'click events'];
+    var consumers = ['warehouse', 'search', 'monitor', 'recs'];
+    var ys = [80, 130, 180, 230];
+
+    function sysBox(x, y, text) {
+        roundRect(ctx, x, y, 100, 30, 6);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + 50, y + 19);
+    }
+
+    // left panel label
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('point-to-point: 4×4 = 16', 180, 58);
+
+    // left mesh lines (under boxes)
+    ctx.strokeStyle = 'rgba(231,76,60,0.45)'; ctx.lineWidth = 1;
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 4; j++) {
+            ctx.beginPath();
+            ctx.moveTo(130, ys[i] + 15);
+            ctx.lineTo(230, ys[j] + 15);
+            ctx.stroke();
+        }
+    }
+
+    // left boxes
+    for (var i = 0; i < 4; i++) {
+        sysBox(30, ys[i], producers[i]);
+        sysBox(230, ys[i], consumers[i]);
+    }
+
+    // right panel label
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one log: 4+4 = 8', 545, 58);
+
+    // right arrows (under boxes)
+    for (var i = 0; i < 4; i++) {
+        arrow(ctx, 485, ys[i] + 15, 520, ys[i] + 15, P.green, 2);
+        arrow(ctx, 580, ys[i] + 15, 605, ys[i] + 15, P.green, 2);
+    }
+
+    // right boxes
+    for (var i = 0; i < 4; i++) {
+        sysBox(385, ys[i], producers[i]);
+        sysBox(605, ys[i], consumers[i]);
+    }
+
+    // central log box
+    roundRect(ctx, 520, 80, 60, 180, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    var word1 = 'commit', word2 = 'log';
+    ctx.fillText(word1, 550, 162);
+    ctx.fillText(word2, 550, 178);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('system names illustrative; pipeline counts exact', w - 20, h - 8);
+});
+
+// c2: one partition, three offsets
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Partition: Three Readers, Three Independent Offsets', w / 2, 24);
+
+    var cellW = 44, cellH = 36, gap = 2, x0 = 60, y0 = 100;
+
+    function cellX(off) { return x0 + off * (cellW + gap); }
+
+    // cells
+    for (var off = 0; off <= 12; off++) {
+        var x = cellX(off);
+        if (off === 12) {
+            ctx.fillStyle = 'rgba(0,131,0,0.15)';
+            ctx.fillRect(x, y0, cellW, cellH);
+            ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+            ctx.strokeRect(x, y0, cellW, cellH);
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.15)';
+            ctx.fillRect(x, y0, cellW, cellH);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+            ctx.strokeRect(x, y0, cellW, cellH);
+        }
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('' + off, x + cellW / 2, y0 + cellH / 2 + 4);
+    }
+
+    // producer marker
+    var last = cellX(12) + cellW / 2;
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('producer appends → offset 12', last + 22, 75);
+    arrow(ctx, last, 80, last, y0 - 4, P.green, 2);
+
+    // consumer pointers
+    var consumers = [
+        { off: 12, color: P.green, lab: 'warehouse — offset 12 (caught up)', y: 185 },
+        { off: 9, color: P.blue, lab: 'search — offset 9 (lag 3)', y: 215 },
+        { off: 3, color: P.orange, lab: 'new monitor — offset 3 (replaying)', y: 245 }
+    ];
+    for (var i = 0; i < consumers.length; i++) {
+        var c = consumers[i];
+        var cx = cellX(c.off) + cellW / 2;
+        arrow(ctx, cx, c.y - 12, cx, y0 + cellH + 4, c.color, 2);
+        ctx.fillStyle = c.color; ctx.font = '12px system-ui';
+        if (c.off === 12) {
+            ctx.textAlign = 'right';
+            ctx.fillText(c.lab, w - 20, c.y);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(c.lab, Math.max(cx - 60, 60), c.y);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('each reader keeps its own offset — the log never changes', w - 20, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offsets illustrative; lag 12−9 = 3 exact', w - 20, h - 8);
+});
+
+// c3: N×M vs N+M integrations
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxV = 100;
+
+    function xOf(n) { return ox + (n - 2) / 8 * pw; }
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Why It Spread: Integrations as Systems Multiply', w / 2, 24);
+
+    // gridlines
+    var gVals = [25, 50, 75];
+    for (var i = 0; i < gVals.length; i++) {
+        var y = yOf(gVals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('' + gVals[i], ox - 6, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 2
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var n = 2; n <= 10; n += 2) {
+        var x = xOf(n);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 4); ctx.stroke();
+        ctx.fillText('' + n, x, baseY + 18);
+    }
+
+    var Ns = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var p2p = [4, 9, 16, 25, 36, 49, 64, 81, 100];
+    var logInt = [4, 6, 8, 10, 12, 14, 16, 18, 20];
+
+    // point-to-point line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < Ns.length; i++) {
+        var x = xOf(Ns[i]), y = yOf(p2p[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // log line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < Ns.length; i++) {
+        var x = xOf(Ns[i]), y = yOf(logInt[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // line labels
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('N×M point-to-point', xOf(8) - 10, yOf(64) - 8);
+    ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('N+M via the log', xOf(8), yOf(16) - 10);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10 systems each side: 100 vs 20', xOf(9) + 30, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts exact: N×M and N+M with N=M', ox + pw, h - 8);
+});
+
+// c4: queue vs log
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Queue vs Log: Consumed Is Not Deleted', w / 2, 24);
+
+    function box(x, cy, bw, fill, border, text) {
+        roundRect(ctx, x, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + bw / 2, cy + 4);
+    }
+
+    var y1 = 95, y2 = 205;
+
+    // row 1: queue
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('queue', 20, y1 - 34);
+    box(130, y1, 140, 'rgba(42,120,214,0.15)', P.blue, 'message m');
+    arrow(ctx, 270, y1, 310, y1, P.mute, 3);
+    box(310, y1, 160, 'rgba(42,120,214,0.15)', P.blue, 'consumer A reads m');
+    arrow(ctx, 470, y1, 510, y1, '#e74c3c', 3);
+    box(510, y1, 180, 'rgba(231,76,60,0.12)', '#e74c3c', 'm deleted — B gets nothing');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', 600, y1 + 38);
+
+    // row 2: log
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('log', 20, y2 - 44);
+    box(130, y2, 180, 'rgba(42,120,214,0.15)', P.blue, 'm at offset 7, retained');
+    arrow(ctx, 310, y2 - 8, 360, y2 - 25 + 4, P.green, 3);
+    arrow(ctx, 310, y2 + 8, 360, y2 + 25 - 4, P.green, 3);
+    box(360, y2 - 25, 165, 'rgba(0,131,0,0.12)', P.green, 'A reads, offset → 8');
+    box(360, y2 + 25, 165, 'rgba(0,131,0,0.12)', P.green, 'B reads, offset → 8');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ replay anytime in retention', 545, y2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the log retains; consumers keep offsets — replay is the feature', w / 2, 275);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offsets illustrative', w - 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

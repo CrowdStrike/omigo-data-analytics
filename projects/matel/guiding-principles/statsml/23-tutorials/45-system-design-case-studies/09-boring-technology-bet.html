@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boring Technology Bet</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Boring Technology Bet</h1>
+<p class="subtitle">During hypergrowth an image-sharing site threw out its zoo of trendy datastores and bet everything on manually sharded MySQL — boring technology whose failure modes were already known</p>
+
+<div class="card-section">
+    <h2>The Datastore Zoo That Kept Failing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">boring technology</span><span class="tag orange">hypergrowth</span></div>
+                <ul>
+                    <li><b>The growth</b> — traffic was roughly doubling every six weeks, per the company's engineering blog</li>
+                    <li><b>The zoo</b> — the stack had accreted MySQL plus Cassandra, Membase, and MongoDB, each added for "scale"</li>
+                    <li><b>The failures</b> — each trendy store failed in a novel way the team had never seen and could not debug fast</li>
+                    <li><b>The bet</b> — they consolidated onto manually sharded MySQL with memcached and Redis in front</li>
+                    <li><b>The reason</b> — MySQL's failure modes were 15 years documented; the new stores' failures were surprises</li>
+                </ul>
+                <p class="example">A clustered datastore rebalances itself during peak traffic and the site goes down — nobody on the team has seen that failure before, so nobody knows the fix.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> During hypergrowth, mature technology with well-known failure modes beats novel technology with unknown ones — you have time to operate, not time to pioneer.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One 64-Bit Number Says Where Everything Lives</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">ID packing</span></div>
+                <ul>
+                    <li><b>The scheme</b> — every object ID is 64 bits packing three fields: shard ID, type, local ID</li>
+                    <li><b>The split</b> — 16 bits of shard ID, 10 bits of type, 36 bits of local ID; the top 2 spare bits stay 0</li>
+                    <li><b>The decode</b> — shard = ID &gt;&gt; 46; type = (ID &gt;&gt; 36) &amp; 0x3FF; local = ID &amp; 0xFFFFFFFFF</li>
+                    <li><b>Hand-check</b> — image ID 241294492511762325 decodes to shard 3429, type 1, local ID 7075733</li>
+                    <li><b>The payoff</b> — any server computes the shard from the ID alone: no lookup service to call or to fail</li>
+                </ul>
+                <p class="example">Given image 241294492511762325, shifting right 46 bits yields 3429 — the request goes straight to shard db3429 with zero lookups.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Packing the shard ID into the object ID makes placement a pure function of the ID — the routing "service" is two bit-shifts that can never be down.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>4096 Virtual Shards, Rebalanced by Moving Them Whole</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">rebalancing</span></div>
+                <ul>
+                    <li><b>The layout</b> — they launched with 4096 virtual shards: 8 MySQL hosts, each holding 512 databases</li>
+                    <li><b>The map</b> — a small config maps shard ranges to physical hosts; the IDs never mention hosts</li>
+                    <li><b>The split</b> — to grow, replicate a host, point half its shard range at the copy, flip the config</li>
+                    <li><b>No re-hash</b> — rows never move between shards; whole shards move between machines instead</li>
+                    <li><b>Locality</b> — a user's boards and images are created on the user's shard, so their joins stay local</li>
+                </ul>
+                <p class="example">When host 1 gets hot, databases db0257–db0512 are replicated to a new host 9 and the config map flips — 4096 shards before, 4096 after, zero rows re-hashed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Far more virtual shards than machines turns rebalancing into "copy some databases and edit a map" — capacity grows while every ID keeps meaning what it always meant.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Price: Your Joins Stop at the Shard Border</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">trade-off</span></div>
+                <ul>
+                    <li><b>The deal</b> — computable placement was bought by giving up cross-shard joins and transactions</li>
+                    <li><b>App joins</b> — a image on shard 3429 owned by a user on shard 12 means two queries, joined in code</li>
+                    <li><b>No global TX</b> — nothing atomically updates rows on two shards; the app orders writes to tolerate it</li>
+                    <li><b>The design answer</b> — colocate what you join: a user's boards and images live on the user's shard</li>
+                    <li><b>The mistake</b> — sharding first and discovering later that every screen needs a five-shard join</li>
+                </ul>
+                <p class="example">A "popular images by friends" page can no longer be one JOIN — it becomes N shard queries merged in application code, so the team designed pages around per-shard data.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating sharding as a transparent scaling knob. It deletes cross-shard JOINs and transactions from your toolbox — the team paid that price knowingly and restructured its data layout around it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: 2011 datastore zoo -> 2012 boring stack
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('2011: Six Datastores, Novel Failures → 2012: Three Boring Ones', w / 2, 24);
+
+    // left column: the zoo
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the zoo', 70, 58);
+    var zoo = ['MySQL', 'Memcached', 'Redis', 'Cassandra', 'Membase', 'MongoDB'];
+    var ys = [70, 106, 142, 178, 214, 250];
+    for (var i = 0; i < 6; i++) {
+        var novel = i >= 3;
+        ctx.fillStyle = novel ? 'rgba(231,76,60,0.12)' : 'rgba(42,120,214,0.15)';
+        ctx.strokeStyle = novel ? '#e74c3c' : P.blue; ctx.lineWidth = 1;
+        roundRect(ctx, 60, ys[i], 170, 30, 6); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(zoo[i], 145, ys[i] + 19);
+        if (novel) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('✗ novel failure', 240, ys[i] + 19);
+        }
+    }
+
+    // consolidate arrow
+    arrow(ctx, 310, 160, 420, 160, P.ink, 4);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('consolidate', 365, 148);
+
+    // right column: the boring stack
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the boring stack', 470, 90);
+    var boring = ['MySQL (sharded)', 'Memcached', 'Redis'];
+    var ys2 = [105, 150, 195];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+        roundRect(ctx, 460, ys2[i], 200, 34, 6); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(boring[i], 555, ys2[i] + 21);
+        ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('✓', 668, ys2[i] + 21);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('known failure modes only', 560, 255);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("stack lists from public scaling talks; layout schematic", 60, h - 6);
+});
+
+// c2: 64-bit ID bit-packing diagram
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Image ID 241294492511762325, Decoded by Bit Position', w / 2, 24);
+
+    var by = 95, bh = 44, bx = 60;
+    // segments: spare 19, shard 150, type 94, local 337
+    var segs = [
+        { w: 19, fill: P.grid, border: null, label: null },
+        { w: 150, fill: 'rgba(42,120,214,0.30)', border: P.blue, label: 'shard · 16 bits' },
+        { w: 94, fill: 'rgba(217,89,38,0.25)', border: P.orange, label: 'type · 10' },
+        { w: 337, fill: 'rgba(0,131,0,0.20)', border: P.green, label: 'local ID · 36 bits' }
+    ];
+    var x = bx;
+    var centers = [];
+    for (var i = 0; i < segs.length; i++) {
+        var sg = segs[i];
+        ctx.fillStyle = sg.fill;
+        ctx.fillRect(x, by, sg.w, bh);
+        if (sg.border) {
+            ctx.strokeStyle = sg.border; ctx.lineWidth = 2;
+            ctx.strokeRect(x, by, sg.w, bh);
+        }
+        if (sg.label) {
+            ctx.fillStyle = sg.border; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(sg.label, x + sg.w / 2, by + bh / 2 + 4);
+        }
+        centers.push(x + sg.w / 2);
+        x += sg.w;
+    }
+
+    // decoded values with arrows
+    var vals = [
+        { cx: centers[1], color: P.blue, txt: 'shard = 3429' },
+        { cx: centers[2], color: P.orange, txt: 'type = 1 (image)' },
+        { cx: centers[3], color: P.green, txt: 'local = 7075733' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var v = vals[i];
+        arrow(ctx, v.cx, by + bh, v.cx, 190, v.color, 2);
+        ctx.font = 'bold 13px system-ui';
+        var tw = ctx.measureText(v.txt).width;
+        ctx.strokeStyle = v.color; ctx.lineWidth = 1; ctx.fillStyle = '#fff';
+        roundRect(ctx, v.cx - tw / 2 - 8, 200, tw + 16, 24, 5); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = v.color; ctx.textAlign = 'center';
+        ctx.fillText(v.txt, v.cx, 216);
+    }
+
+    // formula line
+    ctx.fillStyle = P.mute; ctx.font = '12px ui-monospace, monospace'; ctx.textAlign = 'center';
+    ctx.fillText('shard = id >> 46    type = (id >> 36) & 0x3FF    local = id & 0xFFFFFFFFF', w / 2, 245);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('no lookup table anywhere', 660, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("ID and decode values from a public sharding blog post", w - 20, h - 6);
+});
+
+// c3: move whole shards between hosts, config map is the only change
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Growing Capacity: Move Whole Shards, Never Re-Hash Rows', w / 2, 24);
+
+    // before panel
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('before', 80, 62);
+    ctx.fillStyle = 'rgba(217,89,38,0.18)'; ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    roundRect(ctx, 60, 75, 230, 70, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('host 1 — 512 shards', 175, 103);
+    ctx.fillText('db0001–db0512', 175, 123);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hot', 282, 88);
+
+    // arrows fanning to after boxes
+    arrow(ctx, 290, 100, 470, 96, P.ink, 3);
+    arrow(ctx, 290, 125, 470, 168, P.ink, 3);
+    ctx.fillStyle = P.ink; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('replicate, then flip config', 300, 110);
+
+    // after panel
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('after', 480, 62);
+    ctx.fillStyle = 'rgba(42,120,214,0.18)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    roundRect(ctx, 470, 75, 210, 54, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('host 1 — db0001–db0256', 575, 107);
+    ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    roundRect(ctx, 470, 145, 210, 54, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('host 9 (new) — db0257–db0512', 575, 177);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4096 shards before and after — only the map changed', 370, 205);
+
+    // config strip
+    ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    roundRect(ctx, 60, 225, 620, 34, 6); ctx.fill(); ctx.stroke();
+    ctx.font = '12px ui-monospace, monospace'; ctx.textAlign = 'left';
+    var seg1 = 'shard map:  1–256 → host 1   ';
+    var seg2 = '257–512 → host 9';
+    var seg3 = '   ...   3841–4096 → host 8';
+    var tx = 78, ty = 246;
+    ctx.fillStyle = P.text;
+    ctx.fillText(seg1, tx, ty);
+    tx += ctx.measureText(seg1).width;
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px ui-monospace, monospace';
+    ctx.fillText(seg2, tx, ty);
+    tx += ctx.measureText(seg2).width;
+    ctx.fillStyle = P.text; ctx.font = '12px ui-monospace, monospace';
+    ctx.fillText(seg3, tx, ty);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('8 hosts × 512 databases at launch, per the blog; split shown illustrative', w - 20, h - 6);
+});
+
+// c4: same-shard JOIN vs cross-shard merge in app code
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Shard: One JOIN. Cross-Shard: Two Queries + App Code', w / 2, 24);
+
+    // annotation top right
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the price of lookup-free placement', w - 20, 65);
+
+    // row 1: colocated
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('colocated', 20, 100);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    roundRect(ctx, 130, 72, 220, 46, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('shard 3429', 240, 90);
+    ctx.fillText('user 42 · boards · images', 240, 106);
+    arrow(ctx, 350, 95, 440, 95, P.green, 3);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.fillStyle = '#fff';
+    roundRect(ctx, 440, 72, 220, 46, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one local JOIN', 530, 100);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ 1 round-trip', 666, 100);
+
+    // row 2: cross-shard
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cross-shard', 20, 205);
+    // stacked source boxes
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+    roundRect(ctx, 130, 178, 160, 34, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('image → shard 3429', 210, 199);
+    ctx.fillStyle = 'rgba(217,89,38,0.18)'; ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+    roundRect(ctx, 130, 222, 160, 34, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('owner → shard 12', 210, 243);
+    // converging red arrows
+    arrow(ctx, 290, 195, 420, 216, '#e74c3c', 3);
+    arrow(ctx, 290, 239, 420, 226, '#e74c3c', 3);
+    // merge box
+    ctx.fillStyle = 'rgba(231,76,60,0.10)'; ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    roundRect(ctx, 420, 198, 240, 46, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('merge in application code', 540, 226);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ no SQL JOIN, no shared TX', 540, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('shard numbers reuse the worked example; query flow illustrative', 20, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

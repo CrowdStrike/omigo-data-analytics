@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The GPU Memory Ladder</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The GPU Memory Ladder</h1>
+<p class="subtitle">A GPU is a tiny fast desk beside a huge slow bookshelf — the sizes and speeds of each memory layer, and how LLMs cut their math into tiles so every byte hauled to fast memory gets reused</p>
+
+<div class="card-section">
+    <h2>The Four-Rung Memory Ladder</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">memory ladder</span></div>
+                <ul>
+                    <li><b>The job</b> — Bob's 7B chatbot must read all 14 GB of its weights to produce each single token</li>
+                    <li><b>Rung 1</b> — on-chip SRAM: ~40 MB at ~20 TB/s — the desk: tiny, everything within arm's reach</li>
+                    <li><b>Rung 2</b> — GPU memory (HBM): 80 GB at ~3 TB/s — the bookshelf where the 14 GB of weights live</li>
+                    <li><b>Rung 3</b> — CPU RAM: ~1 TB at ~60 GB/s over the PCIe cable — the basement across the hall</li>
+                    <li><b>Rung 4</b> — SSD: many TB at ~6 GB/s — the warehouse; visit it mid-answer and the chat stalls</li>
+                </ul>
+                <p class="example">Each rung down is roughly 100–1000× bigger and 10–50× slower — and the weights sit one rung below where the math happens.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The GPU is a desk worker — arithmetic happens only at the desk (SRAM); everything else in the machine is fetching.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tiling: Reuse Every Brick You Haul</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">tiling</span></div>
+                <ul>
+                    <li><b>The task</b> — multiply two 8×8 grids of numbers; every output cell needs one row and one column</li>
+                    <li><b>Naive</b> — fetch a fresh row + column per cell: 64 cells × 16 numbers = 1,024 slow fetches</li>
+                    <li><b>Tiled</b> — haul 4×4 blocks to the desk once: 4 output blocks × 4 block-loads × 16 = 256 fetches</li>
+                    <li><b>Check it</b> — 1,024 ÷ 256 = 4× less traffic, exactly the tile width; bigger tiles save even more</li>
+                    <li><b>The limit</b> — tiles must fit the ~40 MB desk; choosing tile sizes is the craft of kernel writing</li>
+                </ul>
+                <p class="example">FlashAttention is this same trick applied to attention — the big score table is computed tile by tile at the desk and never visits the bookshelf.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Split the math into tiles that fit fast memory and reuse each tile fully — slow-memory traffic drops by the tile width.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Who Lives on Which Rung</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">placement</span><span class="tag orange">offloading</span></div>
+                <ul>
+                    <li><b>Weights</b> — permanent residents of HBM; read top to bottom once for every single token</li>
+                    <li><b>KV cache</b> — the conversation's memory; grows in HBM with every token of every open chat</li>
+                    <li><b>Activations</b> — the work in progress; streamed through SRAM tile by tile, barely touching HBM</li>
+                    <li><b>Overflow</b> — when HBM fills, frameworks offload KV or weights to CPU RAM — a 50× slower rung</li>
+                    <li><b>Why it matters</b> — serving cost, context limits, and batch size are all HBM real-estate math</li>
+                </ul>
+                <p class="example">One very long conversation's KV cache can outweigh the model itself — HBM fills up with memories, not weights.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> HBM is prime real estate split between weights and the KV cache — "out of memory" almost always means this shelf ran out.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Horsepower Doesn't Move More Bricks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">memory-bound</span></div>
+                <ul>
+                    <li><b>The floor</b> — one token needs 14 GB read from HBM: 14 GB ÷ 3 TB/s ≈ 4.7 ms, math aside</li>
+                    <li><b>The upgrade</b> — a GPU with double the TFLOPs but the same HBM speed: still ≈ 4.7 ms per token</li>
+                    <li><b>What helps</b> — faster HBM, smaller weights (quantization), or batching more users per read</li>
+                    <li><b>Not automatic</b> — CPU caches speed programs up invisibly; GPU tiling is written by hand</li>
+                    <li><b>The mistake</b> — buying compute when the bottleneck is the pipe between shelf and desk</li>
+                </ul>
+                <p class="example">The spec sheet doubled the TFLOPs; the token timer didn't move — the bookshelf, not the desk, was setting the pace.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading GPU spec sheets by TFLOPs alone — for LLM serving, bytes per second usually matters more than math per second.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: the four-rung memory ladder
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Four-Rung Memory Ladder (one GPU server)', w / 2, 24);
+
+    var rungs = [
+        { y: 52, width: 160, color: P.green, fill: 'rgba(0,131,0,0.12)',
+          nick: 'the desk', speed: '~20 TB/s' },
+        { y: 100, width: 280, color: P.blue, fill: 'rgba(42,120,214,0.12)',
+          nick: 'the bookshelf', speed: '~3 TB/s' },
+        { y: 148, width: 400, color: P.violet, fill: 'rgba(74,58,167,0.10)',
+          nick: 'the basement', speed: '~60 GB/s' },
+        { y: 196, width: 520, color: P.mute, fill: 'rgba(107,114,128,0.10)',
+          nick: 'the warehouse', speed: '~6 GB/s' }
+    ];
+
+    for (var i = 0; i < rungs.length; i++) {
+        var r = rungs[i];
+        var x = 350 - r.width / 2;
+        roundRect(ctx, x, r.y, r.width, 40, 6);
+        ctx.fillStyle = r.fill; ctx.fill();
+        ctx.strokeStyle = r.color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.nick, 14, r.y + 25);
+        ctx.fillStyle = r.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.speed, 706, r.y + 25);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('on-chip SRAM — ~40 MB', 350, 77);
+    ctx.fillStyle = P.ink;
+    ctx.fillText('GPU memory (HBM) — 80 GB', 350, 117);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui';
+    ctx.fillText("Bob's 14 GB of weights live here", 350, 132);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('CPU RAM — ~1 TB (across the PCIe cable)', 350, 173);
+    ctx.fillStyle = P.mute;
+    ctx.fillText('SSD — many TB', 350, 221);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('each rung down: ~100–1000× more space, ~10–50× less speed', w / 2, 266);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes & speeds illustrative — one modern server', w - 12, 292);
+});
+
+// c2: naive vs tiled fetches on an 8x8 multiply
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 8×8 Multiply: 1,024 Fetches Naive vs 256 Tiled', w / 2, 24);
+
+    var cell = 17;
+
+    function drawGrid(gx, gy) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        for (var r = 0; r <= 8; r++) {
+            ctx.beginPath(); ctx.moveTo(gx, gy + r * cell); ctx.lineTo(gx + 8 * cell, gy + r * cell); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(gx + r * cell, gy); ctx.lineTo(gx + r * cell, gy + 8 * cell); ctx.stroke();
+        }
+    }
+
+    // left grid: naive — row 3 and column 6 highlighted
+    var g1x = 40, g1y = 66;
+    ctx.fillStyle = 'rgba(42,120,214,0.25)';
+    ctx.fillRect(g1x, g1y + 2 * cell, 8 * cell, cell);
+    ctx.fillStyle = 'rgba(213,81,129,0.25)';
+    ctx.fillRect(g1x + 5 * cell, g1y, cell, 8 * cell);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(g1x + 5 * cell, g1y + 2 * cell, cell, cell);
+    drawGrid(g1x, g1y);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('naive: every output cell', 108, 222);
+    ctx.fillText('re-fetches its row + column', 108, 236);
+
+    // middle grid: tiled — 4x4 blocks, top-left block shaded
+    var g2x = 270, g2y = 66;
+    ctx.fillStyle = 'rgba(0,131,0,0.20)';
+    ctx.fillRect(g2x, g2y, 4 * cell, 4 * cell);
+    drawGrid(g2x, g2y);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(g2x, g2y, 8 * cell, 8 * cell);
+    ctx.beginPath(); ctx.moveTo(g2x + 4 * cell, g2y); ctx.lineTo(g2x + 4 * cell, g2y + 8 * cell); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(g2x, g2y + 4 * cell); ctx.lineTo(g2x + 8 * cell, g2y + 4 * cell); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('tiled: haul a 4×4 block once,', 338, 222);
+    ctx.fillText('reuse it four times at the desk', 338, 236);
+
+    // right: two bars, 1024 vs 256
+    var base = 210, maxH = 130;
+    var bars = [
+        { cx: 540, v: 1024, color: P.mute, lab: 'naive', valLab: '1,024' },
+        { cx: 650, v: 256, color: P.green, lab: 'tiled', valLab: '256' }
+    ];
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        var bh = b.v / 1024 * maxH;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.cx - 35, base - bh, 70, bh);
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.valLab, b.cx, base - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab, b.cx, 228);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4× less traffic — exactly the tile width; GPUs do this on every layer', w / 2, 268);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('count them yourself: 64×16 vs 4×4×16', w - 12, 292);
+});
+
+// c3: who lives where on the GPU
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Who Lives Where on the GPU', w / 2, 24);
+
+    // GPU outline
+    roundRect(ctx, 30, 52, 430, 210, 6);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('GPU', 44, 72);
+
+    // SRAM strip
+    roundRect(ctx, 50, 82, 390, 32, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('SRAM — activations tile through here', 245, 103);
+
+    // HBM band
+    roundRect(ctx, 50, 136, 390, 110, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.08)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('HBM — 80 GB', 64, 156);
+
+    // weights block
+    roundRect(ctx, 65, 166, 150, 66, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('weights', 140, 192);
+    ctx.fillText('14 GB', 140, 210);
+
+    // KV cache block
+    roundRect(ctx, 230, 166, 190, 66, 6);
+    ctx.fillStyle = 'rgba(217,89,38,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('KV cache', 325, 192);
+    ctx.fillText('grows every token →', 325, 210);
+
+    // SRAM <-> HBM arrow
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(245, 119); ctx.lineTo(245, 131); ctx.stroke();
+    arrowHead(ctx, 245, 116, -Math.PI / 2, 7, P.mute);
+    arrowHead(ctx, 245, 134, Math.PI / 2, 7, P.mute);
+
+    // CPU RAM box
+    roundRect(ctx, 520, 80, 170, 56, 6);
+    ctx.fillStyle = 'rgba(74,58,167,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('CPU RAM — ~1 TB', 605, 112);
+
+    // SSD box
+    roundRect(ctx, 520, 186, 170, 56, 6);
+    ctx.fillStyle = 'rgba(107,114,128,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('SSD — many TB', 605, 218);
+
+    // PCIe offload lane
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(462, 155); ctx.lineTo(514, 112); ctx.stroke();
+    arrowHead(ctx, 518, 109, Math.atan2(109 - 155, 518 - 462), 7, P.orange);
+    arrowHead(ctx, 464, 158, Math.atan2(158 - 112, 464 - 518), 7, P.orange);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('PCIe — offload lane (50× slower)', 452, 172);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('out of memory = this shelf ran out — weights and memories compete for it', w / 2, 280);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('capacities illustrative', w - 12, 296);
+});
+
+// c4: three machines, one token timer
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function yOf(v) { return 245 - v * (185 / 6); }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Machines, One Token Timer', w / 2, 24);
+
+    // gridlines and y labels
+    for (var g = 1; g <= 6; g++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(70, yOf(g)); ctx.lineTo(660, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), 64, yOf(g) + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('0', 64, 249);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(70, 60); ctx.lineTo(70, 245); ctx.lineTo(660, 245); ctx.stroke();
+
+    var centers = [200, 390, 580];
+    var vals = [4.7, 4.7, 2.3];
+    var cols = [P.mute, P.blue, P.green];
+    var valLabs = ['4.7 ms', '4.7 ms', '2.3 ms'];
+    var mains = ['today', 'double compute', 'double memory speed'];
+    var descs = ['100 TFLOPs · 3 TB/s', '200 TFLOPs · 3 TB/s', '100 TFLOPs · 6 TB/s'];
+
+    for (var i = 0; i < 3; i++) {
+        var cx = centers[i];
+        ctx.fillStyle = cols[i];
+        ctx.fillRect(cx - 45, yOf(vals[i]), 90, 245 - yOf(vals[i]));
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLabs[i], cx, yOf(vals[i]) - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(mains[i], cx, 263);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(descs[i], cx, 279);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('14 GB per token ÷ bandwidth = the floor — only the pipe upgrade moved it', 390, 85);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times illustrative: 14 GB ÷ 3 TB/s ≈ 4.7 ms', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

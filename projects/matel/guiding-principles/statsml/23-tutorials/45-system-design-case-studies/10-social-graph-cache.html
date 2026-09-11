@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Social Graph Cache</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Social Graph Cache</h1>
+<p class="subtitle">Rendering one social-network page takes hundreds of tiny graph reads, so virtually all of them must come from memory &mdash; the published design puts huge memcached fleets in front of sharded MySQL, and the cache tier becomes the real serving system</p>
+
+<div class="card-section">
+    <h2>One Page Load, Five Hundred Cache Reads</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">read amplification</span><span class="tag orange">NSDI 2013</span></div>
+                <ul>
+                    <li><b>The page</b> &mdash; one feed render needs friend lists, like counts, comments, and permission checks per story</li>
+                    <li><b>The amplification</b> &mdash; the NSDI 2013 paper measures an average of 521 distinct memcache fetches per page</li>
+                    <li><b>The tail</b> &mdash; at the 95th percentile a single page load fetches 1,740 distinct items, over 3&times; the average</li>
+                    <li><b>The shape</b> &mdash; each read is tiny and cheap alone; the page is expensive because there are hundreds of them</li>
+                    <li><b>The design</b> &mdash; memcached fleets sit in front of sharded MySQL and answer over a billion requests per second</li>
+                </ul>
+                <p class="example">Opening one popular page fires 521 cache reads on average &mdash; if even a few of those had to wait on disk-backed MySQL, the page could not render in time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The social graph amplifies one page view into hundreds of small dependent reads, so the only workable design serves essentially every read from an in-memory cache tier.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Look-Aside Caching, Deletes, and Leases</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">cache invalidation</span><span class="tag orange">leases</span></div>
+                <ul>
+                    <li><b>The read path</b> &mdash; the web server gets a key from memcache; on a miss it reads MySQL and sets the value back</li>
+                    <li><b>The write path</b> &mdash; the web server writes MySQL, then deletes the key rather than updating it (idempotent)</li>
+                    <li><b>The race</b> &mdash; a slow miss-reader can set a pre-write value after the delete, freezing stale data in cache</li>
+                    <li><b>The lease</b> &mdash; a miss returns a 64-bit token; a set is accepted only if it is valid, and a delete voids it</li>
+                    <li><b>The herd</b> &mdash; a token is issued at most once per key every 10 seconds, so one reader per miss reaches MySQL</li>
+                    <li><b>The payoff</b> &mdash; the paper reports leases cut one stampede's peak database load from 17K to 1.3K queries/s</li>
+                </ul>
+                <p class="example">A hot key is invalidated and thousands of readers miss at once &mdash; without leases MySQL takes a 17,000 queries/s spike; with leases one reader refills the key and the peak stays near 1,300 queries/s.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Look-aside caching with delete-on-write is simple, and leases patch its two failure modes at once &mdash; stale sets from racing readers and thundering herds on hot keys.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>TAO and the Primary-Region Invalidation Stream</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">graph cache</span><span class="tag orange">replication</span></div>
+                <ul>
+                    <li><b>The graph API</b> &mdash; TAO replaces raw key-value use with objects (nodes) and associations (ordered typed edges)</li>
+                    <li><b>The calls</b> &mdash; assoc_get, assoc_count, and assoc_range answer "newest 50 comments on this post" natively</li>
+                    <li><b>The win</b> &mdash; a graph-aware cache updates one edge in a cached list instead of invalidating a serialized blob</li>
+                    <li><b>The workload</b> &mdash; the TAO paper measures 99.8% reads to 0.2% writes, at over a billion reads per second</li>
+                    <li><b>Regions</b> &mdash; every region runs a full cache tier; MySQL masters live in the primary region, replicas elsewhere</li>
+                    <li><b>The stream</b> &mdash; mcsqueal tails the master's commit log and pipes deletes to every region, riding replication</li>
+                </ul>
+                <p class="example">A like written in the primary region commits to master MySQL, replicates to the replica region's MySQL, and the invalidation stream then deletes the stale cached count there &mdash; so a cache refill never reads data older than its own invalidation.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> At this scale the cache stops being a dumb key-value layer: TAO makes it graph-aware, and invalidations travel with the database replication stream so every region's cache converges.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Cache Tier Is the Serving System</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">capacity</span></div>
+                <ul>
+                    <li><b>The trap</b> &mdash; treating memcache as a bolt-on speed-up for a database that could survive on its own</li>
+                    <li><b>The math</b> &mdash; at TAO's published 96.4% hit rate, MySQL is sized for 3.6% of a billion reads/s, or 36M/s</li>
+                    <li><b>The cliff</b> &mdash; hit rate falling from 96.4% to 92.8% doubles the miss traffic MySQL absorbs, to 72M reads/s</li>
+                    <li><b>The gutter</b> &mdash; the paper reserves about 1% of cache servers as a Gutter pool to absorb a dead server's keys</li>
+                    <li><b>The lesson</b> &mdash; at extreme read amplification the cache IS the serving system; MySQL is the durable store</li>
+                </ul>
+                <p class="example">At 1 billion reads/s and a 96.4% hit rate, MySQL sees 36M reads/s; a dip to a 92.8% hit rate doubles that to 72M/s within seconds &mdash; and with no cache at all the full 1,000M/s would land on a tier built for 36M.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Sizing the database as if the cache were optional. Once the hit rate is in the high 90s, the database has been capacity-planned for the misses only &mdash; a modest hit-rate drop is a multiplicative DB overload, which is why the papers spend their pages on leases, Gutter pools, and invalidation streams rather than on MySQL.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: read amplification bars
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 250;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Read Amplification: One Page Request Becomes Hundreds of Fetches', w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { y: 85, lab: 'the request — 1 page load', bw: 5, color: P.blue, outline: true, val: '1', valFont: '11px system-ui', valColor: '#444' },
+        { y: 150, lab: 'average popular page', bw: 126, color: P.blue, outline: true, val: '521 memcache fetches', valFont: 'bold 12px system-ui', valColor: P.blue },
+        { y: 215, lab: '95th-percentile page', bw: 420, color: P.orange, outline: false, val: '1,740 fetches', valFont: 'bold 12px system-ui', valColor: P.orange }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 12);
+        if (r.outline) {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(bx, r.y, r.bw, 16);
+            ctx.strokeStyle = r.color; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, r.y, r.bw, 16);
+        } else {
+            ctx.fillStyle = r.color;
+            ctx.fillRect(bx, r.y, r.bw, 16);
+        }
+        ctx.fillStyle = r.valColor; ctx.font = r.valFont; ctx.textAlign = 'left';
+        if (i < 2) ctx.fillText(r.val, bx + r.bw + 8, r.y + 12);
+        else { ctx.textAlign = 'right'; ctx.fillText(r.val, bx + r.bw - 8, r.y - 6); }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('every one of these must be a memory hit', w - 30, 260);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('521 avg / 1,740 p95 as published (NSDI 2013)', w - 20, h - 8);
+});
+
+// c2: hot-key invalidation spike, leases vs no leases
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, pw = 590, ph = 180, maxV = 18000;
+
+    function xOf(sec) { return ox + sec / 60 * pw; }
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Hot-Key Invalidation: Leases Cut the DB Spike from 17K/s to 1.3K/s', w / 2, 24);
+
+    // gridlines
+    var gVals = [4500, 9000, 13500];
+    var gLabs = ['4.5K', '9K', '13.5K'];
+    for (var i = 0; i < gVals.length; i++) {
+        var y = yOf(gVals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gLabs[i], ox - 6, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 15s
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var sec = 0; sec <= 60; sec += 15) {
+        var x = xOf(sec);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 4); ctx.stroke();
+        ctx.fillText(sec + 's', x, baseY + 18);
+    }
+
+    // invalidation marker at 20s
+    var ix = xOf(20);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ix, baseY - ph); ctx.lineTo(ix, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('key deleted', ix, baseY - ph - 6);
+
+    var secs = [0, 10, 20, 25, 30, 40, 50, 60];
+    var noLease = [900, 950, 17000, 12000, 6000, 2500, 1200, 950];
+    var lease = [900, 950, 1300, 1250, 1100, 1000, 950, 940];
+
+    // no-lease line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(noLease[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // lease line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(lease[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no leases — 17K/s peak', xOf(27), 70);
+    ctx.fillStyle = P.green;
+    ctx.fillText('leases — 1.3K/s peak', xOf(42), 215);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one token holder refills; everyone else waits or reads slightly stale', xOf(45) - 300, 110);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('17K/s and 1.3K/s peaks as published; curve shapes illustrative', ox + pw, h - 8);
+});
+
+// c3: primary region + replica region with replication and invalidation streams
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Writes Commit in the Primary Region; Deletes Ride the Replication Stream', w / 2, 24);
+
+    function box(x, cy, bw, fill, border, text) {
+        roundRect(ctx, x, cy - 21, bw, 42, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + bw / 2, cy + 4);
+    }
+
+    var y1 = 95, y2 = 215;
+
+    // row labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('primary region', 15, y1 - 34);
+    ctx.fillText('replica region', 15, y2 - 34);
+
+    // row 1
+    box(130, y1, 130, 'rgba(42,120,214,0.15)', P.blue, 'web tier');
+    arrow(ctx, 260, y1, 300, y1, P.mute, 3);
+    box(300, y1, 160, 'rgba(0,131,0,0.12)', P.green, 'memcache / TAO');
+    arrow(ctx, 460, y1, 510, y1, P.mute, 3);
+    box(510, y1, 150, 'rgba(42,120,214,0.15)', P.blue, 'MySQL master');
+
+    // row 2
+    box(130, y2, 130, 'rgba(42,120,214,0.15)', P.blue, 'web tier');
+    arrow(ctx, 260, y2, 300, y2, P.mute, 3);
+    box(300, y2, 160, 'rgba(0,131,0,0.12)', P.green, 'memcache / TAO');
+    arrow(ctx, 460, y2, 510, y2, P.mute, 3);
+    box(510, y2, 150, 'rgba(42,120,214,0.15)', P.blue, 'MySQL replica');
+
+    // replication arrow: master down to replica
+    arrow(ctx, 585, y1 + 21, 585, y2 - 21, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('SQL replication', 597, (y1 + y2) / 2 + 4);
+
+    // invalidation arrow: replica left to replica-region cache
+    ctx.strokeStyle = P.orange; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(510, y2 + 14); ctx.lineTo(468, y2 + 14); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.PI; // pointing left
+    ctx.fillStyle = P.orange;
+    ctx.beginPath();
+    ctx.moveTo(462, y2 + 14);
+    ctx.lineTo(470, y2 + 10);
+    ctx.lineTo(470, y2 + 18);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mcsqueal deletes', 489, y2 + 38);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('invalidations follow the data — a cache never refills from a DB older than the delete', w / 2, 280);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('topology per the published papers, simplified', w - 20, h - 8);
+});
+
+// c4: MySQL load at three cache states
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 250;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('MySQL Load out of 1B Reads/s: the Database Is Sized for the Misses', w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { y: 85, lab: '96.4% hit rate (published)', bw: 15, outline: true, color: P.green, fill: 'rgba(0,131,0,0.30)', val: '36M reads/s', valFont: '11px system-ui', valColor: '#444' },
+        { y: 150, lab: '92.8% hit rate (a small dip)', bw: 30, outline: false, color: P.orange, val: '72M reads/s — 2× the load', valFont: 'bold 12px system-ui', valColor: P.orange },
+        { y: 215, lab: 'cache gone entirely', bw: 420, outline: false, color: '#e74c3c', val: '1,000M reads/s — 28× capacity', valFont: 'bold 12px system-ui', valColor: '#e74c3c' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 12);
+        if (r.outline) {
+            ctx.fillStyle = r.fill;
+            ctx.fillRect(bx, r.y, r.bw, 16);
+            ctx.strokeStyle = r.color; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, r.y, r.bw, 16);
+        } else {
+            ctx.fillStyle = r.color;
+            ctx.fillRect(bx, r.y, r.bw, 16);
+        }
+        ctx.fillStyle = r.valColor; ctx.font = r.valFont; ctx.textAlign = 'left';
+        if (i < 2) ctx.fillText(r.val, bx + r.bw + 8, r.y + 12);
+        else { ctx.textAlign = 'right'; ctx.fillText(r.val, bx + r.bw - 8, r.y - 6); }
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("a 3.6-point hit-rate drop doubles the database's work", w - 30, 260);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('96.4% hit rate published (TAO); 1B reads/s published; other rows are arithmetic, illustrative', w - 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

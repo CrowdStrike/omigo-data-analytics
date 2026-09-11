@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Search Engine</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Web Search Engine</h1>
+<p class="subtitle">Designing a web-scale search engine — crawl the pages, invert them into an index, and answer each query by asking every shard at once (a classic design exercise using public concepts, not any company's current internals)</p>
+
+<div class="card-section">
+    <h2>One Engine, Three Pipelines</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">architecture</span><span class="tag orange">search</span></div>
+                <ul>
+                    <li><b>The goal</b> — type "coffee grinder" and get the ten best pages out of a million in under 200ms</li>
+                    <li><b>Crawl</b> — a crawler fetches pages, extracts their links, and queues links it hasn't seen yet</li>
+                    <li><b>Politeness</b> — it caps requests per site (say 1 per second) so it never hammers anyone's server</li>
+                    <li><b>Index</b> — an indexer inverts the pages: for each term, the sorted list of docs containing it</li>
+                    <li><b>Serve</b> — the index is split across 100 shards; a query asks all of them at the same time</li>
+                </ul>
+                <p class="example">Our toy engine crawls 1,000,000 pages, rebuilds its index nightly, and serves queries from 100 shards of 10,000 docs each.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A search engine is three loosely coupled pipelines — crawl and index run for hours in batch; serving answers in milliseconds by only reading what the batch jobs built.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Building the Inverted Index by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">inverted index</span></div>
+                <ul>
+                    <li><b>The pages</b> — d1&ndash;d4 are four short pages about coffee gear; their full text sits in the chart</li>
+                    <li><b>Invert</b> — scan every page once; for each word, append that page's id to the word's list</li>
+                    <li><b>Posting lists</b> — coffee &rarr; [d1, d2, d4]; grinder &rarr; [d1, d3, d4]; lists stay sorted by doc id</li>
+                    <li><b>The query</b> — "coffee grinder" intersects two lists: [d1, d2, d4] &cap; [d1, d3, d4] = [d1, d4]</li>
+                    <li><b>Ranking</b> — d4 has 8 inbound links vs d1's 2, so a PageRank-style link score puts d4 first</li>
+                </ul>
+                <p class="example">A two-word query never scans the million pages — it walks two sorted lists and keeps the doc ids that appear in both.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An inverted index turns "which docs contain this term?" from a scan of every page into a lookup — it is the core data structure of every search engine.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Fan-Out Tax: Every Query, Every Shard</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">tail latency</span><span class="tag orange">fan-out</span></div>
+                <ul>
+                    <li><b>Doc-partitioned</b> — each shard holds complete posting lists, but only for its own 10,000 docs</li>
+                    <li><b>Fan-out</b> — any term can live on any shard, so every query must ask all 100 shards</li>
+                    <li><b>Top-k merge</b> — each shard returns its 10 best; the root re-ranks 1,000 candidates into 10</li>
+                    <li><b>Serve-time ranking</b> — text match, link score, and freshness combine per query, not in the index</li>
+                    <li><b>The tail</b> — if a shard runs slow 1% of the time, all-100-fast happens only 0.99&sup1;&#8304;&#8304; &asymp; 37%</li>
+                    <li><b>The fix</b> — hedged requests: re-send to a replica when a shard hasn't answered within, say, 50ms</li>
+                </ul>
+                <p class="example">With 100 shards, 63% of queries wait on at least one straggler — the slowest shard sets the pace for the whole query.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Document partitioning buys simple indexing and per-shard ranking, and pays with fan-out: query latency is the max over all shards, not the average.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Myth of One Fresh Index</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">freshness</span></div>
+                <ul>
+                    <li><b>The mistake</b> — treating the index as one always-current, instantly updated copy of the web</li>
+                    <li><b>The reality</b> — rebuilding the 1M-page base index is a batch job; ours runs nightly at 2:00am</li>
+                    <li><b>The gap</b> — a page published at 9:00am stays invisible for 17 hours on the base index alone</li>
+                    <li><b>The tier</b> — a small fresh index (thousands of docs) rebuilds every 5 minutes and catches it</li>
+                    <li><b>Serve both</b> — queries fan out to base shards and the fresh tier; the merger dedupes by doc id</li>
+                </ul>
+                <p class="example">The 9:00am page is searchable by 9:05 through the fresh tier, then folds into the base index at the 2:00am rebuild.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming freshness is free. A read-optimized index is expensive to update in place, so real engines layer a fast small tier over a slow big one and merge results at serve time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function flowArrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width || 3;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: batch pipeline builds the index, online path reads it
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Batch Pipelines Build the Index; the Online Path Reads It', w / 2, 24);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('batch — hours', 20, 60);
+    ctx.fillText('online — milliseconds', 20, 200);
+
+    function box(x, y, wdt, hgt, lines, fill, border) {
+        rrect(ctx, x, y, wdt, hgt, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        var startY = y + hgt / 2 - (lines.length - 1) * 7 + 4;
+        for (var i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x + wdt / 2, startY + i * 14);
+        }
+    }
+
+    // batch lane
+    box(40, 75, 150, 46, ['crawler', 'fetch + extract links'], 'rgba(42,120,214,0.15)', P.blue);
+    flowArrow(ctx, 192, 98, 236, 98, P.mute, 3);
+    box(240, 75, 150, 46, ['indexer', 'term → postings'], 'rgba(0,131,0,0.12)', P.green);
+    flowArrow(ctx, 392, 98, 466, 98, P.mute, 3);
+
+    // shard stack
+    var shardLabs = ['shard 1', 'shard 2', '…', 'shard 100'];
+    var shardYs = [64, 96, 128, 160];
+    for (var i = 0; i < 4; i++) {
+        rrect(ctx, 470, shardYs[i], 130, 26, 6);
+        ctx.fillStyle = 'rgba(26,82,118,0.10)'; ctx.fill();
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(shardLabs[i], 535, shardYs[i] + 17);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('10,000 docs each', 615, 90);
+
+    // online lane
+    box(40, 214, 150, 46, ['query:', 'coffee grinder'], 'rgba(213,81,129,0.12)', P.magenta);
+    flowArrow(ctx, 192, 237, 236, 237, P.mute, 3);
+    box(240, 214, 150, 46, ['root', 'merge + rank'], 'rgba(74,58,167,0.12)', P.violet);
+
+    // fan-out arrows from root top edge to shards 1, 2, 100
+    var targets = [77, 109, 173];
+    for (var i = 0; i < 3; i++) {
+        flowArrow(ctx, 330, 214, 466, targets[i], P.violet, 2);
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(466, targets[i] + 10); ctx.lineTo(340, 220); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('every query touches every shard', 440, 250);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 20, 292);
+});
+
+// c2: posting lists for four tiny pages, query intersection highlighted
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Tiny Pages, Inverted: term → sorted doc ids', w / 2, 24);
+
+    var rows = [
+        { y: 70, term: 'best', docs: ['d1', 'd4'], hl: false },
+        { y: 100, term: 'coffee', docs: ['d1', 'd2', 'd4'], hl: true },
+        { y: 130, term: 'grinder', docs: ['d1', 'd3', 'd4'], hl: true },
+        { y: 160, term: 'burr', docs: ['d3', 'd4'], hl: false },
+        { y: 190, term: 'review', docs: ['d3', 'd4'], hl: false },
+        { y: 220, term: 'shop', docs: ['d2'], hl: false }
+    ];
+
+    // query highlight bands behind the coffee and grinder rows
+    for (var i = 0; i < rows.length; i++) {
+        if (rows[i].hl) {
+            ctx.fillStyle = 'rgba(201,133,0,0.12)';
+            ctx.fillRect(20, rows[i].y - 13, 380, 26);
+        }
+    }
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.term, 110, r.y + 4);
+        for (var j = 0; j < r.docs.length; j++) {
+            var cx = 130 + j * 38;
+            var isGreen = r.hl && (r.docs[j] === 'd1' || r.docs[j] === 'd4');
+            rrect(ctx, cx, r.y - 10, 30, 20, 6);
+            ctx.fillStyle = isGreen ? 'rgba(0,131,0,0.15)' : 'rgba(42,120,214,0.15)';
+            ctx.fill();
+            ctx.strokeStyle = isGreen ? P.green : P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(r.docs[j], cx + 15, r.y + 4);
+        }
+    }
+
+    // stopword note
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stopwords ("near", "me") dropped before indexing', 20, 248);
+
+    // doc panel
+    var docs = [
+        'd1: "best coffee grinder"',
+        'd2: "coffee shop near me"',
+        'd3: "burr grinder review"',
+        'd4: "best burr coffee grinder review"'
+    ];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    var docYs = [62, 84, 106, 128];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillText(docs[i], 420, docYs[i]);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('"coffee grinder" intersects:', 420, 172);
+    ctx.fillText('[d1,d2,d4] ∩ [d1,d3,d4] = [d1, d4]', 420, 190);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('link score ranks d4 (8 in-links) over d1 (2)', 420, 222);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pages and link counts illustrative', w - 20, 292);
+});
+
+// c3: probability of hitting at least one slow shard vs fan-out width
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var shards = [1, 10, 25, 50, 100, 150, 200];
+    var pct = [1, 10, 22, 39, 63, 78, 87];
+
+    function xOf(n) { return ox + n / 200 * pw; }
+    function yOf(p) { return baseY - p / 100 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fan-Out Makes the Tail the Bottleneck', w / 2, 24);
+
+    var yTicks = [25, 50, 75];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yTicks[i] + '%', ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var n = 0; n <= 200; n += 50) {
+        ctx.fillText(String(n), xOf(n), baseY + 18);
+    }
+
+    // guides at the 100-shard point
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(100), baseY); ctx.lineTo(xOf(100), yOf(63)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(100), yOf(63)); ctx.lineTo(ox, yOf(63)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // curve
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < shards.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(shards[i]), yOf(pct[i])) : ctx.lineTo(xOf(shards[i]), yOf(pct[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath(); ctx.arc(xOf(100), yOf(63), 5, 0, 2 * Math.PI); ctx.fill();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('100 shards: 63% of queries wait on a straggler', xOf(105), 100);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1% slow chance per shard illustrative; curve 1 − 0.99ⁿ exact', w - 20, 292);
+});
+
+// c4: freshness — base-only vs fresh-tier path for a 9:00am page
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Published 9:00am — Searchable When?', w / 2, 24);
+
+    function box(x, y, wdt, hgt, lines, fill, border) {
+        rrect(ctx, x, y, wdt, hgt, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        var startY = y + hgt / 2 - (lines.length - 1) * 7 + 4;
+        for (var i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x + wdt / 2, startY + i * 14);
+        }
+    }
+
+    // row 1: base index only
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('base index only', 20, 119);
+    box(170, 95, 150, 40, ['page live 9:00am'], 'rgba(42,120,214,0.15)', P.blue);
+    flowArrow(ctx, 322, 115, 416, 115, P.mute, 3);
+    box(420, 95, 170, 40, ['invisible until', '2:00am rebuild'], 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('17-hour gap', 370, 138);
+
+    // row 2: with fresh tier
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with fresh tier', 20, 229);
+    box(170, 205, 140, 40, ['page live 9:00am'], 'rgba(42,120,214,0.15)', P.blue);
+    flowArrow(ctx, 312, 225, 356, 225, P.mute, 3);
+    box(360, 205, 150, 40, ['fresh tier', 'by 9:05am'], 'rgba(0,131,0,0.12)', P.green);
+    flowArrow(ctx, 512, 225, 556, 225, P.mute, 3);
+    box(560, 205, 150, 40, ['into base', 'at 2:00am'], 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ 5 min', 435, 197);
+
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('queries hit both tiers; the merger dedupes by doc id', w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rebuild times illustrative', w - 20, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

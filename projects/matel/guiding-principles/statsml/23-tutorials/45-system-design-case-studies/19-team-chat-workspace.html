@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Chat Workspace</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Team Chat Workspace</h1>
+<p class="subtitle">Every open client holds one live WebSocket per workspace — the hard parts are booting a session and telling everyone who's online, not moving the words</p>
+
+<div class="card-section">
+    <h2>One Socket per Person per Workspace</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">WebSockets</span><span class="tag orange">session state</span></div>
+                <ul>
+                    <li><b>The socket</b> — every open client keeps one persistent WebSocket per workspace it shows</li>
+                    <li><b>The multiplier</b> — Maya's laptop shows two workspaces and her phone one: that's three open sockets</li>
+                    <li><b>The push</b> — new messages, edits, typing, and presence all arrive as events down that socket</li>
+                    <li><b>The boot</b> — before the socket is useful, the client must know its channels, membership, unreads</li>
+                    <li><b>The split</b> — history lives in a plain database; the socket only carries what changes right now</li>
+                </ul>
+                <p class="example">Maya opens her laptop at 9am: two WebSockets dial out, and every message she sees for the rest of the day is a small event pushed down one of them.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A team-chat client is a stateful session over a persistent socket — the design question is how much workspace state the client needs before that socket is worth anything.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The 9:02am Thundering Reconnect</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">session boot</span><span class="tag orange">lazy loading</span></div>
+                <ul>
+                    <li><b>The blip</b> — an office network hiccup (or a server deploy) drops 8,000 clients at 9:02am</li>
+                    <li><b>The redial</b> — all 8,000 reconnect within 60 seconds, and each one asks to boot its session</li>
+                    <li><b>The eager way</b> — the old boot call returned everything: channels, membership, unreads, ~4 MB each</li>
+                    <li><b>The meltdown</b> — 8,000 &times; 4 MB = 32 GB demanded in one minute, exactly when servers are busiest</li>
+                    <li><b>The lazy way</b> — connect with a ~8 KB skeleton (64 MB total), fetch each channel's state when opened</li>
+                    <li><b>The blog</b> — team-chat vendors documented this evolution: lazy-load session state on demand at the edge</li>
+                </ul>
+                <p class="example">The 9:02am storm asks the boot service for 32 GB the eager way but only 64 MB the lazy way — the remaining state trickles in as people actually open channels.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Session establishment is the scaling cliff of team chat — a mass reconnect multiplies the boot payload by every client at once, so the fix is to stop front-loading state and fetch it lazily.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Channel Is a Pub/Sub Topic</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">fan-out</span><span class="tag green">channel servers</span><span class="tag orange">offline path</span></div>
+                <ul>
+                    <li><b>The topic</b> — each channel maps to a channel server; posting publishes one event to that topic</li>
+                    <li><b>The fan-out</b> — #general has 2,000 members, 1,400 connected: one post becomes 1,400 socket pushes</li>
+                    <li><b>The offline 600</b> — disconnected members get a mobile push only for mentions and DMs, not every post</li>
+                    <li><b>The catch-up</b> — on reconnect a client asks "what changed since my last event?" and fills the gap</li>
+                    <li><b>The history</b> — the post also lands in the message database; scrollback is an ordinary paged query</li>
+                </ul>
+                <p class="example">Maya posts "standup in 5" to #general: 1,400 sockets light up within a second, and the 600 offline members simply find it in their unreads whenever they next connect.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Real-time delivery is a pub/sub problem keyed by channel and scoped to whoever is connected right now — everyone else is served by the normal database on their own schedule.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Presence Costs More Than the Messages</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">presence</span></div>
+                <ul>
+                    <li><b>The dot</b> — the green "online" dot looks free, but every dot is a live event someone must be sent</li>
+                    <li><b>The blowup</b> — naively, each of N members flipping online/offline broadcasts to all N&minus;1 others</li>
+                    <li><b>The math</b> — at 40 flips/member/day, 10,000 members naively generate 4.0 billion events a day</li>
+                    <li><b>The fix</b> — clients subscribe only to the ~30 users visible on screen, publicly documented by vendors</li>
+                    <li><b>The batch</b> — updates are throttled and coalesced into one batched presence message, not one per flip</li>
+                    <li><b>The mistake</b> — designing fan-out for messages and letting presence ride along unthrottled</li>
+                </ul>
+                <p class="example">A 10,000-member workspace's messages are a few hundred events a second, while naive presence alone would demand 4.0 billion events a day — 333&times; more than the 12 million a subscription model needs.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating presence like just another message. Messages fan out to one channel's members; presence is an N&times;M broadcast across the whole workspace, and it must be subscription-scoped, throttled, and batched or it becomes the biggest traffic source in the system.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function flowArrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one person, three sockets, gateway, backing services
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Person, Three Sockets: What Each Connection Carries', w / 2, 24);
+
+    function box(x, cy, bw, bh, fill, border, lines) {
+        var y = cy - bh / 2;
+        roundRectPath(ctx, x, y, bw, bh, 8);
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x + bw / 2, cy + 4 + (i - (lines.length - 1) / 2) * 15);
+        }
+    }
+
+    // client boxes (left, 170x40, left edge x=30, centers y=95/165/235)
+    var clientYs = [95, 165, 235];
+    var clientLabs = ['laptop — workspace A', 'laptop — workspace B', 'phone — workspace A'];
+    for (var i = 0; i < 3; i++) {
+        box(30, clientYs[i], 170, 40, 'rgba(42,120,214,0.15)', P.blue, [clientLabs[i]]);
+    }
+
+    // gateway (180x60, left edge x=280, center y=165)
+    box(280, 165, 180, 60, 'rgba(107,114,128,0.12)', P.mute, ['WebSocket gateway —', 'one session per socket']);
+
+    // arrows clients -> gateway
+    for (var i = 0; i < 3; i++) {
+        flowArrow(ctx, 200, clientYs[i], 277, 165 + (i - 1) * 14, P.mute, 3);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('WebSocket', 238, (clientYs[i] + 165 + (i - 1) * 14) / 2 - 5);
+    }
+
+    // right column (190x44, left edge x=510, centers y=95/165/235)
+    box(510, 95, 190, 44, 'rgba(0,131,0,0.12)', P.green, ['channel servers —', 'real-time push']);
+    box(510, 165, 190, 44, 'rgba(74,58,167,0.12)', P.violet, ['presence —', 'who is online']);
+    box(510, 235, 190, 44, 'rgba(42,120,214,0.15)', P.blue, ['message DB —', 'history & unreads']);
+
+    // arrows gateway -> services
+    flowArrow(ctx, 460, 150, 507, 95, P.mute, 3);
+    flowArrow(ctx, 460, 165, 507, 165, P.mute, 3);
+    flowArrow(ctx, 460, 180, 507, 235, P.mute, 3);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sockets scale with clients × workspaces, not with people', w / 2, 280);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('schematic; components as publicly blogged', w - 15, h - 8);
+});
+
+// c2: eager vs lazy boot, horizontal bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8,000 Clients Reconnect in One Minute: Eager vs Lazy Boot', w / 2, 24);
+
+    var baseX = 250, barH = 18;
+    var rows = [
+        { name: 'eager boot — 8,000 × 4 MB', cy: 90, width: 420, fill: 'rgba(231,76,60,0.25)', edge: '#e74c3c',
+          label: '32 GB in 1 min', labelStyle: 'bold 12px system-ui', labelColor: '#e74c3c', inside: true },
+        { name: 'lazy connect — 8,000 × 8 KB', cy: 155, width: 26, fill: 'rgba(0,131,0,0.25)', edge: P.green,
+          label: '64 MB — 500× less', labelStyle: 'bold 12px system-ui', labelColor: P.green, inside: false },
+        { name: 'on-demand fetches, next 10 min', cy: 220, width: 120, fill: 'rgba(217,89,38,0.2)', edge: P.orange,
+          label: '~1.6 GB as channels open', labelStyle: '12px system-ui', labelColor: '#444', inside: false }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 60); ctx.lineTo(baseX, 245); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], y = r.cy - barH / 2;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.name, 20, r.cy + 4);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(baseX, y, r.width, barH);
+        ctx.strokeStyle = r.edge; ctx.lineWidth = 2;
+        ctx.strokeRect(baseX, y, r.width, barH);
+        ctx.fillStyle = r.labelColor; ctx.font = r.labelStyle;
+        if (r.inside) {
+            ctx.textAlign = 'right';
+            ctx.fillText(r.label, baseX + r.width - 10, r.cy + 4);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(r.label, baseX + r.width + 10, r.cy + 4);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the deploy no longer melts the boot service', w - 30, 265);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('payload sizes illustrative, bar lengths not to scale; the eager-to-lazy shift is publicly blogged', w - 15, h - 8);
+});
+
+// c3: one post to #general — three paths out
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Post to #general (2,000 Members): Three Paths Out', w / 2, 24);
+
+    function box(x, cy, bw, bh, fill, border, lines) {
+        var y = cy - bh / 2;
+        roundRectPath(ctx, x, y, bw, bh, 8);
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x + bw / 2, cy + 4 + (i - (lines.length - 1) / 2) * 14);
+        }
+    }
+
+    // sender (170x44, left x=25, center y=95)
+    box(25, 95, 170, 44, 'rgba(42,120,214,0.15)', P.blue, ["Maya's client —", 'posts to #general']);
+
+    // channel server (180x50, left x=250, center y=95)
+    box(250, 95, 180, 50, 'rgba(74,58,167,0.12)', P.violet, ['channel server —', 'pub/sub topic for #general']);
+
+    // arrow sender -> channel server
+    flowArrow(ctx, 195, 95, 247, 95, P.mute, 3);
+
+    // connected path (210x44, left x=490, center y=60)
+    box(490, 60, 210, 44, 'rgba(0,131,0,0.12)', P.green, ['1,400 connected —', 'one push per open socket']);
+    flowArrow(ctx, 430, 85, 487, 62, P.green, 3);
+
+    // offline path (210x44, left x=490, center y=140)
+    box(490, 140, 210, 44, 'rgba(217,89,38,0.12)', P.orange, ['600 offline — mobile push if', 'mentioned; catch-up on reconnect']);
+    flowArrow(ctx, 430, 105, 487, 138, P.orange, 3);
+
+    // history path (210x44, left x=250, center y=215)
+    box(250, 215, 210, 44, 'rgba(42,120,214,0.15)', P.blue, ['message DB — ordinary insert;', 'scrollback = paged query']);
+    flowArrow(ctx, 340, 120, 340, 190, P.blue, 3);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('real-time is the special path; history is a normal database problem', w / 2, 280);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('member counts illustrative', w - 15, h - 8);
+});
+
+// c4: presence events per day — broadcast vs subscribe, three workspace sizes
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Presence Events per Day: Broadcast to All vs Subscribe to Visible', w / 2, 24);
+
+    var baseX = 250, barH = 14;
+    var groups = [
+        { name: '100 members', naiveY: 62, subY: 84,
+          naiveW: 150, naiveLab: '396K', naiveFill: 'rgba(42,120,214,0.30)', naiveEdge: P.blue, naiveBold: false,
+          subW: 110, subLab: '120K' },
+        { name: '1,000 members', naiveY: 132, subY: 154,
+          naiveW: 290, naiveLab: '40.0M', naiveFill: 'rgba(42,120,214,0.30)', naiveEdge: P.blue, naiveBold: false,
+          subW: 195, subLab: '1.2M' },
+        { name: '10,000 members', naiveY: 202, subY: 224,
+          naiveW: 420, naiveLab: '4.0B', naiveFill: 'rgba(231,76,60,0.25)', naiveEdge: '#e74c3c', naiveBold: true,
+          subW: 260, subLab: '12M' }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 48); ctx.lineTo(baseX, 240); ctx.stroke();
+
+    for (var g = 0; g < groups.length; g++) {
+        var grp = groups[g];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(grp.name, 20, (grp.naiveY + grp.subY) / 2 + 4);
+
+        // naive bar
+        var ny = grp.naiveY - barH / 2;
+        ctx.fillStyle = grp.naiveFill;
+        ctx.fillRect(baseX, ny, grp.naiveW, barH);
+        ctx.strokeStyle = grp.naiveEdge; ctx.lineWidth = 2;
+        ctx.strokeRect(baseX, ny, grp.naiveW, barH);
+        ctx.fillStyle = grp.naiveEdge;
+        ctx.font = grp.naiveBold ? 'bold 12px system-ui' : '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(grp.naiveLab, baseX + grp.naiveW + 8, grp.naiveY + 4);
+
+        // subscribe bar
+        var sy = grp.subY - barH / 2;
+        ctx.fillStyle = 'rgba(0,131,0,0.25)';
+        ctx.fillRect(baseX, sy, grp.subW, barH);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(baseX, sy, grp.subW, barH);
+        ctx.fillStyle = P.green; ctx.font = '11px system-ui';
+        ctx.fillText(grp.subLab, baseX + grp.subW + 8, grp.subY + 4);
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('at 10,000 members: 333× fewer events', 430, 40);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('40 flips/member/day and 30 watched users illustrative; arithmetic exact', w - 15, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

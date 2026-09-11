@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webmail Service</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Webmail Service</h1>
+<p class="subtitle">A mailbox is a sharded database — each user's mail, labels, and search index live together on one shard, which is what makes web-scale email tractable (a classic design exercise, not a description of any real company's internals)</p>
+
+<div class="card-section">
+    <h2>One User, One Shard, One Place to Look</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">shard key</span><span class="tag orange">mailbox</span></div>
+                <ul>
+                    <li><b>The service</b> — an email system for 10 million users must store, label, and search everyone's mail</li>
+                    <li><b>The shard key</b> — hash(user) assigns each mailbox to one shard; all of kim@'s mail lands together</li>
+                    <li><b>What lives there</b> — kim@'s messages, her labels/folders as metadata rows, and her own search index</li>
+                    <li><b>Labels are pointers</b> — "Inbox" and "Travel" are metadata rows tagging one stored message, not copies</li>
+                    <li><b>The payoff</b> — "open inbox", "read thread", "search my mail" each touch exactly one shard</li>
+                </ul>
+                <p class="example">When kim@ opens her inbox, the front end asks shard 2 and only shard 2 — shards 1 and 3 never hear about the request.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Email has a natural shard key — the mailbox owner. Queries are almost always "my mail", so one user's whole world fits on one shard and reads never cross users.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Delivering 1,000 Messages Through the Pipeline</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">delivery pipeline</span></div>
+                <ul>
+                    <li><b>The batch</b> — 1,000 messages arrive over SMTP in one minute (an illustrative traffic slice)</li>
+                    <li><b>The scan</b> — spam and virus filters reject 380 at the gate; 620 messages continue to delivery</li>
+                    <li><b>The dedupe</b> — the 620 carry 240 attachments; content hashes match 90 already stored, so 150 new blobs</li>
+                    <li><b>The write</b> — each of the 620 is written to its recipient's shard with an "Inbox" label row</li>
+                    <li><b>The index</b> — delivery appends the message's terms to that user's search index before acknowledging</li>
+                </ul>
+                <p class="example">Of 1,000 arriving messages, 380 die at the spam gate; the surviving 620 cost 620 shard writes, 620 index updates, and only 150 new attachment blobs.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Delivery is a pipeline — receive, scan, dedupe, write to the owner's shard, index. Every message is search-ready the moment it lands because indexing happens at delivery time, not at query time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Reads Stay Local, but Spam and Dedupe Go Global</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag green">global systems</span><span class="tag orange">replication</span></div>
+                <ul>
+                    <li><b>Simple reads</b> — every user-facing query is served by one shard; no fan-out, no cross-shard joins</li>
+                    <li><b>Spam goes global</b> — one mailbox sees a scam twice; a global signal store sees the campaign 5,000 times</li>
+                    <li><b>Dedupe goes global</b> — a 2 MB PDF sent to 40 users is one blob plus 40 pointers, not 80 MB of copies</li>
+                    <li><b>The split</b> — shards serve per-user reads; separate global systems do the cross-user learning and storage</li>
+                    <li><b>Replication</b> — each shard is copied to 3 machines, so one dead disk loses nobody's mail</li>
+                </ul>
+                <p class="example">The blob store keys attachments by content hash: 40 recipients of the same 2 MB PDF cost 2 MB of storage plus 40 tiny pointer rows.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Per-user sharding buys simple reads by giving up cross-user queries — so anything that must see across users, like spam signals or attachment dedupe, becomes its own global system beside the shards.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Search Is Indexed at Delivery, Not Scanned at Query</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">search index</span></div>
+                <ul>
+                    <li><b>The temptation</b> — "search is just grep": scan the mailbox for the query word when the user searches</li>
+                    <li><b>The size</b> — a 10-year mailbox holds 40,000 messages at ~8 KB each, so 320 MB to scan per search</li>
+                    <li><b>The cost</b> — scanning 320 MB at 100 MB/s takes 3.2 seconds, on every single search, for every user</li>
+                    <li><b>The index</b> — a per-user index maps term &rarr; message ids; one lookup reads ~50 KB in about 5 ms</li>
+                    <li><b>The trade</b> — a little indexing work on every delivery makes every future search near-free</li>
+                </ul>
+                <p class="example">Searching "invoice" by scan reads 320 MB and takes 3.2 s; the delivery-time index answers the same query from a 50 KB posting list in 5 ms — about 640&times; faster.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating search as a query-time job. At mailbox scale the winning move is to pay at write time — index each message once on delivery — because a message is written once but searched forever.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function flowArrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width || 3;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: hash(user) routes each mailbox to one shard; inbox load touches one
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('hash(user) Picks the Shard — an Inbox Load Touches Exactly One', w / 2, 24);
+
+    // shard boxes
+    var shardTops = [55, 135, 215];
+    for (var i = 0; i < 3; i++) {
+        rrect(ctx, 280, shardTops[i], 150, 58, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('shard ' + (i + 1), 355, shardTops[i] + 25);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+        ctx.fillText('msgs · labels · index', 355, shardTops[i] + 42);
+    }
+
+    // users and hash arrows: ana@->1, bob@->3, kim@->2, raj@->1
+    var users = [
+        { lab: 'ana@', y: 75, shard: 0 },
+        { lab: 'bob@', y: 130, shard: 2 },
+        { lab: 'kim@', y: 185, shard: 1 },
+        { lab: 'raj@', y: 240, shard: 0 }
+    ];
+    for (var i = 0; i < users.length; i++) {
+        var u = users[i];
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(u.lab, 45, u.y + 4);
+        var ty = shardTops[u.shard] + 29;
+        flowArrow(ctx, 85, u.y, 276, ty, P.mute, 1.5);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hash(user)', 175, 55);
+
+    // query box and green arrow into shard 2
+    rrect(ctx, 545, 135, 150, 58, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('kim@ opens Inbox', 620, 168);
+    flowArrow(ctx, 545, 164, 434, 164, P.green, 3);
+
+    // untouched marks toward shards 1 and 3
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(545, 150); ctx.lineTo(478, 118); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(545, 178); ctx.lineTo(478, 212); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', 470, 118);
+    ctx.fillText('✗', 470, 220);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('never touched', 500, 95);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("one user's read = one shard, always", 300, 285);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('generic design exercise — mapping illustrative', w - 20, 297);
+});
+
+// c2: one minute of delivery through the five-stage pipeline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Minute of Delivery: 1,000 In, 620 Mailbox Writes, 150 New Blobs', w / 2, 24);
+
+    var stages = [
+        { x: 20, t: 'SMTP receive', c: '1,000 msgs', fill: 'rgba(42,120,214,0.15)', border: P.blue, cCol: P.text },
+        { x: 160, t: 'spam/virus scan', c: '−380 rejected', fill: 'rgba(231,76,60,0.12)', border: '#e74c3c', cCol: '#e74c3c' },
+        { x: 300, t: 'dedupe attachments', c: '240 seen, 150 new', fill: 'rgba(230,126,34,0.15)', border: '#e67e22', cCol: P.text },
+        { x: 440, t: 'write to shard', c: '620 writes', fill: 'rgba(0,131,0,0.12)', border: P.green, cCol: P.text },
+        { x: 580, t: 'update index', c: '620 updates', fill: 'rgba(0,131,0,0.12)', border: P.green, cCol: P.text }
+    ];
+    for (var i = 0; i < stages.length; i++) {
+        var st = stages[i];
+        rrect(ctx, st.x, 110, 122, 64, 8);
+        ctx.fillStyle = st.fill; ctx.fill();
+        ctx.strokeStyle = st.border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(st.t, st.x + 61, 138);
+        ctx.fillStyle = st.cCol; ctx.font = '11px system-ui';
+        ctx.fillText(st.c, st.x + 61, 156);
+        if (i < stages.length - 1) {
+            flowArrow(ctx, st.x + 124, 142, st.x + 138, 142, P.mute, 3);
+        }
+    }
+
+    // blob callout under the dedupe box
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('90 of 240 attachments already stored', 361, 190);
+
+    // survivor strip: 1px per 2 messages
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(20, 205, 500, 14);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1,000 arrived', 526, 216);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+    ctx.strokeRect(20, 228, 310, 14);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('620 delivered', 25, 239);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('380 dropped', 350, 239);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('indexed on delivery — searchable the second it lands', w / 2, 280);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 20, 296);
+});
+
+// c3: per-user shard world vs global systems
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Two Worlds: the User's Shard vs the Global Systems", w / 2, 24);
+
+    // lane divider and headers
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(380, 50); ctx.lineTo(380, 270); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("per-user (kim@'s shard)", 110, 58);
+    ctx.fillText('global (all users)', 470, 58);
+
+    // replica outlines behind the shard box
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    rrect(ctx, 80, 110, 200, 90, 8); ctx.stroke();
+    rrect(ctx, 70, 100, 200, 90, 8); ctx.stroke();
+    // main shard box (opaque white underlay so replica outlines don't show through)
+    rrect(ctx, 60, 90, 200, 90, 8);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    rrect(ctx, 60, 90, 200, 90, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("kim@'s shard", 160, 128);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('messages · labels · index', 160, 148);
+    ctx.textAlign = 'left';
+    ctx.fillText('×3 replicas — a dead disk loses no mail', 60, 225);
+
+    // global boxes
+    rrect(ctx, 430, 90, 230, 54, 8);
+    ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('spam signal store', 545, 112);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('campaign seen 5,000×', 545, 130);
+
+    rrect(ctx, 430, 170, 230, 54, 8);
+    ctx.fillStyle = 'rgba(230,126,34,0.15)'; ctx.fill();
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('attachment blob store', 545, 192);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('one 2 MB PDF + 40 pointers', 545, 210);
+
+    // delivery arrows
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('delivery', 330, 270);
+    flowArrow(ctx, 322, 258, 200, 184, P.mute, 2);
+    flowArrow(ctx, 340, 258, 426, 121, P.mute, 2);
+    flowArrow(ctx, 340, 258, 426, 200, P.mute, 2);
+
+    // read arrow into the shard from the left
+    flowArrow(ctx, 20, 135, 56, 135, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reads', 20, 122);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('reads never leave the shard; learning and dedupe never fit inside one', 330, 290);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 20, 290);
+});
+
+// c4: one search — scan vs last-month scan vs index lookup
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 250;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Search for "invoice": Scan vs Delivery-Time Index', w / 2, 24);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 230); ctx.stroke();
+
+    var rows = [
+        { y: 80, lab: 'scan whole mailbox — 320 MB', wdt: 430, fill: 'rgba(231,76,60,0.25)', border: '#e74c3c', time: '3,200 ms' },
+        { y: 140, lab: 'scan last month only — 4 MB', wdt: 210, fill: 'rgba(230,126,34,0.25)', border: P.orange, time: '40 ms' },
+        { y: 200, lab: 'index lookup — 50 KB posting list', wdt: 12, fill: 'rgba(0,131,0,0.30)', border: P.green, time: '5 ms' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 15);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.wdt, 22);
+        ctx.strokeStyle = r.border; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y, r.wdt, 22);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        if (r.wdt > 400) {
+            ctx.textAlign = 'right';
+            ctx.fillText(r.time, bx + r.wdt - 8, r.y + 15);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(r.time, bx + r.wdt + 8, r.y + 15);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('640× faster — the index was built once per message at delivery', 300, 250);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes and speeds illustrative; widths schematic, not log-scaled', w - 20, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

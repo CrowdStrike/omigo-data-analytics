@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMB &amp; NFS</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>SMB &amp; NFS</h1>
+<p class="subtitle">SMB and NFS make a folder on another machine look like a local folder — every file operation quietly becomes a message across the network</p>
+
+<div class="card-section">
+    <h2>The Shared Drive That Lives on Another Machine</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">network mount</span><span class="tag orange">SMB vs NFS</span></div>
+                <ul>
+                    <li><b>The team</b> — three analysts at a coffee-shop chain all open the same <code>orders.csv</code> from a shared drive</li>
+                    <li><b>The trick</b> — the file lives on one file server; each laptop mounts the folder so it looks local</li>
+                    <li><b>SMB</b> — the protocol behind Windows shared drives (<code>Z:\shared\</code>), born in the Windows/IBM world in the 1980s</li>
+                    <li><b>NFS</b> — Sun Microsystems' 1984 answer for Unix; mounts appear as ordinary paths like <code>/mnt/shared</code></li>
+                    <li><b>The translation</b> — every open, read, and write the app makes is turned into a network request and reply</li>
+                </ul>
+                <p class="example">An analyst saves orders.csv at 9:00am; a colleague on another laptop opens the same path a minute later and sees the update — there is only one real copy, on the server.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> SMB and NFS are network filesystems: the folder is an illusion drawn by the operating system, and behind every file operation is a round-trip to a server that holds the only real copy.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Round-Trips to List One Folder</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">round-trips</span></div>
+                <ul>
+                    <li><b>The task</b> — an analyst runs a detailed listing (<code>ls -l</code>) on a shared folder holding 200 daily order files</li>
+                    <li><b>The cost</b> — the client asks the server for attributes of each file: ~1 directory read + 200 attribute calls</li>
+                    <li><b>Local disk</b> — 200 lookups at ~0.02 ms each finish in about 4 ms; no network is involved</li>
+                    <li><b>Office LAN</b> — 201 round-trips at 0.5 ms each take about 100 ms; noticeable but fine</li>
+                    <li><b>Over VPN</b> — 201 round-trips at 20 ms each take about 4,020 ms; the same listing now takes ~4 seconds</li>
+                    <li><b>Hand-check</b> — 200 × 20 ms = 4,000 ms; latency per call, not bandwidth, is what you are paying</li>
+                </ul>
+                <p class="example">The identical folder listing takes 4 ms on a local disk, ~100 ms on the office LAN, and ~4 seconds from home over a 20 ms VPN — same files, same command, 1,000× slower.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Network filesystems pay one round-trip per operation, so an action that fires hundreds of small calls is multiplied by network latency — distance to the server, not disk speed, sets the pace.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where a Data Scientist Trips Over the Mount</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">small files</span><span class="tag orange">data loading</span></div>
+                <ul>
+                    <li><b>Invisible mounts</b> — <code>read_csv("/mnt/shared/orders.csv")</code> looks local; the path hides the network</li>
+                    <li><b>Training data</b> — jobs that stream thousands of small files from a mount crawl for the same reason</li>
+                    <li><b>The math</b> — one 400 MB file at 100 MB/s moves in ~4 s plus a handful of round-trips</li>
+                    <li><b>The trap</b> — the same 400 MB as 10,000 × 40 KB files adds ~3 round-trips per file (open, read, close)</li>
+                    <li><b>The bill</b> — 10,000 × 1.5 ms of per-file overhead ≈ 15 s on top of the 4 s of transfer: ~19 s total</li>
+                    <li><b>The fix</b> — bundle small files (one parquet, a tar, a zip) so bytes flow in few large requests</li>
+                </ul>
+                <p class="example">The nightly job reads 400 MB of orders either way — as one file it takes ~4 seconds, as 10,000 tiny files on the same mount it takes ~19 seconds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> On a network filesystem, per-file overhead dominates small files; the standard cure is fewer, bigger files so the mount spends its time moving bytes instead of exchanging messages.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Mounted Folder Is Not a Local Disk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">caching &amp; locks</span></div>
+                <ul>
+                    <li><b>The confusion</b> — because the path looks local, people assume local-disk timing, locking, and consistency</li>
+                    <li><b>Caching</b> — clients cache reads; NFS only guarantees you see others' writes on a fresh open (close-to-open)</li>
+                    <li><b>Stale reads</b> — laptop B can briefly show yesterday's <code>orders.csv</code> after laptop A saved a new one</li>
+                    <li><b>Locks differ</b> — NFS locks are advisory (only cooperating apps honor them); SMB leans on server-side locks and leases</li>
+                    <li><b>Two writers</b> — two machines appending to one shared log can interleave or overwrite each other's rows</li>
+                    <li><b>The habit</b> — write to a temp name, then rename; or give each writer its own file and merge later</li>
+                </ul>
+                <p class="example">Two laptops both append the 9:05am order to the shared log; each cached its own view, and the merged file ends up with one row missing and one duplicated.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the mount as a local disk. Local rules — instant visibility of writes, cheap tiny operations, safe concurrent appends — quietly weaken over SMB/NFS; design for one writer per file or explicit locking.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBox(ctx, x, y, w, h, r, fill, edge) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.45), y2 - 9 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.45), y2 - 9 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: three laptops, one file server across a network band
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Real Copy: Three Laptops, One File Server', w / 2, 24);
+
+    // network band
+    ctx.fillStyle = 'rgba(107,114,128,0.08)';
+    ctx.fillRect(280, 44, 140, 220);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('network', 350, 60);
+
+    // laptop boxes
+    var labels = ['laptop A — Z:\\shared (SMB)', 'laptop B — Z:\\shared (SMB)', 'laptop C — /mnt/shared (NFS)'];
+    var ys = [70, 145, 220];
+    for (var i = 0; i < 3; i++) {
+        roundBox(ctx, 30, ys[i], 170, 44, 8, 'rgba(42,120,214,0.15)', P.blue);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labels[i], 115, ys[i] + 27);
+    }
+
+    // server box
+    roundBox(ctx, 470, 115, 200, 70, 8, 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('file server', 570, 143);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('orders.csv (the only copy)', 570, 163);
+
+    // arrows from laptops to server, with per-arrow labels
+    var targets = [135, 150, 165];
+    for (var i = 0; i < 3; i++) {
+        var x1 = 200, y1 = ys[i] + 22, x2 = 464, y2 = targets[i];
+        arrow(ctx, x1, y1, x2, y2, P.aqua, 3);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('open / read / write as messages', (x1 + x2) / 2, (y1 + y2) / 2 - 8);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the folder is an illusion — every file call is a network round-trip', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('setup schematic', w - 12, h - 8);
+});
+
+// c2: listing 200 files — local disk vs LAN vs VPN
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Listing 200 Files: Same Command, Three Distances', w / 2, 24);
+
+    var bx = 230, barH = 22;
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 250); ctx.stroke();
+
+    var rows = [
+        { y: 85, label: 'local disk — 200 × 0.02 ms', width: 40, color: P.green, val: '≈ 4 ms', bold: false, fill: 'rgba(0,131,0,0.30)' },
+        { y: 150, label: 'office LAN — 201 × 0.5 ms', width: 180, color: P.blue, val: '≈ 100 ms', bold: false, fill: 'rgba(42,120,214,0.30)' },
+        { y: 215, label: 'VPN — 201 × 20 ms', width: 440, color: P.orange, val: '≈ 4,020 ms (~4 s)', bold: true, fill: 'rgba(217,89,38,0.30)' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + barH / 2 - 14);
+
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y - barH / 2, r.width, barH);
+        ctx.strokeStyle = r.color; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y - barH / 2, r.width, barH);
+
+        ctx.fillStyle = r.color;
+        ctx.font = (r.bold ? 'bold ' : '') + '12px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(r.val, bx + r.width + 8, r.y + 4);
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latency × call count — bandwidth never mattered here', w - 20, 45);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('per-call latencies illustrative; multiplication exact; bar widths log-feel schematic', w - 12, h - 8);
+});
+
+// c3: same 400 MB, one big file vs 10,000 small files (stacked bars)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 400 MB, Two Shapes: One File vs 10,000 Small Files', w / 2, 24);
+
+    var bx = 200, maxW = 460, barH = 34;
+    var pxPerSec = maxW / 20; // 0-20 s scale
+
+    // gridlines and tick labels at 0/5/10/15/20 s
+    for (var t = 0; t <= 20; t += 5) {
+        var gx = bx + t * pxPerSec;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gx, 70); ctx.lineTo(gx, 245); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' s', gx, 255);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 70); ctx.lineTo(bx, 245); ctx.stroke();
+
+    // legend (right side, y=60)
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(420, 52, 14, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.strokeRect(420, 52, 14, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('moving bytes', 440, 62);
+    ctx.fillStyle = 'rgba(217,89,38,0.45)';
+    ctx.fillRect(535, 52, 14, 12);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.strokeRect(535, 52, 14, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('per-file round-trips', 555, 62);
+
+    // row 1: one 400 MB file
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one 400 MB file', 20, y1 + barH / 2 + 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(bx, y1, 92, barH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.strokeRect(bx, y1, 92, barH);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('transfer', bx + 46, y1 + barH / 2 + 4);
+    ctx.fillStyle = 'rgba(25,158,112,0.45)';
+    ctx.fillRect(bx + 92, y1, 2, barH);
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 1; ctx.strokeRect(bx + 92, y1, 2, barH);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('≈ 4 s', bx + 102, y1 + barH / 2 + 4);
+
+    // row 2: 10,000 x 40 KB files
+    var y2 = 175;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('10,000 × 40 KB files', 20, y2 + barH / 2 + 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(bx, y2, 92, barH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.strokeRect(bx, y2, 92, barH);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('transfer', bx + 46, y2 + barH / 2 + 4);
+    ctx.fillStyle = 'rgba(217,89,38,0.45)';
+    ctx.fillRect(bx + 92, y2, 345, barH);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.strokeRect(bx + 92, y2, 345, barH);
+    ctx.fillStyle = '#fff'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('overhead', bx + 92 + 172, y2 + barH / 2 + 4);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('≈ 19 s', bx + 92 + 345 + 8, y2 + barH / 2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same bytes — 15 s of pure chit-chat', 330, 140);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('100 MB/s link, 0.5 ms LAN round-trips, illustrative', w - 12, h - 8);
+});
+
+// c4: two writers on one shared file vs one file per writer
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Writers, One Shared File: Why Appends Collide', w / 2, 24);
+
+    var blueFill = 'rgba(42,120,214,0.15)';
+    var redFill = 'rgba(231,76,60,0.12)';
+    var greenFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: shared append
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('shared append', 20, 99);
+
+    roundBox(ctx, 150, 70, 130, 34, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('laptop A: +row 9:05', 215, 91);
+
+    roundBox(ctx, 150, 112, 130, 34, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text;
+    ctx.fillText('laptop B: +row 9:05', 215, 133);
+
+    roundBox(ctx, 420, 88, 190, 44, 8, redFill, '#e74c3c');
+    arrow(ctx, 284, 87, 414, 103, P.mute, 3);
+    arrow(ctx, 284, 129, 414, 117, P.mute, 3);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('log.csv —', 515, 105);
+    ctx.fillText('row lost / doubled', 515, 121);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ silent corruption', 618, 114);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(20, 165); ctx.lineTo(700, 165); ctx.stroke();
+
+    // row 2: one file per writer
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one file per writer', 20, 229);
+
+    roundBox(ctx, 150, 200, 130, 34, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('A → log_A.csv', 215, 221);
+
+    roundBox(ctx, 150, 242, 130, 34, 8, blueFill, P.blue);
+    ctx.fillStyle = P.text;
+    ctx.fillText('B → log_B.csv', 215, 263);
+
+    roundBox(ctx, 420, 218, 190, 44, 8, greenFill, P.green);
+    arrow(ctx, 284, 217, 414, 233, P.mute, 3);
+    arrow(ctx, 284, 259, 414, 247, P.mute, 3);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('merge job → log.csv', 515, 244);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ every row kept', 618, 244);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('client caches and advisory locks make shared appends a gamble', 300, 290);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timestamps illustrative', w - 12, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mixed Read/Write Store</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+.tag.violet { background: rgba(74,58,167,0.14); color: #4a3aa7; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Mixed Read/Write Store</h1>
+<p class="subtitle">An order-status store where every write is read again within seconds &mdash; the read-optimized layout and the write-optimized layout each ruin the other path, so the answer is not a compromise engine but a decomposition: split by data age, then set the quorum dial</p>
+
+<div class="card-section">
+    <h2>Both Paths Are Hot at the Same Time</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag red">both paths hot</span><span class="tag orange">no middle ground</span></div>
+                <ul>
+                    <li><b>The service</b> &mdash; an order-status store where each write is read again within seconds by three apps</li>
+                    <li><b>Both paths hot</b> &mdash; reads and writes are both thousands per second; neither path is the rare one</li>
+                    <li><b>Read-optimized</b> &mdash; keep four pre-shaped copies: a read is one hop, but a write must touch all four</li>
+                    <li><b>Write-optimized</b> &mdash; append and compact later: a write is one op, but a read merges four fragments</li>
+                    <li><b>The contradiction</b> &mdash; each layout turns the other path's one unit of work into four; no middle wins</li>
+                </ul>
+                <p class="example">The courier taps "picked up"; seconds later the customer's map, the courier's job card, and the restaurant's board all read that same row.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> When both paths are hot, the read-optimized and the write-optimized answers contradict each other &mdash; whichever path you make one hop, the other becomes four. Stop hunting for one layout and decompose the workload instead. Illustrative Example.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Split by Age, Not by Averaging</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hot window</span><span class="tag orange">two tiers</span></div>
+                <ul>
+                    <li><b>The shape</b> &mdash; reads pile onto rows written moments ago and fall off sharply with row age</li>
+                    <li><b>The hot window</b> &mdash; about 94% of reads land on rows less than a day old (illustrative mix)</li>
+                    <li><b>The small share</b> &mdash; one day out of a 30-day retention window is roughly 3% of stored rows</li>
+                    <li><b>The hot tier</b> &mdash; that 3% fits in memory, pre-shaped, so recent reads stay a single hop</li>
+                    <li><b>The cold tier</b> &mdash; older rows age out to an append-optimized engine where writes stay cheap</li>
+                </ul>
+                <p class="example">A read for an order placed four minutes ago never touches disk; a support agent's read of a three-week-old order pays the merge cost, and nobody minds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Split by access pattern rather than averaging over it &mdash; a small memory-resident window of recent rows serves most of the reads, and everything older can live in an engine tuned purely for cheap writes. Illustrative Example.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Quorum Dial: R + W &gt; N</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">tunable consistency</span><span class="tag orange">latency dial</span></div>
+                <ul>
+                    <li><b>The replicas</b> &mdash; each order key sits on N = 3 copies; a write waits for W of them, a read for R</li>
+                    <li><b>The rule</b> &mdash; R + W &gt; N forces the read set and the write set to share at least one replica</li>
+                    <li><b>Favor reads</b> &mdash; R=1, W=3: a read answers from the nearest copy, a write waits for all three</li>
+                    <li><b>Favor writes</b> &mdash; R=3, W=1: a write is acknowledged at once, a read must consult every copy</li>
+                    <li><b>Balanced</b> &mdash; R=2, W=2: both paths wait for a majority, and both survive one node being down</li>
+                    <li><b>The unsafe setting</b> &mdash; R=1, W=1 sums to 2, not more than 3, so a read can miss the write entirely</li>
+                </ul>
+                <p class="example">Pin the courier's session to the replica that accepted his write and he sees "picked up" instantly, while the restaurant's board catches up a beat later.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> R + W &gt; N is the whole guarantee: the read set and the write set must overlap, so a read is forced to touch a replica that saw the write. Which side you make slower is a dial you choose, not a property of the database.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What Goes Wrong</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">failure mode</span><span class="tag orange">contention</span><span class="tag violet">last-write-wins</span></div>
+                <ul>
+                    <li><b>The averaged ratio</b> &mdash; one service-wide read:write number can be true of the service and of no table in it</li>
+                    <li><b>Per table instead</b> &mdash; a profile table is read-heavy, an event log write-heavy; pick a layout per table</li>
+                    <li><b>Lock contention</b> &mdash; reads and writes on one hot key serialize, so read latency spikes behind the writes</li>
+                    <li><b>Last-write-wins</b> &mdash; drop the lock and the highest timestamp wins, whichever write actually came second</li>
+                    <li><b>The silent loss</b> &mdash; a slow clock makes the later write look earlier, so it is dropped with no error logged</li>
+                </ul>
+                <p class="example">The support agent sees "cancelled" confirmed on screen, and twenty seconds later every reader is back to "picked up" with nothing in the logs.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Sizing one engine for an averaged ratio, then trusting wall-clock timestamps to order concurrent writes. On a key both paths hammer, the choice is lock contention or a silently lost update &mdash; version vectors or a compare-and-set on the status field, not a clock.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one hop on one path means four on the other
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Whichever Path Is One Hop, the Other Is Four', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(362, 45); ctx.lineTo(362, 265); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function box(x, y, bw, bh, kind, text) {
+        var fill = 'rgba(42,120,214,0.15)', border = P.blue;
+        if (kind === 'green') { fill = 'rgba(0,131,0,0.12)'; border = P.green; }
+        if (kind === 'orange') { fill = 'rgba(217,89,38,0.14)'; border = P.orange; }
+        roundRect(ctx, x, y, bw, bh, 6);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + bw / 2, y + bh / 2 + 4);
+    }
+
+    var fanY = [148, 178, 208, 238];
+    var i;
+
+    // ---- left panel: read-optimized ----
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('read-optimized: pre-shaped copies', 185, 56);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read path', 30, 80);
+    box(30, 88, 54, 26, 'blue', 'read');
+    arrow(ctx, 88, 101, 108, 101, P.mute, 2);
+    box(112, 88, 90, 26, 'green', 'one copy');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 hop', 212, 105);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('write path', 30, 140);
+    box(30, 150, 54, 26, 'blue', 'write');
+    for (i = 0; i < 4; i++) {
+        arrow(ctx, 86, 163, 136, fanY[i] + 12, P.orange, 1.5);
+        box(140, fanY[i], 90, 24, 'orange', 'copy ' + (i + 1));
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('×4', 238, 200);
+
+    // ---- right panel: write-optimized ----
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('write-optimized: append, compact later', 540, 56);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('write path', 385, 80);
+    box(385, 88, 54, 26, 'blue', 'write');
+    arrow(ctx, 443, 101, 463, 101, P.mute, 2);
+    box(467, 88, 110, 26, 'green', 'append once');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 op', 587, 105);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read path', 385, 140);
+    box(385, 150, 54, 26, 'blue', 'read');
+    for (i = 0; i < 4; i++) {
+        box(495, fanY[i], 100, 24, 'orange', 'fragment ' + (i + 1));
+        arrow(ctx, 493, fanY[i] + 12, 443, 165, P.orange, 1.5);
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('×4', 601, 200);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one engine tuned in the middle wins neither path', w / 2, 275);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example; hop counts illustrative', w - 20, h - 8);
+});
+
+// c2: read share by row age, hot window bracketed
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var labels = ['< 1 min', '1-10 min', '10-60 min', '1-24 h', 'older'];
+    var counts = [55000, 20000, 7000, 12000, 6000];
+    var total = 0, i;
+    for (i = 0; i < counts.length; i++) total += counts[i];
+    var pct = [];
+    for (i = 0; i < counts.length; i++) pct.push(counts[i] / total * 100);
+    var hotPct = 0;
+    for (i = 0; i < 4; i++) hotPct += pct[i];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText(Math.round(hotPct) + '% of Reads Land on Rows Less Than a Day Old', w / 2, 24);
+
+    var ox = 80, baseY = 240, pw = 590, ph = 150, maxV = 60;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines
+    var gVals = [20, 40, 60];
+    for (i = 0; i < gVals.length; i++) {
+        var gy = yOf(gVals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gVals[i] + '%', ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var barW = 62, slot = pw / counts.length;
+    var centers = [];
+    for (i = 0; i < counts.length; i++) {
+        var cx = ox + slot * (i + 0.5);
+        centers.push(cx);
+        var top = yOf(pct[i]);
+        var hot = i < 4;
+        ctx.fillStyle = hot ? 'rgba(0,131,0,0.5)' : 'rgba(217,89,38,0.5)';
+        ctx.fillRect(cx - barW / 2, top, barW, baseY - top);
+        ctx.strokeStyle = hot ? P.green : P.orange; ctx.lineWidth = 1;
+        ctx.strokeRect(cx - barW / 2, top, barW, baseY - top);
+
+        ctx.fillStyle = hot ? P.green : P.orange;
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(Math.round(pct[i]) + '%', cx, top - 8);
+
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labels[i], cx, baseY + 18);
+    }
+
+    // hot window bracket over the first four bars
+    var bx1 = centers[0] - barW / 2, bx2 = centers[3] + barW / 2, by = 78;
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx1, by + 8); ctx.lineTo(bx1, by); ctx.lineTo(bx2, by); ctx.lineTo(bx2, by + 8);
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hot window — ' + Math.round(hotPct) + '% of reads', (bx1 + bx2) / 2, by - 6);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('and only about 3% of stored rows (1 day of 30)', 670, 140);
+
+    // axis caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('age of the row when it was read', ox + pw / 2, 278);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example; shares computed from plotted counts', w - 20, h - 8);
+});
+
+// c3: the quorum dial at N = 3
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('N = 3: The Dial Between Fast Reads and Fast Writes', w / 2, 24);
+
+    // legend
+    function swatch(x, y, color, fill, text) {
+        ctx.fillStyle = fill; ctx.fillRect(x, y - 8, 12, 10);
+        ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.strokeRect(x, y - 8, 12, 10);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(text, x + 18, y + 1);
+        return x + 18 + ctx.measureText(text).width + 16;
+    }
+    var nx = swatch(185, 52, P.orange, 'rgba(217,89,38,0.5)', 'write set (W)');
+    nx = swatch(nx, 52, P.blue, 'rgba(42,120,214,0.5)', 'read set (R)');
+    swatch(nx, 52, P.violet, 'rgba(74,58,167,0.12)', 'shared');
+
+    var N = 3;
+    var configs = [
+        { R: 1, W: 3, note: 'reads fastest' },
+        { R: 2, W: 2, note: 'balanced' },
+        { R: 3, W: 1, note: 'writes fastest' },
+        { R: 1, W: 1, note: 'unsafe' }
+    ];
+    var rowY = [100, 148, 196, 244];
+    var slotX = 200, slotW = 50;
+
+    for (var i = 0; i < configs.length; i++) {
+        var cfg = configs[i], cy = rowY[i];
+
+        // replica slot outlines
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        for (var sI = 0; sI < N; sI++) {
+            ctx.strokeRect(slotX + sI * slotW, cy - 18, slotW, 36);
+        }
+
+        // write set: last W slots
+        var wStart = slotX + (N - cfg.W) * slotW;
+        ctx.fillStyle = 'rgba(217,89,38,0.5)'; ctx.fillRect(wStart, cy - 14, cfg.W * slotW, 12);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1; ctx.strokeRect(wStart, cy - 14, cfg.W * slotW, 12);
+
+        // read set: first R slots
+        ctx.fillStyle = 'rgba(42,120,214,0.5)'; ctx.fillRect(slotX, cy + 2, cfg.R * slotW, 12);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(slotX, cy + 2, cfg.R * slotW, 12);
+
+        // shared slots (overlap = R + W - N)
+        var overlap = cfg.R + cfg.W - N;
+        if (overlap > 0) {
+            ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+            ctx.strokeRect(wStart, cy - 17, overlap * slotW, 34);
+            ctx.setLineDash([]);
+        }
+
+        // left labels
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('R=' + cfg.R + ', W=' + cfg.W, 190, cy - 6);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(cfg.note, 190, cy + 14);
+
+        // verdict, printed from the arithmetic
+        var sum = cfg.R + cfg.W;
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        if (sum > N) {
+            ctx.fillStyle = P.green;
+            ctx.fillText(cfg.R + '+' + cfg.W + ' = ' + sum + ' > ' + N + ' — shares ' +
+                overlap + (overlap === 1 ? ' replica' : ' replicas'), 368, cy - 2);
+        } else {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText(cfg.R + '+' + cfg.W + ' = ' + sum + ' ≤ ' + N + ' — may share none', 368, cy - 2);
+            ctx.font = '12px system-ui';
+            ctx.fillText('a read can miss the write', 368, cy + 16);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the overlap is what makes a read see the write', w / 2, 278);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('quorum arithmetic exact', w - 20, h - 8);
+});
+
+// c4: lock contention vs last-write-wins loss
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Writers, One Hot Key: Queue Behind It or Lose One', w / 2, 24);
+
+    function box(x, cy, bw, kind, text) {
+        var fill = 'rgba(42,120,214,0.15)', border = P.blue;
+        if (kind === 'orange') { fill = 'rgba(217,89,38,0.14)'; border = P.orange; }
+        if (kind === 'violet') { fill = 'rgba(74,58,167,0.12)'; border = P.violet; }
+        if (kind === 'red') { fill = 'rgba(231,76,60,0.12)'; border = '#e74c3c'; }
+        roundRect(ctx, x, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + bw / 2, cy + 4);
+    }
+
+    // ---- row 1: with a lock ----
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with a lock', 20, 68);
+
+    box(110, 100, 130, 'blue', 'write A holds lock');
+    arrow(ctx, 240, 100, 278, 100, P.mute, 3);
+    box(282, 100, 150, 'orange', 'write B waits');
+    arrow(ctx, 432, 100, 470, 100, '#e74c3c', 3);
+    box(474, 100, 200, 'red', 'reads queue behind');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ read latency spikes', 574, 140);
+
+    // ---- row 2: no lock, last write wins ----
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no lock, last write wins', 20, 178);
+
+    box(110, 190, 130, 'blue', 'write A (earlier)');
+    box(110, 240, 130, 'blue', 'write B (later)');
+    arrow(ctx, 240, 190, 296, 208, P.mute, 3);
+    arrow(ctx, 240, 240, 296, 222, P.mute, 3);
+    box(300, 215, 170, 'violet', 'highest timestamp wins');
+    arrow(ctx, 470, 215, 506, 215, '#e74c3c', 3);
+    box(510, 215, 170, 'red', 'B dropped, no error');
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a slow clock makes the later write look earlier', w / 2, 278);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example', w - 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

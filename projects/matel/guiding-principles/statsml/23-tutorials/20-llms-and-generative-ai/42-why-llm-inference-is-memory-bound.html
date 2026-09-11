@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why LLM Inference Is Memory-Bound</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Why LLM Inference Is Memory-Bound</h1>
+<p class="subtitle">Producing one token takes very little math but a huge fetch — the chip spends almost all its time waiting for the model's weights to arrive from memory, not computing</p>
+
+<div class="card-section">
+    <h2>A One-Second Job at the End of a 99-Second Walk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">fetch vs work</span><span class="tag orange">waiting</span></div>
+                <ul>
+                    <li><b>The packer</b> — a warehouse packer tapes a box shut in 1 second flat, the fastest hands in the building</li>
+                    <li><b>The aisle</b> — but every box sits at the far end of the aisle, and each cart trip there and back takes 99 seconds</li>
+                    <li><b>The split</b> — of every 100 seconds, 1 goes to taping and 99 to walking; a faster taper changes almost nothing</li>
+                    <li><b>The GPU</b> — an LLM chip is that packer: blistering at math, but every token needs the weights hauled in from memory first</li>
+                    <li><b>The name</b> — a job whose pace is set by the fetching, not the working, is called memory-bound</li>
+                </ul>
+                <p class="example">Doubling the packer's taping speed saves half a second per box out of 100 — halving the aisle saves 49.5.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> When fetching takes far longer than working, the fetch sets the speed — that is all "memory-bound" means.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Token on a 7-Billion-Weight Model, by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">back-of-envelope</span></div>
+                <ul>
+                    <li><b>The bytes</b> — 7 billion weights at 2 bytes each is 14 GB, and all of it is read to produce each token</li>
+                    <li><b>The ops</b> — one token costs about 2 operations per weight: 14 billion operations of math</li>
+                    <li><b>The fetch clock</b> — at 1,000 GB/s of memory bandwidth, reading 14 GB takes 14 ms</li>
+                    <li><b>The math clock</b> — at 100 trillion ops/s, doing 14 billion operations takes 0.14 ms</li>
+                    <li><b>The verdict</b> — the fetch is 100&times; slower, so the chip computes 1% of the time and waits the other 99%</li>
+                    <li><b>The ceiling</b> — one token per 14 ms is at most about 71 tokens per second, set purely by memory</li>
+                </ul>
+                <p class="example">14 GB &divide; 1,000 GB/s = 14 ms to fetch, but 14 billion ops &divide; 100 trillion ops/s = 0.14 ms to compute — a 100-to-1 wait.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Fetch 14 ms vs math 0.14 ms — token speed (&asymp;71 tokens/s) is decided by the memory pipe, not the calculator.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Roofline: One Ratio Predicts the Speed</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">arithmetic intensity</span><span class="tag orange">roofline</span></div>
+                <ul>
+                    <li><b>The ratio</b> — arithmetic intensity = operations done per byte fetched; our token does 14 B ops on 14 GB = 1 op/byte</li>
+                    <li><b>The ridge</b> — this chip can feed 100 ops per byte fetched (100 T ops/s &divide; 1,000 GB/s); below 100, memory rules</li>
+                    <li><b>The roofline</b> — plot intensity against speed: a slanted memory line and a flat compute roof meet at the ridge</li>
+                    <li><b>Batching</b> — serve 8 requests at once and each fetched weight gets used 8 times: intensity &asymp; 8 ops/byte</li>
+                    <li><b>Climbing</b> — batch 1 &rarr; 8 &rarr; 64 slides the dot up the slanted line; only past 100 does the flat roof take over</li>
+                </ul>
+                <p class="example">Batch 1 runs at 1 T ops/s (1% of peak), batch 8 at 8 T, batch 64 at 64 T, and batch 256 finally sits on the 100 T roof.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One number — ops per byte, placed on the roofline — tells you whether memory or compute sets your speed, before any benchmark runs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Buying More TFLOPs Won't Fix It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">what actually helps</span></div>
+                <ul>
+                    <li><b>The mistake</b> — upgrading to a chip with twice the math speed and expecting twice the chat speed</li>
+                    <li><b>The reality</b> — single-stream generation stays at 71 tokens/s, because the 14 GB fetch did not shrink</li>
+                    <li><b>Bandwidth helps</b> — doubling memory bandwidth halves the fetch to 7 ms: about 143 tokens/s</li>
+                    <li><b>Fewer bytes help</b> — 4-bit weights shrink 14 GB to 3.5 GB: a 3.5 ms fetch, about 286 tokens/s</li>
+                    <li><b>Batching helps</b> — more users share each fetch, raising total throughput, though no single user's stream speeds up</li>
+                </ul>
+                <p class="example">Same model, same chip: shrinking weights to 4-bit quadrupled tokens/s, because the bytes — not the ops — were the bottleneck.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a chip's TFLOPs spec as its chat speed. For token-by-token generation, memory bandwidth and the model's bytes are the specs that matter.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: packer's box vs GPU's token, both 99% fetch / 1% work
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ax = 180, aw = 500, axisY = 245;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where the Time Goes: 99% Fetching, 1% Working', w / 2, 24);
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+    var pcts = ['0%', '25%', '50%', '75%', '100%'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i <= 4; i++) {
+        var x = ax + i / 4 * aw;
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, axisY + 5); ctx.stroke();
+        ctx.fillText(pcts[i], x, axisY + 20);
+    }
+
+    function row(cy, label, fetchLab, workLab, workLabAbove) {
+        var bh = 34, top = cy - bh / 2;
+        var split = ax + 0.99 * aw;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(label, 20, cy + 4);
+        // fetch segment 0-99%
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(ax, top, split - ax, bh);
+        ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(fetchLab, (ax + split) / 2, cy + 4);
+        // work sliver 99-100%
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(split, top, ax + aw - split, bh);
+        ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        var sx = split + (ax + aw - split) / 2;
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+        if (workLabAbove) {
+            ctx.fillText(workLab, ax + aw, top - 10);
+            ctx.beginPath(); ctx.moveTo(sx, top - 8); ctx.lineTo(sx, top - 1); ctx.stroke();
+        } else {
+            ctx.fillText(workLab, ax + aw, top + bh + 18);
+            ctx.beginPath(); ctx.moveTo(sx, top + bh + 8); ctx.lineTo(sx, top + bh + 1); ctx.stroke();
+        }
+    }
+    row(110, 'packer: one box (100 s)', 'walking the aisle — 99 s', 'tape 1 s', true);
+    row(185, 'GPU: one token', 'fetching weights — 99% of the time', 'math 1%', false);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same shape: the trip, not the job, sets the pace', 430, 55);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — GPU split worked out with real numbers in the next section', w - 12, h - 10);
+});
+
+// c2: 14 ms fetch bar vs 0.14 ms math sliver on a shared ms axis
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ax = 200, aw = 480, axisY = 245, maxMs = 15;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Token's Clock: 14 ms of Fetching, 0.14 ms of Math", w / 2, 24);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+    var ticks = [0, 5, 10, 15], tickLabs = ['0', '5', '10', '15 ms'];
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 4; i++) {
+        var x = ax + ticks[i] / maxMs * aw;
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, axisY + 5); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(tickLabs[i], x, axisY + 20);
+    }
+
+    // row 1: fetch bar, 14 ms
+    var bh = 40, cy1 = 115, top1 = cy1 - bh / 2;
+    var fw = 14 / maxMs * aw;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reading 14 GB of weights', 20, cy1 + 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(ax, top1, fw, bh);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(ax, top1, fw, bh);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('14 ms', ax + fw + 8, cy1 + 4);
+
+    // row 2: math sliver, 0.14 ms (min 4px)
+    var cy2 = 190, top2 = cy2 - bh / 2;
+    var mw = Math.max(0.14 / maxMs * aw, 4);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('doing 14 billion ops', 20, cy2 + 4);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(ax, top2, mw, bh);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ax + mw + 2, cy2); ctx.lineTo(ax + mw + 24, cy2); ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0.14 ms', ax + mw + 30, cy2 + 4);
+
+    // ceiling: dashed line at 14 ms
+    var cx = ax + 14 / maxMs * aw;
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, 70); ctx.lineTo(cx, axisY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1 token / 14 ms ≈ 71 tokens/s', cx + 30, 62);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the math fits inside 1% of the fetch', 430, 218);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative round numbers: 14 GB model, 1,000 GB/s, 100 T ops/s', w - 12, h - 10);
+});
+
+// c3: roofline on log2-log2 axes with batch dots climbing the memory line
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245;
+
+    function log2(v) { return Math.log(v) / Math.LN2; }
+    function xI(I) { return ox + 59 * log2(I / 0.5); }
+    function yS(S) { return baseY - 23.1 * log2(S / 0.5); }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Roofline: Slanted Memory Line, Flat Compute Roof, Ridge at 100', w / 2, 24);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - 185); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 590, baseY); ctx.stroke();
+
+    // x ticks
+    var xTicks = [1, 4, 16, 64, 256];
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < xTicks.length; i++) {
+        var x = xI(xTicks[i]);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(String(xTicks[i]), x, baseY + 20);
+    }
+    ctx.fillStyle = '#444';
+    ctx.fillText('arithmetic intensity (ops per byte, log scale)', ox + 295, baseY + 40);
+
+    // y ticks
+    var yTicks = [1, 10, 100];
+    ctx.textAlign = 'right';
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yS(yTicks[i]);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(ox - 5, y); ctx.lineTo(ox, y); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(String(yTicks[i]), ox - 9, y + 4);
+    }
+    ctx.textAlign = 'left';
+    ctx.fillText('speed (trillion ops/s)', ox + 4, 44);
+
+    // memory line: (0.5, 0.5) to ridge (100, 100)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xI(0.5), yS(0.5)); ctx.lineTo(xI(100), yS(100)); ctx.stroke();
+    ctx.save();
+    ctx.translate(xI(4), yS(4));
+    ctx.rotate(Math.atan2(yS(100) - yS(0.5), xI(100) - xI(0.5)));
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('memory line: speed = 1 × intensity', 8, -8);
+    ctx.restore();
+
+    // compute roof: ridge to I=512
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xI(100), yS(100)); ctx.lineTo(xI(512), yS(100)); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('compute roof: 100 T ops/s', (xI(100) + xI(512)) / 2 + 35, yS(100) - 10);
+
+    // ridge marker
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xI(100), yS(100)); ctx.lineTo(xI(100), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ridge: 100 ops/byte', xI(100), baseY - 8);
+
+    // batch dots
+    var dots = [
+        { I: 1, S: 1, c: P.orange, lab: 'batch 1 — 1% of peak', dx: 10, dy: 4 },
+        { I: 8, S: 8, c: P.aqua, lab: 'batch 8', dx: 10, dy: 4 },
+        { I: 64, S: 64, c: P.aqua, lab: 'batch 64', dx: 10, dy: 10 },
+        { I: 256, S: 100, c: P.violet, lab: 'batch 256 — roof', dx: -10, dy: 22 }
+    ];
+    for (var i = 0; i < dots.length; i++) {
+        var d = dots[i], x = xI(d.I), y = yS(d.S);
+        ctx.fillStyle = d.c;
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = d.dx < 0 ? 'right' : 'left';
+        ctx.fillText(d.lab, x + d.dx, y + d.dy);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('batching reuses each fetched byte — the dot climbs the slope', 200, 80);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative machine: 1,000 GB/s, 100 T ops/s', w - 12, h - 10);
+});
+
+// c4: tokens/s bars — 2x compute does nothing, bandwidth and 4-bit weights do
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, pw = 590, ph = 185, maxV = 320;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What Moves Tokens/s: Bytes and Bandwidth, Not TFLOPs', w / 2, 24);
+
+    // gridlines
+    var grids = [100, 200, 300];
+    for (var i = 0; i < grids.length; i++) {
+        var y = baseY - grids[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bars = [
+        { v: 71, fill: 'rgba(42,120,214,0.35)', border: P.blue, valC: P.blue, val: '71', lab1: 'baseline', lab2: '(14 GB, 1,000 GB/s)' },
+        { v: 71, fill: 'rgba(107,114,128,0.30)', border: P.mute, valC: P.mute, val: '71 — no change', lab1: '2× compute', lab2: '(same memory)' },
+        { v: 143, fill: 'rgba(25,158,112,0.35)', border: P.aqua, valC: P.aqua, val: '143', lab1: '2× bandwidth', lab2: '(2,000 GB/s)' },
+        { v: 286, fill: 'rgba(0,131,0,0.35)', border: P.green, valC: P.green, val: '286', lab1: '4-bit weights', lab2: '(3.5 GB)' }
+    ];
+    var bw = 90, slot = pw / 4;
+    for (var i = 0; i < 4; i++) {
+        var b = bars[i];
+        var cx = ox + slot * (i + 0.5);
+        var bh = b.v / maxV * ph;
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(cx - bw / 2, baseY - bh, bw, bh);
+        ctx.strokeStyle = b.border; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw / 2, baseY - bh, bw, bh);
+        ctx.fillStyle = b.valC; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.val, cx, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab1, cx, baseY + 16);
+        ctx.fillText(b.lab2, cx, baseY + 30);
+    }
+
+    // reference line at 71
+    var ry = baseY - 71 / maxV * ph;
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, ry); ctx.lineTo(ox + pw, ry); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('baseline 71', ox + 4, ry - 5);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('doubling the math speed bought exactly nothing', 250, 75);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — single-stream generation, one token at a time', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

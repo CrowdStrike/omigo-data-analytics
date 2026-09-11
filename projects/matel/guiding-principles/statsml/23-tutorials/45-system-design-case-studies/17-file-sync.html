@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Sync</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>File Sync</h1>
+<p class="subtitle">File sync as a distributed-systems problem — hash the chunks, dedupe the storage, diff the lists; a generic design exercise built from publicly well-known sync ideas, not a description of the real company's current internals</p>
+
+<div class="card-section">
+    <h2>One File Becomes a List of Hashes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">content addressing</span><span class="tag orange">dedupe</span></div>
+                <ul>
+                    <li><b>The file</b> — a photo tool saves photo_A.raw; the sync client splits it into fixed 4MB chunks</li>
+                    <li><b>The hash</b> — each chunk is hashed, and the hash becomes the chunk's name in the block store</li>
+                    <li><b>The dedupe</b> — a chunk already in the store under that hash is never uploaded or stored again</li>
+                    <li><b>The twin</b> — photo_B.raw shares 2 of its 3 chunks with photo_A, so only 1 new chunk is stored</li>
+                    <li><b>The ledger</b> — a file is just an ordered list of chunk hashes; the bytes live once in the store</li>
+                </ul>
+                <p class="example">photo_A and photo_B name 6 chunks between them, but the store holds only 4 — the 2 shared chunks exist exactly once.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Content-addressed storage names each chunk by the hash of its own bytes — identical chunks collapse into one stored copy, and a file becomes nothing more than an ordered list of hashes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The One-Character Edit to a 100MB File</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">chunk diff</span></div>
+                <ul>
+                    <li><b>The setup</b> — report.bin is 100MB, split into 25 chunks of 4MB; the server holds version 7's list</li>
+                    <li><b>The edit</b> — one character changes inside chunk 12; the other 24 chunks hash exactly the same</li>
+                    <li><b>The compare</b> — the client re-hashes all 25 chunks, diffs against v7's list, and finds 1 mismatch</li>
+                    <li><b>The upload</b> — only chunk 12 (4MB) crosses the wire, plus the new 25-hash list committed as v8</li>
+                    <li><b>The math</b> — 4MB instead of 100MB is a 25&times; saving: ~2s instead of ~40s on a 20 Mbps uplink</li>
+                </ul>
+                <p class="example">Fixing a typo in the 100MB report uploads 4MB in about 2 seconds; re-uploading the whole file would take about 40.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Sync is a chunk-list diff — the transfer cost scales with how much of the file changed, not with how big the file is.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Small Metadata Here, Huge Blocks There</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">architecture</span><span class="tag green">metadata vs blocks</span><span class="tag orange">LAN sync</span></div>
+                <ul>
+                    <li><b>The split</b> — chunk lists, versions, and per-device sync state live in a small metadata database</li>
+                    <li><b>The blocks</b> — the chunk bytes live in cheap blob storage, named by the hash of their own contents</li>
+                    <li><b>Why split</b> — metadata is tiny and hot (every sync reads it); blocks are huge, cold, and scale differently</li>
+                    <li><b>The notify</b> — device B keeps a long-poll connection open; A's commit answers it with "namespace changed"</li>
+                    <li><b>The pull</b> — B asks the metadata service what changed, then fetches only the missing chunks by hash</li>
+                    <li><b>LAN sync</b> — if a desktop beside B already holds those chunks, B fetches them over the LAN, not the cloud</li>
+                </ul>
+                <p class="example">After A commits, B's long-poll returns in under a second; B pulls the single 4MB chunk from A over the office LAN, never touching the block store.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Separating the metadata service from block storage lets the small consistent part (names, versions, sync state) and the giant dumb part (bytes) scale, cache, and fail independently.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Laptops Edit the Same File Offline</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">conflicts</span></div>
+                <ul>
+                    <li><b>The scene</b> — laptops A and B both edit budget.xlsx version 7 while offline on the same flight</li>
+                    <li><b>The collision</b> — both land, come online, and try to commit a version 8 with different chunk lists</li>
+                    <li><b>No merge</b> — the file is opaque binary chunks to the sync layer; it cannot line-merge a spreadsheet</li>
+                    <li><b>The rule</b> — the first commit wins v8; the loser is saved beside it as "budget.xlsx (conflicted copy)"</li>
+                    <li><b>The mistake</b> — last-writer-wins looks simpler but silently throws away one person's work</li>
+                </ul>
+                <p class="example">A commits first; B's upload lands as "budget.xlsx (B's conflicted copy)" next to the original — both edits sit in the folder for a human to reconcile.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Resolving conflicts by "latest timestamp wins" — device clocks skew, and either way one device's edit is destroyed; for arbitrary binaries, keeping both copies is the only safe generic answer.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.45), y2 - 9 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.45), y2 - 9 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two files as hash-labeled chunk boxes deduping into one block store
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var xs = [150, 262, 374];
+    var BW = 100, BH = 36;
+
+    function chunkBox(x, y, label, greenBorder) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        roundedRect(ctx, x, y, BW, BH, 8); ctx.fill();
+        ctx.strokeStyle = greenBorder ? P.green : P.blue;
+        ctx.lineWidth = greenBorder ? 2 : 1.5;
+        roundedRect(ctx, x, y, BW, BH, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + BW / 2, y + BH / 2 + 4);
+    }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Hash Each Chunk: Identical Chunks Are Stored Once', w / 2, 24);
+
+    // row 1: photo_A.raw
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('photo_A.raw', 20, 86);
+    var rowA = ['h=a3f1', 'h=9c2e', 'h=77b0'];
+    for (var i = 0; i < 3; i++) chunkBox(xs[i], 64, rowA[i], false);
+
+    // row 2: photo_B.raw (first two are duplicates, green border)
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('photo_B.raw', 20, 156);
+    var rowB = ['h=a3f1', 'h=9c2e', 'h=e412'];
+    for (var i = 0; i < 3; i++) chunkBox(xs[i], 134, rowB[i], i < 2);
+
+    // block store
+    ctx.fillStyle = 'rgba(0,131,0,0.10)';
+    roundedRect(ctx, 150, 228, 470, 44, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+    roundedRect(ctx, 150, 228, 470, 44, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('block store — 4 unique chunks: a3f1 · 9c2e · 77b0 · e412', 385, 254);
+
+    // arrows: chunk boxes down to store slots (duplicates converge)
+    var slots = { 'h=a3f1': 210, 'h=9c2e': 320, 'h=77b0': 430, 'h=e412': 540 };
+    ctx.strokeStyle = P.mute;
+    for (var i = 0; i < 3; i++) {
+        arrow(ctx, xs[i] + BW / 2, 100, slots[rowA[i]], 226, P.mute, 2);
+        arrow(ctx, xs[i] + BW / 2, 170, slots[rowB[i]], 226, P.mute, 2);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('6 chunks named,', 530, 110);
+    ctx.fillText('4 stored', 530, 128);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hashes illustrative', w - 12, h - 8);
+});
+
+// c2: 25-chunk grid with one changed chunk + upload-size bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('1 Character Changed → 1 Chunk of 25 Uploaded', w / 2, 24);
+
+    // chunk grid: 5x5 of 34px squares, 8px gaps, origin (70,70)
+    var gx = 70, gy = 70, sq = 34, gap = 8;
+    for (var n = 1; n <= 25; n++) {
+        var col = (n - 1) % 5, row = Math.floor((n - 1) / 5);
+        var x = gx + col * (sq + gap), y = gy + row * (sq + gap);
+        if (n === 12) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(x, y, sq, sq);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('12', x + sq / 2, y + sq / 2 + 4);
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.25)';
+            ctx.fillRect(x, y, sq, sq);
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(String(n), x + sq / 2, y + sq / 2 + 4);
+        }
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('report.bin — 25 × 4MB chunks', gx + (5 * sq + 4 * gap) / 2, 292);
+
+    // bars
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('full re-upload: 100MB (~40s at 20 Mbps)', 390, 102);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(390, 110, 280, 16);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(390, 110, 280, 16);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('chunk diff: 4MB (~2s)', 390, 172);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(390, 180, 11, 16);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('25× less data on the wire', 390, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('fixed 4MB chunks, times illustrative', w - 12, h - 8);
+});
+
+// c3: metadata service vs block store architecture
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function box(x, y, bw, bh, line1, line2, fill, border) {
+        ctx.fillStyle = fill;
+        roundedRect(ctx, x, y, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+        roundedRect(ctx, x, y, bw, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(line1, x + bw / 2, y + bh / 2 - 3);
+        ctx.fillText(line2, x + bw / 2, y + bh / 2 + 13);
+    }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Commit Metadata, Upload Blocks, Nudge the Other Devices', w / 2, 24);
+
+    box(40, 120, 140, 44, 'device A', 'edits file', 'rgba(42,120,214,0.15)', P.blue);
+    box(280, 48, 200, 48, 'metadata service', 'namespace, versions, sync state', 'rgba(26,82,118,0.10)', P.ink);
+    box(280, 204, 200, 48, 'block store', 'chunk bytes keyed by hash', 'rgba(0,131,0,0.10)', P.green);
+    box(560, 120, 140, 44, 'device B', 'long-poll open', 'rgba(42,120,214,0.15)', P.blue);
+
+    // arrows
+    arrow(ctx, 180, 132, 278, 82, P.blue, 2);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1. commit chunk list v8', 190, 96);
+
+    arrow(ctx, 180, 152, 278, 222, P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('2. upload chunk 12 (4MB)', 176, 228);
+
+    arrow(ctx, 482, 82, 578, 130, P.violet, 2);
+    ctx.fillStyle = P.violet; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3. notify: namespace changed', 490, 96);
+
+    arrow(ctx, 578, 152, 482, 222, P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4. fetch missing chunk by hash', 490, 228);
+
+    // LAN shortcut
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(180, 180); ctx.lineTo(552, 180); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.aqua;
+    ctx.beginPath();
+    ctx.moveTo(560, 180); ctx.lineTo(549, 175); ctx.lineTo(549, 185);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('LAN sync: B pulls the 4MB chunk from A, not from the cloud', 366, 172);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('metadata is small and hot; blocks are huge and cold — scale them separately', w / 2, 285);
+});
+
+// c4: last-writer-wins vs conflicted copy
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function box(x, y, bw, bh, lines, fill, border) {
+        ctx.fillStyle = fill;
+        roundedRect(ctx, x, y, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundedRect(ctx, x, y, bw, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, y + bh / 2 + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, y + bh / 2 - 3);
+            ctx.fillText(lines[1], x + bw / 2, y + bh / 2 + 13);
+        }
+    }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Offline Edits Collide: Keep Both, Never Silently Overwrite', w / 2, 24);
+
+    var blueFill = 'rgba(42,120,214,0.15)';
+
+    // row 1: last-writer-wins
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('last-writer-wins', 20, 99);
+    box(170, 72, 150, 34, ["A: v7 + A's edit"], blueFill, P.blue);
+    box(170, 112, 150, 34, ["B: v7 + B's edit"], blueFill, P.blue);
+    arrow(ctx, 320, 89, 428, 92, P.text, 3);
+    arrow(ctx, 320, 129, 428, 98, P.text, 3);
+    box(430, 73, 170, 44, ['B overwrites', "A's version"], 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("✗ A's edit", 612, 88);
+    ctx.fillText('silently lost', 612, 104);
+
+    // row 2: conflicted copy
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('conflicted copy', 20, 219);
+    box(170, 192, 150, 34, ["A: v7 + A's edit"], blueFill, P.blue);
+    box(170, 232, 150, 34, ["B: v7 + B's edit"], blueFill, P.blue);
+    arrow(ctx, 320, 209, 428, 212, P.text, 3);
+    arrow(ctx, 320, 249, 428, 218, P.text, 3);
+    box(430, 191, 190, 48, ['budget.xlsx (A) +', "budget.xlsx (B's conflicted copy)"], 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ both edits', 628, 208);
+    ctx.fillText('survive', 628, 224);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sync can move bytes; it cannot merge arbitrary binaries', w / 2, 285);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

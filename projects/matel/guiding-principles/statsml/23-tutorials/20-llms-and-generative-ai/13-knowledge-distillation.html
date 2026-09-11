@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Distillation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Knowledge Distillation</h1>
+<p class="subtitle">A small student model trains to copy a big teacher model's full answer spread — most of the skill survives at a fraction of the size</p>
+
+<div class="card-section">
+    <h2>The Teacher's Full Answer, Not Just the Top Pick</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">teacher-student</span></div>
+                <ul>
+                    <li><b>The setup</b> — a big, expensive teacher model already does the task well; we want a small, cheap one</li>
+                    <li><b>The trick</b> — the student doesn't train on right answers; it trains on the teacher's answers</li>
+                    <li><b>The full spread</b> — for "the movie was ___" the teacher says: great 45%, good 30%, fine 15%, bad 7%, terrible 3%</li>
+                    <li><b>Dark knowledge</b> — the spread reveals that "good" is almost right and "terrible" is very wrong</li>
+                    <li><b>Soft labels</b> — those probability spreads are the student's training targets, class by class</li>
+                </ul>
+                <p class="example">A plain right/wrong label says only "great"; the teacher's spread also teaches the student how the wrong answers rank.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Distillation trains the student to copy the teacher's probabilities — every answer carries far more signal than a lone correct label.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Review, Three Classes, By Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">soft labels</span></div>
+                <ul>
+                    <li><b>The input</b> — one movie review: "the plot was fine but slow" — classes: positive / neutral / negative</li>
+                    <li><b>Hard label</b> — a human tagged it neutral, so the plain target is neutral 100%, others 0%</li>
+                    <li><b>Teacher's soft label</b> — the teacher says: neutral 60%, negative 30%, positive 10%</li>
+                    <li><b>Student's current guess</b> — neutral 40%, negative 20%, positive 40% — too sure it's positive</li>
+                    <li><b>The nudge</b> — per class, push toward the teacher: neutral +20, negative +10, positive −30</li>
+                </ul>
+                <p class="example">The hard label would only say "more neutral"; the teacher's spread also says "much less positive, a bit more negative" — three corrections from one example.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The student's error is the gap to the teacher's 60/30/10 spread — redo the three subtractions yourself and you've done a distillation step.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Small Models Punch Above Their Weight</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">model compression</span></div>
+                <ul>
+                    <li><b>The pressure</b> — flagship models are too slow and costly for phones, laptops, and high-volume APIs</li>
+                    <li><b>The route</b> — small "mini" and "flash" model tiers are commonly distilled from a larger sibling</li>
+                    <li><b>Reasoning too</b> — a student can train on a teacher's written-out step-by-step solutions, not just labels</li>
+                    <li><b>The payoff</b> — a student a tenth the size can keep most of the teacher's quality on the target tasks</li>
+                    <li><b>The catch</b> — shrink too far and the rare, hard cases are the first skills to disappear</li>
+                </ul>
+                <p class="example">A support-ticket classifier distilled from a big general model runs on one cheap GPU and answers in milliseconds instead of seconds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Distillation is the standard route from a flagship-quality demo to a model cheap enough to run everywhere.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not the Same as Squeezing the Model</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">compression vs distillation</span></div>
+                <ul>
+                    <li><b>Quantization</b> — the same model, each knob stored with fewer digits; nothing is retrained</li>
+                    <li><b>Pruning</b> — the same model with the least useful knobs deleted; the wiring stays</li>
+                    <li><b>Distillation</b> — a brand-new smaller model, trained from the teacher's outputs</li>
+                    <li><b>Vs fine-tuning</b> — fine-tuning uses human-made data; in distillation the teacher writes the dataset</li>
+                    <li><b>They stack</b> — a real deployment often distills first, then quantizes the student</li>
+                </ul>
+                <p class="example">A "small" phone assistant is typically a distilled student that was then quantized — two different shrinks layered on each other.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Calling every small model "distilled" — distillation names the training recipe (teacher-written targets), not the size of the result.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: teacher -> soft label spread -> student flow
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Teacher Writes the Student\'s Training Targets', w / 2, 24);
+
+    // teacher box
+    roundRect(ctx, 30, 80, 170, 130, 6);
+    ctx.fillStyle = 'rgba(74,58,167,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('teacher model', 115, 104);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('huge — slow —', 115, 128);
+    ctx.fillText('expensive to run', 115, 146);
+    ctx.fillText('already skilled', 115, 164);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('(sizes illustrative)', 115, 196);
+
+    // spread panel
+    roundRect(ctx, 250, 64, 220, 162, 6);
+    ctx.fillStyle = 'rgba(201,133,0,0.07)'; ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('one soft label', 360, 84);
+
+    var classes = ['great', 'good', 'fine', 'bad', 'terrible'];
+    var vals = [45, 30, 15, 7, 3];
+    for (var i = 0; i < 5; i++) {
+        var ry = 100 + i * 24;
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(classes[i], 322, ry + 11);
+        ctx.fillStyle = P.yellow;
+        ctx.fillRect(330, ry, vals[i] * 2.4, 14);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(vals[i] + '%', 336 + vals[i] * 2.4, ry + 11);
+    }
+    ctx.textAlign = 'center';
+
+    // student box
+    roundRect(ctx, 520, 105, 170, 80, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('student model', 605, 129);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('small — fast — cheap', 605, 150);
+    ctx.fillText('learns to copy the spread', 605, 168);
+
+    // arrows
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(200, 145); ctx.lineTo(238, 145); ctx.stroke();
+    arrowHead(ctx, 244, 145, 0, 7, P.mute);
+    ctx.beginPath(); ctx.moveTo(470, 145); ctx.lineTo(508, 145); ctx.stroke();
+    arrowHead(ctx, 514, 145, 0, 7, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('answers', 222, 132);
+    ctx.fillText('targets', 492, 132);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the teacher\'s full spread — not the right answer — is what the student trains on', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('probabilities illustrative', w - 12, 290);
+});
+
+// c2: grouped bars — hard label vs teacher vs student, with nudges
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Training Example: Push the Student Toward the Teacher', w / 2, 24);
+
+    // legend
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.mute; ctx.fillRect(30, 44, 14, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('hard label', 50, 53);
+    ctx.fillStyle = P.yellow; ctx.fillRect(130, 44, 14, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('teacher (target)', 150, 53);
+    ctx.fillStyle = P.blue; ctx.fillRect(280, 44, 14, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('student now', 300, 53);
+
+    function yOf(v) { return 240 - v * 1.6; }
+
+    // gridlines and y labels
+    var gl = [25, 50, 75, 100];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(70, yOf(gl[i])); ctx.lineTo(660, yOf(gl[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i] + '%', 64, yOf(gl[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(70, 80); ctx.lineTo(70, 240); ctx.lineTo(660, 240); ctx.stroke();
+
+    var centers = [180, 390, 600];
+    var names = ['neutral', 'negative', 'positive'];
+    var hard = [100, 0, 0];
+    var teacher = [60, 30, 10];
+    var student = [40, 20, 40];
+    var nudges = ['nudge +20', 'nudge +10', 'nudge −30'];
+    var nudgeCols = [P.green, P.green, '#e74c3c'];
+
+    for (var g = 0; g < 3; g++) {
+        var cx = centers[g];
+        var bars = [
+            { v: hard[g], col: P.mute, x: cx - 62 },
+            { v: teacher[g], col: P.yellow, x: cx - 14 },
+            { v: student[g], col: P.blue, x: cx + 34 }
+        ];
+        for (var b = 0; b < 3; b++) {
+            var bar = bars[b];
+            var hpx = bar.v * 1.6;
+            ctx.fillStyle = bar.col;
+            if (bar.v === 0) {
+                ctx.fillRect(bar.x, 238, 40, 2);
+            } else {
+                ctx.fillRect(bar.x, 240 - hpx, 40, hpx);
+            }
+            ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(String(bar.v), bar.x + 20, (bar.v === 0 ? 238 : 240 - hpx) - 5);
+        }
+        ctx.fillStyle = nudgeCols[g]; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(nudges[g], cx, 95);
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(names[g], cx, 260);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the error signal is the gap to the yellow bars — the gray bar alone teaches far less', w / 2, 283);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one worked example, numbers exact', w - 12, 296);
+});
+
+// c3: quality retained vs student size
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Quality Kept as the Student Shrinks (illustrative)', w / 2, 24);
+
+    function yOf(v) { return 235 - v * 1.65; }
+
+    var gl = [25, 50, 75, 100];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(70, yOf(gl[i])); ctx.lineTo(660, yOf(gl[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i] + '%', 64, yOf(gl[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(70, 70); ctx.lineTo(70, 235); ctx.lineTo(660, 235); ctx.stroke();
+
+    var centers = [155, 305, 455, 605];
+    var vals = [100, 97, 93, 82];
+    var cols = [P.violet, P.green, P.blue, P.yellow];
+    var mains = ['teacher', '¼ size', '1/10 size', '1/30 size'];
+    var descs = ['full cost', 'cheaper', 'phone-friendly', 'tiny'];
+
+    for (var i = 0; i < 4; i++) {
+        var cx = centers[i];
+        ctx.fillStyle = cols[i];
+        ctx.fillRect(cx - 45, yOf(vals[i]), 90, 235 - yOf(vals[i]));
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(vals[i] + '%', cx, yOf(vals[i]) - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(mains[i], cx, 254);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(descs[i], cx, 270);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a tenth the size keeps most of the skill — the last drop is the rare, hard cases', 390, 92);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('quality percentages illustrative', w - 12, 292);
+});
+
+// c4: quantization vs pruning vs distillation panels
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Ways to Shrink — Only One Trains a New Model', w / 2, 24);
+
+    var px = [30, 255, 480];
+
+    // panel 1: quantization
+    roundRect(ctx, px[0], 52, 210, 180, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.07)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('quantization', px[0] + 105, 76);
+    roundRect(ctx, px[0] + 40, 96, 130, 56, 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = '12px system-ui';
+    ctx.fillText('same model,', px[0] + 105, 118);
+    ctx.fillText('fewer digits', px[0] + 105, 136);
+    ctx.fillStyle = P.text;
+    ctx.fillText('3.14159 → 3.1', px[0] + 105, 182);
+    ctx.fillText('no retraining', px[0] + 105, 200);
+
+    // panel 2: pruning
+    roundRect(ctx, px[1], 52, 210, 180, 6);
+    ctx.fillStyle = 'rgba(213,81,129,0.07)'; ctx.fill();
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('pruning', px[1] + 105, 76);
+    roundRect(ctx, px[1] + 40, 96, 130, 56, 4);
+    ctx.fillStyle = 'rgba(213,81,129,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = '12px system-ui';
+    ctx.fillText('same model,', px[1] + 105, 118);
+    ctx.fillText('knobs deleted', px[1] + 105, 136);
+    var holes = [[310, 104], [350, 124], [390, 110]];
+    for (var i = 0; i < holes.length; i++) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(holes[i][0], holes[i][1], 10, 10);
+        ctx.strokeStyle = P.magenta; ctx.lineWidth = 1;
+        ctx.strokeRect(holes[i][0], holes[i][1], 10, 10);
+    }
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('weakest knobs cut', px[1] + 105, 182);
+    ctx.fillText('wiring kept', px[1] + 105, 200);
+
+    // panel 3: distillation
+    roundRect(ctx, px[2], 52, 210, 180, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.07)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('distillation', px[2] + 105, 76);
+    roundRect(ctx, 500, 92, 92, 40, 4);
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = '11px system-ui';
+    ctx.fillText('teacher', 546, 116);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(546, 132); ctx.lineTo(546, 146); ctx.stroke();
+    arrowHead(ctx, 546, 150, Math.PI / 2, 6, P.mute);
+    roundRect(ctx, 513, 152, 66, 30, 4);
+    ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui';
+    ctx.fillText('student', 546, 171);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('new smaller model,', px[2] + 105, 200);
+    ctx.fillText('trained on teacher output', px[2] + 105, 218);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('quantize and prune squeeze the same model — distillation teaches a new one', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('diagrams simplified', w - 12, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

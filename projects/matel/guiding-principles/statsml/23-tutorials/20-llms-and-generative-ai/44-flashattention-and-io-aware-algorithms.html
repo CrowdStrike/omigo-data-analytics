@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlashAttention &amp; IO-Aware Algorithms</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>FlashAttention &amp; IO-Aware Algorithms</h1>
+<p class="subtitle">The fastest attention code does not do less math — it makes fewer trips to slow memory; the trick is to count the bytes moved, not the operations</p>
+
+<div class="card-section">
+    <h2>The Cook With a Tiny Counter</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">memory trips</span><span class="tag orange">running example</span></div>
+                <ul>
+                    <li><b>The cook</b> — a cook has a tiny counter by the stove and a big pantry a thirty-second walk away</li>
+                    <li><b>Two costs</b> — every dish costs chopping time at the counter plus walking time to the pantry</li>
+                    <li><b>The surprise</b> — chopping takes 2 minutes, but fetching one item per step adds 18 minutes of walking</li>
+                    <li><b>The fix</b> — carry one full basket over, cook everything that needs those items, then walk back once</li>
+                    <li><b>GPUs too</b> — a GPU has tiny fast on-chip memory (the counter) and big slow main memory (the pantry)</li>
+                    <li><b>IO-aware</b> — an IO-aware algorithm plans around the trips (bytes moved), not the chops (operations)</li>
+                </ul>
+                <p class="example">Two cooks follow the same 20-step recipe; the one who batches pantry trips finishes the dish in 5 minutes instead of 20 — identical steps, fewer walks.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An IO-aware algorithm is one designed to minimize data moved between slow and fast memory — because on modern hardware the moving, not the arithmetic, is usually what you wait for.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Numbers Moved: 1,000 Tokens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">bytes moved</span></div>
+                <ul>
+                    <li><b>The setup</b> — attention over 1,000 tokens, each described by 64 numbers: Q, K, V are 64,000 numbers each</li>
+                    <li><b>The big table</b> — scoring every token against every token makes a 1,000 &times; 1,000 table: 1,000,000 numbers</li>
+                    <li><b>Standard way</b> &mdash; writes and rereads that table twice (raw scores, then softmax): 4,000,000 moves</li>
+                    <li><b>Flash way</b> — cuts Q, K, V into tiles that fit on-chip; the million-number table never leaves the chip</li>
+                    <li><b>The bill</b> — standard moves about 4,256,000 numbers; FlashAttention moves about 256,000 — 16&times; less</li>
+                    <li><b>Same math</b> — both do the same ~128 million multiply-adds and produce the exact same answer</li>
+                </ul>
+                <p class="example">For 1,000 tokens the score table alone holds 1,000,000 numbers — nearly four times bigger than all the inputs and outputs combined (256,000).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> FlashAttention never parks the n&times;n score table in slow memory — traffic drops from about 4,256,000 numbers to about 256,000 while the arithmetic stays identical.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why GPUs Wait on Memory, Not Math</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">memory-bound</span></div>
+                <ul>
+                    <li><b>Fast at math</b> — a modern GPU can do hundreds of trillions of multiply-adds every second</li>
+                    <li><b>Slow at fetching</b> — its big main memory delivers data roughly 10&times; slower than its on-chip memory</li>
+                    <li><b>Memory-bound</b> — standard attention spends most of its wall-clock time waiting for the table to move</li>
+                    <li><b>Real speedups</b> — counting bytes instead of ops gave attention 2&ndash;4&times; real speedups, zero accuracy loss</li>
+                    <li><b>Longer context</b> — cheaper attention is one reason context windows grew from 2,000 to 100,000+ tokens</li>
+                    <li><b>The habit</b> — when a kernel is mysteriously slow, check bytes moved before counting operations</li>
+                </ul>
+                <p class="example">An attention pass that took 140 ms on 8,000 tokens runs in 46 ms with FlashAttention — the math did not change, the trips did.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> On memory-bound workloads the clock follows the bytes, not the FLOPs — which is why an algorithm with identical arithmetic can be 3&times; faster in practice.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Arithmetic, Yet Faster</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">FLOPs vs bytes</span></div>
+                <ul>
+                    <li><b>The reflex</b> — "fewer operations means faster" is the first rule everyone learns, and here it misleads</li>
+                    <li><b>More math</b> — FlashAttention actually does about 7% more arithmetic, recomputing values it never stored</li>
+                    <li><b>Still faster</b> — recomputing a number on-chip is cheaper than a round trip to slow memory to fetch it</li>
+                    <li><b>Measure both</b> — profile operations and bytes moved; whichever count is slower rules the runtime</li>
+                    <li><b>The tell</b> — if speed barely improves when you shrink the math, the workload was memory-bound all along</li>
+                </ul>
+                <p class="example">Storing a value off-chip and reading it back later costs more time than rebuilding it from scratch on the chip — so FlashAttention deliberately rebuilds.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Ranking algorithms by operation counts (FLOPs) alone. FlashAttention does ~7% more math yet takes ~65% less time — on memory-bound work the bytes decide, not the FLOPs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: same dish, fetch-per-step vs batched trips, chop vs walk minutes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ax = 190, aw = 480, axisY = 245, maxMin = 20;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Dish, Two Recipes: Chopping vs Walking (minutes)', w / 2, 24);
+
+    // gridlines + axis + ticks
+    var ticks = [0, 5, 10, 15, 20];
+    for (var i = 0; i < ticks.length; i++) {
+        var x = ax + ticks[i] / maxMin * aw;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 50); ctx.lineTo(x, axisY); ctx.stroke();
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var x = ax + ticks[i] / maxMin * aw;
+        ctx.fillText(String(ticks[i]), x, axisY + 20);
+    }
+
+    function row(cy, label, chopMin, walkMin) {
+        var bh = 22, top = cy - bh / 2;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(label, 20, cy + 4);
+        var chopW = chopMin / maxMin * aw;
+        var walkW = walkMin / maxMin * aw;
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(ax, top, chopW, bh);
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(ax + chopW, top, walkW, bh);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillStyle = P.blue;
+        ctx.fillText('chop ' + chopMin, ax + chopW / 2, top - 8);
+        ctx.fillStyle = P.orange;
+        ctx.fillText('walk ' + walkMin, ax + chopW + walkW / 2, top - 8);
+    }
+    row(100, 'old recipe — fetch per step', 2, 18);
+    row(175, 'tile recipe — batch the trips', 2, 3);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same chopping, 4× fewer minutes —', 430, 195);
+    ctx.fillText('the walks were the real cost', 430, 212);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — minutes invented for the example', w - 12, h - 10);
+});
+
+// c2: numbers moved to slow memory, standard vs FlashAttention
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 90, baseY = 245, pw = 560, ph = 185, maxV = 4500000;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Attention on 1,000 Tokens: Numbers Moved to Slow Memory', w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [1000000, 2000000, 3000000, 4000000];
+    var gridLabs = ['1M', '2M', '3M', '4M'];
+    for (var i = 0; i < grids.length; i++) {
+        var y = baseY - grids[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gridLabs[i], ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // bar 1: standard
+    var bw = 120;
+    var h1 = 4256000 / maxV * ph;
+    ctx.fillStyle = 'rgba(217,89,38,0.75)';
+    ctx.fillRect(260 - bw / 2, baseY - h1, bw, h1);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(260 - bw / 2, baseY - h1, bw, h1);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4,256,000', 260, baseY - h1 - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('standard attention', 260, baseY + 18);
+
+    // bar 2: flash
+    var h2 = 256000 / maxV * ph;
+    ctx.fillStyle = 'rgba(0,131,0,0.75)';
+    ctx.fillRect(500 - bw / 2, baseY - h2, bw, h2);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(500 - bw / 2, baseY - h2, bw, h2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('256,000', 500, baseY - h2 - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('FlashAttention', 500, baseY + 18);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('about 16× less traffic —', 380, 105);
+    ctx.fillText('same ~128M multiply-adds', 380, 122);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — counts from the 1,000-token worked example', w - 12, h - 10);
+});
+
+// c3: wall-clock time per attention pass as context grows
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, pw = 580, ph = 185, maxV = 150;
+    var xLabs = ['1,000', '2,000', '4,000', '8,000'];
+    var std = [2, 8, 33, 140];
+    var flash = [1, 3.4, 12, 46];
+
+    function xAt(i) { return ox + pw * (i + 0.5) / 4; }
+    function yAt(v) { return baseY - v / maxV * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Time per Attention Pass as Context Grows', w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [50, 100, 150];
+    var gridLabs = ['50 ms', '100 ms', '150 ms'];
+    for (var i = 0; i < grids.length; i++) {
+        var y = yAt(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gridLabs[i], ox - 8, y + 4);
+    }
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 4; i++) {
+        var x = xAt(i);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.fillText(xLabs[i], x, baseY + 20);
+    }
+    ctx.fillText('context length (tokens)', ox + pw / 2, baseY + 38);
+
+    function line(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (var i = 0; i < 4; i++) {
+            var x = xAt(i), y = yAt(vals[i]);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = color;
+        for (var i = 0; i < 4; i++) {
+            ctx.beginPath(); ctx.arc(xAt(i), yAt(vals[i]), 5, 0, 2 * Math.PI); ctx.fill();
+        }
+    }
+    line(std, P.orange);
+    line(flash, P.green);
+
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('standard', xAt(3) - 10, yAt(std[3]) - 10);
+    ctx.fillStyle = P.green;
+    ctx.fillText('FlashAttention', xAt(3) - 10, yAt(flash[3]) + 20);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('3× faster at 8,000 tokens — 140 ms → 46 ms', 560, 145);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings — shapes matter, not the exact ms', w - 12, h - 10);
+});
+
+// c4: indexed comparison — multiply-adds and time taken, standard = 100
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, pw = 580, ph = 185, maxV = 120;
+
+    function yAt(v) { return baseY - v / maxV * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('More Arithmetic, Less Time (standard = 100)', w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [25, 50, 75, 100];
+    for (var i = 0; i < grids.length; i++) {
+        var y = yAt(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // dashed reference at 100
+    var ry = yAt(100);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, ry); ctx.lineTo(ox + pw, ry); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('standard = 100', ox + pw - 4, ry - 5);
+
+    function group(cx, label, stdV, flashV) {
+        var bw = 70, gap = 12;
+        var x1 = cx - gap / 2 - bw, x2 = cx + gap / 2;
+        var h1 = stdV / maxV * ph, h2 = flashV / maxV * ph;
+        ctx.fillStyle = 'rgba(217,89,38,0.7)';
+        ctx.fillRect(x1, baseY - h1, bw, h1);
+        ctx.fillStyle = 'rgba(0,131,0,0.7)';
+        ctx.fillRect(x2, baseY - h2, bw, h2);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillStyle = P.orange;
+        ctx.fillText(String(stdV), x1 + bw / 2, baseY - h1 - 6);
+        ctx.fillStyle = P.green;
+        ctx.fillText(String(flashV), x2 + bw / 2, baseY - h2 - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(label, cx, baseY + 18);
+    }
+    group(240, 'multiply-adds', 100, 107);
+    group(500, 'time taken', 100, 35);
+
+    // legend, top right
+    ctx.fillStyle = 'rgba(217,89,38,0.7)'; ctx.fillRect(560, 42, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('standard', 577, 52);
+    ctx.fillStyle = 'rgba(0,131,0,0.7)'; ctx.fillRect(560, 60, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('FlashAttention', 577, 70);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('7% more math,', 360, 95);
+    ctx.fillText('65% less time', 360, 112);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — ratios, not benchmarks', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

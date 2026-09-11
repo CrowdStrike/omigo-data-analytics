@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The KV Cache</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The KV Cache</h1>
+<p class="subtitle">A model writing word by word files two index cards for every word it has already seen — the KV cache — so each new word checks the card box instead of rereading the whole conversation from the start</p>
+
+<div class="card-section">
+    <h2>A Card Box Beside the Scribe</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">memoization</span><span class="tag orange">attention</span></div>
+                <ul>
+                    <li><b>The scribe</b> — a scribe writes a story one word at a time, and every new word must fit all the words before it</li>
+                    <li><b>The slow way</b> — with no notes, choosing each new word means rereading the entire story from word one</li>
+                    <li><b>Two cards per word</b> — instead, each written word gets two index cards: a "look me up by" card (K) and a "what I carry" card (V)</li>
+                    <li><b>The card box</b> — to pick the next word, the scribe scans the box of cards once — no rereading, ever</li>
+                    <li><b>That's the cache</b> — attention computes a key and a value for every token; the KV cache just refuses to throw them away</li>
+                </ul>
+                <p class="example">After writing "Once upon a time there was a dog", the scribe holds 8 words and 16 cards — the ninth word is chosen by checking those cards, not by rereading the sentence.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The KV cache is memoization for attention — each token's key and value are computed once, filed, and reused for every later word.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Ten New Words After a 100-Word Story</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">counting the work</span></div>
+                <ul>
+                    <li><b>The setup</b> — the scribe gets a 100-word prompt, then must write 10 more words one at a time</li>
+                    <li><b>Prefill</b> — the first read of the 100-word prompt files 100 pairs of cards; that cost is paid once</li>
+                    <li><b>No cache</b> — word 1 rereads 101 words, word 2 rereads 102, ... word 10 rereads 110: 1,055 in total</li>
+                    <li><b>With cache</b> — each new word costs 1 pass plus the one-time 100: just 110 token-passes in total</li>
+                    <li><b>The ratio</b> — 1,055 vs 110 is nearly 10&times; less work, and the gap widens as the story grows</li>
+                </ul>
+                <p class="example">Adding the numbers by hand: 101+102+...+110 = 1,055 without a cache, against 100+10 = 110 with one.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Without a cache the work per word grows with everything written so far; with the cache each new word costs one pass — 1,055 vs 110 token-passes here.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Every Token Rents Memory</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">memory cost</span><span class="tag green">long context</span></div>
+                <ul>
+                    <li><b>Cards aren't free</b> — every filed card is numbers sitting in GPU memory for the whole conversation</li>
+                    <li><b>Per-token bill</b> — 24 layers &times; 16 heads &times; 64 numbers, twice (K and V), at 2 bytes each = 96 KB per token</li>
+                    <li><b>It only grows</b> — 1,000 tokens hold 96 MB of cards; 4,000 hold 384 MB; 32,000 hold 3,072 MB (~3 GB)</li>
+                    <li><b>Context as a line item</b> — long-context pricing and chat length limits are largely this card box's rent</li>
+                    <li><b>The trade</b> — the cache spends memory to save compute; serving systems budget it per conversation</li>
+                </ul>
+                <p class="example">A 32,000-token chat on this illustrative model carries a 3 GB card box before generating a single new word — that memory is reserved as long as the chat is open.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> KV memory grows linearly with context — 96 KB per token here — so doubling the conversation doubles the rent, which is why long context costs real money.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Scratch Paper, Not Learning</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cache vs weights</span></div>
+                <ul>
+                    <li><b>Two memories</b> — the weights are what the model learned in training; the cache is scratch paper for one chat</li>
+                    <li><b>It vanishes</b> — close the conversation and the card box is discarded; the weights don't change at all</li>
+                    <li><b>Not saving memory</b> — a cache usually means "smaller"; here it means "extra memory spent to save compute"</li>
+                    <li><b>It can outgrow the model</b> — at 128k tokens this cache is 12.3 GB, close to the 14 GB of weights themselves</li>
+                    <li><b>Same words, same cards</b> — the cache holds nothing new; only exactly what recomputing would rebuild</li>
+                </ul>
+                <p class="example">A user says "the model remembered my name from yesterday" — it didn't; yesterday's card box was thrown away, and only text pasted back into today's context is seen again.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the KV cache as the model's memory of facts. It is per-conversation scratch paper that dies with the session — persistence has to come from re-sending text, not from the cache.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: adding one new word — reread everything vs check the card box
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var lefts = [130, 162, 194, 226, 258, 290, 322, 354];
+    var sq = 24;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One New Word: Reread Everything vs Check the Card Box', w / 2, 24);
+
+    function drawLane(cy, label) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(label, 20, cy + 4);
+        // 8 earlier token squares
+        for (var i = 0; i < 8; i++) {
+            ctx.fillStyle = 'rgba(42,120,214,0.15)';
+            ctx.fillRect(lefts[i], cy - sq / 2, sq, sq);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+            ctx.strokeRect(lefts[i], cy - sq / 2, sq, sq);
+        }
+        // new word square
+        ctx.fillStyle = 'rgba(217,89,38,0.18)';
+        ctx.fillRect(400, cy - sq / 2, sq, sq);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+        ctx.strokeRect(400, cy - sq / 2, sq, sq);
+        ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('new', 412, cy + sq / 2 + 13);
+    }
+
+    // ---- top lane: no cache ----
+    var y1 = 110;
+    drawLane(y1, 'no cache');
+    // 8 arcs from new square's top back to each earlier square's top
+    var newTopX = 412, topY = y1 - sq / 2;
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+    for (var i = 0; i < 8; i++) {
+        var tx = lefts[i] + sq / 2;
+        var peak = 60 + i * 4; // farthest arc peaks at y=60, nearest at y=88
+        ctx.beginPath();
+        ctx.moveTo(newTopX, topY);
+        ctx.quadraticCurveTo((newTopX + tx) / 2, peak, tx, topY);
+        ctx.stroke();
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('8 rereads', 480, 90);
+    ctx.fillText('for 1 new word', 480, 105);
+
+    // ---- bottom lane: KV cache ----
+    var y2 = 230;
+    drawLane(y2, 'KV cache');
+    // card box, rounded rect x=470-580, height 56
+    var bx = 470, bw2 = 110, bTop = y2 - 28, bh = 56, r = 8;
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(bx + r, bTop);
+    ctx.lineTo(bx + bw2 - r, bTop); ctx.arcTo(bx + bw2, bTop, bx + bw2, bTop + r, r);
+    ctx.lineTo(bx + bw2, bTop + bh - r); ctx.arcTo(bx + bw2, bTop + bh, bx + bw2 - r, bTop + bh, r);
+    ctx.lineTo(bx + r, bTop + bh); ctx.arcTo(bx, bTop + bh, bx, bTop + bh - r, r);
+    ctx.lineTo(bx, bTop + r); ctx.arcTo(bx, bTop, bx + r, bTop, r);
+    ctx.stroke();
+    // 5 overlapping cards inside, 14x20, 8px apart
+    for (var i = 0; i < 5; i++) {
+        var cxi = bx + 20 + i * 8;
+        ctx.fillStyle = 'rgba(25,158,112,0.25)';
+        ctx.fillRect(cxi, y2 - 10, 14, 20);
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 1;
+        ctx.strokeRect(cxi, y2 - 10, 14, 20);
+    }
+    ctx.fillStyle = P.aqua; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('card box (K, V pairs)', bx + bw2 / 2, bTop + bh + 15);
+    // arrow from new square to the box
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(424, y2); ctx.lineTo(bx - 4, y2); ctx.stroke();
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(bx - 2, y2); ctx.lineTo(bx - 12, y2 - 5); ctx.lineTo(bx - 12, y2 + 5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 lookup +', 600, 215);
+    ctx.fillText('file 2 new cards', 600, 230);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — an 8-word story, one word being added', w - 12, h - 10);
+});
+
+// c2: work per new word over 10 steps, no cache vs KV cache
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 185, maxV = 120;
+    var noCache = [101, 102, 103, 104, 105, 106, 107, 108, 109, 110];
+    var withCache = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Work per New Word: 100-Word Prompt, Then 10 Words', w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [30, 60, 90, 120];
+    for (var i = 0; i < grids.length; i++) {
+        var y = baseY - grids[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // grouped bars
+    var gw = 60, barW = 20, gap = 4;
+    for (var i = 0; i < 10; i++) {
+        var gc = ox + i * gw + gw / 2;
+        var x1 = gc - barW - gap / 2, x2 = gc + gap / 2;
+        // no-cache (orange)
+        var h1 = noCache[i] / maxV * ph;
+        ctx.fillStyle = 'rgba(217,89,38,0.55)';
+        ctx.fillRect(x1, baseY - h1, barW, h1);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+        ctx.strokeRect(x1, baseY - h1, barW, h1);
+        // with-cache (green sliver)
+        var h2 = Math.max(withCache[i] / maxV * ph, 2);
+        ctx.fillStyle = P.green;
+        ctx.fillRect(x2, baseY - h2, barW, h2);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(i + 1), gc, baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('new word #', ox + pw / 2, baseY + 34);
+
+    // legend
+    ctx.fillStyle = 'rgba(217,89,38,0.55)'; ctx.fillRect(75, 67, 12, 12);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1; ctx.strokeRect(75, 67, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no cache', 92, 77);
+    ctx.fillStyle = P.green; ctx.fillRect(75, 85, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('with KV cache', 92, 95);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('totals: 1,055 vs 110 token-passes — nearly 10× less work', 360, 55);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — cache total counts the one-time 100-word prefill', w - 12, h - 10);
+});
+
+// c3: KV memory vs context length, six doubling bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, pw = 590, ph = 180, maxV = 3200;
+    var vals = [96, 192, 384, 768, 1536, 3072];
+    var centers = [120, 218, 316, 414, 512, 610];
+    var labs = ['1k', '2k', '4k', '8k', '16k', '32k'];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Card Box's Rent: KV Memory vs Context Length", w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [800, 1600, 2400, 3200];
+    var gridLabs = ['800', '1600', '2400', '3200 MB'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+    for (var i = 0; i < grids.length; i++) {
+        var y = baseY - grids[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(gridLabs[i], ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // bars
+    var bw = 58;
+    for (var i = 0; i < 6; i++) {
+        var bh = vals[i] / maxV * ph;
+        ctx.fillStyle = 'rgba(42,120,214,0.55)';
+        ctx.fillRect(centers[i] - bw / 2, baseY - bh, bw, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+        ctx.strokeRect(centers[i] - bw / 2, baseY - bh, bw, bh);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(vals[i]), centers[i], baseY - bh - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(labs[i], centers[i], baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('context length (tokens)', ox + pw / 2, baseY + 34);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('double the context,', 200, 85);
+    ctx.fillText('double the memory — 3 GB at 32k', 200, 102);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — 24 layers, 16 heads, 64 dims, fp16: 96 KB per token', w - 12, h - 10);
+});
+
+// c4: growing KV cache vs fixed 14 GB of weights
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, pw = 590, ph = 180, maxV = 16;
+    var vals = [0.4, 3.1, 12.3];
+    var valLabs = ['0.4 GB', '3.1 GB', '12.3 GB'];
+    var centers = [190, 365, 540];
+    var labs = ['4k tokens', '32k tokens', '128k tokens'];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Scratch Paper vs the Model: KV Cache Can Rival the Weights', w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [4, 8, 12, 16];
+    var gridLabs = ['4', '8', '12', '16 GB'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+    for (var i = 0; i < grids.length; i++) {
+        var y = baseY - grids[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(gridLabs[i], ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // bars
+    var bw = 90;
+    for (var i = 0; i < 3; i++) {
+        var bh = vals[i] / maxV * ph;
+        ctx.fillStyle = 'rgba(25,158,112,0.5)';
+        ctx.fillRect(centers[i] - bw / 2, baseY - bh, bw, bh);
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 1.5;
+        ctx.strokeRect(centers[i] - bw / 2, baseY - bh, bw, bh);
+        ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLabs[i], centers[i], baseY - bh - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(labs[i], centers[i], baseY + 16);
+    }
+
+    // weights line at 14 GB
+    var wy = baseY - 14 / maxV * ph;
+    ctx.strokeStyle = P.violet; ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, wy); ctx.lineTo(ox + pw, wy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('model weights: 14 GB (fixed)', ox + 6, wy - 8);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('at 128k tokens the card box', 430, 95);
+    ctx.fillText('nearly outweighs the model', 430, 112);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — same 96 KB-per-token model, weights of a 7B fp16 model', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

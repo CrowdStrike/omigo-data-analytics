@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LoRA &amp; Parameter-Efficient Fine-Tuning</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>LoRA &amp; Parameter-Efficient Fine-Tuning</h1>
+<p class="subtitle">A giant pre-trained model has billions of knobs already set &mdash; LoRA freezes all of them and trains only a thin add-on sliver, so the model learns your task without anyone touching the original</p>
+
+<div class="card-section">
+    <h2>A Bakery Bot on a Borrowed Brain</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">freeze and add</span><span class="tag orange">running example</span></div>
+                <ul>
+                    <li><b>The bakery</b> &mdash; a small bakery wants its chatbot to talk like its menu, not like a generic robot</li>
+                    <li><b>The giant</b> &mdash; the bot runs on a huge ready-made model whose billions of knobs someone else already set</li>
+                    <li><b>Full fine-tune</b> &mdash; retraining every knob for one bakery is like reprinting an encyclopedia to add a page</li>
+                    <li><b>The sliver</b> &mdash; LoRA freezes the whole model and bolts a small trainable patch beside each weight block</li>
+                    <li><b>Same path</b> &mdash; the answer is the frozen block's output plus the patch's small correction, added together</li>
+                </ul>
+                <p class="example">The bakery's bot learns to say "our sourdough proofs for 18 hours" by training a patch under 2% of one layer's size &mdash; the base model itself is never edited.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> LoRA = freeze the pre-trained model and train tiny add-on matrices beside it; the base stays exactly as downloaded, the sliver carries the specialization.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Knobs: 1,000,000 Frozen, 16,000 Trained</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">rank</span></div>
+                <ul>
+                    <li><b>One block</b> &mdash; take one weight block of the model: 1000 wide &times; 1000 tall = 1,000,000 numbers</li>
+                    <li><b>Two strips</b> &mdash; LoRA adds A (1000&times;8) and B (8&times;1000): 8,000 + 8,000 = 16,000 trainable numbers</li>
+                    <li><b>The share</b> &mdash; 16,000 / 1,000,000 = 1.6%; that sliver is everything training is allowed to change</li>
+                    <li><b>The rank</b> &mdash; the strip width 8 is called the rank: rank 2 gives 4,000 numbers, rank 16 gives 32,000</li>
+                    <li><b>By hand</b> &mdash; trainable count = rank &times; (width + height); for a square block that is 2 &times; width &times; rank</li>
+                </ul>
+                <p class="example">For a 1000&times;1000 block at rank 8: 1000&times;8 + 8&times;1000 = 16,000 trainable numbers &mdash; 1.6% of the million sitting frozen in the block.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Trainable count = rank &times; (width + height) &mdash; for rank 8 on a square 1000-wide block that is 16,000 numbers, and the other 984,000 never move.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Base Model, a Shelf of Tiny Adapters</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">adapters</span><span class="tag orange">serving cost</span></div>
+                <ul>
+                    <li><b>Sharing</b> &mdash; a bakery, a clinic, and a law firm can all run on the same frozen base model</li>
+                    <li><b>Full copies</b> &mdash; full fine-tuning gives each client its own 14 GB model, so 3 clients cost 42 GB</li>
+                    <li><b>Adapter files</b> &mdash; LoRA saves only the sliver: about 20 MB per client, 700&times; smaller than a copy</li>
+                    <li><b>Hot swap</b> &mdash; load the 14 GB base once, then swap the 20 MB adapter per request on one machine</li>
+                    <li><b>Cheaper training</b> &mdash; with 60&times; fewer numbers to update, training fits on far smaller hardware</li>
+                </ul>
+                <p class="example">Three custom bots the full way need 42 GB of copies; with LoRA it is one 14 GB base plus three 20 MB adapters &mdash; about 14.1 GB in total.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because the base is frozen and shared, each new client costs a 20 MB adapter file instead of a 14 GB model copy &mdash; that is what makes many custom bots affordable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Cranking the Rank Doesn't Keep Paying</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">diminishing returns</span></div>
+                <ul>
+                    <li><b>The hope</b> &mdash; "if rank 8 works, rank 64 must work eight times better" &mdash; so teams crank the dial</li>
+                    <li><b>The plateau</b> &mdash; on a tone-matching test (illustrative), rank 1 scores 78, rank 8 scores 90, rank 64 only 91</li>
+                    <li><b>Full fine-tune</b> &mdash; retraining everything scores 92 here: about 60&times; the trainable numbers for 2 points</li>
+                    <li><b>Style, not facts</b> &mdash; adapters excel at tone, format, and task habits; fresh facts belong in the prompt</li>
+                    <li><b>Right dial</b> &mdash; start small (rank 4&ndash;16) and raise the rank only while the score is still climbing</li>
+                </ul>
+                <p class="example">The bakery's bot at rank 8 already matches the shop's voice at 90; quadrupling the sliver to rank 32 buys a single extra point.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating rank as a quality dial that always pays. Past a small rank the score flattens, so extra rank buys cost, not quality &mdash; and no rank makes an adapter a substitute for putting new facts in the prompt.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: one layer — frozen block W plus trainable LoRA strips A × B
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Layer: a Frozen Million Plus a Trainable Sliver', w / 2, 24);
+
+    // frozen block
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.fillRect(90, 85, 190, 175);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(90, 85, 190, 175);
+    ctx.fillStyle = P.blue; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('frozen weights W', 185, 158);
+    ctx.fillText('1000 × 1000', 185, 178);
+    ctx.fillText('1,000,000 numbers', 185, 198);
+    ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('FROZEN', 98, 100);
+
+    // plus sign
+    ctx.fillStyle = P.text; ctx.font = 'bold 26px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+', 322, 180);
+
+    // strip A (tall thin)
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(368, 85, 18, 175);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(368, 85, 18, 175);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('A — 1000×8', 377, 278);
+
+    // times sign
+    ctx.fillStyle = P.text; ctx.font = 'bold 20px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('×', 412, 180);
+
+    // strip B (wide short)
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(440, 164, 190, 18);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(440, 164, 190, 18);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('B — 8×1000', 535, 200);
+
+    // trainable tag
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('TRAINABLE', 499, 75);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('sliver = 8,000 + 8,000 = 16,000 numbers', 440, 235);
+    ctx.fillText('1.6% of the frozen block', 440, 251);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative layer — the same freeze-plus-sliver pattern repeats in every layer', w - 15, h - 12);
+});
+
+// c2: trainable numbers in one block — full fine-tune vs LoRA ranks
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Trainable Numbers in One 1000×1000 Block: Full vs LoRA', w / 2, 24);
+
+    var ax = 210, aw = 480, axY = 250;
+    function xOf(v) { return ax + v / 1000000 * aw; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + aw, axY); ctx.stroke();
+    var ticks = [0, 250000, 500000, 750000, 1000000];
+    var tickLabs = ['0', '250k', '500k', '750k', '1,000k'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 5; i++) {
+        var x = xOf(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 5); ctx.stroke();
+        ctx.fillText(tickLabs[i], x, axY + 20);
+    }
+
+    var bh = 22;
+    var rows = [
+        { y: 85,  lab: 'full fine-tune', val: 1000000, valLab: '1,000,000', full: true },
+        { y: 130, lab: 'LoRA rank 16',   val: 32000,   valLab: '32,000',    full: false },
+        { y: 175, lab: 'LoRA rank 8',    val: 16000,   valLab: '16,000',    full: false },
+        { y: 220, lab: 'LoRA rank 2',    val: 4000,    valLab: '4,000',     full: false }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var by = r.y - bh / 2;
+        var bwPx = xOf(r.val) - xOf(0);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 4);
+        if (r.full) {
+            ctx.fillStyle = 'rgba(42,120,214,0.35)';
+            ctx.fillRect(ax, by, bwPx, bh);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(ax, by, bwPx, bh);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(r.valLab, ax + bwPx - 10, r.y + 4);
+        } else {
+            ctx.fillStyle = 'rgba(0,131,0,0.35)';
+            ctx.fillRect(ax, by, bwPx, bh);
+            ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+            ctx.strokeRect(ax, by, bwPx, bh);
+            ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(r.valLab, ax + bwPx + 8, r.y + 4);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rank 8 trains 16,000 numbers — 1.6% of the block', 420, 155);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts follow directly from the matrix sizes — arithmetic, not estimates', w - 15, h - 12);
+});
+
+// c3: fan-out — one shared base model feeding three swappable adapters
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Shared 14 GB Base, Three Swappable 20 MB Adapters', w / 2, 24);
+
+    // base box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.fillRect(70, 105, 200, 110);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(70, 105, 200, 110);
+    ctx.fillStyle = P.blue; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('base model', 170, 145);
+    ctx.fillText('14 GB', 170, 165);
+    ctx.fillText('loaded once, frozen', 170, 185);
+
+    // adapter boxes
+    var adapters = [
+        { y: 70,  lab: 'bakery adapter — 20 MB' },
+        { y: 130, lab: 'clinic adapter — 20 MB' },
+        { y: 190, lab: 'law-firm adapter — 20 MB' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var a = adapters[i];
+        // arrow from base right edge to adapter left edge midpoint
+        var x0 = 270, y0 = 160, x1 = 440, y1 = a.y + 21;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - 6, y1); ctx.stroke();
+        var ang = Math.atan2(y1 - y0, x1 - x0);
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - 10 * Math.cos(ang) + 5 * Math.sin(ang), y1 - 10 * Math.sin(ang) - 5 * Math.cos(ang));
+        ctx.lineTo(x1 - 10 * Math.cos(ang) - 5 * Math.sin(ang), y1 - 10 * Math.sin(ang) + 5 * Math.cos(ang));
+        ctx.closePath(); ctx.fill();
+        // box
+        ctx.fillStyle = 'rgba(0,131,0,0.15)';
+        ctx.fillRect(440, a.y, 190, 42);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(440, a.y, 190, 42);
+        ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(a.lab, 535, a.y + 25);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 full copies: 42 GB — one base + 3 adapters: about 14.1 GB', 360, 268);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative sizes for a mid-size model', w - 15, h - 12);
+});
+
+// c4: tone-matching score vs LoRA rank — the plateau
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Tone-Matching Score vs LoRA Rank — the Plateau (illustrative)', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 175;
+    var ranks = [1, 2, 4, 8, 16, 32, 64];
+    var scores = [78, 84, 88, 90, 91, 91, 91];
+    var yMin = 70, yMax = 95;
+    function xOf(i) { return ox + (i + 0.5) / 7 * pw; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * ph; }
+
+    // gridlines + y labels
+    var yTicks = [75, 80, 85, 90];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 7; i++) {
+        var x = xOf(i);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.fillText(String(ranks[i]), x, baseY + 20);
+    }
+    ctx.fillText('LoRA rank', ox + pw / 2, baseY + 38);
+
+    // full fine-tune dashed ceiling at 92
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(92)); ctx.lineTo(ox + pw, yOf(92)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('full fine-tune: 92', ox + pw - 6, yOf(92) - 6);
+
+    // rank-8 marker (index 3)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(3), baseY); ctx.lineTo(xOf(3), yOf(90)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // LoRA curve
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 7; i++) {
+        var x = xOf(i), y = yOf(scores[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 7; i++) {
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(scores[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // rank-8 label beside its dot
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('rank 8: 90', xOf(3) + 10, yOf(90) + 18);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('within 2 points of full fine-tuning', 430, 110);
+    ctx.fillText('at roughly 1/60th the trainable numbers', 430, 126);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative scores — the plateau shape is the lesson', w - 15, h - 12);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

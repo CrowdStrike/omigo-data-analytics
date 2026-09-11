@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chain-of-Thought</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Chain-of-Thought</h1>
+<p class="subtitle">Asking a model to write out its steps is not asking it to explain itself — every extra token it writes buys one more pass of computation, so the steps are extra thinking time, not a report</p>
+
+<div class="card-section">
+    <h2>One Coffee Order, Two Ways to Answer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">intermediate tokens</span><span class="tag orange">one pass per token</span></div>
+                <ul>
+                    <li><b>The order</b> — a model is asked: 3 lattes at $4.50 and 2 muffins at $3.25, plus a 10% tip — what's the total?</li>
+                    <li><b>The direct way</b> — the model must produce the total in its very next few tokens: one shot, and it blurts $21.50</li>
+                    <li><b>The step way</b> — told to "work it out step by step", it writes the lattes, the muffins, the tip, then $22.00</li>
+                    <li><b>The trick</b> — a model spends one fixed-size pass of compute per token; the direct answer got ~3 passes, the steps got ~30</li>
+                    <li><b>Chain-of-thought</b> — that written run of intermediate tokens is the chain; the extra tokens ARE the extra thinking</li>
+                </ul>
+                <p class="example">Same model, same question — the only difference is that the step-by-step version was allowed to write 30 tokens before committing to a total.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A model can't think longer on a hard token — it can only think MORE TIMES by writing more tokens first; chain-of-thought is buying passes, not narrating them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Bill, One Written Step at a Time</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">redo it by hand</span></div>
+                <ul>
+                    <li><b>Step 1</b> — lattes: 3 &times; $4.50 = $13.50; the model writes this down, and the number is now in its context</li>
+                    <li><b>Step 2</b> — muffins: 2 &times; $3.25 = $6.50, so the running subtotal is $13.50 + $6.50 = $20.00</li>
+                    <li><b>Step 3</b> — tip: 10% of $20.00 = $2.00, so the final total is $20.00 + $2.00 = $22.00</li>
+                    <li><b>Why it helps</b> — each later step reads the earlier written numbers instead of re-deriving them from scratch</li>
+                    <li><b>The direct miss</b> — $21.50 = a $13.00 latte slip + $6.50 + the $2.00 tip, with no written step to catch it</li>
+                </ul>
+                <p class="example">Cover the answer and redo it on paper — $13.50, then $20.00, then $22.00 — you just ran the chain-of-thought yourself.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Each written step turns a hard one-shot question into three easy lookups — the chain works because later tokens can read the earlier ones.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tokens Are the Compute Budget</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">cost &amp; latency</span><span class="tag green">compute budget</span></div>
+                <ul>
+                    <li><b>Fixed per token</b> — the network is the same size every pass; a token about tips costs the same as one about cats</li>
+                    <li><b>Serial depth</b> — 30 intermediate tokens means 30 passes IN A ROW, each able to build on the last one's output</li>
+                    <li><b>The knob</b> — "think step by step", reasoning modes, and token budgets all turn the same dial: more passes</li>
+                    <li><b>Diminishing returns</b> — on our illustrative math set, accuracy climbs 35% &rarr; 76% by 20 tokens, then flattens near 88%</li>
+                    <li><b>The bill</b> — cost and latency grow with every token whether or not it helped, so budget to the flat part</li>
+                </ul>
+                <p class="example">A team caps reasoning at 40 intermediate tokens because their eval showed 85% there and only 88% at double the tokens — and double the cost.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Chain-of-thought is a compute dial, not a magic phrase — you are trading tokens (money, seconds) for serial passes, and the trade flattens out.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Steps Are Scratch Paper, Not a Confession</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">faithfulness</span></div>
+                <ul>
+                    <li><b>The temptation</b> — the steps read like a diary of the model's reasoning, so people audit them as if they were one</li>
+                    <li><b>Scratch paper</b> — the steps are workspace the model writes FOR ITSELF; nothing forces them to match its internals</li>
+                    <li><b>Right for wrong reasons</b> — on our illustrative audit, 9% of answers were correct while a written step was flawed</li>
+                    <li><b>Wrong with clean steps</b> — another 12% showed tidy, convincing steps and still landed on the wrong total</li>
+                    <li><b>The mistake</b> — trusting an answer because its steps sound good; grade the answer, treat steps as a hint at best</li>
+                </ul>
+                <p class="example">A reviewer approves a refund because the model's five steps "all check out" — but step 3 quietly used last month's price, and the tidy prose hid it.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading chain-of-thought as a faithful explanation. It is compute the model spent, written where you happen to see it — verify the answer itself, not the story.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: same prompt, direct lane vs chain-of-thought lane
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Question, Same Model — the Long Lane Bought More Compute', w / 2, 24);
+
+    function roundRect(x, y, rw, rh, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + rw - r, y);
+        ctx.arc(x + rw - r, y + r, r, -Math.PI / 2, 0);
+        ctx.lineTo(x + rw, y + rh - r);
+        ctx.arc(x + rw - r, y + rh - r, r, 0, Math.PI / 2);
+        ctx.lineTo(x + r, y + rh);
+        ctx.arc(x + r, y + rh - r, r, Math.PI / 2, Math.PI);
+        ctx.lineTo(x, y + r);
+        ctx.arc(x + r, y + r, r, Math.PI, 3 * Math.PI / 2);
+        ctx.closePath();
+    }
+
+    // prompt box
+    roundRect(20, 115, 120, 70, 8);
+    ctx.fillStyle = 'rgba(26,82,118,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 lattes $4.50', 80, 135);
+    ctx.fillText('2 muffins $3.25', 80, 152);
+    ctx.fillText('+ 10% tip?', 80, 169);
+
+    // connectors from prompt to each lane
+    function arrow(x1, y1, x2, y2) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+    arrow(140, 135, 166, 102);
+    arrow(140, 165, 166, 194);
+
+    // lane 1: direct answer
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('direct answer — 3 tokens', 170, 75);
+    for (var i = 0; i < 3; i++) {
+        var x = 170 + i * 40;
+        ctx.fillStyle = 'rgba(217,89,38,0.15)';
+        ctx.fillRect(x, 85, 34, 26);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+        ctx.strokeRect(x, 85, 34, 26);
+    }
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(300, 85, 90, 26);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(300, 85, 90, 26);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('$21.50 ✗', 345, 103);
+
+    // lane 2: chain-of-thought
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('step by step — ~30 tokens', 170, 175);
+    var stepLabs = { 1: '$13.50', 5: '$20.00', 9: 'tip $2.00' };
+    for (var i = 0; i < 12; i++) {
+        var x = 170 + i * 31;
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(x, 185, 26, 26);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(x, 185, 26, 26);
+        if (stepLabs[i]) {
+            ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(stepLabs[i], x + 13, 227);
+        }
+    }
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    ctx.fillRect(550, 185, 100, 26);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(550, 185, 100, 26);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('$22.00 ✓', 600, 203);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every token = one more fixed-size pass of compute', 380, 255);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('token counts illustrative', w - 15, h - 10);
+});
+
+// c2: waterfall of the bill, $13.50 -> $20.00 -> $22.00
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Chain in Dollars: $13.50 → $20.00 → $22.00', w / 2, 24);
+
+    var ox = 70, baseY = 245, plotW = 590, plotH = 185, maxV = 24;
+    function yOf(v) { return baseY - v / maxV * plotH; }
+
+    // gridlines + y ticks
+    var yt = [0, 6, 12, 18, 24];
+    for (var i = 0; i < yt.length; i++) {
+        var gy = yOf(yt[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + yt[i], ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var slots = [
+        { cx: 150, lo: 0, hi: 13.5, fill: 'rgba(42,120,214,0.35)', stroke: P.blue, val: '+$13.50', lab: '3 lattes × $4.50' },
+        { cx: 290, lo: 13.5, hi: 20, fill: 'rgba(0,131,0,0.30)', stroke: P.green, val: '+$6.50 → $20.00', lab: '2 muffins × $3.25' },
+        { cx: 430, lo: 20, hi: 22, fill: 'rgba(217,89,38,0.30)', stroke: P.orange, val: '+$2.00', lab: '10% tip' },
+        { cx: 590, lo: 0, hi: 22, fill: 'rgba(26,82,118,0.15)', stroke: P.ink, val: '$22.00', lab: 'total' }
+    ];
+    for (var i = 0; i < slots.length; i++) {
+        var sl = slots[i], yTop = yOf(sl.hi), yBot = yOf(sl.lo);
+        ctx.fillStyle = sl.fill;
+        ctx.fillRect(sl.cx - 45, yTop, 90, yBot - yTop);
+        ctx.strokeStyle = sl.stroke; ctx.lineWidth = 2;
+        ctx.strokeRect(sl.cx - 45, yTop, 90, yBot - yTop);
+        ctx.fillStyle = sl.stroke; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(sl.val, sl.cx, yTop - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(sl.lab, sl.cx, baseY + 16);
+    }
+
+    // dashed connectors linking each block's top to the next block's base
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    var links = [[195, 245, 13.5], [335, 385, 20], [475, 545, 22]];
+    for (var i = 0; i < links.length; i++) {
+        var ly = yOf(links[i][2]);
+        ctx.beginPath(); ctx.moveTo(links[i][0], ly); ctx.lineTo(links[i][1], ly); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // annotation about the direct miss
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('direct answer said $21.50 —', 560, 90);
+    ctx.fillText('no step ever wrote it down', 560, 107);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('exact arithmetic — redo it by hand', w - 15, h - 10);
+});
+
+// c3: accuracy flattens with tokens while cost climbs linearly
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var toks = [0, 5, 10, 20, 40, 80];
+    var accs = [35, 48, 62, 76, 85, 88];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Accuracy Flattens, Cost Doesn’t (illustrative eval)', w / 2, 24);
+
+    var ox = 70, baseY = 240, plotW = 570, plotH = 175;
+    function xOf(t) { return ox + t / 80 * plotW; }
+    function yOf(a) { return baseY - a / 100 * plotH; }
+
+    // y gridlines + labels
+    var yt = [0, 25, 50, 75, 100];
+    for (var i = 0; i < yt.length; i++) {
+        var gy = yOf(yt[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yt[i] + '%', ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    var xt = [0, 10, 20, 40, 60, 80];
+    for (var i = 0; i < xt.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(xt[i]), xOf(xt[i]), baseY + 16);
+    }
+    ctx.fillText('intermediate tokens allowed', ox + plotW / 2, baseY + 34);
+
+    // cost line (straight, dashed)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(xOf(0), 235); ctx.lineTo(xOf(80), 95); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cost & latency (linear in tokens)', xOf(80) - 4, 88);
+
+    // budget marker at 40 tokens
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(40), baseY); ctx.lineTo(xOf(40), 80); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a sane budget', xOf(40), 74);
+
+    // accuracy curve
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < toks.length; i++) {
+        var px = xOf(toks[i]), py = yOf(accs[i]);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    for (var i = 0; i < toks.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(toks[i]), yOf(accs[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('35%', xOf(0) + 10, yOf(35) + 4);
+    ctx.fillText('62%', xOf(10) + 10, yOf(62) + 10);
+    ctx.fillText('76%', xOf(20) + 10, yOf(76) + 12);
+    ctx.textAlign = 'right';
+    ctx.fillText('88%', xOf(80) - 8, yOf(88) - 8);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('35% → 76% by 20 tokens,', 430, 130);
+    ctx.fillText('then the curve goes flat', 430, 147);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative accuracy numbers, not a benchmark', w - 15, h - 4);
+});
+
+// c4: audit of 100 responses, steps soundness vs answer correctness
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Steps vs Answers: an Audit of 100 Responses (illustrative)', w / 2, 24);
+
+    var ax = 250, axW = 430, axY = 250;
+    function xOf(p) { return ax + p / 80 * axW; }
+
+    // axis + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+    var ticks = [0, 20, 40, 60, 80];
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = xOf(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, axY - 4); ctx.lineTo(tx, axY + 4); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i] + '%', tx, axY + 20);
+    }
+
+    var rows = [
+        { lab: 'steps sound, answer right', v: 71, fill: 'rgba(0,131,0,0.35)', stroke: P.green, y: 85 },
+        { lab: 'steps flawed, answer right', v: 9, fill: 'rgba(25,158,112,0.35)', stroke: P.aqua, y: 125 },
+        { lab: 'steps sound, answer WRONG', v: 12, fill: 'rgba(231,76,60,0.25)', stroke: '#e74c3c', y: 165 },
+        { lab: 'steps flawed, answer wrong', v: 8, fill: 'rgba(107,114,128,0.25)', stroke: P.mute, y: 205 }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], bw = r.v / 80 * axW;
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(ax, r.y, bw, 18);
+        ctx.strokeStyle = r.stroke; ctx.lineWidth = 2;
+        ctx.strokeRect(ax, r.y, bw, 18);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, 240, r.y + 14);
+        ctx.fillStyle = r.stroke; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.v + '%', ax + bw + 8, r.y + 14);
+    }
+
+    // bracket over the middle two mismatch rows
+    var bx = 400, bTop = 125, bBot = 183;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx - 8, bTop); ctx.lineTo(bx, bTop);
+    ctx.lineTo(bx, bBot); ctx.lineTo(bx - 8, bBot);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('21% mismatch —', bx + 12, 165);
+    ctx.fillText('the steps are not the reasoning', bx + 12, 182);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative audit — proportions invented for teaching', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAT — The DOS Legacy</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>FAT — The DOS Legacy</h1>
+<p class="subtitle">A FAT disk keeps one big lookup table where entry N says which piece of a file comes after piece N — the whole filesystem is a game of follow-the-chain</p>
+
+<div class="card-section">
+    <h2>One Table That Maps Every File on the Stick</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">allocation table</span><span class="tag orange">DOS era</span></div>
+                <ul>
+                    <li><b>The stick</b> — a coffee shop saves each day's orders to a USB stick formatted with FAT32</li>
+                    <li><b>Clusters</b> — the stick is chopped into equal 4,096-byte clusters, the smallest unit a file can own</li>
+                    <li><b>The directory</b> — a folder entry stores the name, the size, and only the first cluster number</li>
+                    <li><b>The table</b> — the File Allocation Table has one entry per cluster; entry N names the next cluster</li>
+                    <li><b>The chain</b> — reading a file means hopping: start cluster, look up next, jump, repeat until the end mark</li>
+                    <li><b>8.3 names</b> — classic FAT allows 8 name chars + 3 extension chars, so DAILY_ORDERS.CSV shows as DAILY_~1.CSV</li>
+                </ul>
+                <p class="example">To read Monday's orders the laptop finds "DAILY_~1.CSV starts at cluster 5", then asks the table: after 5 comes 9, after 9 comes 12, and 12 is marked end-of-file.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> FAT stores a file's layout not next to the file but in one shared table — the chain of "what comes next" entries IS the file's map, which is why the whole format is named after that table.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Chasing the Chain for a 10,000-Byte File</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hand-check</span></div>
+                <ul>
+                    <li><b>The file</b> — Monday's DAILY_~1.CSV is 10,000 bytes; each cluster holds 4,096 bytes</li>
+                    <li><b>The count</b> — 10,000 / 4,096 = 2.44, and clusters are all-or-nothing, so the file needs 3 clusters</li>
+                    <li><b>The chain</b> — the table reads FAT[5] = 9, FAT[9] = 12, FAT[12] = end-of-chain</li>
+                    <li><b>The read</b> — cluster 5 holds bytes 1&ndash;4,096, cluster 9 holds 4,097&ndash;8,192, cluster 12 holds 8,193&ndash;10,000</li>
+                    <li><b>The slack</b> — 3 clusters hold 12,288 bytes, so 2,288 bytes at the end of cluster 12 are wasted slack</li>
+                </ul>
+                <p class="example">Hand-check the last hop: 10,000 &minus; 8,192 = 1,808 bytes land in cluster 12, leaving 4,096 &minus; 1,808 = 2,288 bytes of slack.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A file always rounds up to whole clusters — the chain length is size &divide; cluster size rounded up, and the unused tail of the last cluster is dead space no other file can use.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Every SD Card Still Speaks DOS</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">limits</span><span class="tag green">interoperability</span></div>
+                <ul>
+                    <li><b>Everywhere</b> — FAT is so simple that cameras, car stereos, printers, and 3D printers all read it</li>
+                    <li><b>Boot duty</b> — the PC boot partition (the EFI System Partition) is FAT by specification, on every OS</li>
+                    <li><b>Growing table</b> — FAT12, FAT16, FAT32 name the bits per table entry: more bits, more clusters addressable</li>
+                    <li><b>The 4 GB wall</b> — FAT32 stores file size in 32 bits, so a single file tops out at 4 GB minus 1 byte</li>
+                    <li><b>The data hit</b> — a 6 GB CSV export onto a FAT32 stick fails at the 4 GB mark however empty the stick is</li>
+                </ul>
+                <p class="example">The coffee shop's year of order logs zips to 6 GB; the copy to a 64 GB FAT32 stick dies at 4 GB, and the fix is splitting the archive or reformatting to a newer filesystem.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> FAT survives because every device agrees on it — but its DOS-era ceilings (8.3 names, the 4 GB file cap) still bite modern data work on SD cards and USB sticks.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Yank the Stick Mid-Write and the Chain Breaks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">power loss</span><span class="tag blue">no journal</span></div>
+                <ul>
+                    <li><b>Three writes</b> — saving a file writes the data clusters, then the FAT chain, then the directory entry</li>
+                    <li><b>No journal</b> — FAT keeps no log of in-progress work, so a power cut keeps whichever writes finished</li>
+                    <li><b>Orphans</b> — chain written but directory not: clusters marked used that no file name points to</li>
+                    <li><b>Wrong size</b> — directory written first: a file that claims 10,000 bytes but chains into garbage</li>
+                    <li><b>Two FATs</b> — FAT keeps two copies of the table, but that guards bad sectors, not half-done updates</li>
+                    <li><b>The cleanup</b> — repair tools sweep orphaned chains into FILE0000.CHK files; names and structure are gone</li>
+                </ul>
+                <p class="example">The barista yanks the stick while Monday's 10,000-byte file saves; data and chain are on disk, but with no directory entry the laptop shows nothing — a disk check later coughs up FILE0000.CHK.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating "safely eject" as optional. A journaling filesystem replays or rolls back a half-done save; FAT has no journal, so the half-done state is simply what you keep.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: directory entry + FAT strip with hop arrows 5 -> 9 -> 12 -> EOF
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One File, Three Hops: the Allocation Table Is the Map', w / 2, 24);
+
+    // directory-entry box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 40, 60, 300, 44, 6); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('DAILY_~1.CSV · 10,000 B · first cluster 5', 190, 87);
+
+    // FAT strip: 12 squares 46x44 starting x=60 at y=170
+    var cellW = 46, cellH = 44, stripX = 60, stripY = 170;
+    var chainCells = { 5: '9', 9: '12', 12: 'EOF' };
+    for (var i = 1; i <= 12; i++) {
+        var cx = stripX + (i - 1) * cellW;
+        if (chainCells[i]) {
+            ctx.fillStyle = 'rgba(0,131,0,0.15)';
+            ctx.fillRect(cx, stripY, cellW, cellH);
+        }
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.strokeRect(cx, stripY, cellW, cellH);
+        ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+        if (chainCells[i]) {
+            ctx.fillStyle = P.green;
+            ctx.fillText(chainCells[i], cx + cellW / 2, stripY + cellH / 2 + 5);
+        } else {
+            ctx.fillStyle = P.mute;
+            ctx.fillText('0', cx + cellW / 2, stripY + cellH / 2 + 5);
+        }
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(String(i), cx + cellW / 2, stripY + cellH + 14);
+    }
+
+    function cellCX(n) { return stripX + (n - 1) * cellW + cellW / 2; }
+
+    // arrow from directory box down to cell 5
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(190, 104);
+    ctx.lineTo(190, 130);
+    ctx.lineTo(cellCX(5), 130);
+    ctx.lineTo(cellCX(5), stripY - 8);
+    ctx.stroke();
+    arrowHead(ctx, cellCX(5), stripY - 2, Math.PI / 2, 8, P.blue);
+
+    // arced hop arrows above the strip: 5 -> 9 and 9 -> 12
+    function hopArc(fromN, toN) {
+        var x1 = cellCX(fromN), x2 = cellCX(toN);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x1, stripY - 4);
+        ctx.quadraticCurveTo((x1 + x2) / 2, stripY - 34, x2, stripY - 6);
+        ctx.stroke();
+        arrowHead(ctx, x2, stripY - 2, Math.PI / 2.6, 8, P.blue);
+    }
+    hopArc(5, 9);
+    hopArc(9, 12);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('entry N answers: what comes after cluster N?', w - 20, 130);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cluster numbers illustrative', w - 15, h - 10);
+});
+
+// c2: byte-scale bars for the 3-cluster chain with slack tail
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('10,000 Bytes Need 3 Clusters — and Waste 2,288 Bytes', w / 2, 24);
+
+    var barX = 130, fullW = 480, barH = 26;
+    var rows = [
+        { y: 95,  label: 'cluster 5',  chain: 'FAT[5] = 9',    usedW: 480, usedLabel: 'bytes 1–4,096' },
+        { y: 155, label: 'cluster 9',  chain: 'FAT[9] = 12',   usedW: 480, usedLabel: 'bytes 4,097–8,192' },
+        { y: 215, label: 'cluster 12', chain: 'FAT[12] = EOC', usedW: 212, usedLabel: '8,193–10,000' }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.label, 25, row.y + barH / 2 + 4);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(row.chain, barX, row.y - 6);
+
+        // used part
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(barX, row.y, row.usedW, barH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(barX, row.y, row.usedW, barH);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(row.usedLabel, barX + row.usedW / 2, row.y + barH / 2 + 4);
+
+        // slack part on the last row
+        if (row.usedW < fullW) {
+            var slackX = barX + row.usedW, slackW = fullW - row.usedW;
+            ctx.fillStyle = 'rgba(107,114,128,0.15)';
+            ctx.fillRect(slackX, row.y, slackW, barH);
+            ctx.save();
+            ctx.beginPath(); ctx.rect(slackX, row.y, slackW, barH); ctx.clip();
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+            for (var hx = slackX - barH; hx < slackX + slackW; hx += 10) {
+                ctx.beginPath();
+                ctx.moveTo(hx, row.y + barH);
+                ctx.lineTo(hx + barH, row.y);
+                ctx.stroke();
+            }
+            ctx.restore();
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+            ctx.strokeRect(slackX, row.y, slackW, barH);
+            ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('slack 2,288 B', slackX + slackW / 2, row.y + barH / 2 + 4);
+        }
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('all-or-nothing clusters: the last tail is dead space', 340, 265);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('file size illustrative; 4,096 B is a common FAT32 cluster size on small volumes', w - 15, h - 10);
+});
+
+// c3: FAT variant ceilings vs the 6 GB export
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The 4 GB Wall: a 6 GB Export Cannot Land on FAT32', w / 2, 24);
+
+    var axisX = 250, barH = 16;
+    var rows = [
+        { y: 75,  label: 'FAT12 — max file ~32 MB (volume cap)', width: 60,  fat: true,  size: '~32 MB' },
+        { y: 125, label: 'FAT16 — max file 2 GB (volume cap)',              width: 200, fat: true,  size: '2 GB' },
+        { y: 175, label: 'FAT32 — max file 4 GB − 1',          width: 280, fat: true,  size: '4 GB − 1' },
+        { y: 225, label: 'the 6 GB export',                             width: 420, fat: false, size: '6 GB' }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axisX, 55); ctx.lineTo(axisX, 250); ctx.stroke();
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.label, 20, row.y + barH / 2 + 4);
+        if (row.fat) {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(axisX, row.y, row.width, barH);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(axisX, row.y, row.width, barH);
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(row.size, axisX + row.width + 8, row.y + barH / 2 + 4);
+        } else {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(axisX, row.y, row.width, barH);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText('does not fit', axisX + row.width - 8, row.y + barH / 2 + 4);
+        }
+    }
+
+    // 4 GB cap marker at the FAT32 bar end (x = 250 + 280 = 530)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(530, 55); ctx.lineTo(530, 250); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 GB cap', 530, 48);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the stick has room; the format does not', w - 20, 255);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bar widths schematic (log-feel); limits are the documented FAT ceilings', w - 15, h - 10);
+});
+
+// c4: three writes of a save — power cut vs clean eject
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Save Is Three Writes — Power Loss Keeps Whichever Finished', w / 2, 24);
+
+    var boxW = 155, boxH = 40;
+
+    function flowBox(x, y, label, fill, border) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y - boxH / 2, boxW, boxH, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + boxW / 2, y + 4);
+    }
+
+    function solidArrow(x1, x2, y, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        arrowHead(ctx, x2, y, 0, 8, color);
+    }
+
+    function dashedArrow(x1, x2, y, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.setLineDash([]);
+        arrowHead(ctx, x2, y, 0, 8, color);
+    }
+
+    // Row 1: power cut
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('power cut', 20, y1 + 4);
+    flowBox(115, y1, '1. data clusters ✓', 'rgba(42,120,214,0.15)', P.blue);
+    solidArrow(115 + boxW, 300, y1, P.blue);
+    flowBox(300, y1, '2. FAT chain ✓', 'rgba(42,120,214,0.15)', P.blue);
+    dashedArrow(300 + boxW, 485, y1, '#e74c3c');
+    flowBox(485, y1, '3. directory ✗', 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orphaned chain — file invisible', 485 + boxW / 2, y1 + boxH / 2 + 18);
+
+    // Row 2: clean eject
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('clean eject', 20, y2 + 4);
+    flowBox(115, y2, '1. data clusters ✓', 'rgba(0,131,0,0.12)', P.green);
+    solidArrow(115 + boxW, 300, y2, P.green);
+    flowBox(300, y2, '2. FAT chain ✓', 'rgba(0,131,0,0.12)', P.green);
+    solidArrow(300 + boxW, 485, y2, P.green);
+    flowBox(485, y2, '3. directory ✓', 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ file readable', 485 + boxW / 2, y2 + boxH / 2 + 18);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no journal means no undo — the half-save is permanent', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('write order simplified', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

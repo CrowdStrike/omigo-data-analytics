@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typeahead Autocomplete</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Typeahead Autocomplete</h1>
+<p class="subtitle">A search box that suggests "pizza near me" before you finish typing "piz" — every keystroke is a query, and each answer has to land in about 50 milliseconds</p>
+
+<div class="card-section">
+    <h2>Every Keystroke Is a Search Query</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">latency budget</span><span class="tag orange">client tricks</span></div>
+                <ul>
+                    <li><b>The box</b> — a user types "piz" into a search box and five suggestions appear before the next letter</li>
+                    <li><b>Keystroke = query</b> — typing "pizza" fires a request per letter; a 10-letter search is 10 queries</li>
+                    <li><b>The budget</b> — a suggestion arriving after ~100 ms feels laggy, so the target is ~50 ms end to end</li>
+                    <li><b>Debounce</b> — the client waits ~50 ms after each keystroke; fast typing collapses "pizz" into "pizza"</li>
+                    <li><b>Client cache</b> — backspacing to "piz" reuses the answer already fetched, no new request goes out</li>
+                </ul>
+                <p class="example">Typing "pizza" at speed sends four requests, not five — "pizz" is debounced away — and every answer lands in under 50 ms.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Typeahead multiplies traffic — every keystroke is a full query — so the whole design bends around answering each one in a few tens of milliseconds.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Tree That Already Knows the Answer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">trie</span><span class="tag orange">precomputed top-k</span></div>
+                <ul>
+                    <li><b>The trie</b> — a tree of letters: root → p → pi → piz; every stored query is a path from the root</li>
+                    <li><b>Top-k on the node</b> — node "piz" stores its 3 best completions, precomputed, sorted by frequency</li>
+                    <li><b>The list</b> — "pizza near me" (14,200), "pizza dough recipe" (9,800), "pizza oven for sale" (7,400)</li>
+                    <li><b>The lookup</b> — walk 3 edges for "piz", then read the stored list: O(prefix length) plus a constant</li>
+                    <li><b>Hand-check</b> — no ranking happens at query time; the server does 3 hops and one read, nothing else</li>
+                </ul>
+                <p class="example">For "piz" the server touches four nodes — root, p, pi, piz — and returns the three completions already sitting on the last one.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Precomputing top-k at every node moves all ranking work offline — the query path is a pointer walk plus one array read, easily inside the 50 ms budget.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Yesterday's Queries Rank Today's Suggestions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">offline batches</span><span class="tag orange">sharding</span></div>
+                <ul>
+                    <li><b>Ranking signal</b> — suggestions are ordered by how often people historically searched each query</li>
+                    <li><b>Nightly batch</b> — the day's query log (900M queries, illustrative) is counted into a fresh trie</li>
+                    <li><b>The lag</b> — today's searches shape tomorrow's suggestions; the batch trie is about a day stale</li>
+                    <li><b>Trending lane</b> — a small delta trie built from the last 15 minutes of queries catches spikes</li>
+                    <li><b>Prefix sharding</b> — servers split the alphabet (a–f, g–p, q–z); "piz" always routes to one shard</li>
+                </ul>
+                <p class="example">A 9am news event reaches the trending overlay by 9:15, but enters the main trie only after tonight's rebuild.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Freshness is layered — a big, cheap, day-old batch trie does most of the ranking, while a tiny fast lane covers what changed in the last few minutes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Ranking at Query Time Blows the Budget</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">memory vs latency</span></div>
+                <ul>
+                    <li><b>The temptation</b> — skip the stored lists and rank live: find all completions, sort, return 3</li>
+                    <li><b>The blowup</b> — the prefix "p" has 1.2M completions (illustrative); scanning them takes ~400 ms</li>
+                    <li><b>Worst where it hurts</b> — short prefixes have the biggest subtrees and also the most traffic</li>
+                    <li><b>The trade</b> — storing top-3 on every node grows the trie from 4 GB to 10 GB of memory</li>
+                    <li><b>The win</b> — lookup falls from ~400 ms to ~2 ms; memory is paid once, latency every keystroke</li>
+                </ul>
+                <p class="example">At the one-letter prefix "p", the precomputed read returns in 2 ms where a live scan-and-sort of 1.2M completions took 400 ms.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Ranking at query time. It looks simpler, but it is slowest exactly on the shortest, highest-traffic prefixes — 2.5× more memory for the stored lists buys a 200× faster lookup.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    var hl = 9;
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x2 - hl * Math.cos(ang), y2 - hl * Math.sin(ang)); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: response time per keystroke while typing "pizza", debounced slot skipped
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var labels = ['p', 'pi', 'piz', 'pizz', 'pizza'];
+    var times = [38, 41, 36, null, 37]; // ms; "pizz" debounced — never sent
+    var centers = [120, 240, 360, 480, 600];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Typing 'pizza': Four Requests, Each Answered in Under 50 ms", w / 2, 24);
+
+    var x0 = 60, baseY = 245, plotW = 600, plotH = 180, top = baseY - plotH;
+    var yMax = 150;
+    function yOf(ms) { return baseY - ms / yMax * plotH; }
+
+    // gridlines at 50 and 100
+    var grids = [50, 100];
+    for (var i = 0; i < grids.length; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x0 + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i] + ' ms', x0 - 6, gy + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, top); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+
+    var barW = 70;
+    for (var i = 0; i < 5; i++) {
+        var cx = centers[i];
+        if (times[i] === null) {
+            // debounced slot: dashed outline box on the baseline
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+            ctx.strokeRect(cx - barW / 2, baseY - 30, barW, 30);
+            ctx.setLineDash([]);
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('debounced — never sent', cx, baseY - 38);
+        } else {
+            var by = yOf(times[i]);
+            ctx.fillStyle = 'rgba(42,120,214,0.35)';
+            ctx.fillRect(cx - barW / 2, by, barW, baseY - by);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(cx - barW / 2, by); ctx.lineTo(cx + barW / 2, by); ctx.stroke();
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(times[i] + ' ms', cx, by - 8);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labels[i], cx, baseY + 18);
+    }
+
+    // laggy line at 100 ms
+    var ly = yOf(100);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, ly); ctx.lineTo(x0 + plotW, ly); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('feels laggy above 100 ms', x0 + plotW - 4, ly - 6);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every answer under 50 ms', 300, 85);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 14, h - 10);
+});
+
+// c2: trie walk for "piz" — 3 hops, then read the stored top-3 list
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Lookup for 'piz': 3 Hops, Then Read the List Already on the Node", w / 2, 24);
+
+    // node boxes
+    var nodes = [
+        { x: 50, label: 'root' },
+        { x: 180, label: 'p' },
+        { x: 310, label: 'pi' },
+        { x: 440, label: 'piz' }
+    ];
+    var ny = 130, nw = 70, nh = 44;
+    for (var i = 0; i < nodes.length; i++) {
+        roundRect(ctx, nodes[i].x, ny, nw, nh, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        if (nodes[i].label === 'piz') { ctx.strokeStyle = P.green; ctx.lineWidth = 3; }
+        else { ctx.strokeStyle = P.blue; ctx.lineWidth = 2; }
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(nodes[i].label, nodes[i].x + nw / 2, ny + 27);
+    }
+
+    // hop arrows
+    var hops = ['hop 1', 'hop 2', 'hop 3'];
+    for (var i = 0; i < 3; i++) {
+        var xa = nodes[i].x + nw, xb = nodes[i + 1].x;
+        arrow(ctx, xa, ny + nh / 2, xb, ny + nh / 2, P.blue, 3);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(hops[i], (xa + xb) / 2, ny + nh / 2 - 12);
+    }
+
+    // top-3 panel
+    roundRect(ctx, 545, 70, 165, 120, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stored top-3 (by freq)', 555, 92);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('pizza near me — 14,200', 555, 118);
+    ctx.fillText('pizza dough recipe — 9,800', 555, 142);
+    ctx.fillText('pizza oven for sale — 7,400', 555, 166);
+
+    // arrow from "piz" box to panel
+    arrow(ctx, 510, 145, 545, 135, P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one read', 527, 168);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no ranking at query time — the answers were computed before the user typed', w / 2, 245);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('query frequencies illustrative', w - 14, h - 10);
+});
+
+// c3: two update lanes feeding three prefix shards
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Update Lanes, Three Prefix Shards', w / 2, 24);
+
+    function box(x, y, wid, label, fill, border) {
+        roundRect(ctx, x, y, wid, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + wid / 2, y + 25);
+    }
+
+    // row 1: batch lane
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('batch — nightly', 15, 62);
+    box(150, 70, 170, "day's query log (900M)", 'rgba(42,120,214,0.15)', P.blue);
+    arrow(ctx, 320, 90, 350, 90, P.blue, 3);
+    box(350, 70, 170, 'count + rank per prefix', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(ctx, 520, 90, 550, 90, P.blue, 3);
+    box(550, 70, 130, 'rebuild trie', 'rgba(42,120,214,0.15)', P.blue);
+
+    // row 2: trending lane
+    ctx.fillStyle = '#444'; ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillText('trending — minutes', 15, 132);
+    box(150, 140, 170, 'last 15 min of queries', 'rgba(217,89,38,0.12)', P.orange);
+    arrow(ctx, 320, 160, 380, 160, P.orange, 3);
+    box(380, 140, 150, 'small delta trie', 'rgba(217,89,38,0.12)', P.orange);
+
+    // merge arrows down to shard row (meeting above shard 2)
+    arrow(ctx, 615, 110, 400, 213, P.blue, 3);
+    arrow(ctx, 455, 180, 385, 213, P.orange, 3);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('merged at serve time', 448, 202);
+
+    // row 3: shards
+    box(110, 215, 140, 'shard 1: a–f', 'rgba(0,131,0,0.10)', P.green);
+    box(290, 215, 140, 'shard 2: g–p', 'rgba(0,131,0,0.10)', P.green);
+    box(470, 215, 140, 'shard 3: q–z', 'rgba(0,131,0,0.10)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("'piz' always routes here", 360, 282);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('volumes and lane timings illustrative', w - 14, h - 10);
+});
+
+// c4: latency and memory trade — precomputed top-3 vs rank-at-query-time
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Trade at Prefix 'p': 2.5× the Memory for a 200× Faster Lookup", w / 2, 24);
+
+    var bx = 250; // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 45); ctx.lineTo(bx, 265); ctx.stroke();
+
+    function hbar(y, wid, color, alpha) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.fillRect(bx, y - 8, wid, 16);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, y - 8, wid, 16);
+    }
+
+    // latency group
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("lookup latency, prefix 'p'", 20, 60);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('rank at query time — scan 1.2M', 20, 89);
+    hbar(85, 430, '#e74c3c', 0.85);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('400 ms', bx + 430 + 6, 89);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('precomputed top-3 — one read', 20, 129);
+    hbar(125, 3, P.green, 0.85);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui';
+    ctx.fillText('2 ms', bx + 3 + 6, 129);
+
+    // memory group
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('trie memory', 20, 180);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('plain trie, no stored lists', 20, 209);
+    hbar(205, 130, P.blue, 0.85);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('4 GB', bx + 130 + 6, 209);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('trie + top-3 on every node', 20, 249);
+    hbar(245, 325, P.orange, 0.85);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('10 GB', bx + 325 + 6, 249);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('memory is paid once — latency is paid on every keystroke', w - 20, 160);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('all sizes and timings illustrative; bar widths schematic', w - 14, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

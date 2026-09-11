@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mixed Precision</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Mixed Precision</h1>
+<p class="subtitle">Storing each number with fewer digits — fp16, bf16, or int8 instead of fp32 — halves or quarters the bytes, so the same chip can move and multiply numbers roughly twice as fast for almost no loss in the answer</p>
+
+<div class="card-section">
+    <h2>Copying the Day's Sales with Fewer Digits</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">digit budget</span><span class="tag orange">half the bytes</span></div>
+                <ul>
+                    <li><b>The ledger</b> — a coffee shop owner copies every sale of the day into a paper ledger by hand</li>
+                    <li><b>Full digits</b> — writing each price as "4.7500000" is exact but slow and fills pages fast</li>
+                    <li><b>Fewer digits</b> — writing "4.75" keeps what matters; writing "5" is coarser but even quicker</li>
+                    <li><b>The formats</b> — fp32 holds ~7 digits in 4 bytes, fp16 ~3 (bf16 ~2) in 2, int8 whole numbers in 1</li>
+                    <li><b>The trade</b> — half the bytes means half the ink, half the pages, and twice the copying speed</li>
+                    <li><b>Mixed</b> — "mixed precision" keeps a few totals in full digits while the bulk uses the short form</li>
+                </ul>
+                <p class="example">The owner writes the running grand total with all its cents but jots each individual sale to the nearest dollar — the important number stays exact, the bulk goes fast.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A number format is a digit budget: fp32 spends 4 bytes for ~7 digits, fp16 spends 2 bytes for ~3 and bf16 for ~2, int8 spends 1 byte for whole numbers — half the bytes, double the speed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Rounding Eight Coffees to Whole Dollars</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">rounding error</span></div>
+                <ul>
+                    <li><b>Eight sales</b> — the exact prices: 4.75, 3.20, 5.15, 2.60, 4.75, 3.85, 5.15, 4.30</li>
+                    <li><b>Exact total</b> — added with all their cents, the eight sales come to $33.75</li>
+                    <li><b>Whole dollars</b> — rounded like int8 would: 5, 3, 5, 3, 5, 4, 5, 4 — total $34.00</li>
+                    <li><b>The damage</b> — the coarse total is off by $0.25, an error of only 0.7%</li>
+                    <li><b>Why so small</b> — round-ups and round-downs mostly cancel when many numbers are summed</li>
+                    <li><b>Same story in a model</b> — millions of tiny multiply-adds tolerate short numbers the same way</li>
+                </ul>
+                <p class="example">Redo it by hand: 4.75 + 3.20 + 5.15 + 2.60 + 4.75 + 3.85 + 5.15 + 4.30 = 33.75, while 5 + 3 + 5 + 3 + 5 + 4 + 5 + 4 = 34 — a whole day of speed for a quarter.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Rounding every price to whole dollars changed the total from $33.75 to $34.00 — 0.7% off — because individual rounding errors largely cancel in a big sum.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why GPUs Love Small Numbers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">memory &amp; speed</span><span class="tag orange">training trick</span></div>
+                <ul>
+                    <li><b>The wall</b> — a GPU spends most of its time moving numbers, not multiplying them</li>
+                    <li><b>Model size</b> — a 7-billion-weight model needs 28 GB at fp32, 14 GB at fp16/bf16, 7 GB at int8</li>
+                    <li><b>The fit</b> — on a 16 GB card the fp32 copy does not fit; the fp16 copy fits; int8 fits twice over</li>
+                    <li><b>The speedup</b> — half the bytes per number roughly doubles throughput on the same hardware</li>
+                    <li><b>The "mixed" part</b> — training multiplies in fp16/bf16 but keeps a master fp32 copy of the weights</li>
+                    <li><b>Loss scaling</b> — fp16 training multiplies the loss up so tiny gradients don't round down to zero</li>
+                </ul>
+                <p class="example">The same chatbot that needs a 28 GB fp32 home squeezes into a 14 GB fp16 one and answers roughly twice as fast — the words it produces are nearly indistinguishable.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Precision is the cheapest speed knob there is: 7 billion weights cost 28 GB at fp32 but 14 GB at fp16 and 7 GB at int8, and every halving of bytes buys roughly a doubling of speed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>fp16 and bf16 Are Not the Same Half</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">range vs digits</span></div>
+                <ul>
+                    <li><b>Same 2 bytes</b> — fp16 and bf16 are both half-size, but they spend their 16 bits differently</li>
+                    <li><b>fp16</b> — more digits of detail, but its biggest storable number is only 65,504</li>
+                    <li><b>bf16</b> — fewer digits, but the same enormous range as fp32, up to about 3.4&times;10&sup3;&#8312;</li>
+                    <li><b>The failure</b> — a gradient of 70,000 overflows to infinity in fp16; bf16 shrugs it off</li>
+                    <li><b>The mistake</b> — treating the two as interchangeable because "both are 16-bit"</li>
+                    <li><b>Rule of thumb</b> — bf16 for training stability, fp16 where supported detail matters, int8 for serving</li>
+                </ul>
+                <p class="example">A team's fp16 training run kept exploding into NaNs until they realized a loss spike of 70,000 simply cannot be written in fp16 — switching to bf16 fixed it without any tuning.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming fp16 and bf16 are interchangeable because both use 2 bytes. fp16 buys extra digits by giving up range and overflows past 65,504; bf16 keeps fp32's range by giving up digits.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: bytes per stored number, one row per format
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Number, Four Sizes: Bytes per Stored Number', w / 2, 24);
+
+    var rows = [
+        { name: 'fp32', bytes: 4, color: P.blue,   y: 80,  note: '4 bytes — ~7 digits' },
+        { name: 'fp16', bytes: 2, color: P.aqua,   y: 130, note: '2 bytes — ~3 digits' },
+        { name: 'bf16', bytes: 2, color: P.green,  y: 180, note: '2 bytes — ~2 digits, huge range' },
+        { name: 'int8', bytes: 1, color: P.orange, y: 230, note: '1 byte — whole numbers −128..127' }
+    ];
+    var sq = 44, sqH = 30, gap = 6, startX = 110;
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.name, 30, row.y + 20);
+        for (var b = 0; b < 4; b++) {
+            var x = startX + b * (sq + gap);
+            if (b < row.bytes) {
+                ctx.fillStyle = row.color;
+                ctx.fillRect(x, row.y, sq, sqH);
+                ctx.strokeStyle = P.ink; ctx.lineWidth = 1;
+                ctx.strokeRect(x, row.y, sq, sqH);
+            } else {
+                ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+                ctx.setLineDash([4, 3]);
+                ctx.strokeRect(x, row.y, sq, sqH);
+                ctx.setLineDash([]);
+            }
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.note, 330, row.y + 20);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('half the bytes →', 430, 55);
+    ctx.fillText('twice as many numbers per trip', 430, 72);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('digit counts are approximate — the byte counts are exact', w - 15, h - 10);
+});
+
+// c2: eight sales, exact vs rounded to whole dollars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var exact = [4.75, 3.20, 5.15, 2.60, 4.75, 3.85, 5.15, 4.30];
+    var rounded = [5, 3, 5, 3, 5, 4, 5, 4];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Eight Sales, Exact vs Rounded to Whole Dollars', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 185, maxV = 6;
+    function yOf(v) { return baseY - v / maxV * plotH; }
+
+    // gridlines + y ticks
+    for (var v = 0; v <= 6; v++) {
+        var gy = yOf(v);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + v, ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    // grouped bars
+    var groupW = plotW / 8;
+    for (var i = 0; i < 8; i++) {
+        var cx = ox + (i + 0.5) * groupW;
+        var ex = cx - 24, rx = cx + 2;
+        var eh = exact[i] / maxV * plotH, rh = rounded[i] / maxV * plotH;
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(ex, baseY - eh, 22, eh);
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(rx, baseY - rh, 22, rh);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('sale ' + (i + 1), cx, baseY + 16);
+    }
+
+    // legend
+    ctx.fillStyle = P.blue; ctx.fillRect(75, 66, 14, 11);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('exact cents', 94, 76);
+    ctx.fillStyle = P.orange; ctx.fillRect(180, 66, 14, 11);
+    ctx.fillStyle = '#444';
+    ctx.fillText('whole dollars (int8-style)', 199, 76);
+
+    // annotation box with the two totals
+    var bx = 430, by = 28, bw = 210, bh = 57;
+    ctx.fillStyle = '#fff'; ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('exact total $33.75', bx + 12, by + 17);
+    ctx.fillText('rounded total $34.00', bx + 12, by + 35);
+    ctx.fillStyle = P.green;
+    ctx.fillText('off by $0.25 — 0.7%', bx + 12, by + 53);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative prices from one morning’s till', w - 15, h - 10);
+});
+
+// c3: 7B model memory at three precisions vs a 16 GB GPU
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One 7B Model, Three Sizes — Which Fits on a 16 GB GPU?', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 185, maxV = 30;
+    function yOf(v) { return baseY - v / maxV * plotH; }
+
+    // gridlines every 5, tick labels at 0/10/20/30
+    for (var v = 0; v <= 30; v += 5) {
+        var gy = yOf(v);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+    }
+    var yt = [0, 10, 20, 30], ytLab = ['0', '10', '20', '30 GB'];
+    for (var i = 0; i < yt.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(ytLab[i], ox - 6, yOf(yt[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    // bars
+    var bars = [
+        { cx: 170, v: 28, fill: 'rgba(217,89,38,0.35)', stroke: P.orange, val: '28 GB', lab: 'fp32 (4 B each)' },
+        { cx: 360, v: 14, fill: 'rgba(42,120,214,0.35)', stroke: P.blue, val: '14 GB', lab: 'fp16 / bf16 (2 B)' },
+        { cx: 550, v: 7, fill: 'rgba(0,131,0,0.35)', stroke: P.green, val: '7 GB', lab: 'int8 (1 B)' }
+    ];
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i], bh = b.v / maxV * plotH;
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(b.cx - 45, baseY - bh, 90, bh);
+        ctx.strokeStyle = b.stroke; ctx.lineWidth = 2;
+        ctx.strokeRect(b.cx - 45, baseY - bh, 90, bh);
+        ctx.fillStyle = b.stroke; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.val, b.cx, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab, b.cx, baseY + 16);
+    }
+
+    // 16 GB GPU line
+    var gpuY = yOf(16);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, gpuY); ctx.lineTo(ox + plotW, gpuY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('16 GB GPU card', ox + plotW - 6, gpuY - 6);
+
+    // annotations
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('doesn’t fit', 170, yOf(28) - 26);
+    ctx.fillStyle = P.green;
+    ctx.textAlign = 'left';
+    ctx.fillText('fits twice over', 550 + 52, 150);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('weights only — activations and optimizer state cost extra; illustrative', w - 15, h - 10);
+});
+
+// c4: fp32 / bf16 / fp16 reach on a log-scale range ruler
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 2 Bytes, Very Different Reach', w / 2, 24);
+
+    var ax = 140, axW = 550, axY = 250;
+    function xOf(l) { return ax + (l + 38) / 76 * axW; }
+
+    // axis + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+    var ticks = [-38, -20, 0, 20, 38];
+    var tickLab = ['10⁻³⁸', '10⁻²⁰', '1', '10²⁰', '10³⁸'];
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = xOf(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, axY - 4); ctx.lineTo(tx, axY + 4); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLab[i], tx, axY + 20);
+    }
+
+    function roundBar(x0, x1, y, fill, stroke) {
+        var r = 8, ht = 16;
+        ctx.beginPath();
+        ctx.moveTo(x0 + r, y);
+        ctx.lineTo(x1 - r, y);
+        ctx.arc(x1 - r, y + ht / 2, r, -Math.PI / 2, Math.PI / 2);
+        ctx.lineTo(x0 + r, y + ht);
+        ctx.arc(x0 + r, y + ht / 2, r, Math.PI / 2, 3 * Math.PI / 2);
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // fp32 row
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fp32 — 4 bytes', 20, 102);
+    roundBar(xOf(-38), xOf(38), 90, 'rgba(42,120,214,0.35)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('~7 digits', xOf(38) - 8, 102);
+
+    // bf16 row
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('bf16 — 2 bytes', 20, 157);
+    roundBar(xOf(-38), xOf(38), 145, 'rgba(0,131,0,0.35)', P.green);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('~2 digits, full range', xOf(38) - 8, 157);
+
+    // fp16 row
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fp16 — 2 bytes', 20, 212);
+    roundBar(xOf(-4.2), xOf(4.8), 200, 'rgba(217,89,38,0.35)', P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('tops out at 65,504', xOf(4.8) + 10, 212);
+
+    // overflow marker at log10 = 4.85
+    var mx = xOf(4.85);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(mx, 70); ctx.lineTo(mx, axY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a 70,000 gradient lands here', mx, 66);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('bf16 spends its bits on range, fp16 on digits — pick for the job', 400, 46);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('normal-number ranges, log scale — endpoints rounded for readability', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-commerce Platform</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>E-commerce Platform</h1>
+<p class="subtitle">Hosting a million merchants means someone, somewhere, is having a flash sale every minute — so the platform treats extreme spikes as the steady state and designs for isolation, not just capacity (publicly blogged architecture concepts)</p>
+
+<div class="card-section">
+    <h2>Everyone Else's Flash Sale</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">multi-tenancy</span><span class="tag orange">spiky load</span></div>
+                <ul>
+                    <li><b>The platform</b> — one codebase and fleet serve over a million merchant stores at once</li>
+                    <li><b>The drop</b> — a sneaker brand posts a limited release and 80,000 shoppers hit checkout in a minute</li>
+                    <li><b>The rotation</b> — with a million stores, some merchant's viral moment is always happening right now</li>
+                    <li><b>The steady state</b> — platform load is never calm: it is a baseline plus a spike that keeps moving</li>
+                    <li><b>The real risk</b> — one merchant's storm slowing every neighboring store on the same machines</li>
+                </ul>
+                <p class="example">At 2:12pm it's a sneaker drop, at 2:27pm a TV-famous sauce brand, at 2:42pm a K-pop merch store — the spike never stops, it just changes owner.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> At platform scale, flash sales are not rare events to survive — they are the permanent workload, so the design question shifts from "how big is the peak" to "whose peak hurts whom".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Pods: A Self-Contained Slice per Group of Merchants</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">pods / shards</span><span class="tag orange">blast radius</span></div>
+                <ul>
+                    <li><b>The pod</b> — a self-contained slice of the platform: a set of merchants with their own database and workers</li>
+                    <li><b>The routing layer</b> — every request first looks up shop &rarr; pod, then goes only to that pod's resources</li>
+                    <li><b>The math</b> — 1,000,000 merchants across 100 pods &asymp; 10,000 merchants per pod (illustrative split)</li>
+                    <li><b>Hand-check</b> — a viral drop lands on one pod, so at most ~1% of merchants share the blast radius</li>
+                    <li><b>The escape hatch</b> — a persistently hot merchant can be moved to a quieter pod, or isolated onto its own</li>
+                </ul>
+                <p class="example">When the sneaker drop hammers pod 7, the 990,000 merchants on the other 99 pods never touch pod 7's database — their day is unchanged.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Pods turn one giant shared system into many small independent ones — load and failures stop at the pod boundary, and the routing layer's shop&rarr;pod map makes moving a hot merchant a data change, not a redesign.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>BFCM: the Annual Stress Test, with a Waiting Room</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag orange">throttling</span><span class="tag green">BFCM</span></div>
+                <ul>
+                    <li><b>The exam</b> — Black Friday&ndash;Cyber Monday is the platform's annual stress test, stats published publicly after</li>
+                    <li><b>The scale</b> — the platform reported roughly $9.3B in 2023 BFCM sales, peaking above $4M in sales per minute</li>
+                    <li><b>The storm</b> — even inside one pod, a big drop can send far more checkouts than inventory or capacity allows</li>
+                    <li><b>The throttle</b> — platform-level throttling caps checkout flow at a rate the pod can sustain</li>
+                    <li><b>The queue</b> — excess shoppers go to a documented waiting room and are admitted in order as capacity frees</li>
+                </ul>
+                <p class="example">A drop sends 12,000 checkout attempts per minute at a pod that sustains 4,000; 8,000 shoppers per minute join the waiting room instead of crashing the store (rates illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Throttling plus a queue converts an impossible spike into a sustained maximum — shoppers wait a few minutes in line, but checkout never falls over, for that merchant or for neighbors.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Servers Is Not Isolation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">noisy neighbor</span></div>
+                <ul>
+                    <li><b>The mistake</b> — answering "flash sales hurt neighbors" with "add more machines to the shared pool"</li>
+                    <li><b>Shared pool</b> — one hot merchant's queries still contend for the same database, cache, and workers</li>
+                    <li><b>The spillover</b> — during a viral drop, innocent neighbor stores see checkout latency blow up too</li>
+                    <li><b>The pod answer</b> — with per-pod databases and workers, the drop saturates its pod and nothing else</li>
+                    <li><b>The lesson</b> — multi-tenancy turns capacity planning into isolation design: partition first, then size</li>
+                </ul>
+                <p class="example">In a shared pool, three bystander stores see p95 checkout latency jump from ~120ms to ~2s during someone else's drop; in a podded design they stay near 130ms (illustrative).</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Sizing the platform for the sum of all peaks while leaving tenants sharing everything — the question is never just "is there enough capacity" but "whose spike can reach whose customers".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: one hour of platform-wide checkout traffic with three merchant spikes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var mins = [0, 5, 10, 12, 14, 20, 25, 27, 29, 35, 40, 42, 44, 50, 55, 60];
+    var vals = [20, 21, 22, 78, 24, 21, 20, 70, 23, 20, 22, 88, 25, 21, 20, 22];
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 100;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Hour on the Platform: the Spike Is Always Somewhere', w / 2, 24);
+
+    function xOf(m) { return ox + m / 60 * pw; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    var gvals = [25, 50, 75];
+    for (var g = 0; g < gvals.length; g++) {
+        var gy = yOf(gvals[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gvals[g]) + 'k', ox - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 15 min
+    var tickMins = [0, 15, 30, 45, 60];
+    var tickLabs = ['2:00pm', '2:15pm', '2:30pm', '2:45pm', '3:00pm'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tickMins.length; i++) {
+        ctx.fillText(tickLabs[i], xOf(tickMins[i]), baseY + 18);
+    }
+
+    // baseline marker at 20k
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(20)); ctx.lineTo(ox + pw, yOf(20)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('everyday baseline', ox + 6, yOf(20) + 16);
+
+    // traffic line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(vals[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // spike labels
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.orange;
+    ctx.fillText('sneaker drop', xOf(12), yOf(78) - 10);
+    ctx.fillStyle = P.magenta;
+    ctx.fillText('sauce brand', xOf(27), yOf(70) - 10);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('merch drop', xOf(42), yOf(88) - 10);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a million stores = a flash sale every minute', 220, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('traffic shape illustrative', w - 15, h - 8);
+});
+
+// c2: routing layer maps shop -> pod; pods stand alone
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Routing Layer Maps Shop → Pod; Each Pod Stands Alone', w / 2, 24);
+
+    function arrowTo(x1, y1, x2, y2, color, width, dashed) {
+        ctx.strokeStyle = color; ctx.lineWidth = width;
+        if (dashed) ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    // routing box (x=40, y=125, 160x52)
+    roundRectPath(ctx, 40, 125, 160, 52, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('routing layer', 120, 146);
+    ctx.fillText('shop → pod lookup', 120, 162);
+
+    // pod boxes (x=300, y=[45,125,205], 190x52)
+    var podYs = [45, 125, 205];
+    var podNames = ['pod 1', 'pod 7', 'pod 42'];
+    for (var i = 0; i < 3; i++) {
+        var py = podYs[i];
+        // arrow from routing right edge to pod left edge
+        arrowTo(200, 151, 297, py + 26, P.blue, 3, false);
+        roundRectPath(ctx, 300, py, 190, 52, 8);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        ctx.fill();
+        if (i === 1) {
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        } else {
+            ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+        }
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(podNames[i] + ' · merchants', 395, py + 21);
+        ctx.fillText('+ DB + workers', 395, py + 37);
+    }
+    // "hot" label on pod 7
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hot', 486, 125 - 4);
+
+    // isolation box (x=545, y=125, 150x52)
+    roundRectPath(ctx, 545, 125, 150, 52, 8);
+    ctx.fillStyle = 'rgba(230,126,34,0.15)';
+    ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('dedicated pod', 620, 155);
+
+    // dashed arrow pod 7 -> isolation
+    arrowTo(490, 151, 542, 151, P.orange, 2, true);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('move hot shop', 516, 138);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('failures and load stop at the pod boundary', w / 2, 282);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pod count and layout schematic', w - 15, h - 8);
+});
+
+// c3: checkout storm — attempts spike, throughput holds, the gap waits in line
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var mins = [0, 2, 4, 6, 8, 10, 12, 15, 20, 25, 30];
+    var attempts = [1, 2, 12, 10, 8, 6, 5, 4, 3, 2, 1];
+    var throughput = [1, 2, 4, 4, 4, 4, 4, 4, 3, 2, 1];
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 14;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Checkout Storm: Attempts Spike, Throughput Holds, the Gap Waits in Line', w / 2, 24);
+
+    function xOf(m) { return ox + m / 30 * pw; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    var gvals = [4, 8, 12];
+    for (var g = 0; g < gvals.length; g++) {
+        var gy = yOf(gvals[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gvals[g]) + 'k', ox - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 10 min
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var ticks = [0, 10, 20, 30];
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.fillText(String(ticks[i]), xOf(ticks[i]), baseY + 18);
+    }
+
+    // waiting-room fill between the lines where attempts exceed throughput (minutes 2..15)
+    ctx.beginPath();
+    var startIdx = 1, endIdx = 7; // minute 2 through minute 15
+    for (var i = startIdx; i <= endIdx; i++) {
+        var x = xOf(mins[i]), y = yOf(attempts[i]);
+        i === startIdx ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    for (var i = endIdx; i >= startIdx; i--) {
+        ctx.lineTo(xOf(mins[i]), yOf(throughput[i]));
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(230,126,34,0.25)';
+    ctx.fill();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('waiting room', xOf(6), yOf(7));
+
+    // cap marker at 4k
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(4)); ctx.lineTo(ox + pw, yOf(4)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throttle cap 4k/min', ox + pw - 4, yOf(4) - 6);
+
+    // attempts line
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(attempts[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // throughput line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(throughput[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // line labels
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('attempts', xOf(4) + 8, yOf(12) - 4);
+    ctx.fillStyle = P.green;
+    ctx.fillText('throughput', xOf(11), yOf(4) + 22);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('checkout never falls over — the line does the absorbing', xOf(20), 75);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative; BFCM totals as publicly reported by the platform', w - 15, h - 8);
+});
+
+// c4: bystander latency during someone else's drop — shared vs podded
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var sharedMs = [1800, 2100, 1950];
+    var poddedMs = [130, 125, 140];
+    var stores = ['store B', 'store C', 'store D'];
+    var centers = [180, 370, 560];
+    var ox = 70, baseY = 245, pw = 590, ph = 180, yMax = 2500;
+    var barW = 44, gap = 10;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Bystander Latency During Someone Else's Drop: Shared vs Podded", w / 2, 24);
+
+    function yOf(ms) { return baseY - ms / yMax * ph; }
+
+    // gridlines
+    var gvals = [500, 1000, 1500, 2000];
+    for (var g = 0; g < gvals.length; g++) {
+        var gy = yOf(gvals[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gvals[g]), ox - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    for (var i = 0; i < 3; i++) {
+        var sx = centers[i] - barW - gap / 2;
+        var px = centers[i] + gap / 2;
+        var sh = sharedMs[i] / yMax * ph;
+        var ph2 = poddedMs[i] / yMax * ph;
+        ctx.fillStyle = 'rgba(231,76,60,0.75)';
+        ctx.fillRect(sx, baseY - sh, barW, sh);
+        ctx.fillStyle = P.green;
+        ctx.fillRect(px, baseY - ph2, barW, ph2);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(sharedMs[i]), sx + barW / 2, baseY - sh - 5);
+        ctx.fillText(String(poddedMs[i]), px + barW / 2, baseY - ph2 - 5);
+        ctx.font = '12px system-ui';
+        ctx.fillText(stores[i], centers[i], baseY + 16);
+    }
+
+    // baseline marker at 120ms
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(120)); ctx.lineTo(ox + pw, yOf(120)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('quiet-day p95 ≈ 120ms', ox + 4, yOf(120) - 6);
+
+    // legend top right
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(520, 40, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('shared pool', 537, 50);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(620, 40, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('podded', 637, 50);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same total hardware — only the partitioning changed', 300, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 15, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

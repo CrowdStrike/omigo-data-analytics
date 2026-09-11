@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APFS</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>APFS</h1>
+<p class="subtitle">Apple's copy-on-write filesystem (2017) never copies data it can share — a duplicate is a second name pointing at the same blocks, and new blocks are written only when something changes</p>
+
+<div class="card-section">
+    <h2>Duplicating 40 GB in the Blink of an Eye</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">copy-on-write</span><span class="tag orange">instant clones</span></div>
+                <ul>
+                    <li><b>The project</b> — a video editor's Mac holds a 40 GB project folder for a client film</li>
+                    <li><b>The duplicate</b> — she duplicates it to try a risky recut; the copy appears in under a second</li>
+                    <li><b>The trick</b> — APFS writes no data: the "copy" is a second name pointing at the same disk blocks</li>
+                    <li><b>The change</b> — when she trims one clip, only the changed blocks are written fresh to disk</li>
+                    <li><b>The name</b> — this is copy-on-write: share everything, copy only at the moment of change</li>
+                </ul>
+                <p class="example">On the pre-2017 filesystem a 40 GB duplicate would grind for minutes; the APFS clone is instant and costs roughly zero new bytes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> APFS is a copy-on-write filesystem — duplicating a file clones references to the existing blocks, and real copying happens only when a block is modified.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Blocks After an Edit</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">block accounting</span></div>
+                <ul>
+                    <li><b>The blocks</b> — call the project 10,000 blocks of 4 MB each: 10,000 &times; 4 MB = 40 GB (illustrative)</li>
+                    <li><b>The clone</b> — right after duplicating, both names share all 10,000 blocks: disk usage stays 40 GB</li>
+                    <li><b>The edit</b> — the recut rewrites 500 blocks; APFS writes 500 fresh 4 MB blocks = 2 GB of new data</li>
+                    <li><b>The total</b> — 9,500 shared + 2 &times; 500 unique blocks = 42 GB on disk, not a full copy's 80 GB</li>
+                    <li><b>The rule</b> — extra disk cost equals exactly what you changed, never what you duplicated</li>
+                </ul>
+                <p class="example">Editing 5% of the clone (500 of 10,000 blocks) costs 2 GB; the untouched 95% is never copied at all.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Clone cost is hand-checkable: new usage = original + (blocks changed &times; block size) — here 40 GB + 500 &times; 4 MB = 42 GB.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Snapshots, Space Sharing, and Safe Crashes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">snapshots</span><span class="tag orange">crash safety</span></div>
+                <ul>
+                    <li><b>Snapshots</b> — a snapshot freezes the disk's block map in place, so it too costs only future changes</li>
+                    <li><b>Time Machine</b> — macOS keeps hourly local snapshots this way; a quiet hour costs almost nothing</li>
+                    <li><b>Space sharing</b> — volumes in one APFS container draw on a shared pool instead of fixed partitions</li>
+                    <li><b>Crash safety</b> — copy-on-write never overwrites live metadata, so a power cut can't half-write it</li>
+                    <li><b>Data work</b> — the same trick lets an engineer clone a huge dataset for an experiment in a second</li>
+                </ul>
+                <p class="example">Four hourly snapshots of the editor's afternoon cost 0.5 + 1.2 + 0.8 + 2.0 = 4.5 GB — not 4 &times; 40 GB = 160 GB of full copies.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Once blocks are shared instead of copied, cheap snapshots, flexible volumes, and crash-safe writes all fall out of the same copy-on-write design.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Clone Is Not a Backup</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">shared fate</span></div>
+                <ul>
+                    <li><b>The trap</b> — a clone shares its blocks with the original on the same disk; it is not a second copy</li>
+                    <li><b>Disk dies</b> — if the drive fails, the project and its instant "copy" vanish in the same moment</li>
+                    <li><b>Deleting</b> — trashing the 40 GB clone frees only ~2 GB: just the blocks it had stopped sharing</li>
+                    <li><b>Finder math</b> — two files can "sum" to 80 GB while the disk shows 42 GB used; sizes stop adding up</li>
+                    <li><b>Real backup</b> — a true backup writes every block to a different disk; slow again, and worth it</li>
+                </ul>
+                <p class="example">The editor's two 40 GB project versions appear to total 80 GB, yet the disk shows 42 GB used — and one failed drive would take both at once.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating an instant duplicate as a backup. A clone protects against bad edits, not bad disks — shared blocks mean shared fate.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function hArrow(ctx, x1, x2, y, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 7, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2, y); ctx.lineTo(x2 - 8, y - 5); ctx.lineTo(x2 - 8, y + 5); ctx.closePath(); ctx.fill();
+}
+
+function vArrow(ctx, x, y1, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2 - 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y2); ctx.lineTo(x - 5, y2 - 8); ctx.lineTo(x + 5, y2 - 8); ctx.closePath(); ctx.fill();
+}
+
+// c1: full copy vs APFS clone block diagram
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var blockW = 40, blockH = 26, gap = 4, startX = 170;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Duplicate, Two Ways: Full Copy vs APFS Clone', w / 2, 24);
+
+    // row 1: full copy
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('full copy (old way)', 20, 68);
+    for (var i = 0; i < 10; i++) {
+        var x = startX + i * (blockW + gap);
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(x, 55, blockW, blockH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(x, 55, blockW, blockH);
+        ctx.fillStyle = 'rgba(217,89,38,0.25)';
+        ctx.fillRect(x, 88, blockW, blockH);
+        ctx.strokeStyle = P.orange;
+        ctx.strokeRect(x, 88, blockW, blockH);
+    }
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('80 GB on disk', 630, 80);
+
+    // row 2: APFS clone — two names, one shared row of blocks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('APFS clone', 20, 215);
+    var names = [ { x: 200, label: 'Project' }, { x: 380, label: 'Project copy' } ];
+    for (var i = 0; i < 2; i++) {
+        roundRect(ctx, names[i].x, 160, 110, 26, 8);
+        ctx.fillStyle = 'rgba(26,82,118,0.10)'; ctx.fill();
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(names[i].label, names[i].x + 55, 177);
+        vArrow(ctx, names[i].x + 55, 186, 208, P.mute, 2);
+    }
+    for (var i = 0; i < 10; i++) {
+        var x = startX + i * (blockW + gap);
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(x, 210, blockW, blockH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(x, 210, blockW, blockH);
+    }
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('40 GB on disk', 630, 222);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the clone costs 0 new bytes', 380, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('each square = 4 GB of blocks, illustrative', w - 10, h - 10);
+});
+
+// c2: disk usage vs share of clone edited
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+
+    function xOf(pct) { return ox + pct / 100 * pw; }
+    function yOf(gb) { return baseY - gb / 90 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Disk Usage Grows Only With What You Change', w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [20, 40, 60, 80];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, yOf(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var xt = [0, 25, 50, 75, 100];
+    for (var i = 0; i < xt.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(xt[i] + '%', xOf(xt[i]), baseY + 18);
+    }
+
+    // full-copy line: flat at 80 GB, dashed orange
+    var fcP = [0, 25, 50, 75, 100], fcG = [80, 80, 80, 80, 80];
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (var i = 0; i < fcP.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(fcP[i]), yOf(fcG[i])) : ctx.lineTo(xOf(fcP[i]), yOf(fcG[i]));
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('full copy: 80 GB from the start', ox + 4, yOf(80) - 10);
+
+    // APFS line
+    var apP = [0, 5, 25, 50, 75, 100], apG = [40, 42, 50, 60, 70, 80];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < apP.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(apP[i]), yOf(apG[i])) : ctx.lineTo(xOf(apP[i]), yOf(apG[i]));
+    }
+    ctx.stroke();
+
+    // marker at (5%, 42 GB)
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(5), yOf(42), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('today\'s edit: 5% changed → 42 GB', xOf(5) + 12, yOf(42) + 18);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the lines only meet if you rewrite everything', xOf(60), 110);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10,000 blocks × 4 MB, illustrative', w - 10, h - 8);
+});
+
+// c3: hourly backups — full copies vs snapshots
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+
+    function yOf(gb) { return baseY - gb / 40 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Hourly Backups: Full Copies vs APFS Snapshots', w / 2, 24);
+
+    // gridlines + y labels
+    var grids = [10, 20, 30, 40];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, yOf(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var hours = ['10am', '11am', '12pm', '1pm'];
+    var centers = [135, 275, 415, 555];
+    var fullGB = [40, 40, 40, 40];
+    var snapGB = [0.5, 1.2, 0.8, 2.0];
+    var snapLabs = ['0.5', '1.2', '0.8', '2.0'];
+    var bw = 44;
+
+    for (var i = 0; i < 4; i++) {
+        // full-copy bar (left of center)
+        var fh = fullGB[i] / 40 * ph;
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(centers[i] - bw - 2, baseY - fh, bw, fh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(centers[i] - bw - 2, baseY - fh, bw, fh);
+        ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('40', centers[i] - bw / 2 - 2, baseY - fh + 16);
+
+        // snapshot bar (right of center)
+        var sh = snapGB[i] / 40 * ph;
+        ctx.fillStyle = P.green;
+        ctx.fillRect(centers[i] + 2, baseY - sh, bw, sh);
+        ctx.font = 'bold 11px system-ui'; ctx.fillStyle = P.green;
+        ctx.fillText(snapLabs[i], centers[i] + 2 + bw / 2, baseY - sh - 5);
+
+        // hour label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(hours[i], centers[i], baseY + 18);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 snapshots: 4.5 GB, not 160 GB', 300, 80);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hourly change sizes illustrative', w - 10, h - 8);
+});
+
+// c4: clone same disk vs backup second disk
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Shared Blocks Mean Shared Fate', w / 2, 24);
+
+    function box(x, cy, bw, lines, color, fill) {
+        var bh = 40;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            ctx.font = lines[i].bold ? 'bold 12px system-ui' : '12px system-ui';
+            ctx.fillStyle = lines[i].color;
+            var ty = lines.length === 1 ? cy + 4 : cy - 4 + i * 15;
+            ctx.fillText(lines[i].t, x + bw / 2, ty);
+        }
+        return x + bw;
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)', redFill = 'rgba(231,76,60,0.12)', greenFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: clone, same disk
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('clone, same disk', 20, 99);
+    var e1 = box(170, 95, 210, [
+        { t: 'Disk A: project + clone', color: P.text },
+        { t: '(shared blocks)', color: P.text }
+    ], P.blue, blueFill);
+    var e2 = box(440, 95, 190, [
+        { t: 'Disk A fails', color: P.text },
+        { t: '✗ both versions gone', color: '#e74c3c', bold: true }
+    ], '#e74c3c', redFill);
+    hArrow(ctx, e1 + 4, 436, 95, P.mute, 3);
+
+    // row 2: backup, second disk
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('backup, second disk', 20, 209);
+    var f1 = box(170, 205, 150, [ { t: 'Disk A: project', color: P.text } ], P.blue, blueFill);
+    var f2 = box(360, 205, 150, [ { t: 'Disk B: full copy', color: P.text } ], P.green, greenFill);
+    var f3 = box(550, 205, 160, [
+        { t: 'Disk A fails — restore', color: P.text },
+        { t: '✓', color: P.green, bold: true }
+    ], P.green, greenFill);
+    hArrow(ctx, f1 + 4, 356, 205, P.mute, 3);
+    hArrow(ctx, f2 + 4, 546, 205, P.mute, 3);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the clone saves you from bad edits, not from bad disks', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

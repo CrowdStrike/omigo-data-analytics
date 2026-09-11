@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batching &amp; Speculative Decoding</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Batching &amp; Speculative Decoding</h1>
+<p class="subtitle">One step of a language model costs a GPU nearly the same for one user or sixteen — batching cashes that in as throughput for the operator, and speculative decoding uses a fast drafter plus a slow checker to cut each user's wait</p>
+
+<div class="card-section">
+    <h2>The Homework Bot's Half-Empty Van</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">batching</span><span class="tag orange">running example</span></div>
+                <ul>
+                    <li><b>The bot</b> — a town library runs a homework-helper chatbot for students, all on one shared GPU</li>
+                    <li><b>One word at a time</b> — the model writes each answer word by word; every word is one full pass, a "step"</li>
+                    <li><b>The heavy part</b> — a step mostly hauls the model's weights through memory, like a van driving its route</li>
+                    <li><b>Full or empty</b> — the van's route takes the same time with 1 package or 16: one step is 50 ms alone, 60 ms for sixteen</li>
+                    <li><b>Batching</b> — advancing many users' answers by one word in the same step; the extra work rides almost free</li>
+                    <li><b>The catch</b> — it is a shared ride: everyone moves together, and a request may wait for the van to load</li>
+                </ul>
+                <p class="example">At 4pm sixteen students ask questions at once; the GPU advances all sixteen answers by one word in a single 60 ms step — barely slower than the 50 ms it takes for one.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One step of the model costs nearly the same for 1 user or 16 — batching is the trick of never letting the van drive empty.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Filling the Van: 20 to 267 Words per Second</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">throughput vs latency</span></div>
+                <ul>
+                    <li><b>Step times</b> — measured (illustrative): batch 1 &rarr; 50 ms, 2 &rarr; 51 ms, 4 &rarr; 53 ms, 8 &rarr; 56 ms, 16 &rarr; 60 ms</li>
+                    <li><b>Solo throughput</b> — 1 word / 0.050 s = 20 words per second, all of it for one student</li>
+                    <li><b>Batched throughput</b> — 16 words / 0.060 s = 267 words per second across all sixteen students</li>
+                    <li><b>Per-student speed</b> — 1 / 0.060 s = 16.7 words/s each; only about 17% slower than having the GPU alone</li>
+                    <li><b>The trade</b> — 13x total output for the library, at a small per-student slowdown plus time queued for a seat</li>
+                </ul>
+                <p class="example">The librarian's dashboard shows the same GPU doing 20 words/s when one student is on, and 267 words/s at the 4pm rush — redo it: 16 / 0.060 = 267.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Batching buys throughput (the GPU's total words/s) at a small cost in latency (each user's words/s) — the operator's favorite trade, paid for in user wait.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Intern Drafts, the Expert Approves</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">speculative decoding</span><span class="tag orange">worked example</span></div>
+                <ul>
+                    <li><b>Still slow</b> — even alone, a student watches words land every 50 ms; the big model cannot step faster</li>
+                    <li><b>The intern</b> — a tiny draft model guesses likely next words at 5 ms each, and easy words it gets right</li>
+                    <li><b>Draft four</b> — the intern writes 4 words ahead in 4 &times; 5 = 20 ms while the expert would still be on word one</li>
+                    <li><b>One check</b> — the big model verifies all 4 guesses in a single 50 ms pass and keeps the correct prefix</li>
+                    <li><b>The math</b> — 3 of 4 survive in this simple telling: 3 per 70 ms &asymp; 43 words/s vs 20 alone — 2.1x faster</li>
+                    <li><b>Same words</b> — every kept word is exactly what the big model would have written; only the clock changes</li>
+                </ul>
+                <p class="example">In "The capital of France is Paris", the intern nails the easy words and the expert only slows things down where the sentence actually gets hard.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Speculative decoding = cheap guesses, one expensive check. The output is identical to the big model's; the wait per word drops from 50 ms to about 23 ms — and real systems do a little better still, since the verify pass also yields its own corrected word.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Levers, Two Beneficiaries</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">where it's used</span></div>
+                <ul>
+                    <li><b>Different levers</b> — batching raises the GPU's total words/s; speculation cuts one user's wait per word</li>
+                    <li><b>Different pockets</b> — batching shrinks the operator's per-answer cost; speculation improves the user's stream</li>
+                    <li><b>Mistake #1</b> — "a bigger batch speeds up my answer": no — each user runs slightly slower and may queue first</li>
+                    <li><b>Mistake #2</b> — "speculative decoding degrades answers": no — the big model approves every word it keeps</li>
+                    <li><b>Together</b> — real servers do both: continuous batching keeps every step full, drafting keeps streams snappy</li>
+                </ul>
+                <p class="example">At peak hour the library's server batches sixteen students per step for cost, while speculation keeps each answer streaming at a readable pace.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reporting "tokens per second" without saying whose — the GPU's total (throughput, the batching lever) or one user's stream (latency, the speculation lever). The same phrase names two different numbers.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: one step's time vs work done, batch of 1 vs batch of 16
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Step of the Model: Time vs Work Done', w / 2, 24);
+
+    var barX = 230, barMaxW = 420, barH = 22;
+
+    // top panel: time for one step (scale 0-70 ms)
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('time for one step (ms)', 60, 68);
+    var times = [{ name: 'batch of 1', v: 50, c: P.blue, y: 84 },
+                 { name: 'batch of 16', v: 60, c: P.violet, y: 116 }];
+    for (var i = 0; i < times.length; i++) {
+        var t = times[i], bw = t.v / 70 * barMaxW;
+        ctx.fillStyle = t.c;
+        ctx.fillRect(barX, t.y, bw, barH);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(t.name, 222, t.y + 16);
+        ctx.fillStyle = t.c; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(t.v + ' ms', barX + bw + 8, t.y + 16);
+    }
+
+    // annotation between panels
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('16x the work for 20% more time', 430, 162);
+
+    // bottom panel: answers advanced in that step (scale 0-16 words)
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('answers advanced in that step', 60, 180);
+    var works = [{ name: 'batch of 1', v: 1, lab: '1 word', c: P.blue, y: 196 },
+                 { name: 'batch of 16', v: 16, lab: '16 words', c: P.violet, y: 228 }];
+    for (var i = 0; i < works.length; i++) {
+        var t = works[i], bw = t.v / 16 * barMaxW;
+        ctx.fillStyle = t.c;
+        ctx.fillRect(barX, t.y, bw, barH);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(t.name, 222, t.y + 16);
+        ctx.fillStyle = t.c; ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = (t.v === 16) ? 'right' : 'left';
+        if (t.v === 16) ctx.fillText(t.lab, barX + bw - 8, t.y + 16);
+        else ctx.fillText(t.lab, barX + bw + 8, t.y + 16);
+    }
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative step times for the library’s model', w - 15, h - 10);
+});
+
+// c2: total throughput bars vs per-user words/s line, computed from step times
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var batches = [1, 2, 4, 8, 16];
+    var totals = [20, 39, 75, 143, 267];
+    var perUser = [20.0, 19.6, 18.9, 17.9, 16.7];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Throughput Climbs 13x, Per-User Speed Barely Drops', w / 2, 24);
+
+    // left panel: total words/s bars
+    var lx = 60, lw = 300, baseY = 240, chH = 160, maxT = 280;
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('total words/s (all users)', lx, 52);
+    var grids = [50, 100, 150, 200, 250];
+    for (var i = 0; i < grids.length; i++) {
+        var gy = baseY - grids[i] / maxT * chH;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(lx, gy); ctx.lineTo(lx + lw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), lx - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, baseY - chH); ctx.lineTo(lx, baseY); ctx.lineTo(lx + lw, baseY); ctx.stroke();
+    for (var i = 0; i < 5; i++) {
+        var cx = lx + (i + 0.5) / 5 * lw, bh = totals[i] / maxT * chH;
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(cx - 20, baseY - bh, 40, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - 20, baseY - bh, 40, bh);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(totals[i]), cx, baseY - bh - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(String(batches[i]), cx, baseY + 16);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('13x total', lx + 30, 70);
+
+    // right panel: per-user words/s line
+    var rx = 420, rw = 270, maxU = 24;
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('words/s each user sees', rx, 52);
+    var grids2 = [5, 10, 15, 20];
+    for (var i = 0; i < grids2.length; i++) {
+        var gy = baseY - grids2[i] / maxU * chH;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(rx, gy); ctx.lineTo(rx + rw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids2[i]), rx - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, baseY - chH); ctx.lineTo(rx, baseY); ctx.lineTo(rx + rw, baseY); ctx.stroke();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var px = rx + (i + 0.5) / 5 * rw, py = baseY - perUser[i] / maxU * chH;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 5; i++) {
+        var px = rx + (i + 0.5) / 5 * rw, py = baseY - perUser[i] / maxU * chH;
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(batches[i]), px, baseY + 16);
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('20.0', rx + 0.5 / 5 * rw, baseY - perUser[0] / maxU * chH - 12);
+    ctx.fillText('16.7', rx + 4.5 / 5 * rw, baseY - perUser[4] / maxU * chH - 12);
+    ctx.fillText('only ~17% slower each', rx + rw / 2, 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — computed from step times 50 → 60 ms', w - 15, h - 10);
+});
+
+// c3: 210 ms of wall clock, expert alone vs draft-then-verify
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 210 ms of Wall Clock: Expert Alone vs Draft-then-Verify', w / 2, 24);
+
+    var ax = 120, axW = 560, axY = 250;
+    function xOf(ms) { return ax + ms / 210 * axW; }
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+    var tickMs = [0, 50, 100, 150, 200];
+    var tickLab = ['0', '50', '100', '150', '200 ms'];
+    for (var i = 0; i < tickMs.length; i++) {
+        var tx = xOf(tickMs[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, axY - 4); ctx.lineTo(tx, axY + 4); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLab[i], tx, axY + 18);
+    }
+
+    // row 1: big model alone, four 50-ms word blocks
+    var r1y = 105;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('big model alone', 15, r1y + 4);
+    for (var i = 0; i < 4; i++) {
+        var x0 = xOf(i * 50), x1 = xOf((i + 1) * 50);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(x0, r1y - 15, x1 - x0, 30);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(x0, r1y - 15, x1 - x0, 30);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('word ' + (i + 1), (x0 + x1) / 2, r1y + 4);
+    }
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 words', 688 - 60, r1y + 4);
+
+    // row 2: draft + verify, three 70-ms cycles
+    var r2y = 185;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('draft + verify', 15, r2y + 4);
+    for (var c = 0; c < 3; c++) {
+        var t0 = c * 70;
+        // four 5-ms draft ticks
+        for (var d = 0; d < 4; d++) {
+            var dx0 = xOf(t0 + d * 5), dx1 = xOf(t0 + (d + 1) * 5);
+            ctx.fillStyle = P.aqua;
+            ctx.fillRect(dx0 + 1, r2y - 15, dx1 - dx0 - 2, 30);
+        }
+        // one 50-ms verify block
+        var vx0 = xOf(t0 + 20), vx1 = xOf(t0 + 70);
+        ctx.fillStyle = 'rgba(74,58,167,0.35)';
+        ctx.fillRect(vx0, r2y - 15, vx1 - vx0, 30);
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+        ctx.strokeRect(vx0, r2y - 15, vx1 - vx0, 30);
+        ctx.fillStyle = P.violet; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('verify', (vx0 + vx1) / 2, r2y + 4);
+        // cycle label
+        ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+        ctx.fillText('+3 words', (xOf(t0) + xOf(t0 + 70)) / 2, r2y + 32);
+        if (c === 0) {
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+            ctx.fillText('1 guess tossed', (xOf(t0) + xOf(t0 + 70)) / 2, r2y + 46);
+        }
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('9 words', 688 - 60, r2y - 24);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('9 words vs 4 in the same clock — and the text is identical', 330, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — expert step 50 ms, drafter 5 ms/word, 3 of 4 guesses kept', w - 15, h - 10);
+});
+
+// c4: two levers, before-to-after arrows on independent scales
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Levers: Who Gets Faster?', w / 2, 24);
+
+    var axL = 280, axR = 680, axW = axR - axL;
+
+    function drawArrow(x1, x2, y) {
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+        var dir = x2 > x1 ? 1 : -1;
+        ctx.fillStyle = P.blue;
+        ctx.beginPath();
+        ctx.moveTo(x2, y);
+        ctx.lineTo(x2 - dir * 10, y - 5);
+        ctx.lineTo(x2 - dir * 10, y + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: operator's lever — batching
+    var y1 = 128;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('operator’s lever — batching:', 20, 110);
+    ctx.fillText('total words/s per GPU', 20, 126);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axL, y1); ctx.lineTo(axR, y1); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0', axL, y1 + 16);
+    ctx.fillText('280 words/s', axR - 20, y1 + 16);
+    var x1a = axL + 20 / 280 * axW, x1b = axL + 267 / 280 * axW;
+    drawArrow(x1a + 10, x1b - 10, y1);
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(x1a, y1, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(x1b, y1, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue; ctx.fillText('20', x1a, y1 - 12);
+    ctx.fillStyle = P.green; ctx.fillText('267', x1b, y1 - 12);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('each user slightly slower, may queue for a seat', axL, y1 + 32);
+
+    // row 2: user's lever — speculation
+    var y2 = 218;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('user’s lever — speculation:', 20, 200);
+    ctx.fillText('wait per word (ms)', 20, 216);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axL, y2); ctx.lineTo(axR, y2); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0', axL, y2 + 16);
+    ctx.fillText('60 ms', axR - 14, y2 + 16);
+    var x2a = axL + 50 / 60 * axW, x2b = axL + 23 / 60 * axW;
+    drawArrow(x2a - 10, x2b + 10, y2);
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(x2a, y2, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(x2b, y2, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue; ctx.fillText('50 ms', x2a, y2 - 12);
+    ctx.fillStyle = P.green; ctx.fillText('23 ms', x2b, y2 - 12);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same words, sooner', axL, y2 + 32);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('batching pays the operator, speculation pays the user — say which lever you pulled', w / 2, 282);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('numbers from the worked examples above — illustrative', w - 15, h - 4);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

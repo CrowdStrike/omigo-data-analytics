@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flash-Sale / Ticket Booking</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Flash-Sale / Ticket Booking</h1>
+<p class="subtitle">When 100,000 buyers chase 10 seats at the same instant, the problem isn't throughput — it's contention on a tiny inventory under one synchronized spike</p>
+
+<div class="card-section">
+    <h2>Ten Seats, One Hundred Thousand Buyers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag red">contention</span><span class="tag orange">flash sale</span></div>
+                <ul>
+                    <li><b>The sale</b> — a concert has 10 remaining seats; they go on sale at exactly 12:00 noon</li>
+                    <li><b>The spike</b> — 100,000 fans refresh at noon; traffic jumps from ~80 to 25,000 requests/sec</li>
+                    <li><b>The ratio</b> — 10,000 buyers per seat: 99.99% of requests must fail fast, and fail fairly</li>
+                    <li><b>Not a scale problem</b> — the same 100,000 buyers spread over a day would be trivial load</li>
+                    <li><b>The defining property</b> — massive synchronized demand colliding on a tiny shared inventory</li>
+                </ul>
+                <p class="example">Three seconds after noon the site has already taken tens of thousands of requests for seats that only 10 people can ever get.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A flash sale is defined by contention, not volume — everyone arrives in the same second and fights over the same handful of rows, so the design centers on the 10 seats, not the 100,000 buyers.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Buyers, One Last Seat: the Oversell Race</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">race condition</span><span class="tag green">atomicity</span></div>
+                <ul>
+                    <li><b>Naive flow</b> — read the count, check it is &ge; 1, then write count &minus; 1: three separate steps</li>
+                    <li><b>The race</b> — buyer A reads "1 left"; buyer B reads "1 left" before A writes; both pass the check</li>
+                    <li><b>The oversell</b> — both write 0 and both get a confirmation: 11 tickets sold for 10 seats</li>
+                    <li><b>Fix 1: atomic decrement</b> — one indivisible op: <code>UPDATE seats SET left = left - 1 WHERE left &gt;= 1</code></li>
+                    <li><b>Fix 2: reservation + TTL</b> — hold a specific seat for 10 minutes through checkout; expiry releases it</li>
+                    <li><b>Hand-check</b> — 10 holds placed at 12:00; 3 buyers abandon, so at 12:10 those 3 seats reopen</li>
+                </ul>
+                <p class="example">A and B both read "1 left" at 12:00:04; with the atomic decrement one UPDATE reports 1 row changed and the other reports 0 — B sees "sold out", and seat 11 never exists.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Correctness comes from making check-and-take one indivisible step (atomic decrement on a single row or a distributed counter) or making the take reversible (TTL reservation) — never from read-then-write.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Waiting Room: Shaping the Spike Into a Trickle</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">demand shaping</span><span class="tag orange">queues</span></div>
+                <ul>
+                    <li><b>The queue</b> — a waiting room in front of checkout admits a controlled 100 users/sec, no more</li>
+                    <li><b>What the core sees</b> — a flat 100/s instead of a 25,000/s wall; the counter absorbs it easily</li>
+                    <li><b>Browse is cheap</b> — seat maps and prices are reads, served from pre-scaled read replicas</li>
+                    <li><b>The asymmetry</b> — reads scale horizontally by adding replicas; the decrement of seat 7 is one row</li>
+                    <li><b>Fast ending</b> — at 100 admits/sec the 10 seats are gone within the first second of admissions</li>
+                </ul>
+                <p class="example">100,000 people are queued at 12:00; the waiting room would take ~17 minutes to drain at 100/s, but the sale effectively ends in the first second of admits — everyone else gets a clean "sold out" page.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Shape demand before it reaches the serialized core — the waiting room converts a synchronized spike into a steady trickle, and the read replicas keep the harmless browse traffic away from the one row that matters.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Servers Don't Buy More Seats</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">serialization</span><span class="tag red">bots</span></div>
+                <ul>
+                    <li><b>The confusion</b> — treating contention as a throughput problem: "the site fell over, add servers"</li>
+                    <li><b>What scaling buys</b> — 8 app servers serve 8&times; the browse pages: 40,000/s instead of 5,000/s</li>
+                    <li><b>What it doesn't</b> — every purchase of seat 7 serializes on that one row: still ~1,000 decrements/s</li>
+                    <li><b>Bots</b> — scripts fire hundreds of holds in the first second, faster than any human can click</li>
+                    <li><b>Per-user limits</b> — cap holds at 2 per account, tie queue admission to a token so scripts can't skip</li>
+                </ul>
+                <p class="example">A bot farm with 50 accounts tries to place 50 ten-minute holds at 12:00:01; a 2-per-account cap plus waiting-room tokens keeps the 10 seats from being cornered and relisted (illustrative).</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming horizontal scaling fixes the flash sale. It multiplies browse capacity, but the seat counter is one row whose atomic decrement is fundamentally serial — protect it with a waiting room and per-user limits instead of a bigger fleet.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function drawBox(ctx, cx, cy, w, h, fill, stroke, lines, textColor) {
+    rrPath(ctx, cx - w / 2, cy - h / 2, w, h, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.fillStyle = textColor || P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], cx, cy + (i - (lines.length - 1) / 2) * 15 + 4);
+    }
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: noon spike line chart
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Noon Spike: 25,000 req/s Chasing 10 Seats', w / 2, 24);
+
+    var ox = 60, baseY = 245, ow = 600, chH = 180, maxV = 25000;
+    function xOf(m) { return ox + (m + 2) / 6 * ow; }
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    // gridlines
+    var grids = [5000, 10000, 15000, 20000];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + ow, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i] / 1000) + 'k', ox - 6, yOf(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + ow, baseY); ctx.stroke();
+    var tickLabs = ['11:58', '11:59', '12:00', '12:01', '12:02', '12:03', '12:04'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = -2; m <= 4; m++) { ctx.fillText(tickLabs[m + 2], xOf(m), baseY + 16); }
+
+    // sale marker
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(0), baseY - chH); ctx.lineTo(xOf(0), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('on sale', xOf(0) + 5, baseY - chH + 12);
+
+    // traffic line
+    var mins = [-2, -1, -0.1, 0, 0.25, 0.5, 1, 2, 3, 4];
+    var reqs = [30, 80, 120, 25000, 14000, 8000, 3000, 900, 300, 150];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(reqs[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // inventory marker
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(0) - 6, baseY); ctx.lineTo(xOf(0) + 6, baseY); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('inventory: 10 seats — invisible at this scale', xOf(0) + 14, baseY - 8);
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('10,000 buyers per seat', xOf(2) - 30, 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('request rates illustrative', w - 16, h - 8);
+});
+
+// c2: read-check-write race vs atomic decrement
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Read-Check-Write Oversells; Atomic Decrement Can\'t', w / 2, 24);
+
+    // row 1: read-check-write
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read-check-write', 20, 62);
+    drawBox(ctx, 160, 95, 150, 40, 'rgba(42,120,214,0.15)', P.blue, ['A reads: 1 left']);
+    drawBox(ctx, 330, 95, 150, 40, 'rgba(42,120,214,0.15)', P.blue, ['B reads: 1 left']);
+    drawBox(ctx, 520, 95, 150, 40, 'rgba(231,76,60,0.12)', '#e74c3c', ['both write 0']);
+    drawArrow(ctx, 237, 88, 443, 88, P.text, 3);
+    drawArrow(ctx, 407, 102, 443, 102, P.text, 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ 11 sold / 10 seats', 520, 133);
+
+    // row 2: atomic decrement
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('atomic decrement', 20, 182);
+    drawBox(ctx, 160, 215, 160, 40, 'rgba(42,120,214,0.15)', P.blue, ['A: left−1 → 1 row']);
+    drawBox(ctx, 330, 215, 160, 40, 'rgba(42,120,214,0.15)', P.blue, ['B: left−1 → 0 rows']);
+    drawBox(ctx, 520, 215, 160, 40, 'rgba(0,131,0,0.12)', P.green, ['A gets the seat ✓']);
+    drawArrow(ctx, 240, 208, 440, 208, P.text, 3);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(330, 235); ctx.lineTo(330, 252); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('B: sold out — no oversell', 330, 266);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the check and the take must be one indivisible step', w / 2, 288);
+});
+
+// c3: waiting room shapes the spike into a trickle
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Waiting Room: 25,000/s Arrive, 100/s Get In', w / 2, 24);
+
+    var ox = 60, baseY = 245, ow = 600;
+    function xOf(m) { return ox + (m + 1) / 5 * ow; }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, 110); ctx.lineTo(ox + ow, 110); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, 180); ctx.lineTo(ox + ow, 180); ctx.stroke();
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, 65); ctx.lineTo(ox, baseY); ctx.lineTo(ox + ow, baseY); ctx.stroke();
+    var tickLabs = ['11:59', '12:00', '12:01', '12:02', '12:03', '12:04'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = -1; m <= 4; m++) { ctx.fillText(tickLabs[m + 1], xOf(m), baseY + 16); }
+
+    // sale marker
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(0), 65); ctx.lineTo(xOf(0), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('on sale', xOf(0) + 5, 76);
+
+    // arrivals line (pixel heights above baseline)
+    var mins = [-1, 0, 0.5, 1, 2, 3, 4];
+    var hts = [8, 170, 120, 85, 45, 25, 15];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = baseY - hts[i];
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('arrivals (peak 25,000/s)', xOf(0) + 10, baseY - 170 + 4);
+
+    // admitted line: zero before noon, flat height 26 from minute 0 to 4
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xOf(-1), baseY);
+    ctx.lineTo(xOf(0), baseY);
+    ctx.lineTo(xOf(0), baseY - 26);
+    ctx.lineTo(xOf(4), baseY - 26);
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('admitted to checkout: 100/s', xOf(4), baseY - 34);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the core never sees the spike', xOf(2), 100);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('heights schematic, rates illustrative', w - 16, h - 8);
+});
+
+// c4: browse capacity scales, the seat-row decrement doesn't
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8× the Servers, 8× the Browsing, Same One Row', w / 2, 24);
+
+    var ox = 60, baseY = 245, ow = 600, chH = 180, maxV = 40000;
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    // gridlines
+    var grids = [10000, 20000, 30000];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + ow, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i] / 1000) + 'k', ox - 6, yOf(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + ow, baseY); ctx.stroke();
+
+    var centers = [145, 290, 435, 580];
+    var labels = ['1 server', '2 servers', '4 servers', '8 servers'];
+    var browse = [5000, 10000, 20000, 40000];
+    var browseLabs = ['5k', '10k', '20k', '40k'];
+    var bw = 44;
+
+    for (var i = 0; i < 4; i++) {
+        var cx = centers[i];
+        // browse bar, left of center
+        var bh = browse[i] / maxV * chH;
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(cx - bw, baseY - bh, bw, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw, baseY - bh, bw, bh);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(browseLabs[i], cx - bw / 2, baseY - bh - 5);
+        // decrement bar, right of center, flat at 1000
+        var dh = 1000 / maxV * chH;
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(cx, baseY - dh, bw, dh);
+        ctx.fillStyle = P.orange; ctx.font = '11px system-ui';
+        ctx.fillText('1k', cx + bw / 2, baseY - dh - 5);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(labels[i], cx, baseY + 16);
+    }
+
+    // legend, top left inside plot
+    ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.fillRect(75, 76, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.strokeRect(75, 76, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('browse pages/s', 92, 86);
+    ctx.fillStyle = P.orange; ctx.fillRect(75, 94, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('seat-row decrements/s', 92, 104);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the decrement is serialized per seat row — servers don\'t help', 400, 80);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput numbers illustrative', w - 16, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

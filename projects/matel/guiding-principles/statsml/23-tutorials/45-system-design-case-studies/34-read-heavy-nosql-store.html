@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Read-Heavy NoSQL Store</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Read-Heavy NoSQL Store</h1>
+<p class="subtitle">A catalog lookup service reads the same items a hundred times for every edit &mdash; that one ratio decides the design: spend on the write path so a read is a single cheap hop to an answer that is already shaped</p>
+
+<div class="card-section">
+    <h2>A Hundred Reads for Every Write</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">measure first</span><span class="tag orange">100 : 1</span></div>
+                <ul>
+                    <li><b>The service</b> &mdash; an item-lookup API for a product catalog: read constantly, edited rarely</li>
+                    <li><b>The split</b> &mdash; count reads and writes separately; at peak it is 1,000,000 reads/s against 10,000 writes/s</li>
+                    <li><b>The ratio</b> &mdash; that is 100 reads for every write, and the ratio matters far more than either raw number</li>
+                    <li><b>Why first</b> &mdash; the ratio is the design input; caches, replicas, and data shape are all chosen after it</li>
+                    <li><b>The trap</b> &mdash; a single "total QPS" figure hides the split, and the split is the only actionable part</li>
+                </ul>
+                <p class="example">Two services with the same total traffic but ratios of 100:1 and 1:1 get completely different designs &mdash; same size, opposite shape.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Read-heavy is not a vague adjective, it is a measured ratio. At 100 reads per write, anything you remove from the read path is saved a hundred times over and anything you add to the write path is paid once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Paying on the Write Path So a Read Is One Hop</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">denormalize</span><span class="tag orange">write amplification</span></div>
+                <ul>
+                    <li><b>The read shape</b> &mdash; one item page wants the item, its brand, its categories, its price, all together</li>
+                    <li><b>Normalized</b> &mdash; those pieces live apart, so the read fans out and stitches them at query time</li>
+                    <li><b>Denormalize</b> &mdash; store one document already stitched, and the same read becomes a single lookup</li>
+                    <li><b>The write cost</b> &mdash; an edit now rewrites that whole document plus every index built over it</li>
+                    <li><b>Why that is safe</b> &mdash; the extra work lands on the rare write, and the saving lands on every single read</li>
+                    <li><b>The rule</b> &mdash; precompute the exact shape the query asks for; never join at read time</li>
+                </ul>
+                <p class="example">Adding one more secondary index makes each edit slightly more expensive and leaves the read at exactly one seek &mdash; a trade you will take every time at 100:1.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Work removed from the read path is multiplied by the read count; work added to the write path is multiplied by the write count. With a hundred-to-one ratio those multipliers are what make denormalizing obviously correct.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Cache Absorbs the Reads, Nothing Absorbs the Writes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">cache tier</span><span class="tag orange">read replicas</span></div>
+                <ul>
+                    <li><b>The cache tier</b> &mdash; an in-memory tier in front of the store answers any read whose key it already holds</li>
+                    <li><b>What arrives</b> &mdash; a 97% hit rate on 1,000,000 reads/s leaves 30,000 QPS for the store to serve</li>
+                    <li><b>Read replicas</b> &mdash; copies of the data behind the cache; the leftover read load splits across them</li>
+                    <li><b>Writes do not split</b> &mdash; every write still lands on one primary, so a replica adds no write capacity</li>
+                    <li><b>The asymmetry</b> &mdash; reads scale by adding machines, writes scale only by sharding or writing less</li>
+                </ul>
+                <p class="example">Doubling the replicas halves the read load each one carries and changes the write path not at all &mdash; replicas are a read lever only.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Origin load is (1 &minus; hit rate) &times; read QPS, so the last couple of points of hit rate matter more than the first ninety. Replicas then divide what is left &mdash; but only on the read side.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Hot Key Expires and Everyone Runs at Once</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">stampede</span><span class="tag green">staleness</span></div>
+                <ul>
+                    <li><b>The blind spot</b> &mdash; a high average hit rate says nothing about what one popular key does when it expires</li>
+                    <li><b>The stampede</b> &mdash; the moment that key's entry is gone, every request for it misses and queries the store</li>
+                    <li><b>Single flight</b> &mdash; let one request fetch and make the rest wait on its result; the burst collapses to one query</li>
+                    <li><b>Also needed</b> &mdash; stagger expiry times so a whole range of keys does not go cold on the same second</li>
+                    <li><b>The tradeoff</b> &mdash; keeping entries longer buys fewer origin queries and staler reads; no setting gives both</li>
+                </ul>
+                <p class="example">The same knob moved one way cuts store load and moves stale answers further behind; moved the other way it does the reverse.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a high hit rate as a steady state. Averages hide bursts &mdash; one hot key expiring concentrates its entire arrival rate onto the store in a single refill window, and only coalescing the duplicate requests removes it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function fmt(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function dashedLine(ctx, x1, y1, x2, y2) {
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function labelBox(ctx, x, y, bw, bh, fill, border, bwidth, text, fontSize) {
+    roundRect(ctx, x, y, bw, bh, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = border; ctx.lineWidth = bwidth; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = fontSize + 'px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(text, x + bw / 2, y + bh / 2 + 4);
+}
+
+// c1: one total vs the same traffic split
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    var reads = 1000000, writes = 10000;
+    var barTop = 150;                 // pixels for the read volume
+    var scale = barTop / reads;       // one shared pixels-per-QPS scale
+    var baseY = 250;
+    var readH = reads * scale;        // 150
+    var writeH = writes * scale;      // 1.5 — the hairline is to scale
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Total Hides the Shape of the Traffic', w / 2, 26);
+
+    dashedLine(ctx, 360, 44, 360, 274);
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = P.mute; ctx.fillText('one number', 175, 54);
+    ctx.fillStyle = P.ink; ctx.fillText('the same traffic, split', 545, 54);
+
+    // left: single undifferentiated bar
+    var totalH = readH + writeH;
+    ctx.fillStyle = 'rgba(107,114,128,0.25)';
+    ctx.fillRect(110, baseY - totalH, 130, totalH);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.strokeRect(110, baseY - totalH, 130, totalH);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('total QPS', 175, 184);
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('reads and writes lumped', 175, 270);
+
+    // right: the same bar, split to scale
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(480, baseY - readH, 130, readH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(480, baseY - readH, 130, readH);
+    ctx.fillStyle = 'rgba(217,89,38,0.9)';
+    ctx.fillRect(480, baseY - readH - writeH, 130, writeH);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+    ctx.strokeRect(480, baseY - readH - writeH, 130, writeH);
+
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('reads — ' + fmt(reads) + '/s', 468, 188);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('writes — ' + fmt(writes) + '/s', 468, 92);
+    arrow(ctx, 472, 90, 478, baseY - readH - writeH, P.orange, 1.5);
+
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one bar is a hairline', 545, 270);
+
+    // computed at render time from the plotted volumes
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(fmt(reads) + ' ÷ ' + fmt(writes) + ' = ' + (reads / writes) + ' reads : 1 write', 25, 292);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example', 700, 292);
+});
+
+// c2: fan out at read time, or once at write time
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fan Out at Read Time, or Once at Write Time', w / 2, 26);
+
+    dashedLine(ctx, 400, 56, 400, 280);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('normalized', 25, 48);
+    ctx.fillText('denormalized', 25, 206);
+
+    // normalized: one read fanning out to many places
+    var pieces = ['item', 'brand', 'category', 'category', 'category', 'price'];
+    var tops = [56, 75, 94, 113, 132, 151];
+    ctx.strokeStyle = 'rgba(231,76,60,0.6)'; ctx.lineWidth = 1.5;
+    for (var i = 0; i < tops.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(115, 112);
+        ctx.lineTo(195, tops[i] + 7);
+        ctx.stroke();
+    }
+    for (var i = 0; i < tops.length; i++) {
+        ctx.fillStyle = 'rgba(231,76,60,0.14)';
+        ctx.fillRect(195, tops[i], 130, 14);
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1;
+        ctx.strokeRect(195, tops[i], 130, 14);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(pieces[i], 260, tops[i] + 11);
+    }
+    labelBox(ctx, 25, 93, 90, 38, 'rgba(42,120,214,0.15)', P.blue, 2, 'read', 12);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('many lookups, stitched per read', 190, 186);
+
+    // denormalized: one read, one document
+    arrow(ctx, 115, 233, 195, 233, P.green, 3);
+    labelBox(ctx, 25, 214, 90, 38, 'rgba(42,120,214,0.15)', P.blue, 2, 'read', 12);
+    labelBox(ctx, 195, 214, 130, 38, 'rgba(0,131,0,0.14)', P.green, 2, 'one document', 12);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one lookup, answer already shaped', 190, 272);
+
+    // right: the write path pays for it
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the write path pays for it', 563, 48);
+
+    var wTops = [64, 98, 132];
+    var wLabels = ['rewrite document', 'update index', 'update index'];
+    for (var i = 0; i < wTops.length; i++) {
+        arrow(ctx, 520, 105, 560, wTops[i] + 13, P.orange, 1.5);
+    }
+    for (var i = 0; i < wTops.length; i++) {
+        labelBox(ctx, 560, wTops[i], 140, 26, 'rgba(217,89,38,0.14)', P.orange, 1, wLabels[i], 11);
+    }
+    labelBox(ctx, 430, 88, 90, 34, 'rgba(213,81,129,0.14)', P.magenta, 2, 'edit', 12);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one edit becomes several writes', 563, 186);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('saving on a read × every read', 563, 216);
+    ctx.fillText('cost on a write × the few writes', 563, 238);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example', 700, 292);
+});
+
+// c3: cache funnel, then reads fan out while writes converge
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    var reads = 1000000, origin = 30000;
+    var hitPct = (100 * (1 - origin / reads)).toFixed(1);
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where a Million Reads a Second Actually Go', w / 2, 26);
+
+    dashedLine(ctx, 372, 44, 372, 278);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('the cache absorbs most reads', 30, 54);
+
+    arrow(ctx, 117, 110, 117, 150, P.mute, 2);
+    arrow(ctx, 117, 190, 117, 230, P.mute, 2);
+
+    labelBox(ctx, 30, 70, 175, 40, 'rgba(42,120,214,0.15)', P.blue, 2, fmt(reads) + ' read QPS', 12);
+    labelBox(ctx, 30, 150, 175, 40, 'rgba(0,131,0,0.14)', P.green, 2, 'cache tier — ' + hitPct + '% hit', 12);
+    labelBox(ctx, 30, 230, 175, 40, 'rgba(217,89,38,0.14)', P.orange, 2, 'origin: ' + fmt(origin) + ' read QPS', 12);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('answered in memory', 212, 134);
+    ctx.fillText('the rest reaches the store', 212, 214);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('reads fan out, writes do not', 545, 54);
+
+    var rTops = [68, 100, 132];
+    for (var i = 0; i < rTops.length; i++) {
+        arrow(ctx, 461, 102, 520, rTops[i] + 13, P.orange, 1.5);
+    }
+    for (var i = 0; i < rTops.length; i++) {
+        labelBox(ctx, 520, rTops[i], 150, 26, 'rgba(217,89,38,0.14)', P.orange, 1, 'read replica', 11);
+    }
+    arrow(ctx, 461, 210, 520, 210, P.magenta, 2.5);
+    labelBox(ctx, 520, 196, 150, 28, 'rgba(213,81,129,0.14)', P.magenta, 2, 'single primary', 11);
+
+    labelBox(ctx, 395, 88, 66, 28, 'rgba(42,120,214,0.15)', P.blue, 2, 'reads', 11);
+    labelBox(ctx, 395, 196, 66, 28, 'rgba(213,81,129,0.14)', P.magenta, 2, 'writes', 11);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('add replicas → more read capacity', 595, 176);
+    ctx.fillStyle = P.magenta;
+    ctx.fillText('add replicas → no write capacity', 595, 244);
+    ctx.fillStyle = P.violet; ctx.font = '12px system-ui';
+    ctx.fillText('every write lands on one node', 595, 266);
+
+    // computed at render time from the same variables the boxes use
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(hitPct + '% hit leaves ' + fmt(origin) + ' of ' + fmt(reads), 30, 292);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example', 700, 292);
+});
+
+// c4: hot-key stampede vs single flight
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Hot Key Expires: A Herd, or One Query', w / 2, 26);
+
+    dashedLine(ctx, 378, 48, 378, 262);
+
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('no coalescing', 195, 60);
+    ctx.fillStyle = P.green; ctx.fillText('single flight', 548, 60);
+
+    labelBox(ctx, 120, 72, 150, 30, 'rgba(231,76,60,0.12)', '#e74c3c', 2, 'hot key expires', 12);
+    labelBox(ctx, 473, 72, 150, 30, 'rgba(0,131,0,0.12)', P.green, 2, 'hot key expires', 12);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('requests for that key', 195, 126);
+    ctx.fillText('requests for that key', 548, 126);
+
+    // left: every waiting request reaches the store
+    ctx.strokeStyle = 'rgba(231,76,60,0.55)'; ctx.lineWidth = 1;
+    for (var i = 0; i < 9; i++) {
+        ctx.beginPath();
+        ctx.moveTo(60 + 32 * i, 149);
+        ctx.lineTo(195, 194);
+        ctx.stroke();
+    }
+    for (var i = 0; i < 9; i++) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(60 + 32 * i, 142, 5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // right: one fetch, the rest reuse it
+    arrow(ctx, 420, 149, 500, 194, P.green, 2.5);
+    for (var i = 0; i < 9; i++) {
+        ctx.fillStyle = i === 0 ? P.green : 'rgba(107,114,128,0.45)';
+        ctx.beginPath(); ctx.arc(420 + 24 * i, 142, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the others wait and reuse it', 575, 172);
+
+    labelBox(ctx, 120, 196, 150, 32, 'rgba(231,76,60,0.12)', '#e74c3c', 2, 'origin store', 12);
+    labelBox(ctx, 473, 196, 150, 32, 'rgba(0,131,0,0.12)', P.green, 2, 'origin store', 12);
+
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('every waiting request queries the store', 195, 250);
+    ctx.fillStyle = P.green; ctx.fillText('exactly one query reaches the store', 548, 250);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('keep entries longer → fewer origin queries, staler answers', 360, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example', 700, 294);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

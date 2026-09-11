@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Microblog Timeline</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Microblog Timeline</h1>
+<p class="subtitle">Designing a large-scale microblog home feed — build each user's timeline at read time (pull) or at write time (push)? Accounts with 50M followers break both, so real designs use a hybrid</p>
+
+<div class="card-section">
+    <h2>Building a Timeline by Asking Everyone You Follow</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">pull model</span><span class="tag orange">read path</span></div>
+                <ul>
+                    <li><b>The feed</b> — a user opens the app and expects the newest posts from everyone they follow</li>
+                    <li><b>The naive read</b> — fetch recent posts from each followed account, merge-sort by time, show top 50</li>
+                    <li><b>The cost</b> — a user following 300 accounts triggers 300 lookups on every single refresh</li>
+                    <li><b>The power user</b> — following 5,000 accounts means 5,000 lookups before one screen renders</li>
+                    <li><b>The name</b> — computing the feed at read time is the pull model, also called fan-out on read</li>
+                </ul>
+                <p class="example">Following 300 accounts, a refresh takes ~40 ms; following 5,000, the same refresh takes ~650 ms — the read cost grows with the follow count.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Pull means the timeline is assembled fresh at read time by merging the posts of everyone you follow — writes are cheap (one row per post), but reads get slower the more you follow.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Post, Fifty Million Timeline Writes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">push model</span><span class="tag orange">fan-out on write</span></div>
+                <ul>
+                    <li><b>The flip</b> — push precomputes: when someone posts, insert it into every follower's stored timeline</li>
+                    <li><b>The read</b> — opening the app now reads one precomputed list; a refresh is a single cheap fetch</li>
+                    <li><b>A friend</b> — a user with 200 followers posts: 200 timeline inserts, done in milliseconds</li>
+                    <li><b>A high-follower account</b> — an account with 50,000,000 followers posts: 50 million inserts for one post</li>
+                    <li><b>Hand-check</b> — at 500,000 inserts/sec, 50,000,000 &divide; 500,000 = 100 seconds to deliver one post</li>
+                </ul>
+                <p class="example">The friend's post costs 200 writes; the high-follower account's costs 50,000,000 — a 250,000&times; write amplification, and late followers see the post over a minute late.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Push (fan-out on write) makes reads O(1) by moving all the work to write time — which is exactly where a high-follower account's follower count detonates it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Hybrid: Push for Most, Pull for the Famous</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">hybrid design</span><span class="tag orange">caching</span></div>
+                <ul>
+                    <li><b>The skew</b> — feeds are read-heavy: illustratively ~300 timeline reads for every post written</li>
+                    <li><b>The split</b> — accounts under a follower threshold (say 1M) are pushed; above it, pulled</li>
+                    <li><b>The read</b> — fetch the user's precomputed timeline, then merge in fresh posts from high-follower accounts</li>
+                    <li><b>The win</b> — a user follows 300 accounts but only 3 are high-follower accounts: 1 cached fetch + 3 pulls</li>
+                    <li><b>The cache</b> — hot timelines live in memory, so the common read touches no disk at all</li>
+                </ul>
+                <p class="example">With a 1M-follower threshold, a reader following 297 normal accounts and 3 high-follower accounts does 4 fetches per refresh instead of 300 pulls or forcing 50M-write fan-outs.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The classic answer is hybrid fan-out — push for the many small accounts, pull for the few huge ones, merged at read time — because read-heavy skew makes precomputation pay everywhere except at the high-follower account extreme.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Mistake: One Model for Every User</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">write amplification</span></div>
+                <ul>
+                    <li><b>The trap</b> — benchmarking with average users (200 follows, 200 followers) makes either pure model look fine</li>
+                    <li><b>Pure pull fails</b> — the 5,000-follow power reader waits 650 ms on every refresh, forever</li>
+                    <li><b>Pure push fails</b> — one 50M-follower post is 50M inserts, and it also writes to dormant accounts</li>
+                    <li><b>The waste</b> — pushing to a follower who logs in once a month spends millions of writes nobody reads</li>
+                    <li><b>The lesson</b> — the tail users (heavy followers, huge followings) set the design, not the average</li>
+                </ul>
+                <p class="example">A design reviewed only against the median user ships pure push, then the first 50M-follower account signs up and every post becomes a 100-second write storm.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Choosing push or pull from the average user's numbers. Feed systems are broken by their extremes — the pull model dies at high follow counts, the push model dies at high follower counts, and only a hybrid survives both.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function flowArrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width || 3;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: pull-model refresh latency vs accounts followed
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxMs = 700;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Pull Model: Refresh Latency Grows with Accounts Followed', w / 2, 24);
+
+    var yTicks = [175, 350, 525];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = baseY - yTicks[i] / maxMs * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var centers = [130, 280, 430, 580], bw = 90;
+    var lat = [15, 40, 130, 650];
+    var xLabs = ['100', '300', '1,000', '5,000 follows'];
+    var vLabs = ['15 ms', '40 ms', '130 ms', '650 ms'];
+    for (var i = 0; i < 4; i++) {
+        var bh = lat[i] / maxMs * ph;
+        var isLast = (i === 3);
+        ctx.fillStyle = isLast ? 'rgba(231,76,60,0.20)' : 'rgba(42,120,214,0.30)';
+        ctx.fillRect(centers[i] - bw / 2, baseY - bh, bw, bh);
+        ctx.strokeStyle = isLast ? '#e74c3c' : P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(centers[i] - bw / 2, baseY - bh, bw, bh);
+        ctx.fillStyle = isLast ? '#e74c3c' : P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(vLabs[i], centers[i], baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(xLabs[i], centers[i], baseY + 18);
+    }
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('5,000 lookups per refresh — the reader pays', 430, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 20, 292);
+});
+
+// c2: timeline inserts caused by one post, four account sizes
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 230;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Push Model: Writes Caused by One Single Post', w / 2, 24);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 250); ctx.stroke();
+
+    var rows = [
+        { y: 70, lab: 'friend — 200 followers', wdt: 8, style: 'blue', count: '200 writes' },
+        { y: 120, lab: 'micro-influencer — 20k followers', wdt: 90, style: 'blue', count: '20,000 writes' },
+        { y: 170, lab: 'big account — 1M followers', wdt: 230, style: 'orange', count: '1,000,000 writes' },
+        { y: 220, lab: 'high-follower account — 50M followers', wdt: 440, style: 'red', count: '50,000,000 writes' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 11);
+        if (r.style === 'blue') {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(bx, r.y, r.wdt, 14);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, r.y, r.wdt, 14);
+        } else {
+            ctx.fillStyle = (r.style === 'orange') ? P.orange : '#e74c3c';
+            ctx.fillRect(bx, r.y, r.wdt, 14);
+        }
+        if (r.style === 'red') {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(r.count, bx + r.wdt - 2, r.y - 5);
+        } else {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(r.count, bx + r.wdt + 6, r.y + 11);
+        }
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('100 s to deliver at 500k inserts/s', 420, 258);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('follower counts and insert rate illustrative', w - 20, 292);
+});
+
+// c3: hybrid fan-out flow, two write paths merging at read
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Hybrid Fan-Out: Two Write Paths, One Merge at Read', w / 2, 24);
+
+    function box(x, y, wdt, hgt, lines, fill, border) {
+        rrect(ctx, x, y, wdt, hgt, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        var startY = y + hgt / 2 - (lines.length - 1) * 7 + 4;
+        for (var i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x + wdt / 2, startY + i * 14);
+        }
+    }
+
+    // row 1: push path
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('push (≤1M followers)', 20, 90);
+    box(150, 95, 150, 44, ['friend posts'], 'rgba(42,120,214,0.15)', P.blue);
+    flowArrow(ctx, 302, 117, 326, 117, P.mute, 3);
+    box(330, 95, 180, 44, ['fan-out: 200', 'timeline inserts'], 'rgba(42,120,214,0.15)', P.blue);
+
+    // row 2: pull path
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('pull (>1M followers)', 20, 190);
+    box(150, 195, 150, 44, ['high-follower account posts'], 'rgba(217,89,38,0.12)', P.orange);
+    flowArrow(ctx, 302, 217, 326, 217, P.mute, 3);
+    box(330, 195, 180, 44, ['high-follower account store:', '1 write'], 'rgba(217,89,38,0.12)', P.orange);
+
+    // merge box
+    box(560, 130, 150, 74, ['read: cached', 'timeline + merge', '3 high-follower account feeds'], 'rgba(0,131,0,0.12)', P.green);
+    flowArrow(ctx, 512, 117, 556, 150, P.mute, 3);
+    flowArrow(ctx, 512, 217, 556, 185, P.mute, 3);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 fetches per refresh instead of 300 — reads stay cheap, no 50M-write storms', w / 2, 275);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('threshold and counts illustrative', w - 20, 293);
+});
+
+// c4: verdict grid, pull/push/hybrid vs the two stress cases
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Stress Test: Each Pure Model Fails One Extreme', w / 2, 24);
+
+    var cols = [250, 430, 610];
+    var colLabs = ['pure pull', 'pure push', 'hybrid'];
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    for (var i = 0; i < 3; i++) {
+        ctx.fillText(colLabs[i], cols[i], 70);
+    }
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('power reader', 20, 131);
+    ctx.fillText('(5,000 follows)', 20, 147);
+    ctx.fillText('high-follower account post', 20, 211);
+    ctx.fillText('(50M followers)', 20, 227);
+
+    function cell(cx, cy, ok, txt) {
+        var color = ok ? P.green : '#e74c3c';
+        var fill = ok ? 'rgba(0,131,0,0.12)' : 'rgba(231,76,60,0.12)';
+        rrect(ctx, cx - 75, cy - 24, 150, 48, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(txt, cx, cy + 4);
+    }
+
+    cell(250, 135, false, '✗ 650 ms reads');
+    cell(430, 135, true, '✓ 1 cached fetch');
+    cell(610, 135, true, '✓ fetch + few pulls');
+    cell(250, 215, true, '✓ 1 write');
+    cell(430, 215, false, '✗ 50M writes');
+    cell(610, 215, true, '✓ 1 write, pulled');
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('design for the tails — the average user never breaks anything', w / 2, 275);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('costs illustrative, from the sections above', w - 20, 293);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

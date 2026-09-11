@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collaborative Editor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Collaborative Editor</h1>
+<p class="subtitle">Two people type in the same sentence at the same time — the editor must merge both keystrokes so every screen converges to the identical text</p>
+
+<div class="card-section">
+    <h2>Two Cursors in the Same Sentence</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">concurrency</span><span class="tag orange">collaboration</span></div>
+                <ul>
+                    <li><b>The doc</b> — two teammates edit the same shared sentence from two laptops at the same moment</li>
+                    <li><b>The keystrokes</b> — A inserts a word near the front while B fixes a typo at the end, 7ms apart</li>
+                    <li><b>The naive save</b> — treat the doc as one value: whoever's save lands last overwrites the other's</li>
+                    <li><b>The loss</b> — with last-write-wins, A's new word silently vanishes when B's save arrives later</li>
+                    <li><b>The goal</b> — both edits must survive and every replica must converge to the same final text</li>
+                </ul>
+                <p class="example">A's save lands at 10:00:00.012 and B's at 10:00:00.019; with last-write-wins the doc becomes B's copy alone, and A watches her word disappear.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Real-time editing is a convergence problem — concurrent edits must merge so all replicas end at the identical document — not a race where the last full-document save wins.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The "cat" Merge, By Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">operational transformation</span></div>
+                <ul>
+                    <li><b>The start</b> — the shared document is the 3-letter word "cat": positions 0='c', 1='a', 2='t'</li>
+                    <li><b>User A</b> — inserts "o" at position 1, so her local copy becomes "coat"</li>
+                    <li><b>User B</b> — concurrently deletes position 2 (the "t"), so his local copy becomes "ca"</li>
+                    <li><b>Naive replay</b> — server applies A, then B's raw delete@2 on "coat" removes the "a": "cot" — wrong</li>
+                    <li><b>The transform</b> — A's insert at 1 shifts B's delete to position 3; "coat" minus the "t" is "coa"</li>
+                    <li><b>Both sides</b> — B's replica applies A's insert@1 to "ca" and also lands on "coa": convergence</li>
+                </ul>
+                <p class="example">Without the transform the server shows "cot" (deleted "a" by mistake) while B's own screen shows "coa" — with the one-index shift, every replica shows "coa".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Operational Transformation rewrites each incoming operation's position against concurrent ops already applied — an insert before you shifts your index right by one — classically with a central server choosing the order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>CRDTs: Name the Letters, Skip the Referee</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">CRDT</span><span class="tag orange">decentralized</span></div>
+                <ul>
+                    <li><b>The alternative</b> — a CRDT gives each character a stable unique ID that never shifts as text changes</li>
+                    <li><b>No positions</b> — a delete says "remove the letter with ID s3", never "delete whatever is at 2"</li>
+                    <li><b>Ordering</b> — concurrent inserts between the same neighbors are ranked by ID, so all replicas agree</li>
+                    <li><b>No referee</b> — merges are deterministic, so peers can sync in any order without a central server</li>
+                    <li><b>The trade</b> — per-character IDs add metadata; OT keeps documents lean but leans on the server</li>
+                </ul>
+                <p class="example">In a CRDT the "t" in "cat" is ID s3 forever; A's insert cannot shift it, so B's "delete s3" removes the right letter on every replica without any transform.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> OT fixes positions with transforms plus a server-picked order; CRDTs remove positions entirely with stable IDs — two published academic routes to the same convergence guarantee.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Document Is a Log, Not a File</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">storage</span></div>
+                <ul>
+                    <li><b>The mistake</b> — storing the doc as one string and overwriting it on save: concurrent edits get lost</li>
+                    <li><b>Timestamps don't help</b> — two edits 7ms apart are still concurrent; clock order still drops intent</li>
+                    <li><b>The log</b> — store the ordered history of operations; the document is the result of replaying it</li>
+                    <li><b>Snapshots</b> — replaying 84,132 ops is slow, so save a full snapshot every 1,000 ops, replay the tail</li>
+                    <li><b>Cursors too</b> — presence (each user's colored cursor) is just a position, transformed like any op</li>
+                </ul>
+                <p class="example">Opening a doc with 84,132 ops in its history loads the snapshot taken at op 84,000 and replays only the last 132 operations — milliseconds, not minutes.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the document as a value to overwrite. The unit of truth is the operation; last-write-wins on whole documents — with or without timestamps — silently discards keystrokes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    var hl = 9;
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x2 - hl * Math.cos(ang), y2 - hl * Math.sin(ang)); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two users' edits funneling into a single-string doc, last-write-wins drops one
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Second, Two Keystrokes: Last-Write-Wins Keeps Only One', w / 2, 24);
+
+    // user boxes
+    function userBox(x, y, label) {
+        roundRect(ctx, x, y, 190, 44, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + 95, y + 27);
+    }
+    userBox(60, 70, 'User A: insert a word — .012');
+    userBox(60, 180, 'User B: fix a typo — .019');
+
+    // server box
+    roundRect(ctx, 330, 125, 170, 44, 8);
+    ctx.fillStyle = '#f8f9fa'; ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('doc stored as ONE string', 415, 152);
+
+    // arrows into server
+    arrow(ctx, 250, 92, 330, 138, P.blue, 3);
+    arrow(ctx, 250, 202, 330, 156, P.aqua, 3);
+
+    // red diagonal strike across A's arrow near x=290
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(280, 130); ctx.lineTo(302, 100); ctx.stroke();
+
+    // result box
+    roundRect(ctx, 540, 125, 170, 44, 8);
+    ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("final doc = B's copy only", 625, 152);
+    arrow(ctx, 500, 147, 540, 147, P.mute, 3);
+
+    // loss marker
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("✗ A's word lost", 555, 105);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('last-write-wins keeps the later save, not both edits', w / 2, 255);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timestamps illustrative', w - 14, h - 10);
+});
+
+// c2: "cat" branches into A and B edits, wrong path diverges, transformed path converges
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("insert 'o'@1 + delete@2: One Shifted Index Decides Convergence", w / 2, 24);
+
+    function wordBox(x, y, word, fill, border) {
+        roundRect(ctx, x, y, 90, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(word, x + 45, y + 26);
+    }
+
+    // boxes
+    wordBox(50, 130, 'cat', 'rgba(42,120,214,0.15)', P.blue);
+    wordBox(220, 55, 'coat', 'rgba(42,120,214,0.15)', P.blue);
+    wordBox(220, 205, 'ca', 'rgba(25,158,112,0.15)', P.aqua);
+    wordBox(450, 40, 'cot', 'rgba(231,76,60,0.12)', '#e74c3c');
+    wordBox(450, 115, 'coa', 'rgba(0,131,0,0.12)', P.green);
+    wordBox(450, 205, 'coa', 'rgba(0,131,0,0.12)', P.green);
+
+    // branch A
+    arrow(ctx, 140, 140, 220, 82, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("A: insert 'o' @1", 172, 96);
+    // branch B
+    arrow(ctx, 140, 160, 220, 218, P.aqua, 3);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('B: delete @2', 168, 206);
+
+    // wrong path: coat -> cot
+    arrow(ctx, 310, 68, 450, 55, '#e74c3c', 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('raw delete @2', 380, 48);
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("✗ deleted 'a'", 548, 65);
+
+    // right path: coat -> coa
+    arrow(ctx, 310, 85, 450, 128, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('transformed: delete @3', 378, 118);
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓', 548, 140);
+
+    // B's replica path: ca -> coa
+    arrow(ctx, 310, 225, 450, 225, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("A's insert 'o' @1 (unchanged)", 380, 250);
+
+    // dashed bracket joining the two "coa" boxes
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(545, 135); ctx.lineTo(558, 135); ctx.lineTo(558, 225); ctx.lineTo(545, 225);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same text', 566, 176);
+    ctx.fillText('everywhere', 566, 191);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the whole trick: 2 → 3', 560, 270);
+});
+
+// c3: CRDT — every letter gets a permanent ID; delete s3 can't miss
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Every Letter Gets a Permanent ID — 'delete s3' Can't Miss", w / 2, 24);
+
+    function cell(x, y, letter, id, fill, border, dashed, strike) {
+        if (dashed) ctx.setLineDash([5, 4]);
+        roundRect(ctx, x, y, 80, 48, 6);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.text; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(letter, x + 40, y + 22);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(id, x + 40, y + 40);
+        if (strike) {
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x + 26, y + 18); ctx.lineTo(x + 54, y + 18); ctx.stroke();
+        }
+    }
+
+    // row 1: start
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('start', 20, 102);
+    cell(170, 75, 'c', 'id s1', 'rgba(42,120,214,0.15)', P.blue, false, false);
+    cell(270, 75, 'a', 'id s2', 'rgba(42,120,214,0.15)', P.blue, false, false);
+    cell(370, 75, 't', 'id s3', 'rgba(42,120,214,0.15)', P.blue, false, false);
+
+    // row 2: after merge
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('after merge', 20, 217);
+    cell(140, 190, 'c', 'id s1', 'rgba(42,120,214,0.15)', P.blue, false, false);
+    cell(240, 190, 'o', 'id a4', 'rgba(0,131,0,0.12)', P.green, false, false);
+    cell(340, 190, 'a', 'id s2', 'rgba(42,120,214,0.15)', P.blue, false, false);
+    cell(440, 190, 't', 'id s3', '#f8f9fa', '#e74c3c', true, true);
+
+    // op labels
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("A: insert (a4,'o') between s1 and s2", 140, 150);
+    arrow(ctx, 262, 156, 276, 188, P.green, 2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('B: delete id s3', 440, 150);
+    arrow(ctx, 478, 156, 480, 188, '#e74c3c', 2);
+
+    // read-out
+    ctx.fillStyle = P.ink; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reads: "coa"', 560, 214);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('IDs never move, so both edits hit the right letters on every replica', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('IDs illustrative; real CRDTs use (site, counter) pairs', w - 14, h - 10);
+});
+
+// c4: op log with snapshots; opening replays one snapshot plus a short tail
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('84,132 Ops in the Log, a Snapshot Every 1,000', w / 2, 24);
+
+    // log strip
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(60, 95, 600, 32);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(60, 95, 600, 32);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('op 0', 60, 145);
+    ctx.fillText('op 84,132', 660, 145);
+
+    // snapshot markers
+    var snaps = [60, 180, 300, 420, 540, 645];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    for (var i = 0; i < snaps.length; i++) {
+        ctx.beginPath(); ctx.moveTo(snaps[i], 95); ctx.lineTo(snaps[i], 127); ctx.stroke();
+    }
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('snapshots every 1,000 ops (spacing schematic)', 60, 70);
+
+    // zoom guides
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(645, 127); ctx.lineTo(130, 190); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(660, 127); ctx.lineTo(680, 190); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // zoom group
+    function zoomBox(x, wid, label, fill, border) {
+        roundRect(ctx, x, 190, wid, 44, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + wid / 2, 217);
+    }
+    zoomBox(130, 200, 'load snapshot @ op 84,000', 'rgba(0,131,0,0.12)', P.green);
+    arrow(ctx, 330, 212, 380, 212, P.orange, 3);
+    zoomBox(380, 140, 'replay 132 ops', 'rgba(230,126,34,0.15)', P.orange);
+    arrow(ctx, 520, 212, 570, 212, P.mute, 3);
+    zoomBox(570, 110, 'current doc', 'rgba(42,120,214,0.15)', P.blue);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('open = 1 snapshot + 132 ops replayed, never all 84,132', w / 2, 265);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('op counts illustrative; strip widths schematic', w - 14, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

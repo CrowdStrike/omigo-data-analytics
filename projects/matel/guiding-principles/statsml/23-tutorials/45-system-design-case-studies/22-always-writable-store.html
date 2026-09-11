@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Always-Writable Store</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Always-Writable Store</h1>
+<p class="subtitle">A landmark always-available key-value design: the shopping cart must always accept writes, so choose availability over consistency — a ring of replicas, sloppy quorums, vector clocks, and a cart that merges by union</p>
+
+<div class="card-section">
+    <h2>The Cart That Must Never Say No</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">availability first</span><span class="tag orange">availability trade</span></div>
+                <ul>
+                    <li><b>The rule</b> — the design starts from a business rule: add-to-cart must always work</li>
+                    <li><b>The cost of no</b> — a refused add-to-cart is lost revenue; a slightly stale cart is only a nuisance</li>
+                    <li><b>The choice</b> — when too few replicas are reachable, refuse the write or accept it; this design accepts</li>
+                    <li><b>The price</b> — accepting writes on both sides of a failure means the cart can split into versions</li>
+                    <li><b>The name</b> — the term of art is an "always writable" store: eventual consistency, chosen on purpose</li>
+                </ul>
+                <p class="example">During a 3-minute outage cutting off 2 of 3 replicas at ~50 add-to-cart writes per second, a strict store refuses &asymp;9,000 adds; an always-writable store accepts every one and reconciles later (rates illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> This is a business rule turned into architecture — the cart must always take the write, so consistency is relaxed and repaired afterward instead of enforced up front.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Ring of Nodes and a Sloppy Quorum</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">consistent hashing</span><span class="tag orange">N, R, W</span></div>
+                <ul>
+                    <li><b>The ring</b> — every key is hashed onto a circle; each node owns the arc that ends at its position</li>
+                    <li><b>The walk</b> — <code>cart:alice</code> hashes to 72&deg;; the next N=3 nodes clockwise — B, C, D — hold the replicas</li>
+                    <li><b>The knobs</b> — N=3 copies, W=2 acks to accept a write, R=2 replies to read (the commonly cited config)</li>
+                    <li><b>The slop</b> — D is down, so the write skips to the next healthy node E, tagged with a hint "this is D's"</li>
+                    <li><b>The handoff</b> — E hands the hinted copy back when D recovers; Merkle-tree anti-entropy repairs the rest</li>
+                </ul>
+                <p class="example">With W=2, acks from B and C are enough — the cart write succeeds even while replica D is dead, and E babysits D's copy until it returns.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A sloppy quorum means "the first N healthy nodes on the ring", not a fixed set — a write never waits on a dead node, and hinted handoff walks the stray copy home.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Carts, One Customer: The Union Merge</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">vector clocks</span><span class="tag green">merge by union</span><span class="tag orange">accepted cost</span></div>
+                <ul>
+                    <li><b>The split</b> — Alice's cart is {book} with clock [Sx,1]; her laptop and phone write during a partition</li>
+                    <li><b>Branch one</b> — the laptop adds a lamp through node Sx: {book, lamp}, clock [Sx,2]</li>
+                    <li><b>Branch two</b> — the phone deletes the book and adds a charger through Sy: {charger}, clock [Sx,1][Sy,1]</li>
+                    <li><b>The detection</b> — neither clock descends from the other, so the store keeps both versions as siblings</li>
+                    <li><b>The merge</b> — the next read returns both; the cart application merges by union: {book, lamp, charger}</li>
+                    <li><b>The cost</b> — the deleted book reappears; the design accepts this so that an add is never, ever lost</li>
+                </ul>
+                <p class="example">Alice deleted the book on her phone, yet after the union merge it sits in her cart next to the lamp and the charger — the documented price of never refusing a write.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Vector clocks let the store detect a conflict, but it never resolves one — resolution is pushed to the application, and the cart's rule is union, which can resurrect a deleted item.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Cart Had a Merge Rule — Your Data May Not</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">when it applies</span></div>
+                <ul>
+                    <li><b>The hidden premise</b> — the design works because two carts can be combined without asking a human</li>
+                    <li><b>Safe by union</b> — a set of cart items merges cleanly; the worst outcome is one unwanted extra row</li>
+                    <li><b>Safe by clock</b> — display preferences can take the later write; the loss is one overwritten edit</li>
+                    <li><b>Safe by counting</b> — likes merge only if you store increments, never a read-then-write total</li>
+                    <li><b>No rule exists</b> — a balance of $100 and a balance of $80 have no correct combination</li>
+                    <li><b>The knob trap</b> — running R=1, W=1 for speed makes stale reads routine, not a rare corner case</li>
+                </ul>
+                <p class="example">A team copies the always-writable design for account balances, gets two sibling versions after a partition, and finds that $100 and $80 merge to neither $180 nor $80 nor $100.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the trade as a free lunch. It buys availability by exporting conflict resolution to the application — copy it only where a merge rule as forgiving as the cart's union actually exists.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: strict quorum vs always-writable during a replica outage
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('2 of 3 Replicas Cut Off at Minute 3: Strict Quorum Refuses, Always-Writable Accepts', w / 2, 24);
+
+    var ox = 60, baseY = 245, ow = 600, chH = 180, maxV = 60;
+    function xOf(m) { return ox + m / 10 * ow; }
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    // gridlines
+    var grids = [15, 30, 45];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + ow, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 6, yOf(grids[i]) + 4);
+    }
+
+    // failure band, minutes 3-6
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(xOf(3), baseY - chH, xOf(6) - xOf(3), chH);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(3), baseY - chH); ctx.lineTo(xOf(3), baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(6), baseY - chH); ctx.lineTo(xOf(6), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2 of 3 replicas cut off', (xOf(3) + xOf(6)) / 2, baseY - chH + 14);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + ow, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 10; m += 2) { ctx.fillText(String(m), xOf(m), baseY + 16); }
+
+    // strict quorum line
+    var sm = [0, 2, 3, 3.1, 6, 6.1, 8, 10];
+    var sv = [50, 52, 51, 0, 0, 49, 51, 50];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < sm.length; i++) {
+        var x = xOf(sm[i]), y = yOf(sv[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('strict quorum', xOf(3.4), yOf(4) - 8);
+
+    // always-writable line
+    var dm = [0, 2, 4, 6, 8, 10];
+    var dv = [50, 52, 49, 51, 50, 50];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < dm.length; i++) {
+        var x = xOf(dm[i]), y = yOf(dv[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('always-writable', xOf(0.2), yOf(52) - 8);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 min × ~50 writes/s ≈ 9,000 carts saved', xOf(7), 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative; the trade-off is the documented design', w - 16, h - 8);
+});
+
+// c2: consistent-hashing ring with sloppy quorum
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Key at 72° → Replicas B, C, D — D Is Down, the Hint Goes to E', w / 2, 24);
+
+    // ring
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(250, 165, 100, 0, 2 * Math.PI); ctx.stroke();
+
+    var nodes = [
+        { n: 'A', x: 250, y: 65 },
+        { n: 'B', x: 337, y: 115 },
+        { n: 'C', x: 337, y: 215 },
+        { n: 'D', x: 250, y: 265 },
+        { n: 'E', x: 163, y: 215 },
+        { n: 'F', x: 163, y: 115 }
+    ];
+
+    // hint arrow D -> E (under nodes)
+    drawArrow(ctx, 250, 265, 163 + 16, 215 + 10, P.orange, 2, [5, 4]);
+
+    for (var i = 0; i < nodes.length; i++) {
+        var nd = nodes[i];
+        ctx.beginPath(); ctx.arc(nd.x, nd.y, 14, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(42,120,214,0.18)'; ctx.fill();
+        var border = P.blue, bw = 2;
+        if (nd.n === 'B' || nd.n === 'C') { border = P.green; bw = 3; }
+        if (nd.n === 'D') { border = '#e74c3c'; bw = 3; }
+        ctx.strokeStyle = border; ctx.lineWidth = bw; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(nd.n, nd.x, nd.y + 5);
+    }
+
+    // ack / down labels
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ ack', 337 + 20, 115 + 4);
+    ctx.fillText('✓ ack', 337 + 20, 215 + 4);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('down ✗', 250, 265 + 28);
+
+    // key marker
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath(); ctx.arc(301, 78, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hash(cart:alice)', 301 + 10, 78 - 8);
+
+    // hint label below the ring
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hinted handoff: E holds D\'s copy', 215, 292);
+
+    // right panel
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('N = 3 replicas', 480, 110);
+    ctx.fillText('W = 2 acks to write', 480, 136);
+    ctx.fillText('R = 2 replies to read', 480, 162);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('B ✓ + C ✓ = W met → write accepted', 480, 200);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('6-node ring illustrative; (N,R,W) = (3,2,2) as commonly configured', w - 16, h - 8);
+});
+
+// c3: vector clocks detect the split, the cart merges by union
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Vector Clocks Detect the Split; the Cart Merges by Union', w / 2, 24);
+
+    var bh = 44;
+    function box(x, y, bwidth, fill, stroke, lines) {
+        rrPath(ctx, x, y, bwidth, bh, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x + bwidth / 2, y + bh / 2 + (i - (lines.length - 1) / 2) * 15 + 4);
+        }
+    }
+
+    // arrows first
+    drawArrow(ctx, 155, 145, 215, 90, P.mute, 2);   // start -> top branch
+    drawArrow(ctx, 155, 160, 215, 215, P.mute, 2);  // start -> bottom branch
+    drawArrow(ctx, 405, 82, 435, 140, P.mute, 2);   // top branch -> sibling
+    drawArrow(ctx, 405, 222, 435, 165, P.mute, 2);  // bottom branch -> sibling
+    drawArrow(ctx, 575, 152, 588, 152, P.mute, 2);  // sibling -> merge
+
+    // partition divider
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(195, 55); ctx.lineTo(195, 250); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('partition', 195, 50);
+
+    // boxes
+    box(25, 130, 130, 'rgba(42,120,214,0.15)', P.blue, ['cart {book}', '[Sx,1]']);
+    box(215, 60, 190, 'rgba(42,120,214,0.15)', P.blue, ['laptop adds lamp', '{book, lamp}  [Sx,2]']);
+    box(215, 200, 190, 'rgba(42,120,214,0.15)', P.blue, ['phone deletes book, adds charger', '{charger}  [Sx,1][Sy,1]']);
+    box(435, 130, 140, 'rgba(217,89,38,0.12)', P.orange, ['read returns BOTH', 'conflict → siblings']);
+    box(592, 130, 124, 'rgba(0,131,0,0.12)', P.green, ['union merge', '{book,lamp,charger}']);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the deleted book is back — the design\'s accepted cost', w / 2, 278);
+});
+
+// c4: which data types have a safe merge rule
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Availability Is Only Free When a Merge Rule Exists', w / 2, 24);
+
+    // column headers
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('the data', 40, 52);
+    ctx.fillText('merge rule after a split', 250, 52);
+    ctx.fillText('verdict', 520, 52);
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(30, 62); ctx.lineTo(690, 62); ctx.stroke();
+
+    var rows = [
+        { cy: 96,  data: 'cart: {book, lamp}',      rule: 'union of both sets',
+          verdict: '\u2713 safe \u2014 worst case one extra item',
+          fill: 'rgba(0,131,0,0.10)',    stroke: P.green,  vc: P.green },
+        { cy: 148, data: 'profile: theme = dark',   rule: 'later timestamp wins',
+          verdict: '\u2713 safe \u2014 worst case one lost edit',
+          fill: 'rgba(0,131,0,0.10)',    stroke: P.green,  vc: P.green },
+        { cy: 200, data: 'like count: 42',          rule: 'sum the increments, not the totals',
+          verdict: '~ safe only if you store deltas',
+          fill: 'rgba(217,89,38,0.10)',  stroke: P.orange, vc: P.orange },
+        { cy: 252, data: 'balance: $100 vs $80',    rule: 'no rule \u2014 $180? $80? $100?',
+          verdict: '\u2717 unsafe \u2014 needs a strict quorum',
+          fill: 'rgba(231,76,60,0.10)',  stroke: '#e74c3c', vc: '#e74c3c' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        rrPath(ctx, 30, r.cy - 22, 660, 44, 8);
+        ctx.fillStyle = r.fill; ctx.fill();
+        ctx.strokeStyle = r.stroke; ctx.lineWidth = 2; ctx.stroke();
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.text; ctx.font = '13px system-ui';
+        ctx.fillText(r.data, 40, r.cy + 5);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(r.rule, 250, r.cy + 5);
+        ctx.fillStyle = r.vc; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(r.verdict, 520, r.cy + 5);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the ring and the quorums are reusable \u2014 the union merge is not', w / 2, 288);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
