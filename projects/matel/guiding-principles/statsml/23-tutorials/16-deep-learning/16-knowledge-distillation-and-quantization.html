@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Distillation &amp; Quantization</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Knowledge Distillation &amp; Quantization</h1>
+<p class="subtitle">Two tricks that shrink a huge model into one that fits on a phone — a small student model learns from the big model's soft answers, then its stored numbers are rounded onto a coarser grid</p>
+
+<div class="card-section">
+    <h2>The Pet-Photo App and Its Giant Brain</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">teacher &amp; student</span><span class="tag orange">soft answers</span></div>
+                <ul>
+                    <li><b>The app</b> — a photo app sorts your camera roll into dog, wolf, and cat, using a 500 MB model in the cloud</li>
+                    <li><b>The wish</b> — the app should work offline on a phone, so the 500 MB brain must shrink to a few MB</li>
+                    <li><b>The teacher</b> — for a blurry husky photo the big model answers softly: 90% dog, 8% wolf, 2% cat</li>
+                    <li><b>The label</b> — the training file only says "dog"; it never mentions that huskies half-resemble wolves</li>
+                    <li><b>Distillation</b> — train the small student to copy the teacher's soft answers, not just the bare labels</li>
+                    <li><b>Extra lessons</b> — "8% wolf" quietly teaches the student which animals look alike and by how much</li>
+                </ul>
+                <p class="example">On the same husky photo, the label says "dog, and nothing else", while the teacher says "90% dog, 8% wolf, 2% cat" — the second answer contains a free lesson about lookalikes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Distillation trains a small model to imitate a big model's soft answers, which carry more information per photo than the plain label ever did.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Rounding the Weights: 0.42 Becomes 53</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">quantization</span><span class="tag orange">8-bit grid</span></div>
+                <ul>
+                    <li><b>The weights</b> — inside the student every learned number is a 32-bit decimal, like 0.42 or -0.87</li>
+                    <li><b>The grid</b> — 8-bit quantization keeps only 255 allowed steps between -1 and 1: store round(w &times; 127)</li>
+                    <li><b>By hand</b> — 0.42 &times; 127 = 53.34, rounds to the integer 53; reading it back gives 53 / 127 = 0.417</li>
+                    <li><b>Tiny error</b> — the round trip moved 0.42 to 0.417, an error of 0.003; most weights lose about that much</li>
+                    <li><b>The payoff</b> — each weight drops from 32 bits to 8, so the whole file instantly becomes 4&times; smaller</li>
+                    <li><b>Cheap math</b> — phones add and multiply small integers faster than decimals, so answers speed up too</li>
+                </ul>
+                <p class="example">The five weights 0.42, -0.87, 0.05, 0.91, -0.33 become the integers 53, -110, 6, 116, -42, and read back as 0.417, -0.866, 0.047, 0.913, -0.331 — every error is 0.004 or less.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Quantization stores each weight as round(w &times; 127), an integer between -127 and 127 — a 4&times; smaller file for round-off errors of only a few thousandths.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From 500 MB in the Cloud to 5 MB in a Pocket</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">size vs accuracy</span></div>
+                <ul>
+                    <li><b>The teacher</b> — the cloud model: 500 MB, 92% accurate, and a round trip to the server takes about 2 s</li>
+                    <li><b>After distillation</b> — the student copies the soft answers: 20 MB and 90% accurate, runs on the phone</li>
+                    <li><b>After quantization</b> — rounding the student's weights to 8 bits: 5 MB, 89.5% accurate, answers in 30 ms</li>
+                    <li><b>The trade</b> — 100&times; smaller and dramatically faster, for a total accuracy cost of 2.5 points</li>
+                    <li><b>The pattern</b> — assistants, keyboards, and camera apps ship distilled-then-quantized copies of big models</li>
+                    <li><b>Order matters</b> — distill first, then quantize; rounding a well-taught student loses almost nothing</li>
+                </ul>
+                <p class="example">The pipeline reads 500 MB at 92% &rarr; 20 MB at 90% &rarr; 5 MB at 89.5% — the last step costs half a point of accuracy and buys a 4&times; smaller download.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Distillation then quantization turned a 500 MB, 2-second cloud model into a 5 MB, 30 ms on-phone model while keeping 89.5 of the original 92 accuracy points.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Not Just Train a Small Model From Scratch?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">soft vs hard labels</span></div>
+                <ul>
+                    <li><b>The question</b> — if a 20 MB model can hit 90%, why bother with the teacher at all?</li>
+                    <li><b>From scratch</b> — the same 20 MB architecture trained on the bare labels alone tops out near 85%</li>
+                    <li><b>Distilled</b> — the identical architecture trained on the teacher's soft answers reaches 90%</li>
+                    <li><b>The difference</b> — 5 points came purely from richer answers like "90% dog, 8% wolf" on every photo</li>
+                    <li><b>Not pruning</b> — quantization rounds every weight to fewer bits; pruning deletes weights — different trick</li>
+                </ul>
+                <p class="example">Two 20 MB students saw the same photos: the one taught by bare labels reached 85%, the one taught by the teacher's soft answers reached 90% — the model size never changed.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming a small model trained from scratch matches a distilled one. The size is the same but the lessons are not — soft answers carry the teacher's lookalike knowledge, worth 5 points here.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: bare label vs teacher's soft answer for the same husky photo
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Blurry Husky Photo: Bare Label vs Teacher's Soft Answer", w / 2, 24);
+
+    var baseY = 245, ph = 180;
+    var cats = ['dog', 'wolf', 'cat'];
+    var barW = 56, gap = 28;
+    var gl = [0.25, 0.5, 0.75];
+    var g, i;
+
+    function drawPanel(ox, pw) {
+        for (g = 0; g < gl.length; g++) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, baseY - gl[g] * ph); ctx.lineTo(ox + pw, baseY - gl[g] * ph); ctx.stroke();
+        }
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('0', ox - 6, baseY + 4);
+        ctx.fillText('0.5', ox - 6, baseY - 0.5 * ph + 4);
+        ctx.fillText('1.0', ox - 6, baseY - ph + 4);
+    }
+
+    // left panel: bare label
+    drawPanel(70, 270);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('bare label', 70 + 135, 70);
+    var leftVals = [1.00, 0.00, 0.00];
+    var leftLabs = ['1.00', '0', '0'];
+    var startX = 70 + (270 - 3 * barW - 2 * gap) / 2;
+    for (i = 0; i < 3; i++) {
+        var x = startX + i * (barW + gap);
+        var bh = leftVals[i] * ph;
+        if (bh > 0) {
+            ctx.fillStyle = P.mute;
+            ctx.fillRect(x, baseY - bh, barW, bh);
+        } else {
+            ctx.fillStyle = P.mute;
+            ctx.fillRect(x, baseY - 2, barW, 2);
+        }
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(leftLabs[i], x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(cats[i], x + barW / 2, baseY + 18);
+    }
+
+    // right panel: teacher's soft answer
+    drawPanel(400, 270);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("teacher's soft answer", 400 + 135, 70);
+    var rightVals = [0.90, 0.08, 0.02];
+    var rightLabs = ['0.90', '0.08', '0.02'];
+    var rightFills = [P.blue, P.orange, P.aqua];
+    var startX2 = 400 + (270 - 3 * barW - 2 * gap) / 2;
+    for (i = 0; i < 3; i++) {
+        var x2 = startX2 + i * (barW + gap);
+        var bh2 = rightVals[i] * ph;
+        ctx.fillStyle = rightFills[i];
+        ctx.fillRect(x2, baseY - bh2, barW, bh2);
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(rightLabs[i], x2 + barW / 2, baseY - bh2 - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(cats[i], x2 + barW / 2, baseY + 18);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the 8% wolf is a lesson', 470, 150);
+    ctx.fillText('the label never gives', 470, 166);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one training photo seen two ways', w - 12, 292);
+});
+
+// c2: five weights snap onto the 8-bit grid
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Five Weights Snap onto the 8-Bit Grid (× 127, round, ÷ 127)', w / 2, 24);
+
+    var ax = 60, aw = 600, axisY = 250;
+    function xOf(v) { return ax + (v + 1) / 2 * aw; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+    var ticks = [-1, -0.5, 0, 0.5, 1];
+    var tickLabs = ['-1.0', '-0.5', '0', '0.5', '1.0'];
+    var i;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (i = 0; i < ticks.length; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(ticks[i]), axisY - 5); ctx.lineTo(xOf(ticks[i]), axisY + 5); ctx.stroke();
+        ctx.fillText(tickLabs[i], xOf(ticks[i]), axisY + 20);
+    }
+
+    // grid hint ticks
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (i = 0; i < 12; i++) {
+        var gx = ax + 25 + i * 50;
+        ctx.beginPath(); ctx.moveTo(gx, 200); ctx.lineTo(gx, 210); ctx.stroke();
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('255 allowed steps (shown coarsely)', ax, 272);
+
+    var floats = [0.42, -0.87, 0.05, 0.91, -0.33];
+    var floatLabs = ['0.42', '-0.87', '0.05', '0.91', '-0.33'];
+    var readBack = [0.417, -0.866, 0.047, 0.913, -0.331];
+    var intLabs = ['53', '-110', '6', '116', '-42'];
+
+    var upperY = 115, lowerY = 205;
+
+    // track labels
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('32-bit float', ax, 95);
+    ctx.fillText('8-bit integer', ax, 185);
+
+    for (i = 0; i < 5; i++) {
+        var ux = xOf(floats[i]), lx = xOf(readBack[i]);
+        // arrow upper -> lower
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(ux, upperY + 8); ctx.lineTo(lx, lowerY - 12); ctx.stroke();
+        var ang = Math.atan2(lowerY - 12 - (upperY + 8), lx - ux);
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(lx, lowerY - 9);
+        ctx.lineTo(lx - 8 * Math.cos(ang - 0.45), lowerY - 9 - 8 * Math.sin(ang - 0.45));
+        ctx.lineTo(lx - 8 * Math.cos(ang + 0.45), lowerY - 9 - 8 * Math.sin(ang + 0.45));
+        ctx.closePath(); ctx.fill();
+        // upper dot + label
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(ux, upperY, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(floatLabs[i], ux, upperY - 13);
+        // lower dot + integer label
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(lx, lowerY, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillText(intLabs[i], lx, lowerY + 22);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('worst round-trip error here: 0.004', 470, 160);
+    ctx.fillText('file shrinks 4×', 470, 176);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — five weights from one layer', w - 12, 292);
+});
+
+// c3: shrink pipeline, size (log) and accuracy panels
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Shrink Pipeline: 500 MB → 20 MB → 5 MB, Accuracy 92% → 90% → 89.5%', w / 2, 24);
+
+    var baseY = 245, ph = 175;
+    var stageLabs = ['teacher', 'distilled', '+ 8-bit'];
+    var fills = [P.blue, P.aqua, P.green];
+    var barW = 60, gap = 26;
+    var i, g;
+
+    // left panel: file size, log scale (log10 MB from 0 to 3)
+    (function() {
+        var ox = 70, pw = 280;
+        function yOf(mb) { return baseY - (Math.log(mb) / Math.LN10) / 3 * ph; }
+        var glabs = [[1, '1 MB'], [10, '10 MB'], [100, '100 MB'], [1000, '1000 MB']];
+        for (g = 0; g < glabs.length; g++) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, yOf(glabs[g][0])); ctx.lineTo(ox + pw, yOf(glabs[g][0])); ctx.stroke();
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(glabs[g][1], ox - 6, yOf(glabs[g][0]) + 4);
+        }
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('file size (log scale)', ox + pw / 2, 68);
+        var sizes = [500, 20, 5];
+        var sizeLabs = ['500 MB', '20 MB', '5 MB'];
+        var startX = ox + (pw - 3 * barW - 2 * gap) / 2;
+        for (i = 0; i < 3; i++) {
+            var x = startX + i * (barW + gap);
+            var top = yOf(sizes[i]);
+            ctx.fillStyle = fills[i];
+            ctx.fillRect(x, top, barW, baseY - top);
+            ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(sizeLabs[i], x + barW / 2, top - 8);
+            ctx.font = '12px system-ui';
+            ctx.fillText(stageLabs[i], x + barW / 2, baseY + 18);
+        }
+    })();
+
+    // right panel: accuracy 85-95%
+    (function() {
+        var ox = 410, pw = 280;
+        function yOf(a) { return baseY - (a - 85) / 10 * ph; }
+        var glabs = [85, 90, 95];
+        for (g = 0; g < glabs.length; g++) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, yOf(glabs[g])); ctx.lineTo(ox + pw, yOf(glabs[g])); ctx.stroke();
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(glabs[g] + '%', ox - 6, yOf(glabs[g]) + 4);
+        }
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('accuracy', ox + pw / 2, 68);
+        var accs = [92, 90, 89.5];
+        var accLabs = ['92%', '90%', '89.5%'];
+        var startX = ox + (pw - 3 * barW - 2 * gap) / 2;
+        for (i = 0; i < 3; i++) {
+            var x = startX + i * (barW + gap);
+            var top = yOf(accs[i]);
+            ctx.fillStyle = fills[i];
+            ctx.fillRect(x, top, barW, baseY - top);
+            ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(accLabs[i], x + barW / 2, top - 8);
+            ctx.font = '12px system-ui';
+            ctx.fillText(stageLabs[i], x + barW / 2, baseY + 18);
+        }
+    })();
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('100× smaller,', 470, 105);
+    ctx.fillText('2.5 points cheaper', 470, 121);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("illustrative — one pet-photo model's shrink pipeline; accuracy axis zoomed", w - 12, 292);
+});
+
+// c4: single accuracy axis with three markers and the distillation jump
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 20 MB Model, Two Teachers: Bare Labels 85% vs Soft Answers 90%', w / 2, 24);
+
+    var ax = 80, aw = 580, axisY = 210;
+    function xOf(a) { return ax + (a - 82) / 12 * aw; }
+
+    // axis + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+    var t;
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (t = 82; t <= 94; t += 2) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(t), axisY - 5); ctx.lineTo(xOf(t), axisY + 5); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(t + '%', xOf(t), axisY + 20);
+    }
+
+    // scratch marker at 85%
+    var sx = xOf(85);
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(sx, axisY, 8, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('from scratch — 85%', sx, 240);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('20 MB, bare labels', sx, 255);
+
+    // distilled marker at 90%
+    var dx = xOf(90);
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(dx, axisY, 8, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('distilled — 90%', dx, 170);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('20 MB, soft answers', dx, 185);
+
+    // teacher marker at 92%
+    var tx = xOf(92);
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(tx, axisY, 8, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('teacher — 92%', tx, 240);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('500 MB', tx, 255);
+
+    // arced jump arrow from scratch to distilled, peaking at y=115
+    ctx.strokeStyle = P.green; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(sx, axisY - 12);
+    ctx.quadraticCurveTo((sx + dx) / 2, 115, dx, axisY - 14);
+    ctx.stroke();
+    // arrowhead at the distilled end (pointing down-right along the arc)
+    var ang = Math.atan2(axisY - 14 - 115, dx - (sx + dx) / 2);
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(dx, axisY - 14);
+    ctx.lineTo(dx - 12 * Math.cos(ang - 0.45), axisY - 14 - 12 * Math.sin(ang - 0.45));
+    ctx.lineTo(dx - 12 * Math.cos(ang + 0.45), axisY - 14 - 12 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+5 points from soft answers alone — same size, better lessons', 346, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — identical architecture, different training targets', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

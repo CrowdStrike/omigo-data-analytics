@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elo Ratings</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Elo Ratings</h1>
+<p class="subtitle">An Elo rating is a running guess of skill &mdash; each match compares the result to what was expected, and the size of the surprise decides how far the number moves</p>
+
+<div class="card-section">
+    <h2>The Office Ping-Pong Ladder</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">update by surprise</span><span class="tag orange">zero-sum</span></div>
+                <ul>
+                    <li><b>The ladder</b> &mdash; an office ping-pong club gives every new player 1,200 points to start</li>
+                    <li><b>Win = take points</b> &mdash; the winner takes rating points from the loser, so the total never changes</li>
+                    <li><b>Surprise sets the size</b> &mdash; beating a stronger player moves ratings a lot; an easy win barely does</li>
+                    <li><b>Maya vs Sam</b> &mdash; Maya (1,400) beating Sam (1,200) is worth &plusmn;8; Sam beating Maya is worth &plusmn;24</li>
+                    <li><b>Moving estimate</b> &mdash; a rating is not a grade; it is a running guess that every match nudges</li>
+                </ul>
+                <p class="example">After the upset, Sam jumps 1,200 &rarr; 1,224 and Maya drops 1,400 &rarr; 1,376 &mdash; one game, 24 points each way.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Elo updates skill by surprise: the more unexpected the result, the bigger the rating move. Expected results barely change anything.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Doing One Update by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">expected score</span><span class="tag orange">K-factor</span></div>
+                <ul>
+                    <li><b>Expected score</b> &mdash; before the match, compute E = 1 / (1 + 10^((opponent &minus; you) / 400))</li>
+                    <li><b>Sam's number</b> &mdash; Sam is 200 below Maya, so E = 1 / (1 + 10^0.5) = 0.24; Maya's is 0.76</li>
+                    <li><b>The update</b> &mdash; new rating = old + K &times; (actual &minus; expected); actual is 1 for a win, 0 for a loss</li>
+                    <li><b>K = 32</b> &mdash; the step size; the upset win pays Sam 32 &times; (1 &minus; 0.24) = 24.3 &asymp; +24 points</li>
+                    <li><b>The favorite</b> &mdash; if Maya wins instead she gets 32 &times; (1 &minus; 0.76) = 7.7 &asymp; +8, and Sam drops 8</li>
+                    <li><b>Odds &times;10</b> &mdash; every 400 points of gap multiplies the win odds by 10, by construction</li>
+                </ul>
+                <p class="example">Every rating on the club wall is two lines of arithmetic: E from the rating gap, then K &times; (result &minus; E).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The whole algorithm is one curve and one correction: an expected score from the rating gap, then a move proportional to the surprise (result &minus; expected).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Season on the Ladder</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">moving estimate</span><span class="tag orange">online learning</span></div>
+                <ul>
+                    <li><b>Sam's season</b> &mdash; Sam starts at 1,200 but plays like a ~1,340 player, so wins keep beating E</li>
+                    <li><b>Early jumps</b> &mdash; the first three wins pay +16, +20, +17 because the rating is still far too low</li>
+                    <li><b>Cheap losses</b> &mdash; losing to a 1,400 player in match 4 costs only &minus;10; that loss was half expected</li>
+                    <li><b>Late wobbles</b> &mdash; by match 12 Sam hovers near 1,327; wins and losses now roughly cancel out</li>
+                    <li><b>Always current</b> &mdash; no season-end recompute; if Sam improves again, the same rule keeps chasing</li>
+                </ul>
+                <p class="example">Twelve matches take Sam from 1,200 to 1,327 &mdash; most of the climb happens in the first six games, while the estimate is furthest from the truth.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Elo is an online estimator: the rating converges toward true skill with big early corrections, then settles into small wobbles that track current form.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What the Number Does &mdash; and Doesn't &mdash; Say</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">probability not verdict</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>Odds, not certainty</b> &mdash; a 200-point gap means the favorite wins about 76 matches in 100, not all</li>
+                    <li><b>Upsets are priced in</b> &mdash; even at a 400-point gap the underdog still wins about 9 in 100</li>
+                    <li><b>Relative scale</b> &mdash; 1,400 in the office club and 1,400 in a city league are different skills</li>
+                    <li><b>Streaks mislead</b> &mdash; three lucky wins inflate the number; later results pull it back down</li>
+                    <li><b>K trade-off</b> &mdash; a big K chases form fast but jitters; a small K is smooth but slow to react</li>
+                </ul>
+                <p class="example">A manager saw "1,400 vs 1,200" and called the match already decided &mdash; Sam still had a 24-in-100 chance.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a rating gap as a verdict. Elo outputs a win probability, not a ranking of certainty &mdash; underdogs cash in that probability all the time, exactly as often as the curve says.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: rating moves for both outcomes of Maya vs Sam
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var zeroY = 160, scale = 4; // 4px per rating point
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Maya (1,400) vs Sam (1,200): Rating Moves for Each Outcome', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(370, 40); ctx.lineTo(370, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // zero baselines
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(55, zeroY); ctx.lineTo(345, zeroY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(395, zeroY); ctx.lineTo(685, zeroY); ctx.stroke();
+
+    // headings
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('expected result: Maya wins', 200, 55);
+    ctx.fillText('the upset: Sam wins', 540, 55);
+
+    function bar(cx, pts, fill, labColor, lab, name) {
+        var bh = Math.abs(pts) * scale;
+        ctx.fillStyle = fill;
+        if (pts > 0) {
+            ctx.fillRect(cx - 30, zeroY - bh, 60, bh);
+            ctx.fillStyle = labColor; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(lab, cx, zeroY - bh - 8);
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+            ctx.fillText(name, cx, zeroY - bh - 24);
+        } else {
+            ctx.fillRect(cx - 30, zeroY, 60, bh);
+            ctx.fillStyle = labColor; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(lab, cx, zeroY + bh + 18);
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+            ctx.fillText(name, cx, zeroY + bh + 34);
+        }
+    }
+
+    // left panel: Maya wins
+    bar(140, 8, 'rgba(42,120,214,0.5)', P.blue, '+8', 'Maya');
+    bar(250, -8, 'rgba(213,81,129,0.5)', P.magenta, '−8', 'Sam');
+
+    // right panel: Sam wins
+    bar(480, 24, 'rgba(0,131,0,0.45)', P.green, '+24', 'Sam');
+    bar(590, -24, 'rgba(217,89,38,0.5)', P.orange, '−24', 'Maya');
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the upset moves', 597, 95);
+    ctx.fillText('3× more points', 597, 112);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('K = 32; points won always equal points lost (illustrative match)', w / 2, h - 8);
+});
+
+// c2: expected score S-curve
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Expected Score vs Rating Difference: E = 1 / (1 + 10^(−diff/400))', w / 2, 24);
+
+    var ox = 70, baseY = 250, pw = 560, ph = 190;
+    function xOf(d) { return ox + (d + 400) / 800 * pw; }
+    function yOf(e) { return baseY - e * ph; }
+
+    var diffs = [-400, -300, -200, -100, -50, 0, 50, 100, 200, 300, 400];
+    var Es = [0.09, 0.15, 0.24, 0.36, 0.43, 0.50, 0.57, 0.64, 0.76, 0.85, 0.91];
+
+    // gridlines + y ticks
+    var yTicks = [0, 0.25, 0.5, 0.75, 1];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        if (yTicks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('' + yTicks[i], ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var xTicks = [-400, -200, 0, 200, 400];
+    var xLabs = ['−400', '−200', '0', '+200', '+400'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < xTicks.length; i++) {
+        var x = xOf(xTicks[i]);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.fillText(xLabs[i], x, baseY + 18);
+    }
+
+    // curve
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < diffs.length; i++) {
+        var x = xOf(diffs[i]), y = yOf(Es[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Sam's point (-200, 0.24)
+    var sx = xOf(-200), sy = yOf(0.24);
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ox, sy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath(); ctx.arc(sx, sy, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Sam: 200 below → E = 0.24', sx - 12, sy - 8);
+
+    // Maya's point (+200, 0.76)
+    var mx = xOf(200), my = yOf(0.76);
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx, baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ox, my); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(mx, my, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Maya: 200 above → E = 0.76', mx + 12, my + 4);
+
+    // midline marker (0, 0.50)
+    var cx0 = xOf(0), cy0 = yOf(0.5);
+    ctx.fillStyle = P.ink;
+    ctx.beginPath(); ctx.arc(cx0, cy0, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('even match: 0.50', cx0 + 10, cy0 - 8);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("x = your rating − opponent's; the two expected scores always sum to 1", w / 2, h - 8);
+});
+
+// c3: Sam's rating over a 12-match season
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Sam's Rating Over a 12-Match Season (illustrative)", w / 2, 24);
+
+    var ratings = [1200, 1216, 1236, 1253, 1243, 1262, 1282, 1298, 1287, 1306, 1325, 1309, 1327];
+    var results = ['W', 'W', 'W', 'L', 'W', 'W', 'W', 'L', 'W', 'W', 'L', 'W'];
+
+    var ox = 70, baseY = 250, pw = 560, ph = 190;
+    var rMin = 1180, rMax = 1380;
+    function xOf(i) { return ox + i / 12 * pw; }
+    function yOf(r) { return baseY - (r - rMin) / (rMax - rMin) * ph; }
+
+    // gridlines + y ticks
+    var yTicks = [1200, 1250, 1300, 1350];
+    var yLabs = ['1,200', '1,250', '1,300', '1,350'];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks 0-12
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i <= 12; i++) {
+        var x = xOf(i);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 4); ctx.stroke();
+        ctx.fillText('' + i, x, baseY + 18);
+    }
+    ctx.fillText('matches played', ox + pw / 2, baseY + 34);
+
+    // true-skill line
+    var ty = yOf(1340);
+    ctx.strokeStyle = P.aqua; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, ty); ctx.lineTo(ox + pw, ty); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('true skill ≈ 1,340 (illustrative)', ox + pw, ty - 8);
+
+    // line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < ratings.length; i++) {
+        var x = xOf(i), y = yOf(ratings[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // dots: start ink; wins green, losses orange
+    for (var i = 0; i < ratings.length; i++) {
+        var x = xOf(i), y = yOf(ratings[i]);
+        if (i === 0) ctx.fillStyle = P.ink;
+        else ctx.fillStyle = (results[i - 1] === 'W') ? P.green : P.orange;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // change labels above points 1-4
+    var chLabs = ['+16', '+20', '+17', '−10'];
+    var chCols = [P.green, P.green, P.green, P.orange];
+    ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = chCols[i];
+        ctx.fillText(chLabs[i], xOf(i + 1), yOf(ratings[i + 1]) - 10);
+    }
+
+    // annotations
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('big jumps while underrated', xOf(1) + 10, yOf(1216) + 26);
+    ctx.fillStyle = P.orange; ctx.textAlign = 'right';
+    ctx.fillText('small wobbles once caught up', xOf(11), yOf(1309) + 26);
+});
+
+// c4: underdog wins per 100 matches, by rating gap
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Underdog Wins per 100 Matches, by Rating Gap', w / 2, 24);
+
+    var gaps = ['0', '100', '200', '300', '400'];
+    var wins = [50, 36, 24, 15, 9];
+
+    var ox = 70, baseY = 245, pw = 560, ph = 180, maxV = 60;
+
+    // gridlines + y ticks
+    var yTicks = [0, 25, 50];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = baseY - yTicks[i] / maxV * ph;
+        if (yTicks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('' + yTicks[i], ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var slot = pw / 5;
+    for (var i = 0; i < 5; i++) {
+        var cx = ox + slot * i + slot / 2;
+        var bh = wins[i] / maxV * ph;
+        var isMS = (i === 2);
+        ctx.fillStyle = isMS ? 'rgba(213,81,129,0.5)' : 'rgba(42,120,214,0.45)';
+        ctx.fillRect(cx - 35, baseY - bh, 70, bh);
+        ctx.fillStyle = isMS ? P.magenta : P.blue;
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('' + wins[i], cx, baseY - bh - 8);
+        if (isMS) ctx.fillText('Maya vs Sam', cx, baseY - bh - 24);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(gaps[i], cx, baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rating gap (favorite − underdog)', ox + pw / 2, baseY + 32);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('even 400 points ahead, the favorite loses 9 in 100', ox + pw, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('underdog win rate = 1 − E, straight from the expected-score formula', w / 2, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q-Learning</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Q-Learning</h1>
+<p class="subtitle">A robot keeps a scorecard of how good each move is in each room — and by nudging one score after every single step, the scorecard alone teaches it the way to the cheese</p>
+
+<div class="card-section">
+    <h2>A Robot, Four Rooms, and a Scorecard</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">Q-table</span><span class="tag orange">trial and error</span></div>
+                <ul>
+                    <li><b>The maze</b> — a toy robot sits in room 1 of a four-room hallway; the cheese waits in room 4</li>
+                    <li><b>No map</b> — nobody tells the robot where the cheese is; it only feels a reward when it arrives</li>
+                    <li><b>The rewards</b> — stepping into room 4 pays +10; every other step pays exactly 0</li>
+                    <li><b>The Q-table</b> — a scorecard with one score per (room, move): rooms 1&ndash;3, moves left or right</li>
+                    <li><b>All zeros</b> — the scorecard starts blank; every score is 0, so at first every move looks equal</li>
+                    <li><b>The promise</b> — with enough wandering, each score becomes the cheese ahead, shrunk a bit per step</li>
+                </ul>
+                <p class="example">The robot in room 2 checks two scores — Q(room 2, left) and Q(room 2, right) — and walks toward the bigger one; that lookup is the whole decision.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Q-learning stores one number per (situation, action) pair — the scorecard IS the strategy: in any room, just take the move with the higher score.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Trips, Checked By Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">the update rule</span></div>
+                <ul>
+                    <li><b>The rule</b> — new score = old score + 0.5 &times; (reward + 0.9 &times; best score in the next room &minus; old score)</li>
+                    <li><b>Two dials</b> — 0.5 is the learning rate (move halfway to the news); 0.9 discounts rewards one step away</li>
+                    <li><b>Trip 1, room 3 &rarr; cheese</b> — Q(3, right) = 0 + 0.5 &times; (10 + 0 &minus; 0) = 5.0; the win is written down</li>
+                    <li><b>Trip 1, rooms 1 and 2</b> — reward 0 and next-room scores still 0, so their updates stay at 0.0</li>
+                    <li><b>Trip 2, room 2 &rarr; room 3</b> — Q(2, right) = 0 + 0.5 &times; (0 + 0.9 &times; 5.0 &minus; 0) = 2.25; credit flows backward</li>
+                    <li><b>Trip 2, room 3 again</b> — Q(3, right) = 5.0 + 0.5 &times; (10 &minus; 5.0) = 7.5; the score creeps toward 10</li>
+                </ul>
+                <p class="example">Room 2 never sees cheese directly — its 2.25 score exists only because room 3's score became 5.0 first; good news travels one room per trip.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One update touches one cell using only (reward now) + (0.9 &times; best score next door) — no map, no model of the maze, just repeated local bookkeeping.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why a Scorecard Beats a Map</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">model-free</span><span class="tag orange">convergence</span></div>
+                <ul>
+                    <li><b>Keep repeating</b> — run the same trip again and again; each score climbs toward its true value</li>
+                    <li><b>The true values</b> — Q(3, right) &rarr; 10, Q(2, right) &rarr; 0.9 &times; 10 = 9, Q(1, right) &rarr; 0.9 &times; 9 = 8.1</li>
+                    <li><b>By trip 8</b> — the scores read 9.96, 8.68, 6.93: already ranking the rooms in the right order</li>
+                    <li><b>No model needed</b> — the robot never learns where walls or cheese are, only which move pays</li>
+                    <li><b>Same recipe elsewhere</b> — which ad to show, which warehouse route, which move in a board game</li>
+                    <li><b>The famous heir</b> — swap the lookup table for a neural network and this becomes deep Q-learning</li>
+                </ul>
+                <p class="example">A support team routes tickets the same way — each (ticket type, queue) pair gets a running score from outcomes, and no one ever writes down a model of customers.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> With enough visits to every (room, move) pair and a decaying learning rate, the table provably converges to the true long-run scores — trial and error alone is enough.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Score Is Not the Reward</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">reward vs value</span></div>
+                <ul>
+                    <li><b>The trap</b> — reading Q as "what I get paid here"; rooms 1&ndash;3 pay 0, yet their scores are far from 0</li>
+                    <li><b>Reward</b> — the immediate payment for one step: 0, 0, 0, then +10 at the cheese door</li>
+                    <li><b>Q-value</b> — the whole future folded in: cheese two rooms away is worth 0.9 &times; 0.9 &times; 10 = 8.1 today</li>
+                    <li><b>The comparison</b> — room 1 pays reward 0 but carries Q &asymp; 8.1; the gap IS the discounted future</li>
+                    <li><b>Why it bites</b> — judging moves by immediate reward makes the robot wander; all early moves pay 0</li>
+                </ul>
+                <p class="example">A free app pays 0 on install day; its "Q-value" is the subscriptions it leads to later — pricing it by day-one revenue is the same mistake.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the Q-value as the reward. Reward is one step's payment; Q is the promise of everything that follows, shrunk by 0.9 per step of distance.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), hl = 7;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.5), y2 - hl * Math.sin(ang - 0.5));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.5), y2 - hl * Math.sin(ang + 0.5));
+    ctx.closePath(); ctx.fill();
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: the four-room hallway and the blank Q-table
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Maze and the Blank Scorecard', w / 2, 24);
+
+    // hallway: four 130x75 rounded boxes at x = 80, 230, 380, 530; y = 55
+    var boxX = [80, 230, 380, 530], boxY = 55, boxW = 130, boxH = 75;
+    for (var i = 0; i < 4; i++) {
+        roundedRect(ctx, boxX[i], boxY, boxW, boxH, 8);
+        ctx.fillStyle = (i === 3) ? 'rgba(0,131,0,0.12)' : '#f8f9fa';
+        ctx.fill();
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('room ' + (i + 1), boxX[i] + boxW / 2, boxY + 20);
+    }
+    // cheese label in room 4
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('CHEESE +10', boxX[3] + boxW / 2, boxY + 52);
+
+    // robot dot in room 1: 20px blue circle with two white eyes
+    var rcx = boxX[0] + boxW / 2, rcy = boxY + 48;
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(rcx, rcy, 10, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(rcx - 3.5, rcy - 2, 2.5, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(rcx + 3.5, rcy - 2, 2.5, 0, 2 * Math.PI); ctx.fill();
+
+    // arrows both ways between adjacent boxes + reward labels under the gaps
+    for (var i = 0; i < 3; i++) {
+        var gx1 = boxX[i] + boxW, gx2 = boxX[i + 1];
+        drawArrow(ctx, gx1 + 2, boxY + 28, gx2 - 2, boxY + 28, '#999', 1);
+        drawArrow(ctx, gx2 - 2, boxY + 48, gx1 + 2, boxY + 48, '#999', 1);
+        var midX = (gx1 + gx2) / 2;
+        ctx.textAlign = 'center';
+        if (i < 2) {
+            ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+            ctx.fillText('reward 0', midX, boxY + boxH + 18);
+        } else {
+            ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+            ctx.fillText('reward +10', midX, boxY + boxH + 18);
+        }
+    }
+
+    // Q-table: 3 rows x 2 cols of 90x26 cells starting at x=250, y=185
+    var tx = 250, ty = 185, cw = 90, ch = 26;
+    // column headers
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('move left', tx + cw / 2, ty - 8);
+    ctx.fillText('move right', tx + cw + cw / 2, ty - 8);
+    for (var r = 0; r < 3; r++) {
+        // row label
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText('room ' + (r + 1), 175, ty + r * ch + 17);
+        for (var c = 0; c < 2; c++) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.strokeRect(tx + c * cw, ty + r * ch, cw, ch);
+            ctx.font = '13px system-ui'; ctx.fillStyle = P.mute;
+            ctx.fillText('0.0', tx + c * cw + cw / 2, ty + r * ch + 17);
+        }
+    }
+
+    // annotation right of table
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one score per (room, move) —', 460, 215);
+    ctx.fillText('all zeros before the first trip', 460, 231);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — a 4-room maze keeps the whole table visible', w - 12, h - 8);
+});
+
+// c2: Q(right) scores before, after trip 1, after trip 2
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Trips of Updates: the Cheese News Walks Backward', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 185;
+    function yOf(v) { return baseY - v / 10 * ph; }
+
+    // gridlines
+    ctx.lineWidth = 1;
+    [[2.5, '2.5'], [5, '5'], [7.5, '7.5'], [10, '10']].forEach(function(t) {
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(t[0])); ctx.lineTo(ox + pw, yOf(t[0])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(t[1], ox - 8, yOf(t[0]) + 4);
+    });
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var groupCx = [170, 370, 570];
+    var groupLabs = ['Q(room 1, right)', 'Q(room 2, right)', 'Q(room 3, right)'];
+    // per group: [before, after trip 1, after trip 2]
+    var vals = [[0, 0, 0], [0, 0, 2.25], [0, 5.0, 7.5]];
+    var valLabs = [['0.0', '0.0', '0.0'], ['0.0', '0.0', '2.25'], ['0.0', '5.0', '7.5']];
+    var fills = ['rgba(107,114,128,0.35)', 'rgba(42,120,214,0.55)', 'rgba(0,131,0,0.55)'];
+    var borders = [P.mute, P.blue, P.green];
+    var bw = 38;
+
+    var barTopY = [];
+    for (var g = 0; g < 3; g++) {
+        barTopY.push([]);
+        for (var b = 0; b < 3; b++) {
+            var bx = groupCx[g] + (b - 1.5) * bw;
+            var v = vals[g][b];
+            var bh = v > 0 ? v / 10 * ph : 3; // zero bars drawn as 3px stubs
+            var topY = baseY - bh;
+            barTopY[g].push(topY);
+            ctx.fillStyle = fills[b];
+            ctx.fillRect(bx, topY, bw - 4, bh);
+            ctx.strokeStyle = borders[b]; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, topY, bw - 4, bh);
+            ctx.textAlign = 'center';
+            if (v > 0) {
+                ctx.fillStyle = borders[b]; ctx.font = 'bold 12px system-ui';
+                ctx.fillText(valLabs[g][b], bx + (bw - 4) / 2, topY - 6);
+            } else {
+                ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+                ctx.fillText('0.0', bx + (bw - 4) / 2, topY - 6);
+            }
+        }
+        ctx.fillStyle = '#444'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(groupLabs[g], groupCx[g], baseY + 18);
+    }
+
+    // legend top right
+    var lx = 470, ly = 44;
+    var legend = [['before any trip', fills[0], borders[0]], ['after trip 1', fills[1], borders[1]], ['after trip 2', fills[2], borders[2]]];
+    legend.forEach(function(item, i) {
+        var y = ly + i * 17;
+        ctx.fillStyle = item[1]; ctx.fillRect(lx, y, 12, 12);
+        ctx.strokeStyle = item[2]; ctx.lineWidth = 1; ctx.strokeRect(lx, y, 12, 12);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(item[0], lx + 18, y + 10);
+    });
+
+    // dashed orange arrow from top of 5.0 bar (group 3, after trip 1) to top of 2.25 bar (group 2, after trip 2)
+    var fromX = groupCx[2] + (1 - 1.5) * bw + (bw - 4) / 2, fromY = yOf(5.0);
+    var toX = groupCx[1] + (2 - 1.5) * bw + (bw - 4) / 2, toY = yOf(2.25);
+    ctx.setLineDash([5, 4]);
+    drawArrow(ctx, fromX, fromY - 12, toX, toY - 12, P.orange, 2.5);
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0.5 × 0.9 × 5.0 = 2.25', (fromX + toX) / 2, Math.min(fromY, toY) - 26);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('learning rate 0.5, discount 0.9 — illustrative maze', w - 12, h - 8);
+});
+
+// c3: scores climbing to their true values over trips 0-8
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Every Score Climbs to Its True Value — Farther Rooms Learn Later', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 185;
+    function xOf(t) { return ox + t / 8 * pw; }
+    function yOf(v) { return baseY - v / 10 * ph; }
+
+    // gridlines at 2, 4, 6, 8, 10
+    ctx.lineWidth = 1;
+    [2, 4, 6, 8, 10].forEach(function(v) {
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('' + v, ox - 8, yOf(v) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels 0-8
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 8; t++) ctx.fillText('' + t, xOf(t), baseY + 16);
+
+    var trips = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    var q3 = [0, 5, 7.5, 8.75, 9.38, 9.69, 9.84, 9.92, 9.96];
+    var q2 = [0, 0, 2.25, 4.5, 6.19, 7.31, 8.02, 8.44, 8.68];
+    var q1 = [0, 0, 0, 1.01, 2.53, 4.05, 5.32, 6.27, 6.93];
+
+    // true-value guides
+    var guides = [[10, P.green, 'true 10'], [9, P.blue, 'true 9'], [8.1, P.orange, 'true 8.1']];
+    guides.forEach(function(g) {
+        ctx.strokeStyle = g[1]; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g[0])); ctx.lineTo(ox + pw, yOf(g[0])); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = g[1]; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(g[2], ox + pw + 4, yOf(g[0]) + 4);
+    });
+
+    function drawLine(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < 9; i++) {
+            i === 0 ? ctx.moveTo(xOf(trips[i]), yOf(vals[i])) : ctx.lineTo(xOf(trips[i]), yOf(vals[i]));
+        }
+        ctx.stroke();
+    }
+    drawLine(q3, P.green);
+    drawLine(q2, P.blue);
+    drawLine(q1, P.orange);
+
+    // line labels
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.green; ctx.fillText('room 3', xOf(2) + 6, yOf(q3[2]) + 16);
+    ctx.fillStyle = P.blue; ctx.fillText('room 2', xOf(4) + 6, yOf(q2[4]) + 16);
+    ctx.fillStyle = P.orange; ctx.fillText('room 1', xOf(6) + 6, yOf(q1[6]) + 16);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('credit moves one room per trip —', xOf(2.5), 70);
+    ctx.fillText('room 1 flatlines until trip 3', xOf(2.5), 86);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('learning rate 0.5, discount 0.9 — illustrative', w - 12, h - 8);
+});
+
+// c4: immediate reward vs learned Q-value per room
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Reward Now vs Score of the Future (move right, true values)', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 185;
+    function yOf(v) { return baseY - v / 10 * ph; }
+
+    // gridlines at 2, 4, 6, 8, 10
+    ctx.lineWidth = 1;
+    [2, 4, 6, 8, 10].forEach(function(v) {
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('' + v, ox - 8, yOf(v) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var groupCx = [190, 380, 570];
+    var groupLabs = ['room 1', 'room 2', 'room 3'];
+    var rewards = [0, 0, 10];
+    var rewardLabs = ['0', '0', '10'];
+    var qvals = [8.1, 9, 10];
+    var qLabs = ['8.1', '9', '10'];
+    var bw = 46;
+
+    for (var g = 0; g < 3; g++) {
+        // reward bar (left, mute)
+        var rx = groupCx[g] - bw - 3;
+        var rv = rewards[g];
+        var rh = rv > 0 ? rv / 10 * ph : 3;
+        ctx.fillStyle = 'rgba(107,114,128,0.35)';
+        ctx.fillRect(rx, baseY - rh, bw, rh);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.strokeRect(rx, baseY - rh, bw, rh);
+        ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(rewardLabs[g], rx + bw / 2, baseY - rh - 6);
+
+        // Q-value bar (right, blue)
+        var qx = groupCx[g] + 3;
+        var qv = qvals[g];
+        var qh = qv / 10 * ph;
+        ctx.fillStyle = 'rgba(42,120,214,0.55)';
+        ctx.fillRect(qx, baseY - qh, bw, qh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(qx, baseY - qh, bw, qh);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(qLabs[g], qx + bw / 2, baseY - qh - 6);
+
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(groupLabs[g], groupCx[g], baseY + 18);
+    }
+
+    // legend top left
+    var lx = 85, ly = 42;
+    ctx.fillStyle = 'rgba(107,114,128,0.35)'; ctx.fillRect(lx, ly, 12, 12);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.strokeRect(lx, ly, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reward for the step', lx + 18, ly + 10);
+    ctx.fillStyle = 'rgba(42,120,214,0.55)'; ctx.fillRect(lx, ly + 17, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.strokeRect(lx, ly + 17, 12, 12);
+    ctx.fillStyle = '#444'; ctx.fillText('Q-value (future folded in)', lx + 18, ly + 27);
+
+    // annotation over room 1
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('pays nothing today,', 190, 85);
+    ctx.fillText('worth 8.1 = 0.9 × 0.9 × 10', 190, 101);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('true long-run values after learning finishes — illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

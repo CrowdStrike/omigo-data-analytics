@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regression Trees</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Regression Trees</h1>
+<p class="subtitle">A regression tree predicts a number by splitting rows into groups and answering with each group's mean — splits are chosen to shrink variance, and these little trees are the atoms inside boosting</p>
+
+<div class="card-section">
+    <h2>One Ice-Cream Cart, Twelve Days</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">leaf = mean</span><span class="tag orange">step predictor</span></div>
+                <ul>
+                    <li><b>The cart</b> — an ice-cream cart logs 12 days of temperature and sales, from 58°F/$125 up to 91°F/$310</li>
+                    <li><b>One guess</b> — with no tree at all, the best single prediction is the overall mean: $210 every day</li>
+                    <li><b>One split</b> — asking "is temp &lt; 74.5°F?" sorts the days into a cool group and a hot group</li>
+                    <li><b>Leaf = mean</b> — cool days now predict their own mean, $140; hot days predict theirs, $280</li>
+                    <li><b>A step, not a line</b> — the tree's prediction is a flat shelf per leaf, jumping at the split</li>
+                </ul>
+                <p class="example">On a 70°F day the tree answers $140; on an 85°F day it answers $280 — every day lands in exactly one leaf.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A regression tree predicts a number by routing each row down yes/no questions to a leaf, then answering with that leaf's mean.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Scoring Every Cut by Leftover Variance</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">variance reduction</span></div>
+                <ul>
+                    <li><b>Start</b> — around the single mean $210, the total squared error (SSE) of the 12 days is 62,200</li>
+                    <li><b>Try all cuts</b> — a split can only fall between sorted neighbors, so 12 days give 11 candidates</li>
+                    <li><b>Score each</b> — for a cut, add the left group's SSE around its mean to the right group's SSE</li>
+                    <li><b>Weak cut</b> — cutting at 65.5°F leaves 36,600 because cool and hot days still mix on one side</li>
+                    <li><b>Best cut</b> — cutting at 74.5°F leaves 850 + 2,550 = 3,400, a 95% drop in squared error</li>
+                    <li><b>Greedy</b> — the tree keeps 74.5°F, then reruns the same search inside each leaf separately</li>
+                </ul>
+                <p class="example">Check the cool leaf by hand: residuals −15, −10, −5, 0, 10, 20 square and sum to exactly 850.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> "Splitting to reduce variance" just means: pick the cut whose two group means leave the smallest total squared error behind.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Atom Inside Boosting</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">boosting</span><span class="tag green">residuals</span></div>
+                <ul>
+                    <li><b>Small trees</b> — gradient boosting stacks hundreds of shallow regression trees, often 1–3 splits each</li>
+                    <li><b>Fit the leftovers</b> — tree 1 predicts $140/$280; tree 2 trains on the residuals tree 1 left behind</li>
+                    <li><b>Round 2</b> — the best cut on those residuals is 86.5°F: predict −5 below it, +25 above it</li>
+                    <li><b>Chipping away</b> — squared error falls 62,200 → 3,400 → 1,900 across the first two trees</li>
+                    <li><b>Even for classes</b> — boosted classifiers still grow regression trees inside, fitted to gradients</li>
+                </ul>
+                <p class="example">The two hottest days (88°F, 91°F) were underpredicted by 20 and 30, so tree 2 adds +25 exactly there.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Boosting is regression trees stacked on residuals — each new tree predicts whatever the sum so far still gets wrong.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Steps, Not Lines</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">extrapolation</span></div>
+                <ul>
+                    <li><b>No slope</b> — inside a leaf the prediction is perfectly flat; a tree never draws a tilted line</li>
+                    <li><b>Finer stairs</b> — two more splits give four leaves: $132.5, $155, $261.7, and $298.3</li>
+                    <li><b>Flat outside</b> — at 100°F the tree still answers $298.3, its hottest leaf's mean, forever</li>
+                    <li><b>Memorizing</b> — keep splitting until every day is its own leaf and training SSE hits 0 — only there</li>
+                    <li><b>Not classification</b> — a regression tree's leaf holds a mean, not a class vote or probability</li>
+                </ul>
+                <p class="example">A heat wave hits 100°F and real sales keep climbing, but the tree stays pinned at $298.3.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting a tree to extrapolate a trend. Outside the training range every regression tree goes flat at its edge leaf's mean — a straight-line fit keeps rising, the staircase does not.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+var TEMPS = [58, 61, 64, 67, 70, 73, 76, 79, 82, 85, 88, 91];
+var SALES = [125, 130, 135, 140, 150, 160, 250, 265, 270, 285, 300, 310];
+
+// c1: scatter with overall mean line and one-split step prediction
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = 720, h = 300;
+    var ox = 60, pw = 620, baseY = 250, ph = 195;
+    var xMin = 55, xMax = 94, yMin = 100, yMax = 330;
+    function xOf(t) { return ox + (t - xMin) / (xMax - xMin) * pw; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('12 Days at the Cart: One Mean vs One Split', w / 2, 24);
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var xt = [60, 70, 80, 90];
+    for (var i = 0; i < xt.length; i++) ctx.fillText(String(xt[i]), xOf(xt[i]), baseY + 16);
+    ctx.textAlign = 'right';
+    var yt = [100, 200, 300];
+    for (var i = 0; i < yt.length; i++) ctx.fillText('$' + yt[i], ox - 6, yOf(yt[i]) + 4);
+
+    // mean line at 210
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(210)); ctx.lineTo(ox + pw, yOf(210)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one guess: mean $210', ox + 6, yOf(210) - 8);
+
+    // split line at 74.5
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(74.5), baseY - ph); ctx.lineTo(xOf(74.5), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('split: temp < 74.5°F', xOf(74.5), baseY - ph + 14);
+
+    // step prediction
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(55), yOf(140)); ctx.lineTo(xOf(74.5), yOf(140)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(74.5), yOf(280)); ctx.lineTo(xOf(94), yOf(280)); ctx.stroke();
+    ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(74.5), yOf(140)); ctx.lineTo(xOf(74.5), yOf(280)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('leaf mean $140', xOf(64), yOf(140) + 20);
+    ctx.fillText('leaf mean $280', xOf(84), yOf(280) - 10);
+
+    // data points
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < TEMPS.length; i++) {
+        ctx.beginPath(); ctx.arc(xOf(TEMPS[i]), yOf(SALES[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('each leaf answers with its group\'s mean — illustrative data', ox, h - 6);
+});
+
+// c2: bar chart of the 11 candidate cuts by remaining SSE
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = 720, h = 300;
+    var thr = [59.5, 62.5, 65.5, 68.5, 71.5, 74.5, 77.5, 80.5, 83.5, 86.5, 89.5];
+    var sse = [54318, 45865, 36600, 26163, 15263, 3400, 12691, 22592, 30989, 40540, 51291];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Every Candidate Cut, Scored by Remaining Squared Error', w / 2, 24);
+
+    var ox = 70, pw = 590, baseY = 245, ph = 180, yMax = 65000;
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // axes and y ticks
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 6, yOf(0) + 4);
+    ctx.fillText('30k', ox - 6, yOf(30000) + 4);
+    ctx.fillText('60k', ox - 6, yOf(60000) + 4);
+
+    // bars
+    var slot = pw / 11, bw = 38;
+    var xs = [];
+    for (var i = 0; i < 11; i++) {
+        var cx = ox + slot * i + slot / 2;
+        xs.push(cx);
+        var by = yOf(sse[i]);
+        ctx.fillStyle = thr[i] === 74.5 ? P.green : 'rgba(42,120,214,0.45)';
+        ctx.fillRect(cx - bw / 2, by, bw, baseY - by);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(thr[i]), cx, baseY + 14);
+    }
+
+    // no-split reference line
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(62200)); ctx.lineTo(ox + pw, yOf(62200)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('no split: 62,200', ox + pw, yOf(62200) - 6);
+
+    // best-cut annotation with arrow
+    var bx = xs[5];
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('best: 3,400', bx, yOf(3400) - 32);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, yOf(3400) - 26); ctx.lineTo(bx, yOf(3400) - 6); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx, yOf(3400) - 4);
+    ctx.lineTo(bx - 4, yOf(3400) - 12);
+    ctx.lineTo(bx + 4, yOf(3400) - 12);
+    ctx.closePath(); ctx.fillStyle = P.green; ctx.fill();
+
+    // weak-cut annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('still 36,600 — groups mixed', xs[2] + 40, yOf(36600) - 10);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('SSE after cut = left-group SSE + right-group SSE', ox, h - 6);
+});
+
+// c3: tree 2 fits tree 1's residuals (left); error shrinking by round (right)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = 720, h = 300;
+    var resid = [-15, -10, -5, 0, 10, 20, -30, -15, -10, 5, 20, 30];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Tree 2 Fits What Tree 1 Missed', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(390, 38); ctx.lineTo(390, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // left panel: residual fit
+    var lx = 55, lw = 300, cy = 155, hh = 85;
+    var xMin = 55, xMax = 94;
+    function xOf(t) { return lx + (t - xMin) / (xMax - xMin) * lw; }
+    function yOf(r) { return cy - r / 40 * hh; }
+
+    // y ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('+40', lx - 6, yOf(40) + 4);
+    ctx.fillText('0', lx - 6, yOf(0) + 4);
+    ctx.fillText('−40', lx - 6, yOf(-40) + 4);
+
+    // zero line
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, cy); ctx.lineTo(lx + lw, cy); ctx.stroke();
+
+    // step: -5 from 55 to 86.5, +25 from 86.5 to 94
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(55), yOf(-5)); ctx.lineTo(xOf(86.5), yOf(-5)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(86.5), yOf(25)); ctx.lineTo(xOf(94), yOf(25)); ctx.stroke();
+    // orange dashed vertical at 86.5
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(86.5), cy - hh); ctx.lineTo(xOf(86.5), cy + hh); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('−5', xOf(70), yOf(-5) + 18);
+    ctx.fillText('+25', xOf(87.5), yOf(25) - 8);
+
+    // residual dots
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < TEMPS.length; i++) {
+        ctx.beginPath(); ctx.arc(xOf(TEMPS[i]), yOf(resid[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('tree 2, trained on residuals', lx + lw / 2, h - 8);
+
+    // right panel: error by round
+    var vals = [62200, 3400, 1900];
+    var labs = ['mean only', '+ tree 1', '+ tree 2'];
+    var valLabs = ['62,200', '3,400', '1,900'];
+    var fills = ['rgba(107,114,128,0.4)', 'rgba(42,120,214,0.5)', P.green];
+    var bx = [430, 510, 590], bw = 55, baseY = 245, ph = 175;
+    for (var i = 0; i < 3; i++) {
+        var bh = Math.max(vals[i] / 62200 * ph, 4);
+        ctx.fillStyle = fills[i];
+        ctx.fillRect(bx[i], baseY - bh, bw, bh);
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLabs[i], bx[i] + bw / 2, baseY - bh - 6);
+        ctx.font = '11px system-ui';
+        ctx.fillText(labs[i], bx[i] + bw / 2, baseY + 14);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each round chips away', 555, 52);
+});
+
+// c4: depth-2 staircase, linear fit for contrast, flat extrapolation zone
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = 720, h = 300;
+    var ox = 60, pw = 620, baseY = 250, ph = 195;
+    var xMin = 55, xMax = 102, yMin = 60, yMax = 400;
+    function xOf(t) { return ox + (t - xMin) / (xMax - xMin) * pw; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Leaves Make a Staircase — and It Goes Flat Off the Edge', w / 2, 24);
+
+    // extrapolation zone
+    ctx.fillStyle = 'rgba(217,89,38,0.08)';
+    ctx.fillRect(xOf(91), baseY - ph, xOf(102) - xOf(91), ph);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(91), baseY - ph); ctx.lineTo(xOf(91), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hottest training day', xOf(91), baseY - ph + 12);
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var xt = [60, 70, 80, 90, 100];
+    for (var i = 0; i < xt.length; i++) ctx.fillText(String(xt[i]), xOf(xt[i]), baseY + 16);
+    ctx.textAlign = 'right';
+    var yt = [100, 250, 400];
+    for (var i = 0; i < yt.length; i++) ctx.fillText('$' + yt[i], ox - 6, yOf(yt[i]) + 4);
+
+    // linear fit (dashed) from (55, 80) to (102, 393)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(xOf(55), yOf(80)); ctx.lineTo(xOf(102), yOf(393)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('linear fit, ≈ $6.6/°F (for contrast)', xOf(58), yOf(330));
+
+    // staircase: 132.5 (55-68.5), 155 (68.5-74.5), 261.7 (74.5-83.5), 298.3 (83.5-102)
+    var shelves = [
+        { v: 132.5, a: 55, b: 68.5, lab: '$132.5' },
+        { v: 155, a: 68.5, b: 74.5, lab: '$155' },
+        { v: 261.7, a: 74.5, b: 83.5, lab: '$261.7' },
+        { v: 298.3, a: 83.5, b: 102, lab: '$298.3' }
+    ];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    for (var i = 0; i < shelves.length; i++) {
+        var sh = shelves[i];
+        ctx.beginPath(); ctx.moveTo(xOf(sh.a), yOf(sh.v)); ctx.lineTo(xOf(sh.b), yOf(sh.v)); ctx.stroke();
+    }
+    ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    for (var i = 1; i < shelves.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(xOf(shelves[i].a), yOf(shelves[i - 1].v));
+        ctx.lineTo(xOf(shelves[i].a), yOf(shelves[i].v));
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < shelves.length; i++) {
+        var sh = shelves[i];
+        ctx.fillText(sh.lab, xOf((sh.a + sh.b) / 2), yOf(sh.v) - 8);
+    }
+
+    // data points
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < TEMPS.length; i++) {
+        ctx.beginPath(); ctx.arc(xOf(TEMPS[i]), yOf(SALES[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // extrapolation annotation with arrow to the shelf
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('flat at $298.3', xOf(96.5), yOf(200));
+    ctx.fillText('forever past the data', xOf(96.5), yOf(180));
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(96.5), yOf(210)); ctx.lineTo(xOf(96.5), yOf(285)); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(xOf(96.5), yOf(290));
+    ctx.lineTo(xOf(96.5) - 4, yOf(285) + 2);
+    ctx.lineTo(xOf(96.5) + 4, yOf(285) + 2);
+    ctx.closePath(); ctx.fillStyle = P.magenta; ctx.fill();
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cuts at 68.5, 74.5, 83.5°F; leaf value = leaf mean', ox, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
