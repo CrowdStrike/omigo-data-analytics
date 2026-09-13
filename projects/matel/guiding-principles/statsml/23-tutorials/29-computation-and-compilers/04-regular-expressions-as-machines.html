@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regular Expressions as Machines</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Regular Expressions as Machines</h1>
+<p class="subtitle">Every regex is secretly a little machine — a row of states that reads one character at a time and either walks all the way to the finish circle or falls off</p>
+
+<div class="card-section">
+    <h2>A Clerk With a Finger on a Diagram</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">states</span><span class="tag orange">one character at a time</span></div>
+                <ul>
+                    <li><b>The stamp</b> — a warehouse clerk checks order IDs like "AB-1234": two letters, a dash, four digits</li>
+                    <li><b>The regex</b> — the rule written compactly is <code>[A-Z][A-Z]-[0-9][0-9][0-9][0-9]</code>, one slot per character</li>
+                    <li><b>The machine</b> — the same rule drawn as 8 circles in a row; each circle is a state, "how far along am I"</li>
+                    <li><b>One step per character</b> — read a character, follow the arrow it matches, move a finger one circle right</li>
+                    <li><b>Accept or reject</b> — finger on the double circle at the end means valid; any wrong character means reject</li>
+                    <li><b>No magic</b> — a regex engine is exactly this: the pattern is compiled into circles and arrows first</li>
+                </ul>
+                <p class="example">Checking "AB-1234" is eight finger positions: start, after A, after B, after the dash, then one hop per digit until the finish circle.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A regex is a compact spelling of a finite machine — states for progress, arrows for allowed characters, one hop per character read.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tracing AB-1234 Through the States</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">trace</span></div>
+                <ul>
+                    <li><b>The good ID</b> — feed "AB-1234": A moves S0&rarr;S1, B moves S1&rarr;S2, the dash moves S2&rarr;S3</li>
+                    <li><b>The digits</b> — then 1, 2, 3, 4 move the finger S3&rarr;S4&rarr;S5&rarr;S6&rarr;S7: finish circle, so it is valid</li>
+                    <li><b>The bad ID</b> — feed "AB-12X4": the first five characters land on S5 exactly as before</li>
+                    <li><b>The fall</b> — character 6 is "X", but S5 only has a 0&ndash;9 arrow, so the machine rejects on the spot</li>
+                    <li><b>No rereading</b> — the machine never looks back at earlier characters; 7 characters cost 7 hops, always</li>
+                </ul>
+                <p class="example">"AB-1234" takes the walk 0, 1, 2, 3, 4, 5, 6, 7 and lands on accept; "AB-12X4" walks 0, 1, 2, 3, 4, 5 and falls off at character 6.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Checking a string is one hop per character — "AB-1234" reaches state 7 and is accepted, "AB-12X4" dies at character 6 with no backtracking.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Fast Search Tools Trust the Machine</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">performance</span><span class="tag red">catastrophic backtracking</span></div>
+                <ul>
+                    <li><b>Log scanning</b> — a data scientist greps millions of lines; the machine view is why that can be fast</li>
+                    <li><b>Linear time</b> — a true machine costs one hop per character: a 28-character line is 28 hops</li>
+                    <li><b>The other way</b> — engines that instead guess-and-backtrack can retry paths, doubling work per letter</li>
+                    <li><b>The blowup</b> — a trap pattern like <code>(a+)+$</code> on 20 a's plus a b tries about 1.0M paths; 28 a's, 268M</li>
+                    <li><b>Real outages</b> — such runaway regexes have frozen production log filters and input validators</li>
+                    <li><b>The fix</b> — machine-based engines (grep, RE2-style) cap the cost at one state-set hop per character</li>
+                </ul>
+                <p class="example">On the trap pattern, adding 8 letters to the line grows backtracking work from 1.0M to 268M tries, while the machine goes from 21 to 29 steps.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Compiled to a machine, matching is one hop per character; simulated by backtracking, a bad pattern can double its work with every extra letter.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Machine Has No Memory</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">finite states</span></div>
+                <ul>
+                    <li><b>The belief</b> — people imagine the regex "remembers" the whole string it has read so far</li>
+                    <li><b>The truth</b> — the machine knows only which circle the finger is on; the past is thrown away</li>
+                    <li><b>Same circle, same future</b> — "AB-12", "ZQ-98", and "KK-00" all land on S5 and get identical treatment</li>
+                    <li><b>What that costs</b> — counting needs a state per count, so no finite machine can match balanced brackets</li>
+                    <li><b>The mistake</b> — reaching for a regex to validate nested JSON or HTML; that job needs a real parser</li>
+                </ul>
+                <p class="example">After "AB-12" or "ZQ-98" the machine is in the same state S5, so "34" finishes both and "3X" kills both — it cannot treat them differently.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting a regex to count or remember. A finite machine only knows its current state, which is exactly why regexes cannot match arbitrarily nested brackets.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.stroke();
+}
+
+// c1: state diagram of the order-ID machine
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Machine Behind [A-Z][A-Z]-[0-9]{4}', w / 2, 24);
+
+    var xs = [60, 146, 232, 318, 404, 490, 576, 662];
+    var cy = 150, r = 20;
+    var arrowLabs = ['A–Z', 'A–Z', '-', '0–9', '0–9', '0–9', '0–9'];
+
+    // start marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    arrow(ctx, 20, cy, xs[0] - r - 2, cy);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('start', 30, cy - 12);
+
+    // transition arrows + labels
+    for (var i = 0; i < 7; i++) {
+        ctx.strokeStyle = P.text; ctx.lineWidth = 2;
+        arrow(ctx, xs[i] + r, cy, xs[i + 1] - r - 2, cy);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(arrowLabs[i], (xs[i] + xs[i + 1]) / 2, 118);
+    }
+
+    // states
+    for (var i = 0; i < 8; i++) {
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(xs[i], cy, r, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('S' + i, xs[i], cy + 5);
+    }
+    // accept state double circle
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(xs[7], cy, 25, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('accept', xs[7], 195);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui';
+    ctx.fillText('any character that has no arrow → reject (fall off the machine)', w / 2, 235);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('one circle per character of progress — the finger only moves right', 360, 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — order-ID checker drawn as a finite machine', w - 12, 290);
+});
+
+// c2: two traces walking the machine
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two IDs Walk the Machine: One Reaches Accept, One Falls Off', w / 2, 24);
+
+    var baseY = 245, ph = 180;
+    var ticksX = [70, 153, 236, 319, 402, 485, 568, 651];
+    var tickLabs = ['start', 'A', 'B', '-', '1', '2', '3|X', '4'];
+    function yOf(st) { return baseY - st / 7 * ph; }
+
+    // y gridlines + labels S0..S7
+    for (var st = 0; st <= 7; st++) {
+        var y = yOf(st);
+        if (st > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(70, y); ctx.lineTo(650, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('S' + st, 62, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(70, baseY - ph); ctx.lineTo(70, baseY); ctx.lineTo(650, baseY); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 8; i++) ctx.fillText(tickLabs[i], ticksX[i], baseY + 18);
+
+    // accept line at state 7
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(70, yOf(7)); ctx.lineTo(650, yOf(7)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('accept state', 74, yOf(7) - 6);
+
+    // accepted trace: stepped green line through states 0..7
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 8; i++) {
+        var x = ticksX[i], y = yOf(i);
+        if (i === 0) { ctx.moveTo(x, y); }
+        else { ctx.lineTo(x, yOf(i - 1)); ctx.lineTo(x, y); }
+    }
+    ctx.stroke();
+    for (var i = 0; i < 8; i++) {
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(ticksX[i], yOf(i), 6, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('AB-1234 → accept', 540, 70);
+
+    // rejected trace: dashed blue stepped line for the first six positions, then a red X
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = ticksX[i], y = yOf(i);
+        if (i === 0) { ctx.moveTo(x, y); }
+        else { ctx.lineTo(x, yOf(i - 1)); ctx.lineTo(x, y); }
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(ticksX[i], yOf(i), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('X', 568, 112);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('AB-12X4 → reject at char 6', 400, 125);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('7 characters = 7 hops — never re-reads', 180, 95);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative traces on the order-ID machine', w - 12, 293);
+});
+
+// c3: backtracking tries vs machine steps
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Trap Pattern (a+)+$: Backtracking Tries vs Machine Steps', w / 2, 24);
+
+    var ox = 80, baseY = 245, pw = 560, ph = 180;
+    var maxV = 280000000;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // y gridlines + labels
+    var yTicks = [0, 70000000, 140000000, 210000000, 280000000];
+    var yLabs = ['0', '70M', '140M', '210M', '280M'];
+    for (var i = 0; i < 5; i++) {
+        var y = yOf(yTicks[i]);
+        if (i > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var barX = [150, 260, 370, 480, 590];
+    var xLabs = ['20', '22', '24', '26', '28'];
+    var tries = [1048576, 4194304, 16777216, 67108864, 268435456];
+    var triesLabs = ['1.0M', '4.2M', '16.8M', '67.1M', '268M'];
+
+    for (var i = 0; i < 5; i++) {
+        var bh = tries[i] / maxV * ph;
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(barX[i] - 35, baseY - bh, 70, bh);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+        ctx.strokeRect(barX[i] - 35, baseY - bh, 70, bh);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(triesLabs[i], barX[i], baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(xLabs[i], barX[i], baseY + 18);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('letters in the line', ox + pw / 2, 280);
+
+    // machine line hugging the floor
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(barX[0] - 35, 243); ctx.lineTo(barX[4] + 35, 243); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('machine: 21–29 steps (too small to see)', 150, 228);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('work doubles with every extra letter —', 390, 85);
+    ctx.fillText('the machine stays one hop per character', 390, 102);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('tries are 2^n for the trap pattern; scenario illustrative', w - 12, 293);
+});
+
+// c4: three pasts converge to one state, one shared future
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Pasts, One State — the Machine Forgot How It Got There', w / 2, 24);
+
+    var prefixes = ['AB-12', 'ZQ-98', 'KK-00'];
+    var ys = [95, 150, 205];
+    var cx = 330, cy = 150, r = 30;
+
+    // prefix labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px ui-monospace, monospace'; ctx.textAlign = 'left';
+    for (var i = 0; i < 3; i++) ctx.fillText(prefixes[i], 60, ys[i] + 4);
+
+    // converging arrows to the circle edge
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    for (var i = 0; i < 3; i++) {
+        var dx = cx - 150, dy = cy - ys[i];
+        var len = Math.sqrt(dx * dx + dy * dy);
+        var tx = cx - dx / len * r, ty = cy - dy / len * r;
+        arrow(ctx, 150, ys[i], tx, ty);
+    }
+
+    // shared state circle
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('S5', cx, cy + 5);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('five characters done', cx, 195);
+
+    // fan-out arrows
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    arrow(ctx, cx + r * 0.9, cy - r * 0.45, 560, 110);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reads "34" → accept', 570, 114);
+
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    arrow(ctx, cx + r * 0.9, cy + r * 0.45, 560, 190);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('reads "3X" → reject', 570, 194);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same state = same future — no memory of the past, so no counting', 360, 262);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — why regexes cannot match nested brackets', w - 12, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

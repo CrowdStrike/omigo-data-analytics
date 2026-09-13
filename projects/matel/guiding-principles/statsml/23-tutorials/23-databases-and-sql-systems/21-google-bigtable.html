@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Bigtable</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Google Bigtable</h1>
+<p class="subtitle">Bigtable stores billions of rows as one giant alphabetically sorted map — every read is a lookup of (row, column, timestamp) — and the 2006 paper describing it became the blueprint for NoSQL</p>
+
+<div class="card-section">
+    <h2>The Webtable: Every Page in One Sorted Map</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">sorted map</span><span class="tag orange">2006 paper</span></div>
+                <ul>
+                    <li><b>The webtable</b> — Google's crawler stores billions of web pages in one table the paper calls the webtable</li>
+                    <li><b>The key trick</b> — the row key is the URL with its hostname reversed: www.cnn.com becomes com.cnn.www</li>
+                    <li><b>Sorted rows</b> — rows sit in strict alphabetical order, so every page of one site becomes a neighbor</li>
+                    <li><b>Column families</b> — contents: holds the page's HTML; anchor: holds the text of links pointing at the page</li>
+                    <li><b>Timestamps</b> — a cell keeps several dated versions; three crawls of one page are versions t3, t5, t6</li>
+                    <li><b>Sparse</b> — most rows fill only a few columns; empty cells cost nothing, unlike a fixed-schema table</li>
+                </ul>
+                <p class="example">Under row com.cnn.www, the cell anchor:cnnsi.com holds the value "CNN" — the exact link text another site used to point there.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A Bigtable is one giant sorted map: hand it (row key, column, timestamp) and it hands back raw bytes — that single sentence is the entire data model.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Walking One Lookup by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">tablets</span></div>
+                <ul>
+                    <li><b>The ask</b> — fetch the cell at (row=com.cnn.www, column=anchor:cnnsi.com, timestamp=t9)</li>
+                    <li><b>Step 1</b> — binary-search the sorted row keys to find com.cnn.www; no secondary index needed</li>
+                    <li><b>Step 2</b> — inside that row, jump to the anchor: family, then to the cnnsi.com column within it</li>
+                    <li><b>Step 3</b> — pick the version stamped t9; the value comes back as the raw bytes "CNN"</li>
+                    <li><b>Newest wins</b> — ask contents: with no timestamp and you get the latest crawl, the t6 version</li>
+                    <li><b>Tablets</b> — the sorted keys are cut into ranges called tablets; each server serves a few ranges</li>
+                </ul>
+                <p class="example">Six row keys — com.aaa, com.bbb, com.cnn, com.cnn/tech, com.weather, org.apache — cut into three tablets of two keys each; com.cnn falls in tablet 2, so exactly one server answers.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every read is the same walk — find the tablet by key range, the row by key, the cell by column and timestamp; there is no query planner and no index to choose.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The 2006 Paper That Launched NoSQL</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">lineage</span><span class="tag orange">NoSQL</span></div>
+                <ul>
+                    <li><b>The paper</b> — Chang et al. published the Bigtable design at OSDI 2006, built on Google's GFS</li>
+                    <li><b>HBase</b> — the open-source rebuild of the paper became an Apache Hadoop subproject in 2008</li>
+                    <li><b>Cassandra</b> — open-sourced by Facebook in 2008, it borrowed Bigtable's column-family data model</li>
+                    <li><b>Wide-column</b> — the whole "wide-column store" category of databases descends from this one design</li>
+                    <li><b>Key design</b> — the sorted-map habit survives everywhere: rows you scan together must sort together</li>
+                    <li><b>Full circle</b> — Google opened Bigtable itself as a public cloud service in 2015</li>
+                </ul>
+                <p class="example">The reversed-URL trick is now standard key design in every wide-column store: prefix the key with whatever you want to scan by.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The paper's deepest legacy is a habit of thought — model the access pattern first, then design the row key so one sorted-range scan answers it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Looks Like a Table — It Isn't One</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">no joins</span></div>
+                <ul>
+                    <li><b>The trap</b> — rows and columns look relational, so newcomers reach for JOIN and WHERE on values</li>
+                    <li><b>No joins</b> — the original Bigtable joins nothing; the API is get, put, delete, and scan by key range</li>
+                    <li><b>No secondary indexes</b> — you can find a row by its key, never by a value stored inside a cell</li>
+                    <li><b>Single-row atomicity</b> — updates are atomic within one row only; there are no multi-row transactions</li>
+                    <li><b>The fix</b> — bake the question into the key, or keep a second copy of the data keyed the other way</li>
+                </ul>
+                <p class="example">"Which pages does cnnsi.com link to?" has no index in the webtable — you either scan every row or maintain a second table keyed by the linking site.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating Bigtable as SQL minus a few features. It is a different machine: if a question cannot be answered by one key-range scan, the data model — not the query — has to change.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.45), y2 - 8 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.45), y2 - 8 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: webtable grid — sorted reversed-URL row keys, column families, versioned cells
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Webtable: Rows Sorted by Reversed URL, Cells Stamped by Time', w / 2, 24);
+
+    // column headers
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink;
+    ctx.fillText('contents:', 260, 55);
+    ctx.fillText('anchor:cnnsi.com', 430, 55);
+    ctx.fillText('anchor:my.look.ca', 590, 55);
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    var rules = [97, 142, 187, 232];
+    for (var i = 0; i < rules.length; i++) {
+        ctx.beginPath(); ctx.moveTo(20, rules[i]); ctx.lineTo(680, rules[i]); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(230, 63); ctx.lineTo(230, 232); ctx.stroke();
+
+    // row keys (already sorted)
+    var keys = ['com.aaa.www', 'com.cnn.www', 'com.cnn.www/tech', 'org.apache.www'];
+    var rowYs = [80, 125, 170, 215];
+    ctx.textAlign = 'left';
+    for (var i = 0; i < 4; i++) {
+        if (i === 1) { ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; }
+        else { ctx.font = '12px system-ui'; ctx.fillStyle = P.text; }
+        ctx.fillText(keys[i], 20, rowYs[i]);
+    }
+
+    // filled cells on the com.cnn.www row (boxes 40px tall)
+    var cy = 100;
+    // contents: three stacked version chips t6 / t5 / t3
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rr(ctx, 195, cy, 130, 40, 8); ctx.fill();
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('t6', 260, cy + 12);
+    ctx.fillText('t5', 260, cy + 25);
+    ctx.fillText('t3', 260, cy + 37);
+
+    // anchor:cnnsi.com — "CNN" @ t9
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    rr(ctx, 355, cy, 150, 40, 8); ctx.fill();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui';
+    ctx.fillText('"CNN" @ t9', 430, cy + 25);
+
+    // anchor:my.look.ca — "CNN.com" @ t8
+    ctx.fillStyle = 'rgba(25,158,112,0.12)';
+    rr(ctx, 515, cy, 150, 40, 8); ctx.fill();
+    ctx.fillStyle = P.aqua; ctx.font = '12px system-ui';
+    ctx.fillText('"CNN.com" @ t8', 590, cy + 25);
+
+    // sparse marker on org.apache.www contents:
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('…', 260, 215);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('reversed hostnames keep all cnn pages adjacent in the sort', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("rows, columns and timestamps follow the 2006 paper's webtable example", 700, 290);
+});
+
+// c2: one lookup — query box, sorted key line cut into tablets, returned value
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Lookup: Key Range → Tablet 2 → Row → Cell @ t9', w / 2, 24);
+
+    // query box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rr(ctx, 40, 62, 340, 34, 8); ctx.fill();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('get (com.cnn, anchor:cnnsi.com, t9)', 210, 83);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('binary search on the key finds the tablet — no index needed', 430, 110);
+
+    // sorted key line with six ticks
+    var ticksX = [80, 180, 280, 380, 480, 580];
+    var tickLabs = ['com.aaa', 'com.bbb', 'com.cnn', 'com.cnn/tech', 'com.weather', 'org.apache'];
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 165); ctx.lineTo(660, 165); ctx.stroke();
+    for (var i = 0; i < 6; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ticksX[i], 159); ctx.lineTo(ticksX[i], 171); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], ticksX[i], 185);
+    }
+
+    // tablet brackets
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    rr(ctx, 65, 205, 160, 18, 6); ctx.fill();
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('tablet 1', 145, 218);
+
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    rr(ctx, 235, 205, 190, 18, 6); ctx.fill();
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('tablet 2', 330, 218);
+
+    ctx.fillStyle = 'rgba(25,158,112,0.30)';
+    rr(ctx, 435, 205, 225, 18, 6); ctx.fill();
+    ctx.fillStyle = P.aqua; ctx.font = '11px system-ui';
+    ctx.fillText('tablet 3', 547, 218);
+
+    // arrows: query box down to the com.cnn tick, then right to the result box
+    arrow(ctx, 280, 96, 280, 153, P.ink, 3);
+    arrow(ctx, 330, 230, 330, 250, P.ink, 3);
+    arrow(ctx, 336, 256, 464, 256, P.ink, 3);
+
+    // result box
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    rr(ctx, 470, 240, 180, 32, 8); ctx.fill();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('value: "CNN" @ t9', 560, 260);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('six keys and three tablets illustrative; real tablets hold ~100–200 MB of rows', 40, 293);
+});
+
+// c3: timeline 2005-2016 — the paper and its descendants
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Paper, Ten Years of Descendants', w / 2, 24);
+
+    var baseY = 170, x0 = 60, x1 = 660;
+    function xOf(year) { return x0 + (year - 2005) / 11 * (x1 - x0); }
+
+    // baseline and year ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+    var years = [2006, 2008, 2010, 2012, 2014, 2016];
+    for (var i = 0; i < years.length; i++) {
+        var x = xOf(years[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, baseY - 5); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(years[i]), x, baseY + 22);
+    }
+
+    // markers: [x, color, label, labelY, above?, bold?]
+    var marks = [
+        [115, P.blue, 'Bigtable paper (OSDI 2006)', 120, true, true],
+        [224, P.green, 'HBase joins Apache Hadoop', 215, false, false],
+        [252, P.orange, 'Cassandra open-sourced', 95, true, false],
+        [605, P.violet, 'Cloud Bigtable public', 120, true, true]
+    ];
+    for (var i = 0; i < marks.length; i++) {
+        var mx = marks[i][0], col = marks[i][1], lab = marks[i][2],
+            ly = marks[i][3], above = marks[i][4], bold = marks[i][5];
+        ctx.strokeStyle = col; ctx.lineWidth = 3;
+        ctx.beginPath();
+        if (above) { ctx.moveTo(mx, baseY - 8); ctx.lineTo(mx, ly + 8); }
+        else { ctx.moveTo(mx, baseY + 8); ctx.lineTo(mx, ly - 14); }
+        ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(mx, baseY, 8, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = (bold ? 'bold ' : '') + '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, mx, ly);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one paper → a whole database category', 520, 45);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('dates are publication and release years', 700, 290);
+});
+
+// c4: lookup by key (one seek) vs search by value (full scan, fixed by 2nd table)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('By Key: One Seek. By Value: Scan Everything', w / 2, 24);
+
+    // row 1: query the key
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('query the key', 20, 99);
+
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rr(ctx, 170, 75, 150, 40, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; rr(ctx, 170, 75, 150, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('get row com.cnn', 245, 99);
+
+    arrow(ctx, 326, 95, 424, 95, P.ink, 3);
+
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    rr(ctx, 430, 75, 140, 40, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; rr(ctx, 430, 75, 140, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('tablet 2 →', 500, 91);
+    ctx.fillText('one row read', 500, 106);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ one server, one seek', 578, 99);
+
+    // row 2: query a value
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('query a value', 20, 209);
+
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rr(ctx, 170, 185, 160, 40, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; rr(ctx, 170, 185, 160, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rows with', 250, 201);
+    ctx.fillText('anchor:cnnsi.com?', 250, 216);
+
+    arrow(ctx, 336, 205, 384, 205, P.ink, 3);
+
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    rr(ctx, 390, 185, 150, 40, 8); ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; rr(ctx, 390, 185, 150, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('no index →', 465, 201);
+    ctx.fillText('scan every tablet', 465, 216);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ full scan', 465, 176);
+
+    arrow(ctx, 546, 205, 569, 205, P.ink, 3);
+
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    rr(ctx, 575, 185, 135, 40, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; rr(ctx, 575, 185, 135, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('fix: 2nd table', 642, 201);
+    ctx.fillText('keyed by linker', 642, 216);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText("if it isn't a key-range scan, redesign the key — not the query", w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("API verbs per the 2006 paper; box layout schematic", 700, 293);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

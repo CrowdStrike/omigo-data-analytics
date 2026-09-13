@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training vs Serving</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Training vs Serving</h1>
+<p class="subtitle">A model lives twice — once at night, learning a rule from a year of history, and once every morning, answering one live question in milliseconds — and most production failures happen where the two lives don't match</p>
+
+<div class="card-section">
+    <h2>The Night Job and the Morning Job</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">two lives</span><span class="tag orange">batch vs live</span></div>
+                <ul>
+                    <li><b>The bakery</b> — a bakery wants a model that answers one question each dawn: how many croissants to bake?</li>
+                    <li><b>The night job</b> — training: the model reads 365 days of sales logs and learns a rule; it runs once, takes hours</li>
+                    <li><b>The morning job</b> — serving: at 6am the saved model gets today's numbers and must answer in milliseconds</li>
+                    <li><b>Different worlds</b> — training sees a clean table of history; serving sees one messy live row at a time</li>
+                    <li><b>One artifact</b> — the night job's only output is a model file; the morning job replays it thousands of mornings</li>
+                </ul>
+                <p class="example">The rule is learned once from last year's logs, but "bake 116" gets asked and answered fresh every single morning.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Training and serving are two different programs sharing one model file — one learns slowly from history, the other answers instantly from live data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Monday 6am: Same Model, Different Answer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">training&ndash;serving skew</span></div>
+                <ul>
+                    <li><b>The rule</b> — training learned: croissants = 20 + 0.8 &times; (7-day average sales); simple enough to check by hand</li>
+                    <li><b>Training's view</b> — the clean logs show last week's sales averaging 120, so the rule says 20 + 0.8&times;120 = 116</li>
+                    <li><b>Serving's view</b> — at 6am Sunday's row is still half-written: only 36 sales logged of the real 120</li>
+                    <li><b>The skewed feature</b> — the live average comes out 108 instead of 120, so the model says 20 + 0.8&times;108 &asymp; 106</li>
+                    <li><b>Same model, wrong input</b> — nothing about the world changed; the two pipelines computed one feature differently</li>
+                    <li><b>The name</b> — this gap between offline and live feature values is called training&ndash;serving skew</li>
+                </ul>
+                <p class="example">The bakery bakes 106 instead of 116 and sells out by 9am — the model was fine, the 6am feature was not.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 20 + 0.8&times;120 = 116 offline but 20 + 0.8&times;108 &asymp; 106 live — when the same feature is computed two ways, the same model gives two answers.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The World Keeps Moving After Training</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag orange">drift</span><span class="tag green">retraining</span></div>
+                <ul>
+                    <li><b>Frozen rule, moving world</b> — training ends but customers, seasons, and menus keep changing under the model</li>
+                    <li><b>Drift</b> — month by month the frozen rule fits the street a little worse; the daily miss creeps upward</li>
+                    <li><b>Serving is the scoreboard</b> — offline scores are rehearsal; wasted trays and sell-outs happen at serving time</li>
+                    <li><b>Retraining</b> — rerunning the night job on fresh logs snaps the rule back to the current street</li>
+                    <li><b>Watch the live miss</b> — teams track serving error week by week and retrain when it drifts past a threshold</li>
+                </ul>
+                <p class="example">A new office opens next door in week 4; the never-retrained model's average daily miss climbs from 4 croissants to 23 by week 10.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Training happens once but serving never stops — without monitoring and retraining, a model that was right in January is quietly wrong by June.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"But It Scored Great Offline"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">offline vs live</span></div>
+                <ul>
+                    <li><b>The mistake</b> — treating the offline test score as the finish line, when it is only the dress rehearsal</li>
+                    <li><b>Offline</b> — on held-out history the bakery model missed by just 4 croissants a day on average</li>
+                    <li><b>Live</b> — in its first real week the same model missed by 12 a day, three times worse</li>
+                    <li><b>Why the gap</b> — skewed 6am features, late-arriving rows, and a world already drifted past the training logs</li>
+                    <li><b>The fix</b> — check the live feature values against training's, and judge the model on its serving miss</li>
+                </ul>
+                <p class="example">The team celebrated "average miss: 4" from the notebook, then spent launch week explaining daily misses of 12.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing the offline test number is the model's real performance. The offline score assumes serving sees the same features training saw — the one assumption production loves to break.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: two-lane flow diagram — training lane and serving lane sharing one model file
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Model, Two Lives: the Night Job and the Morning Job', w / 2, 24);
+
+    // lane labels
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue; ctx.fillText('TRAINING', 20, 90);
+    ctx.fillStyle = P.orange; ctx.fillText('SERVING', 20, 210);
+
+    function box(x1, x2, cy, stroke, fill, lines, textColor) {
+        var hgt = 44, y = cy - hgt / 2;
+        roundRect(ctx, x1, y, x2 - x1, hgt, 6);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = textColor || P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        var cx = (x1 + x2) / 2;
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], cx, cy + 4);
+        } else {
+            ctx.fillText(lines[0], cx, cy - 3);
+            ctx.fillText(lines[1], cx, cy + 12);
+        }
+    }
+
+    // training lane
+    var trFill = 'rgba(42,120,214,0.10)';
+    box(110, 250, 95, P.blue, trFill, ['1 year of sales logs', '(365 rows)']);
+    box(290, 420, 95, P.blue, trFill, ['learn the rule']);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(250, 95); ctx.lineTo(284, 95); ctx.stroke();
+    arrowHead(ctx, 290, 95, 0, 8, P.blue);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(420, 95); ctx.lineTo(454, 95); ctx.stroke();
+    arrowHead(ctx, 460, 95, 0, 8, P.blue);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('runs once, offline, hours are fine', 265, 135);
+
+    // serving lane
+    var svFill = 'rgba(217,89,38,0.10)';
+    box(110, 250, 215, P.orange, svFill, ["this morning's numbers", '(1 row)']);
+    box(290, 420, 215, P.orange, svFill, ['apply the rule']);
+    box(460, 610, 215, P.orange, svFill, ['answer: bake 116']);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(250, 215); ctx.lineTo(284, 215); ctx.stroke();
+    arrowHead(ctx, 290, 215, 0, 8, P.orange);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(420, 215); ctx.lineTo(454, 215); ctx.stroke();
+    arrowHead(ctx, 460, 215, 0, 8, P.orange);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('runs every morning, live, milliseconds', 265, 255);
+
+    // shared model file box
+    roundRect(ctx, 460, 73, 150, 44, 6);
+    ctx.fillStyle = '#f8f9fa'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('model file', 535, 99);
+
+    // dashed arrow from model file down to "apply the rule"
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(535, 117); ctx.lineTo(362, 188); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 358, 190, Math.atan2(190 - 117, 358 - 535), 8, P.ink);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('built once —', 640, 160);
+    ctx.fillText('answers every day', 640, 176);
+});
+
+// c2: grouped bars — feature and prediction, training pipeline vs serving pipeline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Model, Same Monday — Two Pipelines, Two Answers', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 560, ph = 185, maxV = 140;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines + y labels
+    var ticks = [0, 40, 80, 120];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(ticks[i]), ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var groups = [
+        { cx: 210, label: '7-day average sales (feature)', train: 120, serve: 108, gap: '−12' },
+        { cx: 490, label: 'predicted croissants', train: 116, serve: 106, gap: '−10' }
+    ];
+    var bw = 70, gap = 16;
+    for (var g = 0; g < groups.length; g++) {
+        var gr = groups[g];
+        var x1 = gr.cx - gap / 2 - bw, x2 = gr.cx + gap / 2;
+        var yT = yOf(gr.train), yS = yOf(gr.serve);
+        ctx.fillStyle = P.blue; ctx.fillRect(x1, yT, bw, baseY - yT);
+        ctx.fillStyle = P.orange; ctx.fillRect(x2, yS, bw, baseY - yS);
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillStyle = P.blue; ctx.fillText(String(gr.train), x1 + bw / 2, yT - 8);
+        ctx.fillStyle = P.orange; ctx.fillText(String(gr.serve), x2 + bw / 2, yS - 8);
+        // gap bracket above the two bar tops
+        var topY = Math.min(yT, yS) - 26;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x1 + bw / 2, topY + 6); ctx.lineTo(x1 + bw / 2, topY);
+        ctx.lineTo(x2 + bw / 2, topY); ctx.lineTo(x2 + bw / 2, topY + 6);
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(gr.gap, gr.cx, topY - 5);
+        // group label
+        ctx.fillStyle = P.text; ctx.font = '13px system-ui';
+        ctx.fillText(gr.label, gr.cx, baseY + 20);
+    }
+
+    // legend
+    ctx.fillStyle = P.blue; ctx.fillRect(560, 52, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('training pipeline', 578, 62);
+    ctx.fillStyle = P.orange; ctx.fillRect(560, 70, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('serving pipeline (6am)', 578, 80);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the feature changed, not the world —', 365, 48);
+    ctx.fillText("Sunday's row was still half-written", 365, 64);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative bakery numbers', w - 12, 292);
+});
+
+// c3: two-line time series — never retrained vs retrained every 3 weeks
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Average Daily Miss After Launch: Retrained vs Never Retrained', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 570, ph = 180, maxV = 25;
+    function xOf(week) { return ox + 30 + (week - 1) / 9 * (pw - 60); }
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines + y labels
+    var ticks = [5, 10, 15, 20];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(ticks[i]), ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var wk = 1; wk <= 10; wk++) ctx.fillText('wk ' + wk, xOf(wk), baseY + 18);
+
+    // retrain markers at weeks 4, 7, 10
+    var retrains = [4, 7, 10];
+    for (var i = 0; i < retrains.length; i++) {
+        var rx = xOf(retrains[i]);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(rx, baseY); ctx.lineTo(rx, 90); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('retrain', rx, 84);
+    }
+
+    function line(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < vals.length; i++) {
+            var x = xOf(i + 1), y = yOf(vals[i]);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = color;
+        for (var i = 0; i < vals.length; i++) {
+            ctx.beginPath(); ctx.arc(xOf(i + 1), yOf(vals[i]), 4, 0, 2 * Math.PI); ctx.fill();
+        }
+    }
+
+    var never = [4, 5, 6, 8, 10, 12, 15, 17, 20, 23];
+    var retr = [4, 5, 6, 4, 5, 6, 4, 5, 6, 4];
+    line(never, '#e74c3c');
+    line(retr, P.green);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('never retrained', xOf(9), yOf(never[8]) - 14);
+    ctx.fillStyle = P.green;
+    ctx.fillText('retrained every 3 weeks', xOf(6), yOf(retr[5]) + 24);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('world drifts — new office opens wk 4', xOf(4) + 30, 105);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — miss = |baked − actually sold|, daily average', w - 12, 292);
+});
+
+// c4: offline miss vs first live week miss
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Rehearsal and the Opening Night', w / 2, 24);
+
+    var ox = 90, baseY = 245, pw = 520, ph = 175, maxV = 15;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    var ticks = [5, 10];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(ticks[i]), ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // bar 1: offline test = 4
+    var bw = 130;
+    var y1 = yOf(4);
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(250 - bw / 2, y1, bw, baseY - y1);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(250 - bw / 2, y1, bw, baseY - y1);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4', 250, y1 - 8);
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui';
+    ctx.fillText('offline test (held-out history)', 250, baseY + 20);
+
+    // bar 2: first live week = 12
+    var y2 = yOf(12);
+    ctx.fillStyle = 'rgba(217,89,38,0.35)';
+    ctx.fillRect(470 - bw / 2, y2, bw, baseY - y2);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(470 - bw / 2, y2, bw, baseY - y2);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('12', 470, y2 - 8);
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui';
+    ctx.fillText('first live week (serving)', 470, baseY + 20);
+
+    // gap arrow at x=590 between the two bar-top heights
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(590, y1); ctx.lineTo(590, y2); ctx.stroke();
+    arrowHead(ctx, 590, y2, -Math.PI / 2, 7, P.mute);
+    arrowHead(ctx, 590, y1, Math.PI / 2, 7, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3× worse', 600, (y1 + y2) / 2 - 4);
+    ctx.fillText('on real mornings', 600, (y1 + y2) / 2 + 12);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a good offline score is a promise, not a result', 360, 75);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — same model, two measurements', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

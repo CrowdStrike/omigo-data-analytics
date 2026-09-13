@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Train/Serve Skew</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Train/Serve Skew</h1>
+<p class="subtitle">A model is trained on features computed one way and served features computed another way — same feature name, different number, so the model starts wrong on day one</p>
+
+<div class="card-section">
+    <h2>One Model, Two Kitchens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">two pipelines</span><span class="tag orange">same name, different number</span></div>
+                <ul>
+                    <li><b>The shop</b> — a pizza shop builds a model that predicts delivery time from features like "open orders now"</li>
+                    <li><b>Training kitchen</b> — features for training come from clean historical logs, rebuilt overnight by a batch job</li>
+                    <li><b>Serving kitchen</b> — features at order time come from live code reading a counter that lags a few minutes</li>
+                    <li><b>Same name</b> — both pipelines call the feature "open orders", but they count it differently</li>
+                    <li><b>The skew</b> — the model learned on the batch 12 but is fed the live 9 — a world it never saw</li>
+                </ul>
+                <p class="example">For the exact same moment, the overnight batch job counts 12 open orders while the live counter shows 9 — the model was trained on the 12 and is served the 9.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Train/serve skew is when the feature values a model was trained on are computed differently from the ones it receives in production — the model is answering a question nobody is asking.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Twelve Orders on Paper, Nine on the Screen</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">feature mismatch</span></div>
+                <ul>
+                    <li><b>The rule</b> — the model is simple enough to run by hand: predicted minutes = 11 + 2 &times; open orders</li>
+                    <li><b>The truth</b> — in the last hour 12 orders came in; the last 3 arrived within the past 5 minutes</li>
+                    <li><b>The lag</b> — the live counter syncs every 5 minutes, so those 3 newest orders are invisible to it</li>
+                    <li><b>Two answers</b> — training data says 11 + 2&times;12 = 35 min; the live app computes 11 + 2&times;9 = 29 min</li>
+                    <li><b>The bill</b> — the pizza actually takes 36 min; the app promised 29 and is off by 7 minutes</li>
+                </ul>
+                <p class="example">The customer sees "29 minutes", waits 36, and one-stars the shop — the model was fine, its input was stale.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Predicted = 11 + 2 &times; orders, so 12 vs 9 orders is 35 vs 29 minutes — a 6-minute error created entirely by the feature pipeline, not by the model.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Demo Was Great and Launch Day Wasn't</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it bites</span><span class="tag orange">silent failure</span></div>
+                <ul>
+                    <li><b>Offline glory</b> — the evaluation used batch features for both training and testing: error 4.1 minutes</li>
+                    <li><b>Day one</b> — in production the live features arrive skewed, and the error jumps to about 7.2 minutes</li>
+                    <li><b>No alarm</b> — nothing crashes and no log fills with errors; predictions are just quietly worse</li>
+                    <li><b>Not decay</b> — the model did not rot slowly; it shipped into a world it was never trained on</li>
+                    <li><b>The fix</b> — compute features once and reuse them, or log served features and compare to the batch rebuild</li>
+                </ul>
+                <p class="example">The launch review asks "did the world change?" — it didn't; the 4.1-minute model was never actually deployed, a 7.2-minute one was.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Offline metrics certify the model plus the batch feature pipeline; production runs the model plus a different pipeline — the day-one gap is the skew, measured in your own metric.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Skew Is Not Drift</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">skew vs drift</span></div>
+                <ul>
+                    <li><b>Drift</b> — the world changes over months: new menu, new neighborhoods, and error creeps up slowly</li>
+                    <li><b>Skew</b> — the world is the same but the two pipelines disagree, so error is high from the first hour</li>
+                    <li><b>The tell</b> — drift shows a rising error curve; skew shows a flat curve that starts too high</li>
+                    <li><b>Wrong cure</b> — retraining "fixes" drift; retraining on batch features does nothing for skew</li>
+                    <li><b>Right test</b> — for the same request, log the served feature values and diff them against the batch rebuild</li>
+                </ul>
+                <p class="example">A team retrained the delivery model three times to fight "drift" and the error never moved — one feature diff would have shown 12 vs 9 in an afternoon.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Blaming a day-one performance gap on data drift and scheduling retrains. Drift grows with time; skew is born at launch — check the shape of the error curve before choosing the cure.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two-lane flow diagram, training lane and serving lane converging on one model
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Feature Name, Two Different Kitchens', w / 2, 24);
+
+    // lane labels
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('TRAINING (offline)', 20, 52);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('SERVING (live)', 20, 172);
+
+    var boxW = 140, boxH = 48;
+    var xs = [110, 290, 470];
+    var trainY = 62, serveY = 182;
+
+    function drawBox(x, y, lines, stroke, boldPart, boldColor) {
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+        ctx.fillStyle = '#fff';
+        roundRect(ctx, x, y, boxW, boxH, 6);
+        ctx.fill(); ctx.stroke();
+        ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            var ly = y + (lines.length === 1 ? boxH / 2 + 4 : 20 + i * 16);
+            if (boldPart && lines[i].indexOf(boldPart) >= 0) {
+                var pre = lines[i].slice(0, lines[i].indexOf(boldPart));
+                ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+                var preW = ctx.measureText(pre).width;
+                ctx.font = 'bold 14px system-ui';
+                var boldW = ctx.measureText(boldPart).width;
+                var total = preW + boldW;
+                var startX = x + boxW / 2 - total / 2;
+                ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+                ctx.fillText(pre, startX, ly);
+                ctx.font = 'bold 14px system-ui'; ctx.fillStyle = boldColor;
+                ctx.fillText(boldPart, startX + preW, ly);
+                ctx.textAlign = 'center';
+            } else {
+                ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+                ctx.fillText(lines[i], x + boxW / 2, ly);
+            }
+        }
+    }
+
+    // training lane boxes
+    drawBox(xs[0], trainY, ['historical logs', '(cleaned overnight)'], P.blue);
+    drawBox(xs[1], trainY, ['batch SQL job'], P.blue);
+    drawBox(xs[2], trainY, ['open orders = 12'], P.blue, '12', P.blue);
+    arrow(ctx, xs[0] + boxW, trainY + boxH / 2, xs[1] - 4, trainY + boxH / 2, P.blue);
+    arrow(ctx, xs[1] + boxW, trainY + boxH / 2, xs[2] - 4, trainY + boxH / 2, P.blue);
+
+    // serving lane boxes
+    drawBox(xs[0], serveY, ['live order counter', '(syncs every 5 min)'], P.orange);
+    drawBox(xs[1], serveY, ['app feature code'], P.orange);
+    drawBox(xs[2], serveY, ['open orders = 9'], P.orange, '9', P.orange);
+    arrow(ctx, xs[0] + boxW, serveY + boxH / 2, xs[1] - 4, serveY + boxH / 2, P.orange);
+    arrow(ctx, xs[1] + boxW, serveY + boxH / 2, xs[2] - 4, serveY + boxH / 2, P.orange);
+
+    // model box centered at x=640, y=148
+    var mW = 110, mH = 64, mx = 640 - mW / 2, my = 148 - mH / 2;
+    ctx.fillStyle = 'rgba(26,82,118,0.12)';
+    roundRect(ctx, mx, my, mW, mH, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    roundRect(ctx, mx, my, mW, mH, 8);
+    ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('SAME', 640, 144);
+    ctx.fillText('MODEL', 640, 160);
+
+    // arrows from lane ends into the model
+    arrow(ctx, xs[2] + boxW, trainY + boxH / 2, mx + 10, my + 6, P.blue);
+    arrow(ctx, xs[2] + boxW, serveY + boxH / 2, mx + 10, my + mH - 6, P.orange);
+
+    // outputs below
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('trained to expect 12 → predicts 35 min', 430, 251);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('fed 9 → predicts 29 min', 430, 268);
+
+    // annotation between lanes
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same moment, same feature name — 12 vs 9', 250, 150);
+
+    // caption bottom left
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('illustrative — one feature shown; real systems have dozens', 20, h - 8);
+});
+
+// c2: order timeline for the last hour, 3 newest orders unsynced
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Last Hour: 12 Orders Happened, the Live Counter Sees 9', w / 2, 24);
+
+    var ax = 60, axW = 600, axY = 190;
+    function xOf(minAgo) { return ax + (60 - minAgo) / 60 * axW; }
+
+    // sync-lag zone: last 5 minutes (x from 5-min-ago to now)
+    ctx.fillStyle = 'rgba(217,89,38,0.10)';
+    ctx.fillRect(xOf(5), 60, xOf(0) - xOf(5), axY - 60);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('not yet synced', xOf(0), 54);
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var tickLabs = ['60 min ago', '45', '30', '15', 'now'];
+    var tickX = [60, 210, 360, 510, 660];
+    for (var i = 0; i < 5; i++) {
+        ctx.fillText(tickLabs[i], tickX[i], axY + 20);
+    }
+
+    // order dots
+    var minsAgo = [58, 52, 47, 41, 36, 30, 24, 17, 11, 4, 2, 1];
+    for (var i = 0; i < 12; i++) {
+        var x = xOf(minsAgo[i]);
+        if (i < 9) {
+            ctx.fillStyle = P.blue;
+            ctx.beginPath(); ctx.arc(x, 160, 8, 0, 2 * Math.PI); ctx.fill();
+        } else {
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.arc(x, 160, 8, 0, 2 * Math.PI); ctx.stroke();
+        }
+    }
+
+    // count labels
+    ctx.textAlign = 'left'; ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('training pipeline counts 12 → predicts 35 min', 70, 76);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('live counter counts 9 → predicts 29 min', 70, 95);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('actual delivery: 36 min — the app promised 29', 430, 125);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one hour at one pizza shop', w - 15, h - 8);
+});
+
+// c3: live daily error over 10 days above the dashed offline-test line
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Launch Week: Live Error vs the Offline Test Score', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 185;
+    var yMax = 9;
+    function yOf(v) { return baseY - v / yMax * ph; }
+    function xOf(day) { return ox + (day - 0.5) / 10 * pw; }
+
+    // gridlines at 0, 3, 6, 9
+    var glines = [0, 3, 6, 9];
+    for (var i = 0; i < glines.length; i++) {
+        var gy = yOf(glines[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glines[i], ox - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 1; d <= 10; d++) {
+        ctx.fillText('day ' + d, xOf(d), baseY + 16);
+    }
+
+    // offline line at 4.1
+    var oy = yOf(4.1);
+    ctx.strokeStyle = P.blue; ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + pw, oy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('offline test error 4.1 min', ox + 4, oy + 16);
+
+    // gap marker at day 1 (behind the live line)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xOf(1), yOf(4.1)); ctx.lineTo(xOf(1), yOf(7.2)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(xOf(1) - 4, yOf(4.1)); ctx.lineTo(xOf(1) + 4, yOf(4.1)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(1) - 4, yOf(7.2)); ctx.lineTo(xOf(1) + 4, yOf(7.2)); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('gap ≈ 3 min', xOf(1) + 8, yOf(5.65) + 4);
+
+    // live line
+    var live = [7.2, 7.5, 6.9, 7.4, 7.1, 7.6, 7.0, 7.3, 7.5, 7.2];
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var d = 1; d <= 10; d++) {
+        var x = xOf(d), y = yOf(live[d - 1]);
+        d === 1 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var d = 1; d <= 10; d++) {
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(xOf(d), yOf(live[d - 1]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // annotation near day 6
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('wrong from day one — skew, not decay', xOf(6), 75);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — mean absolute error per day', w - 15, h - 8);
+});
+
+// c4: skew (flat and high) vs drift (starts fine, climbs) over 12 months
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Ways to Be Wrong: Flat-and-High vs Slowly Climbing', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 185;
+    var yMax = 10;
+    function yOf(v) { return baseY - v / yMax * ph; }
+    function xOf(m) { return ox + (m - 0.5) / 12 * pw; }
+
+    // gridlines at 0, 2, 4, 6, 8, 10
+    for (var g = 0; g <= 10; g += 2) {
+        var gy = yOf(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g, ox - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks m1-m12
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 1; m <= 12; m++) {
+        ctx.fillText('m' + m, xOf(m), baseY + 16);
+    }
+
+    // offline reference at 4.1
+    var oy = yOf(4.1);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + pw, oy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('offline score 4.1', ox + 4, oy + 14);
+
+    var skew = [7.2, 7.3, 7.1, 7.2, 7.4, 7.2, 7.3, 7.1, 7.2, 7.3, 7.2, 7.3];
+    var drift = [4.1, 4.3, 4.6, 5.0, 5.4, 5.9, 6.4, 7.0, 7.5, 8.1, 8.7, 9.3];
+
+    // skew line
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var m = 1; m <= 12; m++) {
+        var x = xOf(m), y = yOf(skew[m - 1]);
+        m === 1 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('skew: high from month 1', xOf(1.5), yOf(7.4) - 12);
+
+    // drift line
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 3; ctx.beginPath();
+    for (var m = 1; m <= 12; m++) {
+        var x = xOf(m), y = yOf(drift[m - 1]);
+        m === 1 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('drift: starts fine, climbs', xOf(4.5), yOf(5.4) + 24);
+
+    // crossing marker at month 8, value 7.0
+    ctx.fillStyle = P.text;
+    ctx.beginPath(); ctx.arc(xOf(8), yOf(7.0), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same error, different disease', xOf(8) + 10, yOf(7.0) + 18);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the shape of the curve names the problem', 200, 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — both curves are mean error in minutes', w - 15, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

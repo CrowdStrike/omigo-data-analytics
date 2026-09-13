@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Query Optimizers</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Query Optimizers</h1>
+<p class="subtitle">The SQL you write says what you want, not how to fetch it — the database's optimizer prices several routes to the same answer and quietly runs the cheapest one</p>
+
+<div class="card-section">
+    <h2>One Question, Two Ways to Answer It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">what not how</span><span class="tag orange">cost estimates</span></div>
+                <ul>
+                    <li><b>The question</b> — an online bakery's analyst asks its database: show Maya's orders over $50</li>
+                    <li><b>Two routes</b> — it can read all 500,000 order rows, or jump via a customer index to Maya's 120</li>
+                    <li><b>The optimizer</b> — a planner inside the database that prices each route before running anything</li>
+                    <li><b>Cost guess</b> — full scan estimated at 2.0 s, index route at 0.003 s; it silently takes the cheap one</li>
+                    <li><b>The rewrite</b> — the SQL you typed is a wish; the plan that actually runs may look nothing like it</li>
+                </ul>
+                <p class="example">Like a taxi ride: you give the address, the driver picks the streets — your query is the address, the optimizer is the driver.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A query declares what you want; the optimizer decides how to get it, comparing estimated costs and running only the cheapest plan.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Rows Each Route Touches</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">selectivity</span></div>
+                <ul>
+                    <li><b>Two filters</b> — customer = 'Maya' keeps 120 of 500,000 rows; total > $50 keeps 1 row in 5</li>
+                    <li><b>Picky first</b> — the optimizer starts with the pickier filter: index straight to Maya's 120 rows</li>
+                    <li><b>Then the rest</b> — checking total > $50 on those 120 leaves 120 × 1/5 = 24 final rows</li>
+                    <li><b>The dumb order</b> — total-first touches all 500,000 rows and still leaves 100,000 to sift for Maya</li>
+                    <li><b>Same answer</b> — both orders return the identical 24 rows; only the work differs: 120 vs 500,000</li>
+                    <li><b>Hand check</b> — 500,000 / 120 ≈ 4,000× fewer rows touched, and 120 × 1/5 = 24 either way</li>
+                </ul>
+                <p class="example">Filter order changed nothing about the answer and almost everything about the bill — 24 rows out either way, but 500,000 rows touched versus 120.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Selectivity sets the order: apply the filter that throws away the most rows first — 120 × 1/5 = 24 final rows, checkable by hand.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Join Order and Why Your Query Isn't Run as Written</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">join order</span><span class="tag orange">EXPLAIN</span></div>
+                <ul>
+                    <li><b>Join order</b> — "customers with a refunded order": start from 2,000 refunds, not 500,000 orders</li>
+                    <li><b>The savings</b> — small-first builds 4,000 intermediate rows; big-first builds 502,000 — 125× more</li>
+                    <li><b>Everywhere</b> — Spark, warehouses, and dataframe engines all reorder work; SQL is not run top-down</li>
+                    <li><b>EXPLAIN</b> — every database will print the plan it chose; read it before blaming your query</li>
+                    <li><b>Fast then slow</b> — the same query can switch plans overnight as tables grow or stats refresh</li>
+                </ul>
+                <p class="example">An analyst spent a week reordering her JOIN clauses; EXPLAIN showed the optimizer had been quietly using the same plan the whole time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The optimizer reorders joins to keep intermediate results small — 4,000 rows built instead of 502,000 for the identical three-table answer.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Guesses From Statistics, Not From Your Data</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">stale statistics</span></div>
+                <ul>
+                    <li><b>The map</b> — the optimizer never reads your rows to plan; it reads statistics collected earlier</li>
+                    <li><b>Stale stats</b> — stats gathered in July say about 100 December orders; by January there are 60,000</li>
+                    <li><b>Wrong route</b> — expecting 100 rows it picks the index hop; 60,000 hops take 9.0 s, one scan 1.2 s</li>
+                    <li><b>The fix</b> — refresh statistics (ANALYZE) after big loads; the optimizer is only as good as its map</li>
+                    <li><b>Not magic</b> — that was a bad estimate, not a bad database; the plan fit the world it believed in</li>
+                </ul>
+                <p class="example">After the holiday data load, one ANALYZE turned the 9-second report back into a 1.2-second one — without changing a character of the query.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming the optimizer sees your data. It sees statistics about your data — feed it a stale summary and it will confidently pick the slow plan.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, size) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - size * Math.cos(ang - 0.45), y2 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - size * Math.cos(ang + 0.45), y2 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: query -> optimizer -> two candidate plans, cheap one chosen
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Question, Two Routes — the Optimizer Picks', w / 2, 24);
+
+    // query box
+    ctx.fillStyle = 'rgba(26,82,118,0.06)';
+    rr(ctx, 25, 115, 175, 75, 6); ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    rr(ctx, 25, 115, 175, 75, 6); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders WHERE', 112, 138);
+    ctx.fillText("customer = 'Maya'", 112, 155);
+    ctx.fillText('AND total > $50', 112, 172);
+
+    // optimizer box
+    ctx.fillStyle = 'rgba(74,58,167,0.08)';
+    rr(ctx, 265, 122, 135, 60, 6); ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+    rr(ctx, 265, 122, 135, 60, 6); ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('optimizer', 332, 157);
+
+    // arrow query -> optimizer
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+    arrow(ctx, 200, 152, 262, 152, 6);
+
+    // Plan A box (rejected)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    rr(ctx, 470, 55, 225, 72, 6); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Plan A — read every row', 582, 76);
+    ctx.font = '12px system-ui';
+    ctx.fillText('500,000 rows', 582, 96);
+    ctx.fillText('est. 2.0 s', 582, 114);
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+    arrow(ctx, 400, 140, 467, 95, 6);
+
+    // Plan B box (chosen)
+    ctx.fillStyle = 'rgba(0,131,0,0.08)';
+    rr(ctx, 470, 180, 225, 72, 6); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    rr(ctx, 470, 180, 225, 72, 6); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Plan B — customer index', 570, 201);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('120 rows', 570, 221);
+    ctx.fillText('est. 0.003 s', 570, 239);
+    ctx.strokeStyle = P.green; ctx.fillStyle = P.green; ctx.lineWidth = 3;
+    arrow(ctx, 400, 165, 467, 212, 7);
+    ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('✓ chosen', 688, 231);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same answer either way —', 250, 235);
+    ctx.fillText('it takes the cheap route on its own', 250, 251);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('costs illustrative — a bakery orders table', 705, 294);
+});
+
+// c2: rows touched by each filter order, 500,000 vs 120
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rows Touched by Each Filter Order (same 24 answers out)', w / 2, 24);
+
+    var bx = 225, maxW = 455;
+    function bw(v) { return Math.max(v / 500000 * maxW, 3); }
+
+    function bar(y, label, v, valLab, fill, valColor) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(label, 20, y + 13);
+        ctx.fillStyle = fill;
+        ctx.fillRect(bx, y, bw(v), 18);
+        ctx.fillStyle = valColor; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(valLab, bx + bw(v) + 8, y + 13);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Plan A — total > $50 first (full scan)', 20, 68);
+    bar(85, 'step 1: check total on all rows', 500000, '500,000', 'rgba(217,89,38,0.55)', P.orange);
+    bar(120, 'step 2: sift those for Maya', 100000, '100,000', 'rgba(217,89,38,0.35)', P.orange);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Plan B — Maya first (customer index)', 20, 168);
+    bar(185, "step 1: index jump to Maya's rows", 120, '120', 'rgba(0,131,0,0.55)', P.green);
+    bar(220, 'step 2: check total on those', 120, '120', 'rgba(0,131,0,0.35)', P.green);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same 24 rows out — about 4,000× fewer rows touched', 400, 160);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — 500,000-row orders table', 705, 294);
+});
+
+// c3: intermediate rows built under two join orders
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Join Orders, Same Answer: Rows Built Along the Way', w / 2, 24);
+
+    var bx = 255, maxW = 425;
+    function bw(v) { return Math.max(v / 500000 * maxW, 3); }
+
+    function bar(y, label, v, valLab, fill, valColor) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(label, 20, y + 13);
+        ctx.fillStyle = fill;
+        ctx.fillRect(bx, y, bw(v), 18);
+        ctx.fillStyle = valColor; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(valLab, bx + bw(v) + 8, y + 13);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('big first — total built: 502,000', 20, 66);
+    bar(83, 'step 1: orders ⋈ customers', 500000, '500,000', 'rgba(217,89,38,0.55)', P.orange);
+    bar(118, 'step 2: result ⋈ refunds', 2000, '2,000', 'rgba(217,89,38,0.35)', P.orange);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('small first — total built: 4,000', 20, 170);
+    bar(187, 'step 1: refunds ⋈ orders', 2000, '2,000', 'rgba(0,131,0,0.55)', P.green);
+    bar(222, 'step 2: result ⋈ customers', 2000, '2,000', 'rgba(0,131,0,0.35)', P.green);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('start small: 125× less work, identical answer', 400, 155);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — orders 500,000, customers 10,000, refunds 2,000', 705, 294);
+});
+
+// c4: stale stats — estimate vs actual rows, and the runtime consequence
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Stale Statistics: a Confident Wrong Turn', w / 2, 24);
+
+    // caption top right
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — stats last refreshed in July', 705, 42);
+
+    var baseY = 245;
+
+    // left panel: December rows, estimate vs actual
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('December rows: estimate vs actual', 195, 60);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(330, baseY); ctx.stroke();
+
+    var hEst = Math.max(100 / 60000 * 170, 3);   // 100 rows, 3px minimum
+    ctx.fillStyle = 'rgba(42,120,214,0.55)';
+    ctx.fillRect(95, baseY - hEst, 70, hEst);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('100', 130, baseY - hEst - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('estimated', 130, baseY + 18);
+
+    ctx.fillStyle = 'rgba(217,89,38,0.55)';
+    ctx.fillRect(215, baseY - 170, 70, 170);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('60,000', 250, baseY - 170 - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('actual', 250, baseY + 18);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(365, 55); ctx.lineTo(365, 260); ctx.stroke();
+
+    // right panel: runtime of the chosen plan
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('runtime of the chosen plan', 540, 60);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(400, baseY); ctx.lineTo(680, baseY); ctx.stroke();
+
+    ctx.fillStyle = 'rgba(217,89,38,0.55)';
+    ctx.fillRect(435, baseY - 170, 70, 170);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('9.0 s', 470, baseY - 170 - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('picked: index hops', 470, baseY + 18);
+
+    var hScan = 1.2 / 9.0 * 170;   // 23px
+    ctx.fillStyle = 'rgba(0,131,0,0.55)';
+    ctx.fillRect(560, baseY - hScan, 70, hScan);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('1.2 s', 595, baseY - hScan - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('best: one scan', 595, baseY + 18);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('old map, wrong route — refresh stats after big loads', 365, 285);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

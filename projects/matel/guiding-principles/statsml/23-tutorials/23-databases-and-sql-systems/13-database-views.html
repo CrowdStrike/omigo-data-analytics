@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Views</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Database Views</h1>
+<p class="subtitle">A view is a saved query wearing a table costume — you query the name, and the database quietly runs the stored query underneath</p>
+
+<div class="card-section">
+    <h2>Five Reports, One Messy Three-Table Join</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">saved query</span><span class="tag orange">SQL</span></div>
+                <ul>
+                    <li><b>The definition</b> — an online store calls a customer "active" if they have a paid order in the last 90 days</li>
+                    <li><b>The join</b> — answering that takes three tables: customers joined to orders joined to payments</li>
+                    <li><b>The mess</b> — two join keys, a date filter, a payment-status filter — 14 lines of SQL, every time</li>
+                    <li><b>Five copies</b> — the email list, churn dashboard, revenue report, loyalty picks and exec summary each paste it</li>
+                    <li><b>The view</b> — <code>CREATE VIEW active_customers AS &lt;that query&gt;</code> saves the query under a table-like name</li>
+                    <li><b>The costume</b> — every report now writes <code>FROM active_customers</code> as if that table really existed</li>
+                </ul>
+                <p class="example">The Tuesday email report shrinks from a 14-line three-table join to one line: <code>SELECT email FROM active_customers</code>.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A view is a SELECT statement saved under a name. The database swaps the full query in wherever the name appears — no rows are copied, no new table is stored.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What the Database Actually Runs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">query expansion</span><span class="tag orange">permissions</span></div>
+                <ul>
+                    <li><b>The analyst types</b> — <code>SELECT name, last_order_date FROM active_customers WHERE total_paid &gt; 200</code></li>
+                    <li><b>The rewrite</b> — before anything runs, the name expands into the stored three-table join plus the filter</li>
+                    <li><b>Hand-check in</b> — customer 4127 has 3 paid orders totaling $260 in the window, so she appears</li>
+                    <li><b>Hand-check out</b> — customer 5580's last paid order was 140 days ago, so the view never shows him</li>
+                    <li><b>The lock</b> — analysts get SELECT on the view only; the payments table (with card_last4) grants them nothing</li>
+                    <li><b>The trick</b> — the view reads tables with its owner's rights, so readers see results without touching raw data</li>
+                </ul>
+                <p class="example">Customer 4127 (3 paid orders, $260 in 90 days) is in the result and 5580 (last paid order 140 days ago) is not — identically by hand or through the view.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Querying the view and querying its stored SELECT are the same operation — and because it is a separate object, you can grant people the view while denying them the raw tables underneath.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Definition of Active, Not Five</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag green">single source</span><span class="tag orange">column security</span></div>
+                <ul>
+                    <li><b>The drift</b> — the five pasted copies quietly diverged: 90-day, 60-day, 30-day and 75-day windows</li>
+                    <li><b>The worst copy</b> — the exec summary forgot the paid filter and counted unpaid orders too</li>
+                    <li><b>Five answers</b> — the same word "active" reported as 3,400, 2,600, 1,900, 3,150 and 3,650 customers</li>
+                    <li><b>One edit</b> — after the view, changing the window is one <code>CREATE OR REPLACE VIEW</code>; all five reports follow</li>
+                    <li><b>Column security</b> — the view exposes 5 safe columns; card_last4 and margin never leave the raw tables</li>
+                    <li><b>A stable name</b> — tables behind the view can be renamed or split; reports keep querying the same name</li>
+                </ul>
+                <p class="example">In the Monday meeting the exec asks why churn says 2,600 actives while the email list says 3,400 — nobody can answer, because both copies are "the" definition.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A view turns a business definition into one shared object — one place to fix the logic, one place to attach permissions, instead of five drifting copies.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A View Is Not a Faster Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">computed at query time</span></div>
+                <ul>
+                    <li><b>No speedup</b> — the view stores the query text, not the answer; the join runs fresh on every query</li>
+                    <li><b>Same 1.8s</b> — the raw three-table join takes 1.8s; the same SELECT through the view takes the same 1.8s</li>
+                    <li><b>Stacking</b> — views built on views rerun the whole stack each time, so slowness quietly compounds</li>
+                    <li><b>The fast cousin</b> — a materialized view or nightly summary table stores the rows (0.05s) but goes stale</li>
+                    <li><b>The tell</b> — if a "table" is always perfectly up to date and cost nothing to create, it is a plain view</li>
+                </ul>
+                <p class="example">The team wraps the slow churn join in a view hoping the dashboard gets snappy — it stays at 1.8s, because the view reruns that exact join.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting a view to speed up a slow query. A plain view is expanded and recomputed at query time; only storing the results — a summary table or materialized view — buys speed, at the price of staleness.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function drawBox(ctx, x, y, w, h, fill, stroke, lw) {
+    rrect(ctx, x, y, w, h, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lw) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: three raw tables feed one view, five reports read the view
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Saved Join, Five Reports Share It', w / 2, 24);
+
+    // table boxes (left)
+    var tblY = [62, 127, 192];
+    var tblLabs = ['customers — 12,000 rows', 'orders — 48,000 rows', 'payments — 46,500 rows'];
+    for (var i = 0; i < 3; i++) {
+        drawBox(ctx, 40, tblY[i], 140, 36, 'rgba(42,120,214,0.15)', P.blue, 1.5);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tblLabs[i].split(' — ')[0], 110, tblY[i] + 15);
+        ctx.fillText(tblLabs[i].split(' — ')[1], 110, tblY[i] + 30);
+    }
+
+    // view box (center)
+    drawBox(ctx, 270, 112, 180, 66, 'rgba(0,131,0,0.12)', P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('VIEW active_customers', 360, 140);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('3,400 rows when queried', 360, 158);
+
+    // report boxes (right)
+    var repY = [48, 98, 148, 198, 248];
+    var repLabs = ['email list', 'churn dashboard', 'revenue report', 'loyalty picks', 'exec summary'];
+    for (var i = 0; i < 5; i++) {
+        drawBox(ctx, 540, repY[i], 150, 30, 'rgba(74,58,167,0.10)', P.violet, 1.5);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(repLabs[i], 615, repY[i] + 19);
+    }
+
+    // arrows: tables -> view
+    for (var i = 0; i < 3; i++) {
+        drawArrow(ctx, 180, tblY[i] + 18, 268, 145, P.mute, 2);
+    }
+    // arrows: view -> reports
+    for (var i = 0; i < 5; i++) {
+        drawArrow(ctx, 450, 145, 538, repY[i] + 15, P.mute, 2);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the join is written once — the name is reused five times', 40, 288);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts illustrative', 710, 292);
+});
+
+// c2: the short query typed vs the expanded join actually run
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('You Type Three Lines — the Database Runs Fourteen', w / 2, 24);
+
+    // left panel: what the analyst types
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what the analyst types', 40, 60);
+    drawBox(ctx, 40, 70, 270, 150, 'rgba(42,120,214,0.08)', P.blue, 2);
+    var typed = [
+        'SELECT name, last_order_date',
+        'FROM active_customers',
+        'WHERE total_paid > 200;'
+    ];
+    ctx.fillStyle = P.text; ctx.font = '12px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+    for (var i = 0; i < typed.length; i++) {
+        ctx.fillText(typed[i], 54, 108 + i * 26);
+    }
+
+    // arrow
+    drawArrow(ctx, 318, 145, 396, 145, P.mute, 2.5);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the name expands', 357, 130);
+
+    // right panel: what the database runs
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what the database runs', 400, 44);
+    drawBox(ctx, 400, 52, 290, 186, 'rgba(0,131,0,0.07)', P.green, 2);
+    var run = [
+        'SELECT c.name, MAX(o.order_date), SUM(p.amount)',
+        'FROM customers c',
+        'JOIN orders o ON o.customer_id = c.id',
+        'JOIN payments p ON p.order_id = o.id',
+        "WHERE p.status = 'paid'",
+        '  AND o.order_date >= today - 90 days',
+        'GROUP BY c.name',
+        'HAVING SUM(p.amount) > 200;'
+    ];
+    ctx.fillStyle = P.text; ctx.font = '11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+    for (var i = 0; i < run.length; i++) {
+        ctx.fillText(run[i], 410, 78 + i * 21);
+    }
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('expansion abridged — 14 lines in full', 690, 252);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('analysts: SELECT on the view only — direct reads of payments denied', 40, 262);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same rows either way — the view adds a name, not data', w / 2, 288);
+});
+
+// c3: five pasted copies vs one view — "active customers" per report
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Five Pasted Copies, Five Answers — One View, One Answer', w / 2, 24);
+
+    var ox = 60, baseY = 245, chH = 180, maxV = 4000;
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    // gridlines
+    var grid = [1000, 2000, 3000];
+    for (var i = 0; i < grid.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grid[i])); ctx.lineTo(ox + 620, yOf(grid[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i] / 1000) + ',000', ox - 6, yOf(grid[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 620, baseY); ctx.stroke();
+
+    var centers = [120, 240, 360, 480, 600];
+    var groups = ['email', 'churn', 'revenue', 'loyalty', 'exec'];
+    var before = [3400, 2600, 1900, 3150, 3650];
+    var after = [3400, 3400, 3400, 3400, 3400];
+    for (var i = 0; i < 5; i++) {
+        var cx = centers[i];
+        // before bar (orange, left)
+        var bh = before[i] / maxV * chH;
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(cx - 34, baseY - bh, 34, bh);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(before[i].toLocaleString('en-US'), cx - 17, baseY - bh - 5);
+        // after bar (green, right)
+        var ah = after[i] / maxV * chH;
+        ctx.fillStyle = P.green;
+        ctx.fillRect(cx, baseY - ah, 34, ah);
+        if (i === 0) {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+            ctx.fillText(after[i].toLocaleString('en-US'), cx + 17, baseY - ah - 5);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(groups[i], cx, baseY + 16);
+    }
+
+    // reference line at 3,400
+    ctx.strokeStyle = P.ink; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(3400)); ctx.lineTo(ox + 620, yOf(3400)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one definition: 3,400', ox + 618, yOf(3400) - 6);
+
+    // legend (top right)
+    ctx.fillStyle = P.orange; ctx.fillRect(468, 36, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('pasted copy (before)', 485, 46);
+    ctx.fillStyle = P.green; ctx.fillRect(468, 54, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('shared view (after)', 485, 64);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("same word 'active', five different numbers", 90, 60);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', 710, 292);
+});
+
+// c4: same query three ways — raw join, through the view, summary table
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Question Three Ways: the View Is Exactly as Slow as the Join', w / 2, 24);
+
+    var ox = 60, baseY = 245, chH = 180, maxV = 2.0;
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    var grid = [0.5, 1.0, 1.5];
+    var gridLabs = ['0.5s', '1.0s', '1.5s'];
+    for (var i = 0; i < grid.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grid[i])); ctx.lineTo(ox + 620, yOf(grid[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gridLabs[i], ox - 6, yOf(grid[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 620, baseY); ctx.stroke();
+
+    var centers = [170, 370, 570];
+    var vals = [1.8, 1.8, 0.05];
+    var cols = [P.blue, P.orange, P.aqua];
+    var names = ['raw 3-table join', 'through the view', 'nightly summary table'];
+    var timeLabs = ['1.8s', '1.8s', '0.05s'];
+    for (var i = 0; i < 3; i++) {
+        var bh = vals[i] / maxV * chH;
+        ctx.fillStyle = cols[i];
+        ctx.fillRect(centers[i] - 60, baseY - bh, 120, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        var labY = i === 2 ? 216 : baseY - bh - 8;
+        ctx.fillText(timeLabs[i], centers[i], labY);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(names[i], centers[i], baseY + 16);
+    }
+    // staleness note under third bar's time label
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('stale until tonight\'s refresh', centers[2], 230);
+
+    // equality marker joining tops of first two bars
+    var topY = yOf(1.8);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(centers[0] - 60, topY); ctx.lineTo(centers[1] + 60, topY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same 1.8s — the view saved typing, not time', 270, 60);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', 710, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

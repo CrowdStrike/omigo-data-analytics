@@ -1,0 +1,39 @@
+# CS Foundations for Data
+
+**Page type:** grid page (tutorial category nav grid, 4 columns, single flat grid)
+**HTML title tag:** CS Foundations for Data
+
+**Subtitle:** The computer science ideas that quietly decide whether your data work is fast, correct, and trustworthy.
+
+| # | Category | Title | Link | Description | Topic tags |
+|---|----------|-------|------|-------------|------------|
+| 1 | SCALE & SPEED | Big-O Intuition | [25-cs-foundations-for-data/01-big-o-intuition.md](25-cs-foundations-for-data/01-big-o-intuition.md) | A feel for how work grows as data grows — and why "twice the rows" can mean far more than twice the time. | growth rates, nested loops, rule of thumb |
+| 2 | SCALE & SPEED | Why Some Code Dies at a Million Rows | [25-cs-foundations-for-data/02-why-some-code-dies-at-a-million-rows.md](25-cs-foundations-for-data/02-why-some-code-dies-at-a-million-rows.md) | Code that works fine on a sample can grind to a halt on the full table — here is how to spot it before it happens. | quadratic traps, row-by-row loops, vectorization |
+| 3 | SCALE & SPEED | Caching | [25-cs-foundations-for-data/03-caching.md](25-cs-foundations-for-data/03-caching.md) | Keeping an answer around so you never compute it twice — the trick behind most "how is that so fast" moments. | memoization, hit rate, stale results |
+| 4 | SCALE & SPEED | Memory vs Disk | [25-cs-foundations-for-data/04-memory-vs-disk.md](25-cs-foundations-for-data/04-memory-vs-disk.md) | Why reading from RAM and reading from disk feel like different worlds, and what that means for big datasets. | latency gap, out-of-memory, chunking |
+| 5 | SCALE & SPEED | Parallelism, Intuitively | [25-cs-foundations-for-data/05-parallelism-intuitively.md](25-cs-foundations-for-data/05-parallelism-intuitively.md) | Splitting one big job across many workers — when it helps a lot, and why it never helps as much as you hope. | divide and conquer, coordination cost, Amdahl's law |
+| 6 | DATA MECHANICS | Hashing | [25-cs-foundations-for-data/06-hashing.md](25-cs-foundations-for-data/06-hashing.md) | Turning anything into a short fixed-size fingerprint — the idea behind fast lookups, joins, and dedup. | fingerprints, hash tables, collisions |
+| 7 | DATA MECHANICS | Floating Point: Why 0.1 + 0.2 ≠ 0.3 | [25-cs-foundations-for-data/07-floating-point-why-0-1-plus-0-2-not-equals-0-3.md](25-cs-foundations-for-data/07-floating-point-why-0-1-plus-0-2-not-equals-0-3.md) | Computers store decimals approximately, so tiny errors creep into sums, averages, and equality checks. | rounding error, equality checks, money math |
+| 8 | DATA MECHANICS | Integer Overflow & Precision | [25-cs-foundations-for-data/08-integer-overflow-and-precision.md](25-cs-foundations-for-data/08-integer-overflow-and-precision.md) | Numbers have a ceiling — cross it and counters wrap around or silently lose digits, corrupting totals. | overflow, 64-bit limits, big counters |
+| 9 | DATA MECHANICS | Character Encodings | [25-cs-foundations-for-data/09-character-encodings.md](25-cs-foundations-for-data/09-character-encodings.md) | Why text turns into Ã©-style garbage when files are read with the wrong alphabet-to-bytes mapping. | UTF-8, mojibake, CSV imports |
+| 10 | DATA MECHANICS | Compression Basics | [25-cs-foundations-for-data/10-compression-basics.md](25-cs-foundations-for-data/10-compression-basics.md) | How files shrink by exploiting repetition, and why some data compresses to almost nothing while other data won't budge. | redundancy, lossless vs lossy, columnar files |
+| 11 | DATA MECHANICS | Fixed Point vs Floating Point | [25-cs-foundations-for-data/11-fixed-point-vs-floating-point.md](25-cs-foundations-for-data/11-fixed-point-vs-floating-point.md) | Two ways to store $3.14 — pin the decimal in one agreed spot for exactness, or trade exact digits for a huge range. | fixed point, floating point, exact vs range |
+| 12 | ALGORITHMS THAT MATTER | Binary Search & Sorting | [25-cs-foundations-for-data/12-binary-search-and-sorting.md](25-cs-foundations-for-data/12-binary-search-and-sorting.md) | Sorted data lets you find any item by halving the search — the reason indexes and lookups feel instant. | halving, sorted order, indexes |
+| 13 | ALGORITHMS THAT MATTER | Reservoir Sampling | [25-cs-foundations-for-data/13-reservoir-sampling.md](25-cs-foundations-for-data/13-reservoir-sampling.md) | Picking a fair random sample from a stream when you can't hold the data and don't know how much is coming. | streaming, fair sampling, fixed memory |
+| 14 | ALGORITHMS THAT MATTER | Bloom Filters & Sketches | [25-cs-foundations-for-data/14-bloom-filters-and-sketches.md](25-cs-foundations-for-data/14-bloom-filters-and-sketches.md) | Tiny structures that answer "have I seen this?" or "roughly how many?" using a sliver of the memory exact answers need. | approximate answers, membership tests, distinct counts |
+| 15 | INFORMATION & CODING | Huffman Coding | [25-cs-foundations-for-data/15-huffman-coding.md](25-cs-foundations-for-data/15-huffman-coding.md) | Give the most common symbols the shortest codes and the rare ones longer codes — the greedy tree inside every ZIP file. | variable-length codes, prefix rule, greedy tree |
+| 16 | INFORMATION & CODING | Error-Correcting Codes | [25-cs-foundations-for-data/16-error-correcting-codes.md](25-cs-foundations-for-data/16-error-correcting-codes.md) | Extra check bits stored alongside the data let a reader work out exactly which bits were destroyed and put them back. | check bits, redundancy, bit flips |
+| 17 | INFORMATION & CODING | Kolmogorov Complexity | [25-cs-foundations-for-data/17-kolmogorov-complexity.md](25-cs-foundations-for-data/17-kolmogorov-complexity.md) | The complexity of data is the length of the shortest recipe that reproduces it — patterned data has a short recipe, truly random data has none. | shortest recipe, patterns, randomness |
+
+## Regeneration instructions
+
+To rebuild the HTML from this spec:
+
+- **Template:** tutorials category grid page. Single page: h1, `.subtitle` paragraph, then one flat `.nav-grid` of `.nav-card` anchors (no h2 section headings).
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin-top 15px; responsive: 3 columns below 1400px, 2 below 1100px, 1 below 600px.
+- **Links:** the tables above link to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
+- **Card structure:** `<a class="nav-card" href="cs-foundations/NN-slug.html">` containing `<div class="card-num">SUBCATEGORY LABEL</div>`, `<h3>N. Title</h3>` (unpadded index number matching the 2-digit zero-padded file number; numbering runs across the whole category), `<p>description</p>`, then `<div class="topics">` of `<span class="topic-tag">` pills (one per topic tag listed above). Cards appear in ascending number order within each section.
+- **Category label colors** (applied by a small script that maps `.card-num` text to a color): SCALE & SPEED `#e67e22`; DATA MECHANICS `#27ae60`; ALGORITHMS THAT MATTER `#8e44ad`; INFORMATION & CODING `#16a085`. Default `.card-num` color `#2980b9`.
+- **Card style:** background `#ffffff`, border `1px solid #d8d8d8`, radius 10px, padding 20px, shadow `0 2px 4px rgba(0,0,0,0.05)`; hover: border `#2980b9`, `translateY(-2px)`. `.card-num` 0.75em bold; h3 `#1a3a4a` 1em; description `#555` 0.85em. Topic tags: background `#f0f0f0`, border `1px solid #ccc`, radius 4px, padding 2px 6px, 0.7em, `#666`, flex-wrapped with 4px gap.
+- **Page style:** body system sans-serif, background `#f5f5f0`, text `#2a2a2a`, padding 40px, line-height 1.6; h1 1.8em `#2980b9`; subtitle `#666` 1.05em. No nav bar, no back/home links.
+- **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`. No canvases on this page; detail pages use `window.devicePixelRatio` scaling for canvases.

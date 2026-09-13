@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Count-Min Sketch</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Count-Min Sketch</h1>
+<p class="subtitle">When a stream is too big to keep a counter per item, a count-min sketch counts everything on a tiny fixed grid of shared boxes — and reads an item's count as the smallest box it touches, which can only overshoot, never undershoot</p>
+
+<div class="card-section">
+    <h2>A Tally Card Smaller Than the Menu</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">shared counters</span><span class="tag orange">fixed memory</span></div>
+                <ul>
+                    <li><b>The cafe</b> — a busy cafe's register logs thousands of orders a day across a menu of 200 drinks</li>
+                    <li><b>Too many counters</b> — keeping one tally per drink means 200 counters; a search engine would need billions</li>
+                    <li><b>The card</b> — instead, use one small card: 2 rows of 4 boxes, sized before the day starts</li>
+                    <li><b>The rules</b> — each row has its own rule (a hash) that sends every drink name to exactly one of its boxes</li>
+                    <li><b>Shared boxes</b> — with 200 drinks and 4 boxes per row, strangers share a box; their counts pile up together</li>
+                    <li><b>Reading it</b> — to count a drink, look at its one box in each row and take the smallest number</li>
+                </ul>
+                <p class="example">An order of "cola" bumps row A's box 2 and row B's box 1 by one each — two pen strokes, no matter how big the menu is.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A count-min sketch is a small fixed grid of shared counters: every arrival increments one box per row, and an item's count is read as the minimum across its boxes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Eight Orders on a Two-Row Card</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">take the min</span></div>
+                <ul>
+                    <li><b>The stream</b> — 8 lunch orders arrive: cola, chai, cola, soup, cola, cake, chai, cola</li>
+                    <li><b>True counts</b> — cola 4, chai 2, soup 1, cake 1; the card never stores these, only its 8 boxes</li>
+                    <li><b>Rule collisions</b> — row A sends cola AND chai to box 2; row B sends cola AND soup to box 1</li>
+                    <li><b>Card after lunch</b> — row A reads 1, 0, 6, 1 and row B reads 1, 5, 0, 2 across its four boxes</li>
+                    <li><b>Reading cola</b> — its boxes hold 6 (row A) and 5 (row B); take the min: estimate 5, truth 4</li>
+                    <li><b>Reading chai</b> — its boxes hold 6 and 2; the min is 2, which happens to be exactly right</li>
+                </ul>
+                <p class="example">Row A's box 2 says 6 because cola's 4 and chai's 2 piled into the same box — the min across rows is what strips away most of that pile-up.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Estimate = min over rows of the item's box: cola gets min(6, 5) = 5 against a true 4 — one stray order of overcount, never any undercount.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Small Card Beats the Big Ledger</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">streams</span><span class="tag orange">heavy hitters</span></div>
+                <ul>
+                    <li><b>Fixed size</b> — the card is sized before the stream starts and never grows, however long the day runs</li>
+                    <li><b>Real streams</b> — trending search terms, top network flows, most-played songs: too many keys to tally exactly</li>
+                    <li><b>Heavy hitters</b> — overcounts are tiny next to popular items' counts, so the big sellers rank correctly</li>
+                    <li><b>Tunable error</b> — more boxes per row shrinks the overcount; more rows makes a lucky low box more likely</li>
+                    <li><b>One pass</b> — each arrival costs one bump per row and is then forgotten; nothing is ever revisited</li>
+                </ul>
+                <p class="example">By closing time the cafe has logged 8,000 orders, and an exact ledger would be carrying 186 drink counters — the card is still the same 8 boxes it opened with.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Memory is chosen up front and stays flat: the stream can grow all day while the sketch keeps answering from the same few boxes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Never Undercounts — and It Can't Name Items</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">one-sided error</span></div>
+                <ul>
+                    <li><b>One-sided error</b> — boxes only ever gain from collisions, so every estimate is truth plus junk, never less</li>
+                    <li><b>Not an average</b> — averaging cola's boxes gives (6+5)/2 = 5.5; the min, 5, is the tighter and safer read</li>
+                    <li><b>Can't enumerate</b> — the card answers "how many cola?" but cannot list which drinks were ordered</li>
+                    <li><b>Not a Bloom filter</b> — a Bloom filter answers "seen at all?"; the count-min sketch answers "roughly how many?"</li>
+                    <li><b>Rare items suffer</b> — a 1-count drink sharing a box with a 4-count seller can look five times too popular</li>
+                </ul>
+                <p class="example">Asking the lunch card about "latte" — never ordered — returns min(6, 5) = 5, because latte's boxes happen to be cola's boxes; zero is never guaranteed, only "at most this".</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the estimate as exact or two-sided. It is an upper bound: fine for spotting big sellers, misleading for items whose true counts are near zero.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: one order routed into one box per row
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Order, Two Rules: 'cola' Lands in One Box per Row", w / 2, 24);
+
+    function roundRect(x, y, rw, rh, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + rw - r, y);
+        ctx.arcTo(x + rw, y, x + rw, y + r, r);
+        ctx.lineTo(x + rw, y + rh - r);
+        ctx.arcTo(x + rw, y + rh, x + rw - r, y + rh, r);
+        ctx.lineTo(x + r, y + rh);
+        ctx.arcTo(x, y + rh, x, y + rh - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    // order token
+    ctx.fillStyle = 'rgba(42,120,214,0.12)';
+    roundRect(30, 125, 130, 55, 6); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    roundRect(30, 125, 130, 55, 6); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order: cola', 95, 157);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText("from the day's stream of orders", 95, 200);
+
+    // grid: two rows of 4 cells
+    var cellW = 85, cellH = 52, gx = 350, rowAy = 85, rowBy = 175;
+    for (var i = 0; i < 4; i++) {
+        var cx = gx + i * cellW;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(cx, rowAy, cellW, cellH);
+        ctx.fillRect(cx, rowBy, cellW, cellH);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+        ctx.strokeRect(cx, rowAy, cellW, cellH);
+        ctx.strokeRect(cx, rowBy, cellW, cellH);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('box ' + i, cx + cellW / 2, 75);
+    }
+
+    // row labels
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row A — rule 1', 340, 115);
+    ctx.fillText('row B — rule 2', 340, 205);
+
+    // arrows
+    function arrow(x1, y1, x2, y2) {
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 11 * Math.cos(ang - 0.4), y2 - 11 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 11 * Math.cos(ang + 0.4), y2 - 11 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+    arrow(160, 140, 520, 111);   // to row A box 2
+    arrow(160, 165, 435, 201);   // to row B box 1
+
+    // +1 in the target cells
+    ctx.fillStyle = P.green; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+1', 520 + cellW / 2, rowAy + 31);   // row A box 2
+    ctx.fillText('+1', 435 + cellW / 2, rowBy + 31);   // row B box 1
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('200 drinks share 8 boxes —', 350, 45);
+    ctx.fillText('each row splits them differently', 350, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — a 2×4 card standing in for a much wider real sketch', w - 15, h - 10);
+});
+
+// c2: the filled card after 8 orders, cola's boxes highlighted
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("After 8 Orders: Read 'cola' as the Smallest of Its Boxes", w / 2, 24);
+
+    var cellW = 100, cellH = 54, gx = 230, rowAy = 75, rowBy = 165;
+    var rowA = [1, 0, 6, 1], rowB = [1, 5, 0, 2];
+
+    // cells
+    for (var i = 0; i < 4; i++) {
+        var cx = gx + i * cellW;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(cx, rowAy, cellW, cellH);
+        ctx.fillRect(cx, rowBy, cellW, cellH);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+        ctx.strokeRect(cx, rowAy, cellW, cellH);
+        ctx.strokeRect(cx, rowBy, cellW, cellH);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('box ' + i, cx + cellW / 2, 65);
+    }
+
+    // cola highlights: row A box 2, row B box 1
+    ctx.fillStyle = 'rgba(217,89,38,0.12)';
+    ctx.fillRect(gx + 2 * cellW, rowAy, cellW, cellH);
+    ctx.fillRect(gx + 1 * cellW, rowBy, cellW, cellH);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.strokeRect(gx + 2 * cellW, rowAy, cellW, cellH);
+    ctx.strokeRect(gx + 1 * cellW, rowBy, cellW, cellH);
+
+    // cell values
+    ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = P.text;
+    for (var i = 0; i < 4; i++) {
+        ctx.fillText(String(rowA[i]), gx + i * cellW + cellW / 2, rowAy + 34);
+        ctx.fillText(String(rowB[i]), gx + i * cellW + cellW / 2, rowBy + 34);
+    }
+
+    // row labels
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row A', 220, 106);
+    ctx.fillText('row B', 220, 196);
+
+    // cola tags + collision notes
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.orange; ctx.font = 'bold 11px system-ui';
+    ctx.fillText("cola's box", gx + 2 * cellW + cellW / 2, 142);
+    ctx.fillText("cola's box", gx + 1 * cellW + cellW / 2, 232);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('cola + chai share it', gx + 2 * cellW + cellW / 2, 156);
+    ctx.fillText('cola + soup share it', gx + 1 * cellW + cellW / 2, 246);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cola estimate = min(6, 5) = 5 — true count is 4', 60, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative 8-order lunch stream', w - 15, h - 10);
+});
+
+// c3: exact ledger grows, sketch stays flat at 8 boxes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Day of Orders: the Exact Ledger Grows, the Card Stays at 8 Boxes', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 185, maxX = 8000, maxY = 200;
+    function xOf(v) { return ox + v / maxX * pw; }
+    function yOf(v) { return baseY - v / maxY * ph; }
+
+    // gridlines + y ticks
+    var grids = [50, 100, 150, 200];
+    ctx.font = '12px system-ui';
+    for (var i = 0; i < grids.length; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, gy + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var xt = [0, 2000, 4000, 6000, 8000];
+    var xl = ['0', '2,000', '4,000', '6,000', '8,000'];
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var i = 0; i < xt.length; i++) {
+        ctx.fillText(xl[i], xOf(xt[i]), baseY + 18);
+    }
+
+    // axis captions
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders seen', ox + pw / 2, baseY + 36);
+    ctx.save();
+    ctx.translate(18, baseY - ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('counters kept', 0, 0);
+    ctx.restore();
+
+    var orders = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000];
+    var counters = [0, 60, 95, 120, 140, 155, 168, 178, 186];
+
+    // exact ledger line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < orders.length; i++) {
+        var x = xOf(orders[i]), y = yOf(counters[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('exact: one counter per distinct drink', xOf(4500), yOf(148) - 24);
+
+    // sketch line: flat at 8
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(0), yOf(8)); ctx.lineTo(xOf(8000), yOf(8)); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sketch: 8 boxes, fixed', xOf(1800), yOf(8) - 8);
+
+    // end markers + value labels
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(xOf(8000), yOf(186), 3, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('186', xOf(8000) - 8, yOf(186) - 6);
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(8000), yOf(8), 3, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillText('8', xOf(8000) - 8, yOf(8) - 6);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the card's size is chosen", xOf(5200), 175);
+    ctx.fillText('before the day starts', xOf(5200), 190);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — counter growth invented', w - 15, h - 10);
+});
+
+// c4: true count vs card estimate — grouped bars, error only points up
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('True Count vs Card Estimate — the Error Only Points Up', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180, maxV = 6;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines + y ticks
+    var grids = [2, 4, 6];
+    ctx.font = '12px system-ui';
+    for (var i = 0; i < grids.length; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, gy + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var centers = [130, 250, 370, 490, 610];
+    var items = ['cola', 'chai', 'soup', 'cake', 'latte'];
+    var trueC = [4, 2, 1, 1, 0];
+    var estC = [5, 2, 1, 1, 5];
+
+    for (var i = 0; i < 5; i++) {
+        var cx = centers[i];
+        // true bar (left)
+        var ty = yOf(trueC[i]);
+        ctx.fillStyle = 'rgba(42,120,214,0.75)';
+        ctx.fillRect(cx - 42, ty, 40, baseY - ty);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(trueC[i]), cx - 22, ty - 6);
+        // estimate bar (right)
+        var ey = yOf(estC[i]);
+        ctx.fillStyle = 'rgba(217,89,38,0.75)';
+        ctx.fillRect(cx + 2, ey, 40, baseY - ey);
+        ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(String(estC[i]), cx + 22, ey - 6);
+        // item label
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(items[i], cx, baseY + 18);
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.75)';
+    ctx.fillRect(80, 47, 14, 10);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('true count', 100, 56);
+    ctx.fillStyle = 'rgba(217,89,38,0.75)';
+    ctx.fillRect(180, 47, 14, 10);
+    ctx.fillStyle = P.text;
+    ctx.fillText('card estimate', 200, 56);
+
+    // annotation with pointer to latte's estimate bar
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('never ordered, still reads 5 —', 500, 95);
+    ctx.fillText('its boxes belong to cola', 500, 110);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(590, 98); ctx.lineTo(628, yOf(5) + 6); ctx.stroke();
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — same 8-order lunch as above', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

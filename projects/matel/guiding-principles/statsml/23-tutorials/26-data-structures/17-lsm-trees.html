@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LSM Trees</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>LSM Trees</h1>
+<p class="subtitle">When new data arrives faster than you can file it, jot everything at the end of a notepad and sort it later in batches — that trade is the whole idea of an LSM tree</p>
+
+<div class="card-section">
+    <h2>The Pizza Shop Notepad vs the Filing Cabinet</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">append-only</span><span class="tag orange">write-heavy</span></div>
+                <ul>
+                    <li><b>The shop</b> — a pizza shop's phone rings nonstop on game night; every order must be written down instantly</li>
+                    <li><b>The cabinet</b> — filing each order alphabetically means shuffling earlier slips to make room, every time</li>
+                    <li><b>The notepad</b> — the cashier instead jots each order at the bottom of the pad: one motion, always the same cost</li>
+                    <li><b>Sort later</b> — when the pad fills up, its orders get copied onto one sorted page in a single quiet pass</li>
+                    <li><b>The name</b> — databases that work this way (append fast, merge sorted batches later) are LSM trees</li>
+                </ul>
+                <p class="example">Order #8 lands on the notepad in 1 step, but filing it alphabetically would mean shifting 5 slips first — the pad never makes the phone wait.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An LSM tree accepts writes at the cheapest possible spot — the end of a log — and pays the sorting bill later, in batches, off the critical path.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Flush and One Merge, by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">flush &amp; merge</span></div>
+                <ul>
+                    <li><b>The pad fills</b> — five jotted orders, arrival order: Mia 2, Sam 1, Leo 3, Sam 2, Ana 1</li>
+                    <li><b>Sam twice</b> — Sam called back to change 1 pizza to 2; the pad just gets a second Sam line</li>
+                    <li><b>The flush</b> — copy the pad to a sorted page, newest line per name wins: Ana 1, Leo 3, Mia 2, Sam 2</li>
+                    <li><b>An older page</b> — last hour's sorted page already reads: Ben 2, Mia 1, Zoe 1</li>
+                    <li><b>The merge</b> — zip the two sorted pages into one: Ana 1, Ben 2, Leo 3, Mia 2, Sam 2, Zoe 1</li>
+                    <li><b>Shrinkage</b> — the flush drops Sam's stale line (5 &rarr; 4); the merge feeds 4 + 3 = 7 lines, writes 6</li>
+                </ul>
+                <p class="example">Mia appears on both pages (2 new, 1 old) — the merge keeps the newer "Mia 2" and drops the stale line, no eraser needed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Flush = sort one small batch; merge = zip two already-sorted pages front to front — both are single left-to-right passes anyone can redo by hand.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Write-Heavy Systems Choose This</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">trade-off</span></div>
+                <ul>
+                    <li><b>The flood</b> — chat messages, sensor readings, click logs: millions of tiny writes, few slow lookups</li>
+                    <li><b>Write win</b> — the notepad design takes roughly 4x more orders per minute than file-in-place (below)</li>
+                    <li><b>Read cost</b> — a lookup now checks the pad first, then newer pages, then older ones, newest first</li>
+                    <li><b>Real homes</b> — this is the storage engine inside Cassandra, RocksDB, LevelDB, and HBase</li>
+                    <li><b>The other camp</b> — read-heavy systems keep the filing cabinet (B-trees): slower writes, one-stop reads</li>
+                </ul>
+                <p class="example">On game night the shop logs 180 orders/min on the pad but would manage about 45/min filing each alphabetically — while a lookup now flips through 3 pages instead of 1 (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> LSM trees buy cheap, steady writes by making reads check a few sorted pages — the right trade exactly when writes outnumber reads.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Deleting Without an Eraser</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">tombstones</span></div>
+                <ul>
+                    <li><b>The cancel</b> — Sam calls to cancel; the cashier cannot erase Sam's line from an already-sorted page</li>
+                    <li><b>The tombstone</b> — instead a new line goes on the pad: "Sam — CANCELLED", dated after Sam's order</li>
+                    <li><b>Newest wins</b> — a lookup meets the cancel note first, stops, and reports "no order for Sam"</li>
+                    <li><b>Still on disk</b> — the old "Sam 2" line sits on the older page until a later merge drops both lines</li>
+                    <li><b>The mistake</b> — assuming a delete frees space at once; before the merge it actually adds a line</li>
+                </ul>
+                <p class="example">Right after the cancel the pages hold 9 lines about 8 customers — Sam's order plus Sam's tombstone — and only the next merge shrinks it to 7 lines.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating deletes as instant removal. In an LSM tree a delete is one more write — a tombstone — and the data truly disappears only when compaction merges past it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// arrow with small filled triangle arrowhead
+function drawArrow(ctx, x1, y1, x2, y2, color, width) {
+    var dx = x2 - x1, dy = y2 - y1;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    var ux = dx / len, uy = dy / len;
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * 8, y2 - uy * 8); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * 9 - uy * 4.5, y2 - uy * 9 + ux * 4.5);
+    ctx.lineTo(x2 - ux * 9 + uy * 4.5, y2 - uy * 9 - ux * 4.5);
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: recording order #1..#8 — append vs file-in-place, grouped bars
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Recording Order #1 through #8: Append vs File-in-Place', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 620, plotH = 180, maxV = 6;
+    // gridlines 1..5
+    for (var g = 1; g <= 5; g++) {
+        var gy = baseY - g / maxV * plotH;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var appendSteps = [1, 1, 1, 1, 1, 1, 1, 1];
+    var sortedSteps = [1, 1, 2, 2, 3, 4, 4, 5];
+    var bw = 26, gap = 6;
+    for (var i = 0; i < 8; i++) {
+        var cx = ox + (i + 0.5) * plotW / 8;
+        // append bar (left)
+        var ah = appendSteps[i] / maxV * plotH;
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(cx - bw - gap / 2, baseY - ah, bw, ah);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw - gap / 2, baseY - ah, bw, ah);
+        // sorted-insert bar (right)
+        var sh = sortedSteps[i] / maxV * plotH;
+        ctx.fillStyle = 'rgba(217,89,38,0.30)';
+        ctx.fillRect(cx + gap / 2, baseY - sh, bw, sh);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        ctx.strokeRect(cx + gap / 2, baseY - sh, bw, sh);
+        // x label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('#' + (i + 1), cx, baseY + 18);
+    }
+
+    // legend top left inside plot
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fillRect(75, 44, 14, 10);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.strokeRect(75, 44, 14, 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('notepad: jot at the end', 95, 53);
+    ctx.fillStyle = 'rgba(217,89,38,0.30)'; ctx.fillRect(75, 60, 14, 10);
+    ctx.strokeStyle = P.orange; ctx.strokeRect(75, 60, 14, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('cabinet: shift slips, insert sorted', 95, 69);
+
+    // annotation, two lines
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('appending stays flat at 1 step —', 420, 95);
+    ctx.fillText('sorting is postponed, not skipped', 420, 112);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('step counts illustrative — shifts grow with slips already filed', w - 16, h - 8);
+});
+
+// c2: notepad -> flushed sorted page (+ older page) -> merged page
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Notepad → Sorted Page → Merged Page', w / 2, 24);
+
+    function box(x, y, bw, bh, border, borderW, fill, header, headerColor) {
+        ctx.fillStyle = fill;
+        ctx.fillRect(x, y, bw, bh);
+        ctx.strokeStyle = border; ctx.lineWidth = borderW;
+        ctx.strokeRect(x, y, bw, bh);
+        ctx.fillStyle = headerColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(header, x + 10, y + 18);
+    }
+
+    // notepad box
+    box(25, 55, 150, 170, P.blue, 2, 'rgba(42,120,214,0.10)', 'notepad (arrival order)', P.blue);
+    var padLines = ['Mia 2', 'Sam 1', 'Leo 3', 'Sam 2', 'Ana 1'];
+    for (var i = 0; i < padLines.length; i++) {
+        var ly = 55 + 40 + i * 26;
+        if (padLines[i] === 'Sam 1') {
+            ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('Sam 1', 35, ly);
+            var tw = ctx.measureText('Sam 1').width;
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(35, ly - 4); ctx.lineTo(35 + tw, ly - 4); ctx.stroke();
+            ctx.fillStyle = P.orange; ctx.font = '11px system-ui';
+            ctx.fillText('updated', 35 + tw + 8, ly);
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(padLines[i], 35, ly);
+        }
+    }
+
+    // flushed page box
+    box(235, 55, 150, 150, P.green, 2, 'rgba(0,131,0,0.08)', 'flushed page (sorted)', P.green);
+    var flushLines = ['Ana 1', 'Leo 3', 'Mia 2', 'Sam 2'];
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    for (var i = 0; i < flushLines.length; i++) {
+        ctx.fillText(flushLines[i], 245, 55 + 40 + i * 26);
+    }
+
+    // older page box
+    box(235, 215, 150, 70, P.mute, 2, '#f8f9fa', "last hour's page", P.mute);
+    // one line: "Ben 2 · Mia 1 · Zoe 1" with Mia 1 struck through
+    var oy = 215 + 44;
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.text;
+    ctx.fillText('Ben 2 · ', 245, oy);
+    var w1 = ctx.measureText('Ben 2 · ').width;
+    ctx.fillStyle = P.mute;
+    ctx.fillText('Mia 1', 245 + w1, oy);
+    var w2 = ctx.measureText('Mia 1').width;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(245 + w1, oy - 4); ctx.lineTo(245 + w1 + w2, oy - 4); ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.fillText(' · Zoe 1', 245 + w1 + w2, oy);
+
+    // merged page box
+    box(475, 75, 190, 170, P.violet, 3, 'rgba(74,58,167,0.08)', 'merged page (sorted)', P.violet);
+    var mergedLines = ['Ana 1', 'Ben 2', 'Leo 3', 'Mia 2', 'Sam 2', 'Zoe 1'];
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    for (var i = 0; i < mergedLines.length; i++) {
+        ctx.fillText(mergedLines[i], 485, 75 + 40 + i * 21);
+    }
+
+    // arrows
+    drawArrow(ctx, 175, 130, 235, 130, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('flush: sort 5 lines', 205, 112);
+
+    drawArrow(ctx, 385, 130, 475, 145, P.violet, 3);
+    drawArrow(ctx, 385, 245, 475, 195, P.violet, 3);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('merge: 7 lines in, 6 out', 430, 60);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('newest line per name wins', 475, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative orders — one flush, one merge', w - 16, h - 8);
+});
+
+// c3: two panels — write throughput and places checked per lookup
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Trade: Faster Writes, Busier Reads', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(380, 70); ctx.lineTo(380, 250); ctx.stroke();
+
+    // left panel: orders per minute
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('orders logged per minute', 60, 78);
+
+    var lScale = 230 / 200; // 0-200 mapped to 230px
+    // notepad bar
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(110, 110, 180 * lScale, 26);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(110, 110, 180 * lScale, 26);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('180', 110 + 180 * lScale + 8, 128);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('notepad (LSM)', 104, 128);
+    // cabinet bar
+    ctx.fillStyle = 'rgba(107,114,128,0.30)';
+    ctx.fillRect(110, 170, 45 * lScale, 26);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.strokeRect(110, 170, 45 * lScale, 26);
+    ctx.fillStyle = P.mute; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('45', 110 + 45 * lScale + 8, 188);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cabinet (B-tree)', 104, 188);
+
+    // right panel: places checked per lookup
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('places checked per lookup', 400, 78);
+
+    var rScale = 220 / 4; // 0-4 mapped to 220px
+    // LSM bar
+    ctx.fillStyle = 'rgba(217,89,38,0.30)';
+    ctx.fillRect(460, 110, 3 * rScale, 26);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(460, 110, 3 * rScale, 26);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3', 460 + 3 * rScale + 8, 128);
+    ctx.font = '12px system-ui';
+    ctx.fillText('pad + 2 pages', 460 + 3 * rScale + 8, 145);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('notepad (LSM)', 454, 128);
+    // B-tree bar
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(460, 170, 1 * rScale, 26);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(460, 170, 1 * rScale, 26);
+    ctx.fillStyle = P.green; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1', 460 + 1 * rScale + 8, 188);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cabinet (B-tree)', 454, 188);
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('~4x the write speed, paid for with a 3-stop read', w / 2, 272);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput and stop counts illustrative', w - 16, h - 8);
+});
+
+// c4: layered pages — lookup for Sam stops at the tombstone on the newest layer
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Looking Up 'Sam' After a Cancel: Newest Note Wins", w / 2, 24);
+
+    var lx = 170, lw = 420, lh = 48;
+    var layerYs = [70, 135, 200];
+    var layerLabs = ['notepad (newest)', 'merged page', 'oldest page'];
+
+    // layer labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    for (var i = 0; i < 3; i++) {
+        ctx.fillText(layerLabs[i], 25, layerYs[i] + lh / 2 + 4);
+    }
+
+    // top layer (tombstone)
+    ctx.fillStyle = 'rgba(231,76,60,0.10)';
+    ctx.fillRect(lx, layerYs[0], lw, lh);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(lx, layerYs[0], lw, lh);
+    var ty = layerYs[0] + lh / 2 + 4;
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Ana 1 · ', lx + 14, ty);
+    var w1 = ctx.measureText('Ana 1 · ').width;
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Sam — CANCELLED', lx + 14 + w1, ty);
+    var tombW = ctx.measureText('Sam — CANCELLED').width;
+
+    // red X marker on the tombstone entry
+    var xcx = lx + 14 + w1 + tombW + 14, xcy = ty - 4;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xcx - 4, xcy - 4); ctx.lineTo(xcx + 4, xcy + 4);
+    ctx.moveTo(xcx + 4, xcy - 4); ctx.lineTo(xcx - 4, xcy + 4);
+    ctx.stroke();
+
+    // middle layer
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(lx, layerYs[1], lw, lh);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.strokeRect(lx, layerYs[1], lw, lh);
+    var my = layerYs[1] + lh / 2 + 4;
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.text;
+    ctx.fillText('Ben 2 · Leo 3 · Mia 2 · ', lx + 14, my);
+    var mw1 = ctx.measureText('Ben 2 · Leo 3 · Mia 2 · ').width;
+    ctx.fillStyle = P.mute;
+    ctx.fillText('Sam 2', lx + 14 + mw1, my);
+    var mw2 = ctx.measureText('Sam 2').width;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx + 14 + mw1, my - 4); ctx.lineTo(lx + 14 + mw1 + mw2, my - 4); ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.fillText(' · Zoe 1', lx + 14 + mw1 + mw2, my);
+
+    // bottom layer
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(lx, layerYs[2], lw, lh);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.strokeRect(lx, layerYs[2], lw, lh);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Kim 1 · Raj 2', lx + 14, layerYs[2] + lh / 2 + 4);
+
+    // lookup arrow into the top layer
+    drawArrow(ctx, 640, 45, 620, layerYs[0] + 6, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lookup: Sam?', 610, 40);
+
+    // stop label below the top layer
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stop here — answer: cancelled', lx + 14, layerYs[0] + lh + 14);
+
+    // dashed skip lines past layers 2 and 3
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(620, layerYs[0] + lh); ctx.lineTo(620, layerYs[1] + lh / 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(620, layerYs[1] + lh); ctx.lineTo(620, layerYs[2] + lh / 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('never read for Sam', 630, layerYs[1] + lh / 2 + 4);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the delete added a line; the next merge removes both Sam lines', 170, 278);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — tombstone shown on the newest layer', w - 16, h - 4);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Write-Ahead Logging</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Write-Ahead Logging</h1>
+<p class="subtitle">Before touching the data, the database writes down what it is about to do &mdash; so a power cut mid-write loses nothing that was promised</p>
+
+<div class="card-section">
+    <h2>The $200 Transfer and the Pulled Plug</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">durability</span><span class="tag orange">crash safety</span></div>
+                <ul>
+                    <li><b>The transfer</b> &mdash; Priya moves $200 from checking ($500) to savings ($100) at 10:00:00</li>
+                    <li><b>Log first</b> &mdash; the database appends the changes to an append-only log file before touching any data</li>
+                    <li><b>Ack after fsync</b> &mdash; only once the log record is forced to disk does the app hear "committed"</li>
+                    <li><b>Pages later</b> &mdash; the actual account pages are rewritten lazily, whenever the database gets to them</li>
+                    <li><b>The plug</b> &mdash; power dies after the checking page is written but before the savings page is</li>
+                    <li><b>Safe anyway</b> &mdash; on restart the log still holds the full story, so the committed transfer survives</li>
+                </ul>
+                <p class="example">The plug is pulled 50 ms in: the log has all three records, the checking page shows $300, the savings page still shows $100 &mdash; yet no money is lost.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Write-ahead logging means every change is described in a sequential log that is forced to disk BEFORE the data pages &mdash; commit is safe the moment the log is, not when the data is.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Replaying the Log: Redo or Skip, LSN by LSN</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">recovery</span></div>
+                <ul>
+                    <li><b>Restart scan</b> &mdash; recovery reads the log forward and finds LSN 101, 102, 103 for the transfer</li>
+                    <li><b>Page stamps</b> &mdash; every data page stores the LSN of the last change already applied to it</li>
+                    <li><b>LSN 101</b> &mdash; the checking page carries page-LSN 101; 101 &ge; 101, change already there: skip</li>
+                    <li><b>LSN 102</b> &mdash; the savings page carries page-LSN 87 (stale); 87 &lt; 102: redo, set savings to $300</li>
+                    <li><b>LSN 103</b> &mdash; a COMMIT record, so the transfer counts; without it, both changes would roll back</li>
+                    <li><b>Idempotent</b> &mdash; crash during recovery? Replay again; the LSN compare makes redo safe to repeat</li>
+                </ul>
+                <p class="example">Recovery redoes exactly one record &mdash; LSN 102, savings 100&rarr;300 &mdash; and skips LSN 101 because the checking page already carries stamp 101.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The redo rule is one comparison: apply a log record only if its LSN is greater than the page's stamped LSN &mdash; that single check makes replay correct and repeatable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Log, Many Jobs: Recovery, Replicas, Restores</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">replication</span><span class="tag orange">CDC</span></div>
+                <ul>
+                    <li><b>Every serious DB</b> &mdash; Postgres's WAL, MySQL's redo log, SQLite's WAL mode: same idea, different names</li>
+                    <li><b>Filesystems too</b> &mdash; journaling filesystems log metadata changes before touching the real structures</li>
+                    <li><b>Replication</b> &mdash; replicas stay in sync by replaying the primary's log stream, not by copying files</li>
+                    <li><b>Point-in-time restore</b> &mdash; a backup plus the log since then rebuilds the database as of any second</li>
+                    <li><b>CDC</b> &mdash; change-data-capture taps the same log to feed caches, search indexes, and warehouses</li>
+                    <li><b>Speed bonus</b> &mdash; one sequential append is far cheaper than scattering random page writes at commit</li>
+                </ul>
+                <p class="example">A replica running 300 ms behind the primary is just another database replaying the same log 300 ms later.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The log outgrows crash safety &mdash; it becomes the canonical stream of every change, and recovery, replicas, restores, and pipelines are all just different subscribers to it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>write() Is Not on Disk: the fsync Trap</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">fsync</span><span class="tag blue">log is truth</span></div>
+                <ul>
+                    <li><b>The trap</b> &mdash; a successful <code>write()</code> only means the OS cache has the bytes, not the disk itself</li>
+                    <li><b>fsync</b> &mdash; the database must call fsync on the log and wait before acknowledging any commit</li>
+                    <li><b>Lying disks</b> &mdash; some drives ack from a volatile onboard cache; power loss can still eat those writes</li>
+                    <li><b>Log is truth</b> &mdash; data files are a cache of the log; a torn or stale page is rebuilt from it</li>
+                    <li><b>The mistake</b> &mdash; disabling fsync for a benchmark win, then losing acknowledged commits in a crash</li>
+                </ul>
+                <p class="example">With fsync off, a "committed" transfer can sit only in RAM for 30 seconds &mdash; a power cut in that window silently erases an acknowledged commit.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing <code>write()</code> returning means durable. Only an fsync'd log record survives the pulled plug &mdash; every layer above the disk is volatile, and the data files are just a cache.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: two-lane timeline — log durable at 22 ms, data pages cut off at 50 ms
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Log Is Done at 22 ms; the Data Pages Never Finish', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600;
+    function xOf(ms) { return ox + ms / 80 * pw; }
+
+    // axis with ms ticks every 20
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [0, 20, 40, 60, 80].forEach(function(ms) {
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(xOf(ms), baseY); ctx.lineTo(xOf(ms), baseY + 5); ctx.stroke();
+        ctx.fillText(ms === 80 ? '80 ms' : String(ms), xOf(ms), baseY + 20);
+    });
+
+    // lane guide lines + labels
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [110, 190].forEach(function(y) {
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+    });
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('log file — on disk', 62, 86);
+    ctx.fillText('data pages — on disk', 62, 166);
+
+    // log lane boxes (times 8 / 15 / 22 ms; boxes widened for legibility, ms labels give true times)
+    var logBoxes = [
+        { cx: 130, l1: 'LSN 101', l2: 'checking 500→300', ms: '8 ms', border: P.blue },
+        { cx: 255, l1: 'LSN 102', l2: 'savings 100→300', ms: '15 ms', border: P.blue },
+        { cx: 380, l1: 'LSN 103', l2: 'COMMIT ✓ fsync', ms: '22 ms', border: P.green }
+    ];
+    logBoxes.forEach(function(b) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.strokeStyle = b.border; ctx.lineWidth = 2;
+        rr(ctx, b.cx - 57, 110 - 14, 114, 28, 8);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.l1, b.cx, 107);
+        ctx.fillText(b.l2, b.cx, 120);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(b.ms, b.cx, 137);
+    });
+
+    // data lane: checking page written at 40 ms
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    rr(ctx, xOf(40) - 68, 190 - 14, 136, 28, 8);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('checking page = $300', xOf(40), 194);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('40 ms', xOf(40), 217);
+
+    // data lane: savings page write never happens (66 ms)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    rr(ctx, xOf(66) - 68, 190 - 14, 136, 28, 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('savings page write', xOf(66), 194);
+    ctx.fillText('never happens', xOf(66), 217);
+
+    // power cut at 50 ms
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(xOf(50), 55); ctx.lineTo(xOf(50), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('power cut', xOf(50), 50);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('commit already durable at 22 ms', xOf(25), 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, 292);
+});
+
+// c2: recovery decisions — one redo, one skip, one commit
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Recovery After the Crash: One Redo, One Skip, One Commit', w / 2, 24);
+
+    // column headers
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('log record', 70, 58);
+    ctx.fillText('page LSN on disk', 310, 58);
+    ctx.fillText('verdict', 530, 58);
+
+    var rows = [
+        { y: 95, log: 'LSN 101 checking 500→300', mid: 'page LSN 101',
+          verdict: 'SKIP — 101 ≥ 101', vFill: 'rgba(107,114,128,0.12)', vBorder: P.mute, vText: P.mute },
+        { y: 155, log: 'LSN 102 savings 100→300', mid: 'page LSN 87',
+          verdict: 'REDO — 87 < 102', vFill: 'rgba(0,131,0,0.12)', vBorder: P.green, vText: P.green },
+        { y: 215, log: 'LSN 103 COMMIT', mid: '—',
+          verdict: 'KEEP — transfer counts', vFill: 'rgba(74,58,167,0.12)', vBorder: P.violet, vText: P.violet }
+    ];
+
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 7, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2, y); ctx.lineTo(x2 - 9, y - 4); ctx.lineTo(x2 - 9, y + 4);
+        ctx.closePath(); ctx.fill();
+    }
+
+    rows.forEach(function(r) {
+        var cy = r.y, bh = 34;
+
+        // log record box
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        rr(ctx, 70, cy - bh / 2, 190, bh, 8);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.log, 70 + 95, cy + 4);
+
+        arrow(262, 308, cy);
+
+        // mid box
+        ctx.fillStyle = 'rgba(107,114,128,0.10)'; ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        rr(ctx, 310, cy - bh / 2, 145, bh, 8);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.mid, 310 + 72.5, cy + 4);
+
+        arrow(457, 528, cy);
+
+        // verdict box
+        ctx.fillStyle = r.vFill; ctx.strokeStyle = r.vBorder; ctx.lineWidth = 2;
+        rr(ctx, 530, cy - bh / 2, 182, bh, 8);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = r.vText; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.verdict, 530 + 91, cy + 4);
+    });
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one redo rebuilds the savings page: $100 → $300', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('LSNs illustrative', w - 12, 292);
+});
+
+// c3: hub-and-spoke — the WAL fanning out to four subscribers
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Sequential Log, Four Subscribers', w / 2, 24);
+
+    // source box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    rr(ctx, 50, 115, 170, 70, 8);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('WAL', 135, 136);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('LSN 101, 102, 103…', 135, 153);
+    ctx.fillText('append-only', 135, 169);
+
+    var consumers = [
+        { y: 70, lines: ['crash recovery —', 'redo replay'], fill: 'rgba(0,131,0,0.12)', border: P.green },
+        { y: 125, lines: ['replica — 300 ms behind'], fill: 'rgba(25,158,112,0.12)', border: P.aqua },
+        { y: 180, lines: ['point-in-time restore'], fill: 'rgba(201,133,0,0.12)', border: P.yellow },
+        { y: 235, lines: ['CDC → warehouse, caches'], fill: 'rgba(74,58,167,0.12)', border: P.violet }
+    ];
+
+    consumers.forEach(function(c) {
+        // arrow from source right edge to consumer left edge
+        var x1 = 220, y1 = 150, x2 = 470, y2 = c.y;
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        var hx = x2 - 9 * Math.cos(ang), hy = y2 - 9 * Math.sin(ang);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(hx, hy); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(hx + 4 * Math.sin(ang), hy - 4 * Math.cos(ang));
+        ctx.lineTo(hx - 4 * Math.sin(ang), hy + 4 * Math.cos(ang));
+        ctx.closePath(); ctx.fill();
+
+        // consumer box
+        ctx.fillStyle = c.fill; ctx.strokeStyle = c.border; ctx.lineWidth = 2;
+        rr(ctx, 470, c.y - 19, 170, 38, 8);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (c.lines.length === 2) {
+            ctx.fillText(c.lines[0], 555, c.y - 2);
+            ctx.fillText(c.lines[1], 555, c.y + 12);
+        } else {
+            ctx.fillText(c.lines[0], 555, c.y + 4);
+        }
+    });
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('everything downstream is just replaying the log', 345, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('lag and consumers illustrative', w - 12, 292);
+});
+
+// c4: layered durability — where the bytes actually are
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where the Bytes Actually Are When the Plug Is Pulled', w / 2, 24);
+
+    var layers = [
+        { y: 75, label: 'application buffer (RAM)', fill: 'rgba(42,120,214,0.15)', border: P.blue, bold: false },
+        { y: 145, label: 'OS page cache (RAM)', fill: 'rgba(201,133,0,0.12)', border: P.yellow, bold: false },
+        { y: 215, label: 'disk — durable', fill: 'rgba(0,131,0,0.12)', border: P.green, bold: true }
+    ];
+
+    // volatile zone (behind the layer boxes)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(140, 55, 440, 145);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('vanishes on power cut', 575, 50);
+
+    layers.forEach(function(L) {
+        ctx.fillStyle = L.fill; ctx.strokeStyle = L.border; ctx.lineWidth = 2;
+        rr(ctx, 150, L.y, 420, 44, 8);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text;
+        ctx.font = (L.bold ? 'bold ' : '') + '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(L.label, 360, L.y + 27);
+    });
+
+    function downArrow(x, y1, y2, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2 - 8); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x, y2); ctx.lineTo(x - 5, y2 - 9); ctx.lineTo(x + 5, y2 - 9);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // write() arrow: layer 1 -> layer 2
+    downArrow(360, 119, 145, P.blue);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('write() returns here', 375, 137);
+
+    // fsync() arrow: layer 2 -> layer 3
+    downArrow(360, 189, 215, P.green);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fsync() returns here', 375, 207);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('only this layer', 590, 230);
+    ctx.fillText('survives', 590, 246);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('layers schematic; drive caches vary', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

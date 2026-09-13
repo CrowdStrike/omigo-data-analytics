@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Late &amp; Re-Arriving Data</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Late &amp; Re-Arriving Data</h1>
+<p class="subtitle">Yesterday's numbers change today — events stamped with Tuesday's time keep trickling in for days, so a "closed" day is never quite closed</p>
+
+<div class="card-section">
+    <h2>The Tuesday Count That Kept Growing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">event time</span><span class="tag orange">moving target</span></div>
+                <ul>
+                    <li><b>The metric</b> — a mobile app team counts Tuesday's daily active users each morning after the day ends</li>
+                    <li><b>Wednesday's answer</b> — the first run says 41,200 users were active on Tuesday</li>
+                    <li><b>Thursday's answer</b> — the same query on the same table now says 42,900 for the same Tuesday</li>
+                    <li><b>The stragglers</b> — phones that were offline Tuesday upload their Tuesday-stamped events later</li>
+                    <li><b>The settle</b> — Friday reads 43,380, Saturday reads 43,450, and only then does Tuesday stop moving</li>
+                </ul>
+                <p class="example">Between Wednesday and Saturday, 2,250 extra users "appear" in Tuesday — nothing was recounted wrong; their events just arrived late.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Late-arriving data is any record that lands after the pipeline has already processed the period its event time belongs to — so a daily partition keeps changing after the day closes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Event Time vs Processing Time: 1,000 Tuesday Events</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">two clocks</span></div>
+                <ul>
+                    <li><b>Two timestamps</b> — every event has an event time (tapped on the phone) and a processing time (landed in the warehouse)</li>
+                    <li><b>The batch</b> — follow 1,000 events all stamped with Tuesday event times</li>
+                    <li><b>On time</b> — 880 of them arrive on Tuesday itself, while the day is still open</li>
+                    <li><b>The tail</b> — 92 arrive Wednesday (overnight offline phones), 21 Thursday (retries), 7 Friday (an upstream backfill)</li>
+                    <li><b>Hand-check</b> — cumulative coverage of Tuesday's partition: 880 &rarr; 972 &rarr; 993 &rarr; 1,000, i.e. 88% &rarr; 97.2% &rarr; 99.3% &rarr; 100%</li>
+                </ul>
+                <p class="example">A subway commuter's Tuesday 8:14am workout event sits on the phone until Wednesday's wifi — event time Tuesday, processing time Wednesday.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Partition by event time and the day fills in over several days; partition by processing time and the count is stable but puts Tuesday's actions in Wednesday's bucket. You must pick one and know which you picked.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Lookback Window: Rewriting the Last Three Days</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">reprocessing</span></div>
+                <ul>
+                    <li><b>The fix</b> — instead of computing only yesterday, the nightly job recomputes the last 3 event-time days</li>
+                    <li><b>The rewrite</b> — Friday night's run rebuilds the Wednesday, Thursday, and Friday partitions from scratch</li>
+                    <li><b>Late absorbed</b> — a Thursday-stamped event arriving Friday lands correctly because Thursday is rebuilt</li>
+                    <li><b>The cutoff</b> — a Tuesday-stamped event arriving Saturday falls outside Saturday's 3-day window and is missed</li>
+                    <li><b>The trade</b> — wider windows catch more stragglers but multiply compute; teams size them from the arrival tail</li>
+                </ul>
+                <p class="example">With the worked example's tail, the 3-day window reaches 993 of 1,000 (99.3%) — the 7 Friday backfill events need a 4-day window, and a 2-day window would permanently miss 28.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A reprocessing window turns "the day is final at midnight" into "the day is final once it ages out of the lookback" — correctness now has an explicit settling period.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Report That Wouldn't Reconcile</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">re-run drift</span></div>
+                <ul>
+                    <li><b>The scene</b> — an analyst runs last week's DAU report on Monday, then re-runs it Wednesday for a deck</li>
+                    <li><b>The drift</b> — the two runs disagree on the same historical days, and recent days moved the most</li>
+                    <li><b>The false alarm</b> — the analyst files a pipeline bug; nothing is broken — the partitions were still settling</li>
+                    <li><b>The mistake</b> — treating a freshly closed partition as final and comparing report runs without a data-as-of date</li>
+                    <li><b>The habit</b> — stamp every report with "data as of", and only compare days older than the settling period</li>
+                </ul>
+                <p class="example">Sunday reads 38,100 on Monday's run but 39,300 on Wednesday's run — a 3.1% jump on the youngest, least-settled day, while Thursday barely moves.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting two runs of the same query over event-time-partitioned data to match. Until a day ages past the arrival tail (and the lookback window stops rewriting it), the same day legitimately has different values on different run dates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rbox(ctx, x, y, w, h, r, fill, stroke, lw, dashed) {
+    if (dashed) ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
+    ctx.setLineDash([]);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw, dashed) {
+    var ang = Math.atan2(y2 - y1, x2 - x1), ah = 8;
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    if (dashed) ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - 0.45), y2 - ah * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - ah * Math.cos(ang + 0.45), y2 - ah * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: Tuesday's DAU asked on four successive mornings
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Same Question, Four Mornings: Tuesday's DAU Keeps Growing", w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function yOf(v) { return baseY - (v - 40000) / 4000 * ph; }
+    var xs = [135, 285, 435, 585];
+    var days = ['Wed', 'Thu', 'Fri', 'Sat'];
+    var readings = [41200, 42900, 43380, 43450];
+    var labs = ['41,200', '42,900', '43,380', '43,450'];
+
+    // gridlines
+    var gvals = [41000, 42000, 43000], glabs = ['41k', '42k', '43k'];
+    for (var i = 0; i < 3; i++) {
+        var gy = yOf(gvals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(days[i], xs[i], baseY + 17);
+    }
+
+    // final-value dashed line
+    var fy = yOf(43450);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, fy); ctx.lineTo(ox + pw, fy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('settled value 43,450', ox + pw - 4, fy - 8);
+
+    // reading line with dots
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 4; i++) {
+        var x = xs[i], y = yOf(readings[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 4; i++) {
+        var x = xs[i], y = yOf(readings[i]);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        if (i === 0) ctx.fillText(labs[i], x + 6, y + 22);
+        else ctx.fillText(labs[i], x, y + 22);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("+2,250 users arrive after the day 'closed'", 150, 110);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('DAU counts illustrative', w - 12, h - 8);
+});
+
+// c2: arrival day of 1,000 Tuesday-stamped events + cumulative coverage
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('1,000 Tuesday Events: When They Actually Arrive', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function yOf(c) { return baseY - c / 1000 * ph; }
+    var xs = [135, 285, 435, 585];
+    var days = ['Tue (same day)', 'Wed', 'Thu', 'Fri'];
+    var counts = [880, 92, 21, 7];
+    var cum = [880, 972, 993, 1000];
+    var cumLabs = ['88%', '97.2%', '99.3%', '100%'];
+
+    // gridlines
+    var gvals = [250, 500, 750];
+    for (var i = 0; i < 3; i++) {
+        var gy = yOf(gvals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gvals[i]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(days[i], xs[i], baseY + 17);
+    }
+
+    // bars
+    for (var i = 0; i < 4; i++) {
+        var bh = counts[i] / 1000 * ph;
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(xs[i] - 35, baseY - bh, 70, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(xs[i] - 35, baseY - bh, 70, bh);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(counts[i]), xs[i], baseY - bh - 6);
+    }
+
+    // cumulative line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.beginPath();
+    for (var i = 0; i < 4; i++) {
+        var x = xs[i], y = yOf(cum[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 4; i++) {
+        var x = xs[i], y = yOf(cum[i]);
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        if (i === 0) ctx.fillText(cumLabs[i], x + 10, y + 4);
+        else { ctx.textAlign = 'center'; ctx.fillText(cumLabs[i], x, y - 10); }
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('12% of Tuesday shows up after Tuesday', 320, 100);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('arrival split illustrative', w - 12, h - 8);
+});
+
+// c3: Friday night's job rebuilds a 3-day window
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Friday Night's Job Rebuilds a 3-Day Window", w / 2, 24);
+
+    var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var bw = 88, bh = 44, gap = 10, top = 150 - bh / 2;
+    var xs = [];
+    for (var i = 0; i < 6; i++) xs.push(60 + i * (bw + gap));
+
+    for (var i = 0; i < 6; i++) {
+        var cx = xs[i] + bw / 2;
+        if (i === 2 || i === 3 || i === 4) {
+            rbox(ctx, xs[i], top, bw, bh, 8, 'rgba(0,131,0,0.12)', P.green, 2);
+        } else if (i === 5) {
+            rbox(ctx, xs[i], top, bw, bh, 8, null, P.mute, 1, true);
+            ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('open', cx, top + bh + 16);
+        } else {
+            rbox(ctx, xs[i], top, bw, bh, 8, 'rgba(42,120,214,0.15)', P.blue, 1);
+            ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('frozen', cx, top + bh + 16);
+        }
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(days[i], cx, 150 + 4);
+    }
+
+    // job arrows into Wed, Thu, Fri
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('nightly job — reload 3 days', w / 2, 70);
+    var winIdx = [2, 3, 4];
+    for (var i = 0; i < 3; i++) {
+        var cx = xs[winIdx[i]] + bw / 2;
+        arrow(ctx, cx, 80, cx, top - 4, P.green, 2);
+    }
+
+    // late event, caught
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(470, 240, 5, 0, 2 * Math.PI); ctx.fill();
+    arrow(ctx, 466, 234, xs[3] + bw / 2 + 8, top + bh + 4, P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Thu event arrives Fri — rebuilt, counted', 400, 260);
+
+    // late event, missed
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(180, 240, 5, 0, 2 * Math.PI); ctx.fill();
+    arrow(ctx, 183, 233, xs[1] + bw / 2 - 4, top + bh + 10, '#e74c3c', 2, true);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', xs[1] + bw / 2 - 4, top + bh + 8);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Tue event arrives Sat — outside window, missed', 30, 260);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('window size illustrative; teams tune it to the arrival tail', w - 12, h - 8);
+});
+
+// c4: same days, two run dates
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Days, Two Run Dates: the Youngest Days Moved Most', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function yOf(v) { return baseY - (v - 36000) / 8000 * ph; }
+    var xs = [135, 285, 435, 585];
+    var days = ['Thu', 'Fri', 'Sat', 'Sun'];
+    var mon = [43100, 42800, 39400, 38100];
+    var wed = [43150, 42950, 39900, 39300];
+    var deltas = ['+0.1%', '+0.4%', '+1.3%', '+3.1%'];
+    var deltaColors = [P.mute, P.mute, P.orange, '#e74c3c'];
+
+    // gridlines
+    var gvals = [38000, 40000, 42000], glabs = ['38k', '40k', '42k'];
+    for (var i = 0; i < 3; i++) {
+        var gy = yOf(gvals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    for (var i = 0; i < 4; i++) {
+        var mh = baseY - yOf(mon[i]), wh = baseY - yOf(wed[i]);
+        // Monday-run bar
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(xs[i] - 32, baseY - mh, 32, mh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(xs[i] - 32, baseY - mh, 32, mh);
+        // Wednesday re-run bar
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(xs[i], baseY - wh, 32, wh);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(xs[i], baseY - wh, 32, wh);
+        // delta label above the pair
+        ctx.fillStyle = deltaColors[i]; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(deltas[i], xs[i], Math.min(yOf(mon[i]), yOf(wed[i])) - 8);
+        // day label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(days[i], xs[i], baseY + 17);
+    }
+
+    // legend, top right inside plot
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fillRect(500, 44, 14, 10);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(500, 44, 14, 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('run Monday', 520, 53);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)'; ctx.fillRect(500, 60, 14, 10);
+    ctx.strokeStyle = P.green; ctx.strokeRect(500, 60, 14, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('re-run Wednesday', 520, 69);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("not a bug — Sunday hadn't settled yet", 660, 105);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('DAU values illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

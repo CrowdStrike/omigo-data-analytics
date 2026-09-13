@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upserts &amp; MERGE</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Upserts &amp; MERGE</h1>
+<p class="subtitle">One statement that inserts the row if it's new and updates it if it already exists — insert-or-update atomically, with no gap in between</p>
+
+<div class="card-section">
+    <h2>The Nightly Customer Feed</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">insert or update</span><span class="tag orange">atomic</span></div>
+                <ul>
+                    <li><b>The feed</b> — every night a loyalty program receives a file of 5 customer rows from the stores</li>
+                    <li><b>The mix</b> — some rows are brand-new customers, others are existing customers with a changed email</li>
+                    <li><b>The naive plan</b> — for each row, SELECT to check if the id exists, then INSERT or UPDATE accordingly</li>
+                    <li><b>The gap</b> — between the check and the insert, another loader can slip the same id in first</li>
+                    <li><b>The upsert</b> — one statement does both: insert if the key is new, update if it already exists</li>
+                    <li><b>No gap</b> — the database checks the key and acts inside a single atomic operation</li>
+                </ul>
+                <p class="example">Row <code>c103, dana@mail.com</code> arrives; one upsert statement inserts it tonight and would update it tomorrow — same statement, both cases.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An upsert folds check-then-write into one atomic statement, so "does this row exist?" and "write it" can never be separated by another writer.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Walking Five Rows Through ON CONFLICT and MERGE</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">ON CONFLICT</span><span class="tag orange">MERGE</span></div>
+                <ul>
+                    <li><b>The table</b> — <code>customers</code> already holds 3 rows: c101, c102, c105, keyed by customer id</li>
+                    <li><b>The feed</b> — tonight's 5 rows: c101 (new email), c102 (unchanged), c103, c104 (new), c105 (new city)</li>
+                    <li><b>Postgres form</b> — <code>INSERT ... ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email</code></li>
+                    <li><b>MERGE form</b> — <code>MERGE ... WHEN MATCHED THEN UPDATE WHEN NOT MATCHED THEN INSERT</code></li>
+                    <li><b>The result</b> — c103 and c104 insert (2 rows), c101, c102, c105 update (3 rows); table now has 5 rows</li>
+                    <li><b>Run it again</b> — same file re-run: 0 inserts, 5 updates, table still 5 rows — same final state</li>
+                </ul>
+                <p class="example">c101 exists so its email updates; c103 doesn't so it inserts — one statement, and re-running the file changes nothing.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Both forms make the same per-row decision — matched keys update, unmatched keys insert — so the load lands the same final table no matter how many times it runs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Loads You Can Safely Run Twice</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">idempotent</span><span class="tag orange">CDC</span></div>
+                <ul>
+                    <li><b>Idempotent loads</b> — a pipeline that upserts can crash mid-run and simply be restarted from the top</li>
+                    <li><b>Append breaks</b> — a plain INSERT load re-run after a crash duplicates every row it already wrote</li>
+                    <li><b>Dedupe on natural keys</b> — upserting on (store, date) keeps one row per key however often data arrives</li>
+                    <li><b>CDC apply</b> — change-data-capture streams replay inserts and updates; upsert absorbs both kinds</li>
+                    <li><b>The habit</b> — data engineers reach for upsert by default so retries are always safe</li>
+                </ul>
+                <p class="example">The 5-row feed loads three nights in a row by mistake; append leaves 18 rows with duplicates, upsert leaves the correct 5.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Upserts make loads idempotent — running the same feed once or five times converges to the same table, which is what makes retries and replays safe.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Check-Then-Insert Race</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">concurrency</span><span class="tag green">duplicate keys</span></div>
+                <ul>
+                    <li><b>The race</b> — two workers both SELECT c103, both see "not found", both INSERT: duplicate-key error</li>
+                    <li><b>Why it happens</b> — the check and the write are separate statements; another writer fits between them</li>
+                    <li><b>Not fixed by speed</b> — shrinking the gap makes the race rarer, not impossible; only atomicity fixes it</li>
+                    <li><b>MERGE's own trap</b> — if the source feed holds c103 twice, MERGE hits one target row with two updates</li>
+                    <li><b>The standard says</b> — a multi-match MERGE raises a cardinality error; dedupe the source first</li>
+                    <li><b>The fix</b> — upsert for the race; <code>GROUP BY</code> or <code>ROW_NUMBER</code> to one row per key before any MERGE</li>
+                </ul>
+                <p class="example">Two loaders race on c103 and one crashes with a duplicate-key error; the same feeds using one upsert statement both succeed.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing a SELECT-then-INSERT you wrote yourself is "basically an upsert." Under concurrency it is a coin flip; and MERGE is only safe once the source has exactly one row per key.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function drawBox(ctx, x, y, w, h, fill, stroke, lw, r, dashed) {
+    rrect(ctx, x, y, w, h, r || 8);
+    ctx.fillStyle = fill; ctx.fill();
+    if (dashed) ctx.setLineDash([5, 3]);
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lw) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: check-then-insert with a gap vs one atomic upsert
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Two Statements Leave a Gap; One Statement Doesn't", w / 2, 24);
+
+    // row 1: check, then insert (boxes centered on y=95)
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('check, then', 20, y1 - 4);
+    ctx.fillText('insert', 20, y1 + 12);
+    drawBox(ctx, 150, y1 - 20, 170, 40, 'rgba(42,120,214,0.15)', P.blue, 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('SELECT c103 — not found', 235, y1 + 4);
+    drawArrow(ctx, 322, y1, 358, y1, P.mute, 3);
+    drawBox(ctx, 360, y1 - 20, 150, 40, 'rgba(217,89,38,0.12)', P.orange, 1.5, 8, true);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('gap: anyone', 435, y1 - 3);
+    ctx.fillText('can write', 435, y1 + 12);
+    drawArrow(ctx, 512, y1, 548, y1, P.mute, 3);
+    drawBox(ctx, 550, y1 - 20, 160, 40, 'rgba(231,76,60,0.12)', '#e74c3c', 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('INSERT c103', 630, y1 - 3);
+    ctx.fillText('— may collide', 630, y1 + 12);
+
+    // annotation between rows
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the gap is the bug — the upsert removes it', w / 2, 154);
+
+    // row 2: one upsert (boxes centered on y=205)
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one upsert', 20, y2 + 4);
+    drawBox(ctx, 250, y2 - 20, 260, 40, 'rgba(0,131,0,0.12)', P.green, 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('INSERT c103 ON CONFLICT DO UPDATE', 380, y2 + 4);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ check + write, atomic', 528, y2 + 4);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('flow schematic, illustrative', 710, 292);
+});
+
+// c2: five feed rows mapped to insert/update actions on the customers table
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Tonight's 5 Rows: 2 Insert, 3 Update", w / 2, 24);
+
+    var feedY = [70, 113, 156, 199, 242];
+    var feedLabs = ['c101 — new email', 'c102 — unchanged', 'c103 — new customer', 'c104 — new customer', 'c105 — new city'];
+    var actions = ['UPDATE', 'UPDATE', 'INSERT', 'INSERT', 'UPDATE'];
+    for (var i = 0; i < 5; i++) {
+        drawBox(ctx, 40, feedY[i], 200, 30, 'rgba(42,120,214,0.12)', P.blue, 1, 6);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(feedLabs[i], 140, feedY[i] + 19);
+    }
+
+    // target box
+    drawBox(ctx, 520, 70, 170, 202, 'rgba(26,82,118,0.06)', P.ink, 1);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('customers (key: id)', 605, 96);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('c101 · c102 · c105', 605, 155);
+    ctx.fillText('+ c103 + c104', 605, 185);
+
+    // arrows
+    for (var i = 0; i < 5; i++) {
+        var ay = feedY[i] + 15;
+        var isInsert = actions[i] === 'INSERT';
+        var col = isInsert ? P.green : P.blue;
+        drawArrow(ctx, 240, ay, 520, ay, col, 3);
+        ctx.fillStyle = col;
+        ctx.font = (isInsert ? 'bold ' : '') + '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(actions[i], 380, ay - 6);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('re-run: 0 inserts, 5 updates — same table', 340, 292);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('customer ids and counts illustrative', 710, 62);
+});
+
+// c3: re-running the same feed — append grows, upsert converges
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Re-Running the Same Feed: Append Grows, Upsert Converges', w / 2, 24);
+
+    var ox = 60, baseY = 245, chW = 600, chH = 180, maxV = 20;
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    var grid = [5, 10, 15];
+    for (var i = 0; i < grid.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grid[i])); ctx.lineTo(ox + chW, yOf(grid[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i]), ox - 6, yOf(grid[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + chW, baseY); ctx.stroke();
+
+    var centers = [180, 380, 580];
+    var groupLabs = ['run 1', 'run 2', 'run 3'];
+    var append = [8, 13, 18];
+    var upsert = [5, 5, 5];
+    for (var i = 0; i < 3; i++) {
+        var cx = centers[i];
+        var ah = append[i] / maxV * chH;
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(cx - 60, baseY - ah, 60, ah);
+        ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(append[i]), cx - 30, baseY - ah - 6);
+        var uh = upsert[i] / maxV * chH;
+        ctx.fillStyle = P.green;
+        ctx.fillRect(cx, baseY - uh, 60, uh);
+        ctx.fillStyle = P.green; ctx.font = '12px system-ui';
+        ctx.fillText(String(upsert[i]), cx + 30, baseY - uh - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(groupLabs[i], cx, baseY + 16);
+    }
+
+    // reference line at 5 rows
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(5)); ctx.lineTo(ox + chW, yOf(5)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('correct: 5 rows', ox + 4, yOf(5) - 5);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('upsert lands on 5 every time', 430, 80);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts illustrative; table starts at 3 rows', 710, 292);
+});
+
+// c4: two workers race on check-then-insert; the upsert lane stays clean
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Workers, One New Key: the Gap Bites', w / 2, 24);
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 250); ctx.lineTo(660, 250); ctx.stroke();
+    var ticks = [{ lab: 't=0', x: 60 }, { lab: 't=5ms', x: 360 }, { lab: 't=10ms', x: 660 }];
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ticks[i].x, 246); ctx.lineTo(ticks[i].x, 254); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i].lab, ticks[i].x, 270);
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)';
+    var redFill = 'rgba(231,76,60,0.12)';
+    var greenFill = 'rgba(0,131,0,0.12)';
+
+    // worker A lane (y=85)
+    var yA = 85;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('worker A', 20, yA + 17);
+    drawBox(ctx, 60, yA, 60, 26, blueFill, P.blue, 1, 6);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('SELECT c103: none', 60, yA - 6);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(120, yA + 13); ctx.lineTo(240, yA + 13); ctx.stroke();
+    ctx.setLineDash([]);
+    drawBox(ctx, 240, yA, 60, 26, blueFill, P.blue, 1, 6);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('INSERT c103 ✓', 240, yA - 6);
+
+    // worker B lane (y=150)
+    var yB = 150;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('worker B', 20, yB + 17);
+    drawBox(ctx, 90, yB, 60, 26, blueFill, P.blue, 1, 6);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('SELECT c103: none', 90, yB - 6);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(150, yB + 13); ctx.lineTo(270, yB + 13); ctx.stroke();
+    ctx.setLineDash([]);
+    drawBox(ctx, 270, yB, 60, 26, redFill, '#e74c3c', 1, 6);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('INSERT c103 ✗ dup key', 270, yB - 6);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('error', 336, yB + 17);
+
+    // upsert lane (y=215)
+    var yU = 215;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('upsert', 20, yU + 17);
+    drawBox(ctx, 60, yU, 90, 26, greenFill, P.green, 1, 6);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui';
+    ctx.fillText('upsert c103 → insert ✓', 60, yU - 6);
+    drawBox(ctx, 150, yU, 90, 26, greenFill, P.green, 1, 6);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui';
+    ctx.fillText('upsert c103 → update ✓', 246, yU + 17);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both checks passed before either insert ran', 460, 120);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings in ms, illustrative', 710, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

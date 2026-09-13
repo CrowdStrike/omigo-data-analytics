@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T-Digest</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>T-Digest</h1>
+<p class="subtitle">A t-digest keeps a few tiny summary buckets instead of every number, and can still answer "what's the median delivery time?" or "what's the 95th percentile?" about a stream it never stored</p>
+
+<div class="card-section">
+    <h2>A Pizza Shop That Can't Keep Every Ticket</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">streaming</span><span class="tag orange">centroids</span></div>
+                <ul>
+                    <li><b>The shop</b> — a pizza shop times every delivery all day and wants the median and the slowest 5%</li>
+                    <li><b>The problem</b> — thousands of tickets pile up; keeping every single time just to sort them is wasteful</li>
+                    <li><b>The trick</b> — keep a short list of clusters, each just two numbers: an average time and a count</li>
+                    <li><b>Squeeze the middle</b> — nearby middling times merge into big clusters; 18, 20, 22 min become "20 min &times; 3"</li>
+                    <li><b>Protect the edges</b> — the fastest and slowest deliveries stay as tiny clusters, some holding one ticket</li>
+                    <li><b>The name</b> — this cluster list is a t-digest: coarse in the middle, sharp exactly where percentiles live</li>
+                </ul>
+                <p class="example">Twelve deliveries — 14, 16, 18, 20, 22, 22, 24, 26, 28, 30, 38, 52 minutes — collapse into six clusters, and the lone 52-minute disaster keeps its own row.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A t-digest replaces the raw stream with a handful of (average, count) clusters, kept deliberately small near the extremes so tail percentiles stay accurate.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Reading the Median From Six Summary Rows</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">interpolation</span></div>
+                <ul>
+                    <li><b>The list</b> — six clusters: 15&times;2, 20&times;3, 24&times;3, 29&times;2, 38&times;1, 52&times;1; total count 2+3+3+2+1+1 = 12</li>
+                    <li><b>Mid-ranks</b> — each average sits at the middle of its ranks: 15 at rank 1.5, 20 at rank 4, 24 at rank 7</li>
+                    <li><b>The target</b> — the median of 12 deliveries is halfway between rank 6 and rank 7, so rank 6.5</li>
+                    <li><b>Walk and interpolate</b> — rank 6.5 lands between 20 (rank 4) and 24 (rank 7): 20 + (2.5/3)&times;4 &asymp; 23.3 min</li>
+                    <li><b>Check it</b> — the true median of the raw list is (22+24)/2 = 23 min; the digest says 23.3, off by 0.3</li>
+                    <li><b>The tail is exact</b> — the worst delivery, 52 min, is its own cluster, so the maximum has zero error</li>
+                </ul>
+                <p class="example">Six rows on a sticky note reproduce the median of twelve deliveries to within a third of a minute — 23.3 estimated versus 23 true.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Percentiles come from walking the clusters' cumulative counts and interpolating between averages — no raw ticket is ever consulted again.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Day of 40,000 Deliveries in 60 Rows</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">memory</span><span class="tag orange">dashboards</span></div>
+                <ul>
+                    <li><b>Real scale</b> — a delivery app logs 40,000 orders a day; a t-digest summarizes them in about 60 clusters</li>
+                    <li><b>Same answers</b> — the digest reports the median as 23.2 min against a true 23, and p95 as 43.6 against 44</li>
+                    <li><b>Sharp tails</b> — the smallest clusters sit at the extremes, so p95 and p99 alarms stay accurate</li>
+                    <li><b>One pass</b> — each new ticket updates the nearest cluster and is thrown away; nothing is ever re-sorted</li>
+                    <li><b>Everywhere</b> — latency dashboards, load-time monitors, and database engines all lean on this structure</li>
+                </ul>
+                <p class="example">A dashboard shows live p50, p95, and p99 delivery times all day while holding 60 little (average, count) pairs instead of 40,000 tickets.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A t-digest turns "store and sort everything" into "keep ~60 rows", and the percentile curve it reports is nearly indistinguishable from the exact one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>You Can't Average Percentiles — But You Can Merge Digests</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">merging</span></div>
+                <ul>
+                    <li><b>Two stores</b> — store A has 100 deliveries with p95 = 30 min; store B has 900 with p95 = 50 min</li>
+                    <li><b>The shortcut</b> — averaging the two p95s gives (30+50)/2 = 40 min, and it is simply wrong</li>
+                    <li><b>Why it fails</b> — a percentile is a rank in one combined pile, and B's 900 tickets dominate that pile</li>
+                    <li><b>The right way</b> — merge the two digests' cluster lists into one, then read p95 from it: about 49 min</li>
+                    <li><b>The mistake</b> — company dashboards that average per-server p95s understate the real tail by minutes</li>
+                </ul>
+                <p class="example">The chain's real p95 is about 49 minutes, but the averaged dashboard says 40 — nine minutes of slow deliveries hidden by one innocent-looking mean.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Averaging percentiles from separate machines or stores. Percentiles don't average — but t-digests merge, and the merged digest gives the combined percentile correctly.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: 12 raw delivery times collapsing into 6 centroids on a shared minutes axis
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('12 Delivery Times Squeezed Into 6 Clusters', w / 2, 24);
+
+    var ax = 60, aw = 620, ay = 250;
+    function xOf(min) { return ax + (min - 10) / 45 * aw; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + aw, ay); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 10; m <= 55; m += 5) {
+        var tx = xOf(m);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, ay); ctx.lineTo(tx, ay + 5); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(String(m), tx, ay + 20);
+    }
+    ctx.fillStyle = '#444';
+    ctx.fillText('delivery time (minutes)', w / 2, 290);
+
+    // raw dots: [14,16,18,20,22,22,24,26,28,30,38,52], second 22 stacked at y=93
+    var raw = [14, 16, 18, 20, 22, 22, 24, 26, 28, 30, 38, 52];
+    var rawY = [105, 105, 105, 105, 105, 93, 105, 105, 105, 105, 105, 105];
+
+    // centroids: means, counts, radii = 5 + 3*count
+    var means = [15, 20, 24, 29, 38, 52];
+    var counts = [2, 3, 3, 2, 1, 1];
+    var cy = 195;
+
+    // connectors: raw index -> cluster index
+    var clusterOf = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5];
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    for (var i = 0; i < raw.length; i++) {
+        var c = clusterOf[i];
+        var r = 5 + 3 * counts[c];
+        ctx.beginPath();
+        ctx.moveTo(xOf(raw[i]), rawY[i] + 6);
+        ctx.lineTo(xOf(means[c]), cy - r);
+        ctx.stroke();
+    }
+
+    // raw dots
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < raw.length; i++) {
+        ctx.beginPath(); ctx.arc(xOf(raw[i]), rawY[i], 3, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('raw tickets', 62, 80);
+
+    // centroid circles + labels
+    for (var i = 0; i < means.length; i++) {
+        var r = 5 + 3 * counts[i];
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.beginPath(); ctx.arc(xOf(means[i]), cy, r, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(xOf(means[i]), cy, r, 0, 2 * Math.PI); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(means[i] + '×' + counts[i], xOf(means[i]), cy + r + 14);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('t-digest clusters', 62, 170);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('middle gets merged,', 470, 140);
+    ctx.fillText('tails keep their own rows', 470, 155);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one small day of deliveries', w - 15, 290);
+});
+
+// c2: reading rank 6.5 off the cluster line -> ~23.3 min
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Reading Rank 6.5 Off the Cluster Line: ≈ 23.3 min', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190;
+    function xOf(r) { return ox + r / 13 * pw; }
+    function yOf(m) { return baseY - m / 60 * ph; }
+
+    // gridlines + y ticks (0..60 every 10)
+    ctx.font = '12px system-ui';
+    for (var m = 10; m <= 60; m += 10) {
+        var gy = yOf(m);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(m), ox - 8, gy + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks (0..12 every 2)
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var r = 0; r <= 12; r += 2) {
+        ctx.fillText(String(r), xOf(r), baseY + 16);
+    }
+    ctx.fillText('rank (out of 12 deliveries)', ox + pw / 2, baseY + 34);
+
+    // cluster line through mid-rank points
+    var pts = [[1.5, 15], [4, 20], [7, 24], [9.5, 29], [11, 38], [12, 52]];
+    var labs = ['15×2', '20×3', '24×3', '29×2', '38×1', '52×1'];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+        var x = xOf(pts[i][0]), y = yOf(pts[i][1]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < pts.length; i++) {
+        ctx.beginPath(); ctx.arc(xOf(pts[i][0]), yOf(pts[i][1]), 3.5, 0, 2 * Math.PI); ctx.fill();
+    }
+    // staggered cluster labels
+    var labPos = [[xOf(1.5), yOf(15) + 20], [xOf(4), yOf(20) + 20], [xOf(7) + 14, yOf(24) - 12],
+                  [xOf(9.5), yOf(29) - 14], [xOf(11) - 14, yOf(38) - 12], [xOf(12) - 16, yOf(52) - 10]];
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < labs.length; i++) {
+        ctx.fillText(labs[i], labPos[i][0], labPos[i][1]);
+    }
+
+    // read-off guides at rank 6.5 -> 23.3 min
+    var gx = xOf(6.5), gy = yOf(23.3333);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(gx, baseY); ctx.lineTo(gx, gy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(ox, gy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('median rank 6.5 → 23.3 min', gx + 10, gy + 20);
+
+    // true median marker on y axis at 23
+    var ty = yOf(23);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(ox - 6, ty); ctx.lineTo(ox + 6, ty); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('true: 23', ox + 10, ty + 16);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('off by 0.3 min — from six rows, not twelve tickets', xOf(8.5), yOf(12));
+});
+
+// c3: exact vs t-digest percentile curve
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Exact vs T-Digest Percentile Curve — 40,000 Tickets vs 60 Rows', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190;
+    function xOf(p) { return ox + p / 100 * pw; }
+    function yOf(m) { return baseY - m / 60 * ph; }
+
+    // gridlines + y ticks
+    ctx.font = '12px system-ui';
+    for (var m = 10; m <= 60; m += 10) {
+        var gy = yOf(m);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(m), ox - 8, gy + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var xt = [0, 25, 50, 75, 95, 100];
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var i = 0; i < xt.length; i++) {
+        ctx.fillText(String(xt[i]), xOf(xt[i]), baseY + 16);
+    }
+    ctx.fillText('percentile', ox + pw / 2, baseY + 34);
+
+    var pcts = [1, 5, 10, 25, 50, 75, 90, 95, 99];
+    var exact = [11, 14, 16, 19, 23, 28, 34, 44, 58];
+    var digest = [11, 14, 16, 19.2, 23.2, 28.3, 34.4, 43.6, 57.5];
+
+    // call-out guide lines first (behind curves)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(50), baseY); ctx.lineTo(xOf(50), yOf(23)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(95), baseY); ctx.lineTo(xOf(95), yOf(44)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // exact curve (green, thick)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (var i = 0; i < pcts.length; i++) {
+        var x = xOf(pcts[i]), y = yOf(exact[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('exact (all 40,000)', xOf(30), yOf(20) - 22);
+
+    // digest curve (blue, dashed)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (var i = 0; i < pcts.length; i++) {
+        var x = xOf(pcts[i]), y = yOf(digest[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('t-digest (60 rows)', xOf(65), yOf(26) + 28);
+
+    // call-out labels, staggered
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('p50: 23 vs 23.2', xOf(50), 150);
+    ctx.fillText('p95: 44 vs 43.6', xOf(95) - 60, 92);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('two curves, one shape —', xOf(20), yOf(50));
+    ctx.fillText('the raw data was never kept', xOf(20), yOf(50) + 17);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — a simulated day of deliveries', w - 15, h - 8);
+});
+
+// c4: combined p95 — averaging says 40, merging digests says 49
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Combined p95: Averaging Says 40, Merging Digests Says 49', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190;
+    function yOf(m) { return baseY - m / 60 * ph; }
+
+    // gridlines + y ticks
+    ctx.font = '12px system-ui';
+    for (var m = 10; m <= 60; m += 10) {
+        var gy = yOf(m);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(m), ox - 8, gy + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 150, v: 30, fill: 'rgba(42,120,214,0.35)', stroke: P.blue, lab1: 'store A', lab2: 'p95', tag: '100 deliveries' },
+        { cx: 290, v: 50, fill: 'rgba(42,120,214,0.35)', stroke: P.blue, lab1: 'store B', lab2: 'p95', tag: '900 deliveries' },
+        { cx: 430, v: 40, fill: 'rgba(231,76,60,0.25)', stroke: '#e74c3c', lab1: 'average', lab2: 'of p95s', tag: null },
+        { cx: 570, v: 49, fill: 'rgba(0,131,0,0.25)', stroke: P.green, lab1: 'merged', lab2: 'digest p95', tag: null }
+    ];
+
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        var top = yOf(b.v);
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(b.cx - 40, top, 80, baseY - top);
+        ctx.strokeStyle = b.stroke; ctx.lineWidth = 2;
+        ctx.strokeRect(b.cx - 40, top, 80, baseY - top);
+        // value label
+        ctx.fillStyle = b.stroke; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(b.v), b.cx, top - 8);
+        // two-line bar label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab1, b.cx, baseY + 18);
+        ctx.fillText(b.lab2, b.cx, baseY + 33);
+        // count tag inside blue bars
+        if (b.tag) {
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+            ctx.fillText(b.tag, b.cx, top + 24);
+        }
+    }
+
+    // annotation spanning above bars 3-4
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('9 minutes of slow tail hidden by averaging', 500, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — two stores, one chain', w - 15, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

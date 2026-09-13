@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSTables &amp; Memtables</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>SSTables &amp; Memtables</h1>
+<p class="subtitle">Every LSM storage engine is two structures: a sorted in-memory notebook for fresh writes (the memtable) and immutable sorted files it flushes to disk (SSTables)</p>
+
+<div class="card-section">
+    <h2>The Notebook at the Counter and the Filed Pages</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">sorted writes</span><span class="tag orange">LSM engine</span></div>
+                <ul>
+                    <li><b>The ledger</b> — a coffee shop tracks loyalty points per customer; every update is one small write</li>
+                    <li><b>The memtable</b> — fresh writes land in one sorted in-memory page: an update is just an insert</li>
+                    <li><b>Sorted on arrival</b> — leo: 31 arrives before ava: 12, yet the page keeps ava above leo</li>
+                    <li><b>The flush</b> — when the page hits its limit (4 entries here), it is written to disk in one pass</li>
+                    <li><b>The SSTable</b> — the flushed file is a Sorted String Table: sorted by key, never edited again</li>
+                    <li><b>A fresh page</b> — the instant one page is filed, an empty memtable starts taking new writes</li>
+                </ul>
+                <p class="example">At 9am the memtable holds ava: 12 and leo: 31; two more writes and the whole page would flush to disk as SSTable-3.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A memtable is the sorted in-memory buffer where every write lands; an SSTable is that buffer frozen into an immutable sorted file on disk.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Looking Up Maya, Then Zipping Two Files Together</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">read path</span><span class="tag orange">merge</span></div>
+                <ul>
+                    <li><b>The lookup</b> — a read for maya checks the memtable first: only ava and leo live there, so it misses</li>
+                    <li><b>Newest file next</b> — SSTable-2 holds maya: 57; the read returns 57 and stops searching</li>
+                    <li><b>Never reached</b> — SSTable-1 also stores maya: 40, but the older copy is never consulted</li>
+                    <li><b>A deeper read</b> — noah misses the memtable and SSTable-2, then hits in SSTable-1 at 15</li>
+                    <li><b>The merge</b> — compaction walks SSTable-1 and SSTable-2 key by key: ben, kai, maya, noah</li>
+                    <li><b>Who survives</b> — maya keeps 57 over 40; ben's tombstone erases both ben rows: 6 rows in, 3 out</li>
+                </ul>
+                <p class="example">Read maya → memtable miss → SSTable-2 hit (57) → stop; the later merge writes exactly kai: 18, maya: 57, noah: 15.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Reads check the memtable, then SSTables newest-to-oldest, stopping at the first hit; compaction is a sorted-list merge where the newest version of each key wins.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Write-Heavy Stores Are Built This Way</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">fast writes</span><span class="tag orange">tombstones</span></div>
+                <ul>
+                    <li><b>Built for writes</b> — every write is an append: a memtable insert plus a sequential log write, no seek</li>
+                    <li><b>The engines</b> — Cassandra, RocksDB, and LevelDB all store data this way; the design is an LSM tree</li>
+                    <li><b>Deletes are writes</b> — you cannot erase a row from an immutable file, so a delete writes a tombstone</li>
+                    <li><b>The tombstone</b> — ben's delete is a tiny "ben: deleted" record that shadows every older ben on read</li>
+                    <li><b>The trade</b> — writes get cheap, reads may touch several files; bloom filters skip files lacking the key</li>
+                </ul>
+                <p class="example">An illustrative points ledger sustains about 100k appended writes/s where an update-in-place design manages about 12k.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> LSM engines turn every insert, update, and delete into a cheap sequential append — which is why write-heavy stores stand on memtables and SSTables.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Updates Don't Edit Files — They Shadow Them</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">immutable files</span><span class="tag blue">space</span></div>
+                <ul>
+                    <li><b>No edits</b> — updating maya from 40 to 57 never touches the old file; a new row shadows the old one</li>
+                    <li><b>Shadow, not overwrite</b> — the disk holds both maya: 40 and maya: 57; reads only ever see 57</li>
+                    <li><b>Space until compaction</b> — dead versions and tombstones sit on disk until a merge drops them</li>
+                    <li><b>The surprise</b> — deleting rows can make the store temporarily bigger: each delete adds a tombstone</li>
+                    <li><b>The cleanup</b> — the merge from the worked example shrinks 6 stored rows to the 3 live ones</li>
+                </ul>
+                <p class="example">Before compaction the shop's ledger stores 6 rows for 3 live customers; after compaction, exactly 3 rows remain.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting an update or delete to change the bytes on disk. SSTables are immutable — new versions shadow old ones, and the dead rows occupy space until compaction reclaims them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.45), y2 - 8 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.45), y2 - 8 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+function storeBox(ctx, x, y, w, h, fill, border, header, rows, rowColors) {
+    ctx.fillStyle = fill;
+    rr(ctx, x, y, w, h, 8); ctx.fill();
+    ctx.strokeStyle = border; ctx.lineWidth = 2;
+    rr(ctx, x, y, w, h, 8); ctx.stroke();
+    ctx.fillStyle = border; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(header, x + 12, y + 18);
+    ctx.font = '12px system-ui';
+    for (var i = 0; i < rows.length; i++) {
+        ctx.fillStyle = (rowColors && rowColors[i]) ? rowColors[i] : P.text;
+        ctx.fillText(rows[i], x + 12, y + 36 + i * 16);
+    }
+}
+
+// c1: writes fill a sorted memtable in MEMORY; full memtables flush as SSTables on DISK
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fresh Writes Fill a Sorted Memtable; Full Memtables Flush as SSTables', w / 2, 24);
+
+    // memory/disk divider
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(30, 170); ctx.lineTo(690, 170); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('MEMORY', 35, 52);
+    ctx.fillText('DISK', 35, 188);
+
+    // memtable box
+    storeBox(ctx, 60, 62, 240, 92, 'rgba(42,120,214,0.15)', P.blue,
+        'memtable (sorted, 2/4)', ['ava: 12', 'leo: 31']);
+
+    // incoming writes
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('write leo: 31 (9:01)', 400, 82);
+    ctx.fillText('write ava: 12 (9:04)', 400, 112);
+    arrow(ctx, 394, 78, 306, 78, P.aqua, 2);
+    arrow(ctx, 394, 108, 306, 108, P.aqua, 2);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('sorted on insert — ava files above leo', 400, 142);
+
+    // flush arrow into disk region
+    arrow(ctx, 180, 154, 180, 192, P.orange, 3);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('flush when full — one sequential write', 196, 178);
+
+    // disk boxes
+    storeBox(ctx, 60, 198, 200, 84, 'rgba(0,131,0,0.12)', P.green,
+        'SSTable-2 (newer)', ['ben: ⊗ deleted', 'kai: 18', 'maya: 57']);
+    storeBox(ctx, 300, 198, 200, 84, 'rgba(74,58,167,0.12)', P.violet,
+        'SSTable-1 (older)', ['ben: 22', 'maya: 40', 'noah: 15']);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('files are never edited', 520, 234);
+    ctx.fillText('after the flush', 520, 252);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('entries and flush size illustrative', 700, 293);
+});
+
+// c2: read path — memtable first, then newest SSTable, stop at first hit
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Read Path: Memtable First, Then Newest File, Stop at First Hit', w / 2, 24);
+
+    // store boxes
+    storeBox(ctx, 40, 55, 190, 84, 'rgba(42,120,214,0.15)', P.blue,
+        'memtable', ['ava: 12', 'leo: 31']);
+    storeBox(ctx, 265, 55, 190, 84, 'rgba(0,131,0,0.12)', P.green,
+        'SSTable-2 (newest)', ['ben: ⊗', 'kai: 18', 'maya: 57']);
+    storeBox(ctx, 490, 55, 190, 84, 'rgba(74,58,167,0.12)', P.violet,
+        'SSTable-1 (oldest)', ['ben: 22', 'maya: 40', 'noah: 15']);
+
+    // lookup row 1: maya
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read maya →', 40, 185);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('✗ miss', 135, 185);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ hit: 57 — stop', 360, 185);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('not checked (40 ignored)', 585, 185);
+    arrow(ctx, 175, 181, 295, 181, P.mute, 2);
+
+    // lookup row 2: noah
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read noah →', 40, 220);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('✗ miss', 135, 220);
+    ctx.fillText('✗ miss', 360, 220);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ hit: 15', 585, 220);
+    arrow(ctx, 175, 216, 320, 216, P.mute, 2);
+    arrow(ctx, 400, 216, 545, 216, P.mute, 2);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the newest copy shadows maya: 40 — the old file is never read', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('points illustrative', 700, 290);
+});
+
+// c3: write throughput bars — update-in-place vs LSM append (illustrative)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Why LSM: Every Write Is a Sequential Append', w / 2, 24);
+
+    var x0 = 60, baseY = 245, plotW = 600, plotH = 180, maxV = 120000;
+    function yOf(v) { return baseY - v / maxV * plotH; }
+
+    // gridlines
+    var grids = [30000, 60000, 90000];
+    var gridLabs = ['30k', '60k', '90k'];
+    for (var i = 0; i < grids.length; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x0 + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gridLabs[i], x0 - 8, gy + 4);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+
+    // bars: [centerX, value, fill, border, valueLabel, categoryLabel]
+    var bars = [
+        [210, 12000, 'rgba(42,120,214,0.30)', P.blue, '12k', 'update-in-place (seek + rewrite page)'],
+        [510, 100000, 'rgba(0,131,0,0.25)', P.green, '100k', 'LSM (memtable + append)']
+    ];
+    for (var i = 0; i < bars.length; i++) {
+        var cx = bars[i][0], v = bars[i][1], bh = v / maxV * plotH;
+        ctx.fillStyle = bars[i][2];
+        ctx.fillRect(cx - 60, baseY - bh, 120, bh);
+        ctx.strokeStyle = bars[i][3]; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - 60, baseY - bh, 120, bh);
+        ctx.fillStyle = bars[i][3]; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bars[i][4], cx, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(bars[i][5], cx, baseY + 20);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('appends never seek — ~8× the write throughput', 430, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput numbers illustrative', 700, 290);
+});
+
+// c4: compaction — two files merge, shadowed rows drop out
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Compaction: Two Files Merge, Shadowed Rows Drop Out', w / 2, 24);
+
+    function box(x, y, bw, bh, fill, border, header) {
+        ctx.fillStyle = fill; rr(ctx, x, y, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; rr(ctx, x, y, bw, bh, 8); ctx.stroke();
+        ctx.fillStyle = border; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(header, x + 12, y + 18);
+    }
+
+    function strikeRow(text, x, y, suffix) {
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(text, x, y);
+        var tw = ctx.measureText(text).width;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + tw, y - 4); ctx.stroke();
+        if (suffix) {
+            ctx.font = '11px system-ui';
+            ctx.fillText(suffix, x + tw + 6, y);
+        }
+    }
+
+    // SSTable-1 (older) with shadowed rows
+    box(50, 58, 210, 92, 'rgba(74,58,167,0.12)', P.violet, 'SSTable-1 (older)');
+    strikeRow('ben: 22', 62, 94, '(shadowed)');
+    strikeRow('maya: 40', 62, 110, '(shadowed)');
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('noah: 15', 62, 126);
+
+    // SSTable-2 (newer)
+    box(50, 172, 210, 92, 'rgba(0,131,0,0.12)', P.green, 'SSTable-2 (newer)');
+    strikeRow('ben: ⊗ tombstone', 62, 208, '');
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('kai: 18', 62, 224);
+    ctx.fillText('maya: 57', 62, 240);
+
+    // merge arrows converging on the merged box
+    arrow(ctx, 262, 104, 428, 156, P.orange, 3);
+    arrow(ctx, 262, 218, 428, 164, P.orange, 3);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('key-by-key merge', 300, 150);
+
+    // merged SSTable
+    box(430, 112, 230, 96, 'rgba(25,158,112,0.12)', P.aqua, 'merged SSTable');
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('kai: 18', 442, 148);
+    ctx.fillText('maya: 57', 442, 164);
+    ctx.fillText('noah: 15', 442, 180);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('6 rows stored, 3 live — the rest was shadow space', 430, 252);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row values illustrative', 700, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

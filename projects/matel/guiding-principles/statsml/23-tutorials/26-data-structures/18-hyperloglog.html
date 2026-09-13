@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HyperLogLog</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>HyperLogLog</h1>
+<p class="subtitle">You can guess the size of a crowd from one lucky coin streak — HyperLogLog turns that trick into a count of a billion distinct users in 1.5 KB, off by only a couple percent</p>
+
+<div class="card-section">
+    <h2>The Longest Run of Heads in a Crowd</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">coin streaks</span><span class="tag orange">hashing</span></div>
+                <ul>
+                    <li><b>The game</b> — everyone in a crowd flips a coin until tails and remembers their streak of heads</li>
+                    <li><b>Rare streaks</b> — about 1 person in 8 reaches 3 heads, and only 1 in 4,096 reaches 12 heads</li>
+                    <li><b>The record</b> — you keep just the single best streak: a record of 12 suggests about 2&sup1;&sup2; = 4,096 people</li>
+                    <li><b>Hashing</b> — a hash turns each user ID into coin flips, the same flips every time for that user</li>
+                    <li><b>Repeats free</b> — a returning visitor re-flips the exact same streak, so the record never double-counts</li>
+                </ul>
+                <p class="example">If the best streak in a room is 6 heads, guess about 2&#8310; = 64 people — one lucky number stands in for the whole crowd.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One tiny number — the record heads streak — estimates crowd size, because a streak of k heads shows up about once per 2^k people.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Eight Visitors, Four Buckets, One Guess</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">buckets</span><span class="tag orange">records</span></div>
+                <ul>
+                    <li><b>One record is jumpy</b> — a single lucky streak can wreck the guess, so split visitors into buckets</li>
+                    <li><b>Bucket bits</b> — the first 2 hash bits pick a bucket (00&ndash;11); the last 4 bits are the coin flips (0 = heads)</li>
+                    <li><b>Record keeping</b> — each bucket stores only the longest heads streak it has ever seen</li>
+                    <li><b>Eight visitors</b> — the records land at 2, 3, 2, 4 for buckets 0&ndash;3 (redo it by hand from the chart)</li>
+                    <li><b>The guess</b> — a simplified harmonic-average formula: 0.532 &times; 4&sup2; &divide; (&frac14; + &#8539; + &frac14; + &sup1;&frasl;&#8321;&#8326;) &asymp; 12</li>
+                    <li><b>Rough here, tight at scale</b> — 4 buckets wobble about &plusmn;50%; 2,048 buckets tighten to about &plusmn;2%</li>
+                </ul>
+                <p class="example">dev hashes to 00 0010 — bucket 00's flips run heads, heads, tails, a 2-heads streak, so bucket 0's record becomes 2.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The whole sketch is just a handful of tiny records; the estimate of 12 versus the true 8 is rough only because there are 4 buckets here.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Billion Distinct Users in 1.5 KB</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">memory</span><span class="tag orange">mergeable</span></div>
+                <ul>
+                    <li><b>The exact way</b> — remembering every distinct visitor ID costs 8 bytes each: a billion users &asymp; 8 GB</li>
+                    <li><b>The bitmap way</b> — one bit per possible user ID still costs about 125 MB for a billion IDs</li>
+                    <li><b>The sketch way</b> — 2,048 buckets &times; 6 bits per record = 12,288 bits = exactly 1.5 KB</li>
+                    <li><b>The accuracy</b> — expected error is 1.04 &divide; &radic;2,048 &asymp; 2.3%, so a true billion reads &asymp; 0.98&ndash;1.02 billion</li>
+                    <li><b>Free unions</b> — merge two servers' sketches by keeping each bucket's larger record; no rescan needed</li>
+                    <li><b>Everywhere</b> — the distinct-count feature in many databases and analytics engines runs on this sketch</li>
+                </ul>
+                <p class="example">A dashboard slicing distinct viewers by country and by device keeps thousands of 1.5 KB sketches instead of thousands of 8 GB lists.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 1.5 KB buys a distinct count of a billion within about 2% — because the sketch stores records of streaks, not people.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Counts, It Doesn't Remember</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">distinct only</span></div>
+                <ul>
+                    <li><b>Not a sample</b> — every single visitor updates the sketch; nothing is skipped or sampled away</li>
+                    <li><b>Repeats add nothing</b> — a returning user re-flips identical flips, so no bucket record can grow</li>
+                    <li><b>No memory of who</b> — the sketch can say &asymp;286 million distinct, never whether ana was one of them</li>
+                    <li><b>No subtraction</b> — records only ratchet upward; you cannot remove a user or un-merge a day</li>
+                    <li><b>Distinct, not volume</b> — total visits and distinct visitors drift far apart; HLL tracks only the second</li>
+                </ul>
+                <p class="example">By day 10 the site has logged 1.95 billion visits from 280 million people — the sketch reads &asymp;286 million, unmoved by the 1.67 billion repeats.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the sketch as a compressed visitor list — HyperLogLog answers "how many distinct", never "who" or "how often".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: bigger crowd -> longer record streak (bar chart)
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Bigger Crowd, Longer Record Streak', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190, maxV = 14;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines at 4, 8, 12
+    var grids = [4, 8, 12];
+    for (var i = 0; i < grids.length; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var centers = [135, 285, 435, 585];
+    var streaks = [3, 6, 9, 12];
+    var crowdLabs = ['8 people', '64', '512', '4,096'];
+
+    for (var i = 0; i < 4; i++) {
+        var top = yOf(streaks[i]);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(centers[i] - 35, top, 70, baseY - top);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(centers[i] - 35, top, 70, baseY - top);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(streaks[i]), centers[i], top - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(crowdLabs[i], centers[i], baseY + 18);
+    }
+
+    // dashed guide through bar tops
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var i = 0; i < 4; i++) {
+        var x = centers[i], y = yOf(streaks[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('record ≈ log₂(crowd)', 340, 140);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('see a 12-heads record ⇒', 430, 70);
+    ctx.fillText('guess about 2¹² = 4,096 people', 430, 87);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — typical record streaks', w - 15, h - 10);
+});
+
+// c2: eight visitors -> four bucket records -> guess ~12 (flow diagram)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var bucketColors = [P.blue, P.green, P.orange, P.violet];
+    var bucketFills = ['rgba(42,120,214,0.12)', 'rgba(0,131,0,0.12)', 'rgba(217,89,38,0.12)', 'rgba(74,58,167,0.12)'];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8 Visitors → 4 Bucket Records → Guess ≈ 12', w / 2, 24);
+
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('visitor → bucket bits | flips → streak', 40, 62);
+
+    var rows = [
+        { txt: 'ana  → 00 | 0100 → 1', bucket: 0 },
+        { txt: 'dev  → 00 | 0010 → 2', bucket: 0 },
+        { txt: 'hugo → 00 | 0110 → 1', bucket: 0 },
+        { txt: 'ben  → 01 | 0001 → 3', bucket: 1 },
+        { txt: 'finn → 01 | 0100 → 1', bucket: 1 },
+        { txt: 'cara → 10 | 0011 → 2', bucket: 2 },
+        { txt: 'gia  → 10 | 0101 → 1', bucket: 2 },
+        { txt: 'elle → 11 | 0000 → 4', bucket: 3 }
+    ];
+    var rowYs = [84, 106, 128, 150, 172, 194, 216, 238];
+
+    var boxX = 430, boxW = 240, boxH = 34;
+    var boxYs = [75, 118, 161, 204];
+    var boxTexts = ['bucket 00 — record 2', 'bucket 01 — record 3', 'bucket 10 — record 2', 'bucket 11 — record 4'];
+
+    function roundRect(x, y, rw2, rh2, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + rw2 - r, y);
+        ctx.arcTo(x + rw2, y, x + rw2, y + r, r);
+        ctx.lineTo(x + rw2, y + rh2 - r);
+        ctx.arcTo(x + rw2, y + rh2, x + rw2 - r, y + rh2, r);
+        ctx.lineTo(x + r, y + rh2);
+        ctx.arcTo(x, y + rh2, x, y + rh2 - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    // connectors first (so text draws over them)
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < rows.length; i++) {
+        var b = rows[i].bucket;
+        ctx.beginPath();
+        ctx.moveTo(330, rowYs[i] - 4);
+        ctx.lineTo(boxX, boxYs[b] + boxH / 2);
+        ctx.stroke();
+    }
+
+    // visitor rows
+    ctx.font = '13px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+    for (var i = 0; i < rows.length; i++) {
+        ctx.fillStyle = bucketColors[rows[i].bucket];
+        ctx.fillText(rows[i].txt, 40, rowYs[i]);
+    }
+
+    // register boxes
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = bucketFills[i];
+        roundRect(boxX, boxYs[i], boxW, boxH, 4);
+        ctx.fill();
+        ctx.strokeStyle = bucketColors[i]; ctx.lineWidth = 2;
+        roundRect(boxX, boxYs[i], boxW, boxH, 4);
+        ctx.stroke();
+        ctx.fillStyle = bucketColors[i]; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(boxTexts[i], boxX + boxW / 2, boxYs[i] + 22);
+    }
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('harmonic average of 2, 3, 2, 4 ⇒ guess ≈ 12 (true: 8)', 550, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('illustrative 6-bit hashes — real sketches use 64 bits', 40, h - 10);
+});
+
+// c3: memory to count a billion distinct users (horizontal log-scale bars)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Counting 1 Billion Distinct Users: Memory Needed (log scale)', w / 2, 24);
+
+    var ax = 200, aw = 480, ay = 245;
+    function xOf(bytes) {
+        var lg = Math.log(bytes) / Math.LN10;
+        return ax + (lg - 3) / 7 * aw;
+    }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + aw, ay); ctx.stroke();
+    var ticks = [{ v: 1e3, lab: '1 KB' }, { v: 1e6, lab: '1 MB' }, { v: 1e9, lab: '1 GB' }];
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = xOf(ticks[i].v);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, ay - 5); ctx.lineTo(tx, ay + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i].lab, tx, ay + 20);
+    }
+
+    var rows = [
+        { lab: 'exact ID list (8 B/user)', bytes: 8e9, fill: 'rgba(217,89,38,0.35)', stroke: P.orange, y: 80, val: '8 GB' },
+        { lab: 'bitmap (1 bit/ID)', bytes: 1.25e8, fill: 'rgba(201,133,0,0.35)', stroke: P.yellow, y: 140, val: '125 MB' },
+        { lab: 'HyperLogLog (2,048 × 6 bits)', bytes: 1536, fill: 'rgba(0,131,0,0.35)', stroke: P.green, y: 200, val: '1.5 KB' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var bx = xOf(r.bytes);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(ax, r.y, bx - ax, 30);
+        ctx.strokeStyle = r.stroke; ctx.lineWidth = 2;
+        ctx.strokeRect(ax, r.y, bx - ax, 30);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 20);
+        ctx.font = 'bold 13px system-ui';
+        if (i === 0) {
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'right';
+            ctx.fillText(r.val, bx - 10, r.y + 20);
+        } else {
+            ctx.fillStyle = r.stroke; ctx.textAlign = 'left';
+            ctx.fillText(r.val, bx + 8, r.y + 20);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('5,000,000× smaller than the exact list —', 380, 215);
+    ctx.fillText('and still within about 2%', 380, 232);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('log scale — each gridline step is 1,000×', w - 15, h - 10);
+});
+
+// c4: total visits climb, HLL tracks only distinct (line chart, 10 days)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Visits Keep Climbing — the Sketch Only Counts Distinct People', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 185, maxV = 2000;
+    function xOf(day) { return ox + (day - 1) / 9 * pw; }
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines
+    var grids = [{ v: 500, lab: '500M' }, { v: 1000, lab: '1B' }, { v: 1500, lab: '1.5B' }, { v: 2000, lab: '2B' }];
+    for (var i = 0; i < grids.length; i++) {
+        var gy = yOf(grids[i].v);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i].lab, ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 1; d <= 10; d++) {
+        ctx.fillText(d === 1 ? 'day 1' : String(d), xOf(d), baseY + 18);
+    }
+
+    var totals = [100, 240, 410, 600, 800, 1010, 1230, 1460, 1700, 1950];
+    var distinct = [80, 140, 190, 220, 240, 255, 265, 272, 277, 280];
+    var hll = [82, 137, 193, 224, 236, 251, 259, 278, 271, 286];
+
+    // total visits: mute dashed
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i + 1), y = yOf(totals[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('total visits', xOf(10) - 4, yOf(totals[9]) - 10);
+
+    // true distinct: blue solid
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i + 1), y = yOf(distinct[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('true distinct', xOf(10) - 4, yOf(distinct[9]) + 20);
+
+    // HLL estimate: green dashed with dots
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+        var x = xOf(i + 1), y = yOf(hll[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green;
+    for (var i = 0; i < 10; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i + 1), yOf(hll[i]), 3, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('HLL estimate ≈286M', xOf(10) - 4, yOf(hll[9]) - 26);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('repeat visits add nothing —', 280, 95);
+    ctx.fillText('same user, same coin flips', 280, 112);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — 2,048-bucket sketch, ≈2% error', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

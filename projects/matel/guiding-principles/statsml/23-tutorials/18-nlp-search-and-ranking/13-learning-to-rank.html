@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Learning to Rank</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Learning to Rank</h1>
+<p class="subtitle">When the answer is an ordering — which result goes first, second, third — you don't grade the model on its scores, you grade it on the order those scores produce</p>
+
+<div class="card-section">
+    <h2>Which Recipe Goes First?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">ordering</span><span class="tag orange">search results</span></div>
+                <ul>
+                    <li><b>The search</b> — a recipe app gets the query "chocolate cake" and must decide which of four recipes to show first</li>
+                    <li><b>The candidates</b> — A classic chocolate cake, B chocolate mug cake, C vanilla cake, D chocolate cookies</li>
+                    <li><b>No single column works</b> — sort by star rating and vanilla cake (4.9 stars) beats every chocolate recipe</li>
+                    <li><b>What users say</b> — out of 100 searches, clicks go 46 to A, 27 to B, 15 to C, and 4 to D</li>
+                    <li><b>The task</b> — learn a scoring rule from those clicks so that sorting by score reproduces the order users want</li>
+                </ul>
+                <p class="example">Sorting by rating puts vanilla cake (4.9) on top; users overwhelmingly pick the classic chocolate cake — the rating column alone cannot see the query.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Learning to rank means the model is judged by the order it produces for a query, not by how pretty any single score looks.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Swapped Pairs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">pairwise</span></div>
+                <ul>
+                    <li><b>The labels</b> — clicks give each recipe a usefulness grade for this query: A gets 3, B gets 2, C gets 1, D gets 0</li>
+                    <li><b>The model's try</b> — its scores are B 2.9, A 2.7, D 1.2, C 1.0, so sorting gives the order B, A, D, C</li>
+                    <li><b>Check by pairs</b> — four recipes make 6 pairs; for each pair ask one question: did the better recipe score higher?</li>
+                    <li><b>The tally</b> — B over D, B over C, A over D, A over C are right; B over A and D over C are swapped: 4 of 6</li>
+                    <li><b>The training trick</b> — pairwise methods nudge the scores to fix each swapped pair, one comparison at a time</li>
+                </ul>
+                <p class="example">A (grade 3) sits below B (grade 2), so training says "raise A's score, lower B's" — the exact score values never enter the complaint, only who beat whom.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 4 of 6 pairs in the right order is a pairwise accuracy of 67% — and swapped pairs are exactly what a pairwise ranker trains on.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Top Slot Is Worth the Most</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">position bias</span><span class="tag green">NDCG</span></div>
+                <ul>
+                    <li><b>Position bias</b> — searchers read from the top and often stop after one or two results; slot 1 does most of the work</li>
+                    <li><b>The discount</b> — DCG-style scoring pays position p a credit of 1/log2(p+1): weights 1.00, 0.63, 0.50, 0.43</li>
+                    <li><b>Ideal score</b> — the perfect order A, B, C, D earns 3&times;1.00 + 2&times;0.63 + 1&times;0.50 + 0&times;0.43 = 4.76</li>
+                    <li><b>A swap at the top</b> — swapping A and B (slots 1 and 2) drops the score to 4.39, a loss of 0.37</li>
+                    <li><b>The same swap low down</b> — swapping C and D (slots 3 and 4) drops it only to 4.69, a loss of 0.07</li>
+                    <li><b>Where it lives</b> — web search, product search, feeds, and ads: anywhere the output the user sees is a list</li>
+                </ul>
+                <p class="example">The same neighbouring swap costs 0.37 points at the top of the list but only 0.07 at the bottom — roughly five times cheaper.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Ranking metrics weight mistakes by position, so a good ranker spends its effort getting the top of the list right and forgives noise at the bottom.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Good Scores, Bad Order</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">pointwise vs pairwise</span></div>
+                <ul>
+                    <li><b>The trap</b> — treating ranking as regression: predict each grade accurately and hope the order follows</li>
+                    <li><b>Close but wrong</b> — one model predicts A 2.7, B 2.8, C 1.0, D 0.1; average miss just 0.3, yet B tops A</li>
+                    <li><b>Far but right</b> — another predicts A 90, B 70, C 40, D 10 on a wildly wrong scale, yet the order is perfect</li>
+                    <li><b>Sorting forgives scale</b> — sorting only compares scores to each other, so absolute values wash out entirely</li>
+                    <li><b>The three families</b> — pointwise fits the grades, pairwise fixes the swaps, listwise optimizes the list metric</li>
+                </ul>
+                <p class="example">The model that missed every grade by dozens of points beats the one that missed by 0.3, because only the order ever reaches the user.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Judging a ranker by score error (RMSE). A tiny score error can still swap the top two results — evaluate with ranking metrics like pairwise accuracy or NDCG instead.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: bump chart — order by star rating vs order users click
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Query, Two Orders: Star Rating vs What Users Click', w / 2, 24);
+
+    var leftX = 200, rightX = 520;
+    var slotY = [105, 150, 195, 240];
+    var colors = { A: P.blue, B: P.green, C: P.orange, D: P.mute };
+
+    // column headers
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('sorted by star rating', leftX, 65);
+    ctx.fillText('order users click', rightX, 65);
+
+    // slot numbers
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    for (var i = 0; i < 4; i++) {
+        ctx.textAlign = 'center';
+        ctx.fillText((i + 1) + '.', 120, slotY[i] + 4);
+        ctx.fillText((i + 1) + '.', 650, slotY[i] + 4);
+    }
+
+    // left column order (top to bottom): C, D, A, B
+    var leftOrder = [
+        { r: 'C', lab: 'C vanilla cake — 4.9★' },
+        { r: 'D', lab: 'D chocolate cookies — 4.8★' },
+        { r: 'A', lab: 'A classic chocolate cake — 4.6★' },
+        { r: 'B', lab: 'B chocolate mug cake — 4.2★' }
+    ];
+    // right column order (top to bottom): A, B, C, D
+    var rightOrder = [
+        { r: 'A', lab: 'A classic chocolate cake — 46 clicks' },
+        { r: 'B', lab: 'B chocolate mug cake — 27' },
+        { r: 'C', lab: 'C vanilla cake — 15' },
+        { r: 'D', lab: 'D chocolate cookies — 4' }
+    ];
+
+    // slot y lookup per recipe on each side
+    var leftYOf = {}, rightYOf = {};
+    for (var i = 0; i < 4; i++) {
+        leftYOf[leftOrder[i].r] = slotY[i];
+        rightYOf[rightOrder[i].r] = slotY[i];
+    }
+
+    // connecting lines first (under dots)
+    ['A', 'B', 'C', 'D'].forEach(function(r) {
+        ctx.strokeStyle = colors[r]; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(leftX, leftYOf[r]);
+        ctx.lineTo(rightX, rightYOf[r]);
+        ctx.stroke();
+    });
+
+    // left dots + labels (label to the left of dot)
+    for (var i = 0; i < 4; i++) {
+        var r = leftOrder[i].r, y = slotY[i];
+        ctx.fillStyle = colors[r];
+        ctx.beginPath(); ctx.arc(leftX, y, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(leftOrder[i].lab, leftX - 14, y + 4);
+    }
+
+    // right dots + labels (label to the right of dot)
+    for (var i = 0; i < 4; i++) {
+        var r = rightOrder[i].r, y = slotY[i];
+        ctx.fillStyle = colors[r];
+        ctx.beginPath(); ctx.arc(rightX, y, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rightOrder[i].lab, rightX + 14, y + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the best-rated recipe is the wrong first answer — the order must be learned', 360, 282);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('ratings and clicks illustrative', w - 12, h - 6);
+});
+
+// c2: pair checklist — the model's order B, A, D, C checked pair by pair
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Model's Order B, A, D, C — Checked One Pair at a Time", w / 2, 24);
+
+    // ranked list strip
+    var boxX = [150, 270, 390, 510];
+    var boxLabs = ['B (grade 2)', 'A (grade 3)', 'D (grade 0)', 'C (grade 1)'];
+    var slotLabs = ['1st', '2nd', '3rd', '4th'];
+    var boxY = 57, boxW = 90, boxH = 26, rad = 6;
+    for (var i = 0; i < 4; i++) {
+        var bx = boxX[i];
+        ctx.beginPath();
+        ctx.moveTo(bx + rad, boxY);
+        ctx.lineTo(bx + boxW - rad, boxY);
+        ctx.arcTo(bx + boxW, boxY, bx + boxW, boxY + rad, rad);
+        ctx.lineTo(bx + boxW, boxY + boxH - rad);
+        ctx.arcTo(bx + boxW, boxY + boxH, bx + boxW - rad, boxY + boxH, rad);
+        ctx.lineTo(bx + rad, boxY + boxH);
+        ctx.arcTo(bx, boxY + boxH, bx, boxY + boxH - rad, rad);
+        ctx.lineTo(bx, boxY + rad);
+        ctx.arcTo(bx, boxY, bx + rad, boxY, rad);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(42,120,214,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(boxLabs[i], bx + boxW / 2, boxY + 17);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(slotLabs[i], bx + boxW / 2, boxY - 5);
+    }
+
+    // pair rows
+    var rows = [
+        { lab: 'A vs B — grade 3 vs 2 — model put B first', ok: false },
+        { lab: 'A vs C — grade 3 vs 1 — A placed higher', ok: true },
+        { lab: 'A vs D — grade 3 vs 0 — A placed higher', ok: true },
+        { lab: 'B vs C — grade 2 vs 1 — B placed higher', ok: true },
+        { lab: 'B vs D — grade 2 vs 0 — B placed higher', ok: true },
+        { lab: 'C vs D — grade 1 vs 0 — model put D first', ok: false }
+    ];
+    var rowY = [115, 141, 167, 193, 219, 245];
+    for (var i = 0; i < 6; i++) {
+        var y = rowY[i], row = rows[i];
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.lab, 90, y);
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        if (row.ok) {
+            ctx.fillStyle = P.green;
+            ctx.fillText('✓', 560, y);
+            ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('correct', 590, y);
+        } else {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('✕', 560, y);
+            ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('swapped', 590, y);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 of 6 pairs right — pairwise accuracy 67%', 90, 278);
+});
+
+// c3: DCG bar chart — same swap, different cost
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Swap, Different Cost: DCG of Three Orderings', w / 2, 24);
+
+    var ox = 70, baseY = 245, plotW = 430, plotH = 180;
+    var yOf = function(v) { return baseY - v / 5 * plotH; };
+
+    // gridlines + y ticks 0..5
+    for (var t = 0; t <= 5; t++) {
+        var y = yOf(t);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(t), ox - 8, y + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 150, v: 4.76, fill: 'rgba(0,131,0,0.35)', line: P.green, name: ['perfect', 'A, B, C, D'] },
+        { cx: 290, v: 4.39, fill: 'rgba(217,89,38,0.30)', line: P.orange, name: ['A/B swapped', '(top)'] },
+        { cx: 430, v: 4.69, fill: 'rgba(42,120,214,0.30)', line: P.blue, name: ['C/D swapped', '(bottom)'] }
+    ];
+    var bw = 90;
+    bars.forEach(function(b) {
+        var yTop = yOf(b.v);
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(b.cx - bw / 2, yTop, bw, baseY - yTop);
+        ctx.strokeStyle = b.line; ctx.lineWidth = 2;
+        ctx.strokeRect(b.cx - bw / 2, yTop, bw, baseY - yTop);
+        ctx.fillStyle = b.line; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.v.toFixed(2), b.cx, yTop - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.name[0], b.cx, baseY + 16);
+        ctx.fillText(b.name[1], b.cx, baseY + 30);
+    });
+
+    // dashed reference line at 4.76
+    var refY = yOf(4.76);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, refY); ctx.lineTo(ox + plotW, refY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // loss labels beside gaps to the reference line
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.orange;
+    ctx.fillText('−0.37', 290 + bw / 2 + 6, (refY + yOf(4.39)) / 2 + 4);
+    ctx.fillStyle = P.blue;
+    ctx.fillText('−0.07', 430 + bw / 2 + 6, (refY + yOf(4.69)) / 2 + 8);
+
+    // side panel: credit by position
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('credit by position', 540, 72);
+    var credits = ['slot 1 — 1.00', 'slot 2 — 0.63', 'slot 3 — 0.50', 'slot 4 — 0.43'];
+    ctx.font = '12px system-ui';
+    for (var i = 0; i < 4; i++) {
+        ctx.fillText(credits[i], 540, 94 + i * 20);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the top swap costs', 540, 220);
+    ctx.fillText('about 5× the bottom one', 540, 236);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('grades 3, 2, 1, 0; credits 1/log2(p+1) — illustrative', w - 12, h - 6);
+});
+
+// c4: two number lines — score accuracy is not order accuracy
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Score Accuracy Is Not Order Accuracy', w / 2, 24);
+
+    // true grades reminder
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('true grades: A 3, B 2, C 1, D 0', w - 20, 42);
+
+    var axX0 = 150, axX1 = 670;
+    var colors = { A: P.blue, B: P.green, C: P.orange, D: P.mute };
+
+    // Row 1: scale 0-3, y=125
+    var y1 = 125;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axX0, y1); ctx.lineTo(axX1, y1); ctx.stroke();
+    // ticks 0..3
+    for (var t = 0; t <= 3; t++) {
+        var x = axX0 + t / 3 * (axX1 - axX0);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y1 - 5); ctx.lineTo(x, y1 + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(t), x, y1 + 20);
+    }
+    // left label
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('close scores,', 20, y1 - 4);
+    ctx.fillText('wrong order', 20, y1 + 12);
+    // dots: D 0.1, C 1.0, A 2.7, B 2.8 — A and B staggered
+    var row1 = [
+        { r: 'D', v: 0.1, lab: 'D 0.1', dy: -12 },
+        { r: 'C', v: 1.0, lab: 'C 1.0', dy: -12 },
+        { r: 'A', v: 2.7, lab: 'A 2.7', dy: -26 },
+        { r: 'B', v: 2.8, lab: 'B 2.8', dy: -12 }
+    ];
+    row1.forEach(function(d) {
+        var x = axX0 + d.v / 3 * (axX1 - axX0);
+        ctx.fillStyle = colors[d.r];
+        ctx.beginPath(); ctx.arc(x, y1, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(d.lab, x, y1 + d.dy);
+    });
+    // verdict
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('order B, A, C, D — top pair swapped (avg miss 0.3)', axX0, 80);
+
+    // Row 2: scale 0-100, y=235
+    var y2 = 235;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axX0, y2); ctx.lineTo(axX1, y2); ctx.stroke();
+    var ticks2 = [0, 25, 50, 75, 100];
+    for (var i = 0; i < ticks2.length; i++) {
+        var x = axX0 + ticks2[i] / 100 * (axX1 - axX0);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y2 - 5); ctx.lineTo(x, y2 + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(ticks2[i]), x, y2 + 20);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('far scores,', 20, y2 - 4);
+    ctx.fillText('right order', 20, y2 + 12);
+    var row2 = [
+        { r: 'D', v: 10, lab: 'D 10' },
+        { r: 'C', v: 40, lab: 'C 40' },
+        { r: 'B', v: 70, lab: 'B 70' },
+        { r: 'A', v: 90, lab: 'A 90' }
+    ];
+    row2.forEach(function(d) {
+        var x = axX0 + d.v / 100 * (axX1 - axX0);
+        ctx.fillStyle = colors[d.r];
+        ctx.beginPath(); ctx.arc(x, y2, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(d.lab, x, y2 - 12);
+    });
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('order A, B, C, D — perfect', axX0, 190);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sorting keeps only the order — the scale washes out', 360, 285);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('predicted scores illustrative', w - 12, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

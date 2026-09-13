@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HNSW &amp; Approximate Nearest Neighbors</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>HNSW &amp; Approximate Nearest Neighbors</h1>
+<p class="subtitle"><b>HNSW</b> = <b>H</b>ierarchical (stacked layers, giant hops on top) <b>N</b>avigable (each step simply moves closer to the target) <b>S</b>mall <b>W</b>orld (mostly links to close neighbors plus a few long shortcuts); <b>ANN</b> = <b>A</b>pproximate <b>N</b>earest <b>N</b>eighbors — usually the true closest item, not always.<br>To find the closest match among a million vectors, HNSW hops through a graph of neighbors — long express hops first, short local hops last — checking a few hundred items instead of all of them</p>
+
+<div class="card-section">
+    <h2>One Million Songs, One Query</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">graph hopping</span><span class="tag orange">layers</span></div>
+                <ul>
+                    <li><b>The app</b> — a music app stores 1,000,000 songs as points in space; similar songs sit close together</li>
+                    <li><b>The query</b> — a listener picks one song and asks: which songs sit nearest to this one?</li>
+                    <li><b>Brute force</b> — measuring the distance to all 1,000,000 songs gives the exact answer, painfully slowly</li>
+                    <li><b>The shortcut</b> — link every song to a few close neighbors, then hop greedily toward the query</li>
+                    <li><b>The layers</b> — a thin top layer holds huge hops between far-apart songs, like express trains before local ones</li>
+                    <li><b>The payoff</b> — about 230 distance checks instead of 1,000,000, and the answer is almost always right</li>
+                </ul>
+                <p class="example">It works like reaching a street address: fly to the city, take a train to the district, walk the last block — nobody checks every house on Earth.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> HNSW answers "what's nearest?" by hopping neighbor-to-neighbor through layered shortcuts — express layers cover distance fast, the bottom layer finishes the job.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Greedy Walk Across Twelve Songs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">greedy search</span></div>
+                <ul>
+                    <li><b>The map</b> — 12 songs placed by tempo (x) and energy (y); the query song Q sits at (7, 6)</li>
+                    <li><b>Entry point</b> — the walk starts at song A(2, 2), whose distance to Q is 6.4</li>
+                    <li><b>Hop 1</b> — A's neighbors: B(5, 3) at 3.6, C(3, 6) at 4.0, K at 6.3, L at 5.1 — step to B</li>
+                    <li><b>Hop 2</b> — B's unvisited neighbors: D(6, 6) at 1.0 and F(7, 4) at 2.0 — step to D</li>
+                    <li><b>Stop</b> — D's unvisited neighbors E(8, 7) at 1.4 and I(4, 9) at 4.2 can't beat D's 1.0 — D wins</li>
+                    <li><b>The bill</b> — 9 distance checks instead of 12; on a million songs the same walk stays a few hundred</li>
+                </ul>
+                <p class="example">Two hops — A to B to D — and the walk stops because no neighbor of D is closer to Q than D's own distance of 1.0.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The greedy rule is: measure your neighbors, step to whichever is closest to the query, stop when none beats you — here 9 checks found the winner among 12 songs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Every Vector Database Uses This</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">scale</span><span class="tag orange">speed</span></div>
+                <ul>
+                    <li><b>Embeddings everywhere</b> — search, recommendations, and chatbots all turn text or images into vectors</li>
+                    <li><b>The scale wall</b> — brute force cost grows with the library: 1,000,000 items means 1,000,000 checks</li>
+                    <li><b>Logarithmic cost</b> — HNSW needs about 150 checks at 10 thousand songs and only about 270 at 10 million</li>
+                    <li><b>Behind the curtain</b> — vector databases and RAG pipelines run HNSW (or a close cousin) on every query</li>
+                    <li><b>The trade</b> — you accept a small chance of missing the true nearest in exchange for thousand-fold speed</li>
+                </ul>
+                <p class="example">A 1,000&times; bigger library costs brute force 1,000&times; more work, but costs HNSW only about 120 extra checks.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Brute force scales with the library size; HNSW scales roughly with the number of digits in it — that gap is why vector search over millions of items feels instant.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Approximate Means It Can Miss</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">recall</span></div>
+                <ul>
+                    <li><b>The A in ANN</b> — approximate: the greedy walk can settle on a very good song that isn't the best one</li>
+                    <li><b>Recall</b> — the share of queries where the true nearest neighbor actually makes it into the results</li>
+                    <li><b>The dial</b> — a search-width setting called ef keeps more candidate songs alive during the walk</li>
+                    <li><b>Cheap start</b> — widening ef from 10 to 50 lifts recall from 71% to 96% for 80 &rarr; 300 checks</li>
+                    <li><b>Costly finish</b> — the last stretch, 96% to 99.5%, needs 300 &rarr; 1,000 checks — the price triples</li>
+                    <li><b>The mistake</b> — treating results as exact; a 96%-recall index silently misses 4 queries in every 100</li>
+                </ul>
+                <p class="example">A shopping site settles on ef = 50: recall 96% at 300 checks per query — pages load fast and shoppers never notice the rare miss.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming vector search returns THE nearest neighbor. It returns A near neighbor; recall says how often the two coincide, and each extra point of recall is bought with a wider, slower search.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: three-layer hop diagram
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Layers: Express Hops First, Local Hops Last', w / 2, 24);
+
+    // layer bands
+    var bands = [
+        { y: 55, hgt: 44, lab: 'layer 2 — a handful of songs' },
+        { y: 125, hgt: 44, lab: 'layer 1 — more songs' },
+        { y: 195, hgt: 56, lab: 'layer 0 — all 1,000,000 songs' }
+    ];
+    bands.forEach(function(b) {
+        ctx.fillStyle = 'rgba(26,82,118,0.06)';
+        var bx = 60, bw = 600, rad = 8;
+        ctx.beginPath();
+        ctx.moveTo(bx + rad, b.y);
+        ctx.lineTo(bx + bw - rad, b.y);
+        ctx.arcTo(bx + bw, b.y, bx + bw, b.y + rad, rad);
+        ctx.lineTo(bx + bw, b.y + b.hgt - rad);
+        ctx.arcTo(bx + bw, b.y + b.hgt, bx + bw - rad, b.y + b.hgt, rad);
+        ctx.lineTo(bx + rad, b.y + b.hgt);
+        ctx.arcTo(bx, b.y + b.hgt, bx, b.y + b.hgt - rad, rad);
+        ctx.lineTo(bx, b.y + rad);
+        ctx.arcTo(bx, b.y, bx + rad, b.y, rad);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(b.lab, 60, b.y - 4);
+    });
+
+    // layer 2 nodes
+    var l2x = [140, 380, 600];
+    l2x.forEach(function(x) {
+        ctx.fillStyle = P.ink;
+        ctx.beginPath(); ctx.arc(x, 77, 6, 0, 2 * Math.PI); ctx.fill();
+    });
+    // layer 1 nodes
+    var l1x = [110, 200, 300, 400, 500, 600];
+    l1x.forEach(function(x) {
+        ctx.fillStyle = P.ink;
+        ctx.beginPath(); ctx.arc(x, 147, 6, 0, 2 * Math.PI); ctx.fill();
+    });
+    // layer 0 nodes
+    var l0x = [80, 125, 170, 215, 260, 305, 350, 395, 440, 485, 575, 620];
+    l0x.forEach(function(x) {
+        ctx.fillStyle = P.ink;
+        ctx.beginPath(); ctx.arc(x, 223, 5, 0, 2 * Math.PI); ctx.fill();
+    });
+    // answer node (green)
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(530, 223, 7, 0, 2 * Math.PI); ctx.fill();
+
+    // query marker: orange diamond at (530, 250)
+    ctx.fillStyle = P.orange;
+    ctx.beginPath();
+    ctx.moveTo(530, 242); ctx.lineTo(538, 250); ctx.lineTo(530, 258); ctx.lineTo(522, 250);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('query', 546, 254);
+
+    // hop path
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    // hop 1: (140,77) -> (380,77)
+    ctx.beginPath(); ctx.moveTo(140, 77); ctx.lineTo(380, 77); ctx.stroke();
+    arrowHead(ctx, 140, 77, 380, 77, P.blue);
+    // drop: (380,77) -> (400,147) dashed
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(380, 77); ctx.lineTo(400, 147); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 380, 77, 400, 147, P.blue);
+    // hop: (400,147) -> (500,147)
+    ctx.beginPath(); ctx.moveTo(400, 147); ctx.lineTo(500, 147); ctx.stroke();
+    arrowHead(ctx, 400, 147, 500, 147, P.blue);
+    // drop: (500,147) -> (485,223) dashed
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(500, 147); ctx.lineTo(485, 223); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 500, 147, 485, 223, P.blue);
+    // hop: (485,223) -> (530,223)
+    ctx.beginPath(); ctx.moveTo(485, 223); ctx.lineTo(530, 223); ctx.stroke();
+    arrowHead(ctx, 485, 223, 530, 223, P.blue);
+
+    // entry label
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('start here', 140, 62);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('long hops shrink the search fast', 180, 118);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — node counts shrunk to fit the page', w - 12, h - 8);
+});
+
+// c2: greedy walk scatter map
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Greedy Walk: A (6.4) → B (3.6) → D (1.0) — stop', w / 2, 24);
+
+    var ox = 60, baseY = 262, plotW = 560, plotH = 222;
+    function px(t) { return ox + t * 56; }
+    function py(e) { return baseY - e * 22; }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    // ticks every 2
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    for (var t = 0; t <= 10; t += 2) {
+        ctx.textAlign = 'center';
+        ctx.fillText(String(t), px(t), baseY + 16);
+        ctx.textAlign = 'right';
+        ctx.fillText(String(t), ox - 8, py(t) + 4);
+    }
+    // axis titles
+    ctx.textAlign = 'center';
+    ctx.fillText('tempo', ox + plotW / 2, baseY + 32);
+    ctx.save();
+    ctx.translate(16, baseY - plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('energy', 0, 0);
+    ctx.restore();
+
+    var pts = {
+        A: [2, 2], B: [5, 3], C: [3, 6], D: [6, 6], E: [8, 7], F: [7, 4],
+        G: [1, 8], H: [9, 2], I: [4, 9], J: [9, 9], K: [1, 4], L: [6, 1]
+    };
+
+    // neighbor links
+    var links = [['A','B'],['A','C'],['A','K'],['A','L'],['B','D'],['B','F'],['B','L'],
+                 ['C','G'],['C','I'],['D','E'],['D','F'],['D','I'],['E','J'],['E','H'],
+                 ['F','H'],['F','L'],['G','K'],['I','J']];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    links.forEach(function(lk) {
+        var a = pts[lk[0]], b = pts[lk[1]];
+        ctx.beginPath();
+        ctx.moveTo(px(a[0]), py(a[1]));
+        ctx.lineTo(px(b[0]), py(b[1]));
+        ctx.stroke();
+    });
+
+    // greedy path arrows A->B and B->D
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px(2), py(2)); ctx.lineTo(px(5), py(3)); ctx.stroke();
+    arrowHead(ctx, px(2), py(2), px(5), py(3), P.blue);
+    ctx.beginPath(); ctx.moveTo(px(5), py(3)); ctx.lineTo(px(6), py(6)); ctx.stroke();
+    arrowHead(ctx, px(5), py(3), px(6), py(6), P.blue);
+
+    // song dots + letter labels
+    Object.keys(pts).forEach(function(name) {
+        var p = pts[name];
+        ctx.fillStyle = P.ink;
+        ctx.beginPath(); ctx.arc(px(p[0]), py(p[1]), 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(name, px(p[0]) + 8, py(p[1]) - 6);
+    });
+
+    // D redrawn as green 8px dot
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(px(6), py(6), 8, 0, 2 * Math.PI); ctx.fill();
+
+    // query Q diamond at (7,6)
+    var qx = px(7), qy = py(6);
+    ctx.fillStyle = P.orange;
+    ctx.beginPath();
+    ctx.moveTo(qx, qy - 8); ctx.lineTo(qx + 8, qy); ctx.lineTo(qx, qy + 8); ctx.lineTo(qx - 8, qy);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Q', qx, qy - 14);
+
+    // distance labels at visited stops
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('6.4', px(2) + 8, py(2) + 16);
+    ctx.fillText('3.6', px(5) + 8, py(3) + 16);
+    ctx.fillStyle = P.green;
+    ctx.fillText('1.0', px(6) - 32, py(6) + 18);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('9 of 12 songs checked —', 500, 230);
+    ctx.fillText('the rest never touched', 500, 246);
+});
+
+// c3: brute force vs HNSW checks, horizontal bars on log scale
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Distance Checks per Query — bar length on a log scale', w / 2, 24);
+
+    var barX = 200;
+    var groupY = [62, 112, 162, 212];
+    var rowLabs = ['10 thousand songs', '100 thousand songs', '1 million songs', '10 million songs'];
+    var bruteW = [240, 300, 360, 420];
+    var bruteLabs = ['10,000 checks', '100,000 checks', '1,000,000 checks', '10,000,000 checks'];
+    var hnswW = [131, 137, 142, 146];
+    var hnswLabs = ['~150', '~190', '~230', '~270'];
+    var bh = 14, gap = 4;
+
+    for (var i = 0; i < 4; i++) {
+        var y = groupY[i];
+        // row label, vertically centered over the group (two bars + gap = 32px)
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabs[i], 20, y + 20);
+        // brute bar
+        ctx.fillStyle = P.magenta;
+        ctx.fillRect(barX, y, bruteW[i], bh);
+        ctx.fillStyle = P.magenta; ctx.font = '12px system-ui';
+        ctx.fillText(bruteLabs[i], barX + bruteW[i] + 8, y + 11);
+        // hnsw bar
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(barX, y + bh + gap, hnswW[i], bh);
+        ctx.fillStyle = P.blue;
+        ctx.fillText(hnswLabs[i], barX + hnswW[i] + 8, y + bh + gap + 11);
+    }
+
+    // legend top right
+    ctx.fillStyle = P.magenta; ctx.fillRect(560, 40, 14, 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('brute force', 580, 49);
+    ctx.fillStyle = P.blue; ctx.fillRect(560, 56, 14, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('HNSW', 580, 65);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1,000× more songs → only ~120 more HNSW checks', 300, 252);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative check counts', w - 12, h - 8);
+});
+
+// c4: recall vs checks curve
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Recall Dial: More Checks Buy Less and Less', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 190;
+    function px(checks) { return ox + checks * 0.6; }
+    function py(recall) { return baseY - (recall - 60) * 4.75; }
+
+    // gridlines + y ticks
+    var yTicks = [60, 70, 80, 90, 100];
+    yTicks.forEach(function(r) {
+        var y = py(r);
+        if (r > 60) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r + '%', ox - 8, y + 4);
+    });
+    // x ticks
+    var xTicks = [[0, '0'], [200, '200'], [400, '400'], [600, '600'], [800, '800'], [1000, '1,000']];
+    ctx.textAlign = 'center';
+    xTicks.forEach(function(t) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(t[1], px(t[0]), baseY + 18);
+    });
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    // ceiling line at 100%
+    var cy = py(100);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, cy); ctx.lineTo(ox + plotW, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('exact (brute force)', ox + plotW, cy - 5);
+
+    // curve
+    var ptsCR = [[80, 71], [140, 88], [300, 96], [550, 99], [1000, 99.5]];
+    var efLabs = ['ef=10', 'ef=20', 'ef=50', 'ef=100', 'ef=200'];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ptsCR.forEach(function(p, i) {
+        var x = px(p[0]), y = py(p[1]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // dots + labels
+    ptsCR.forEach(function(p, i) {
+        var x = px(p[0]), y = py(p[1]);
+        if (i === 2) {
+            // ef=50 sweet spot in green
+            ctx.fillStyle = P.green;
+            ctx.beginPath(); ctx.arc(x, y, 8, 0, 2 * Math.PI); ctx.fill();
+            ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('sweet spot: 96% at 300 checks', x + 30, y - 14);
+        } else {
+            ctx.fillStyle = P.blue;
+            ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI); ctx.fill();
+        }
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(efLabs[i], x, y + 20);
+    });
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('96% → 99.5% recall', 430, 140);
+    ctx.fillText('triples the checks (300 → 1,000)', 430, 156);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative recall figures', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

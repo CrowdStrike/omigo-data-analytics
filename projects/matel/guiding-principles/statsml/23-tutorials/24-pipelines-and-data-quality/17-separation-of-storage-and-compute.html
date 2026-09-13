@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Separation of Storage and Compute</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Separation of Storage and Compute</h1>
+<p class="subtitle">Keep the data in cheap object storage and rent compute only while a job runs — the cluster becomes disposable, the data does not</p>
+
+<div class="card-section">
+    <h2>The Orders Job That Kept a Cluster Alive</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">S3 + ephemeral clusters</span><span class="tag orange">architecture</span></div>
+                <ul>
+                    <li><b>The job</b> — a nightly analytics job scans a 2 TB orders dataset and takes 2 hours on 20 nodes</li>
+                    <li><b>The old way</b> — classic Hadoop stores the orders data on the workers' own disks (HDFS)</li>
+                    <li><b>The trap</b> — turn those 20 nodes off and the data goes with them, so the cluster runs 24/7</li>
+                    <li><b>The shift</b> — move the 2 TB to object storage (S3); the workers now hold no data at all</li>
+                    <li><b>The payoff</b> — spin up 20 nodes at 1am, run the 2-hour job, kill the cluster; the data stays put</li>
+                </ul>
+                <p class="example">At 3am the cluster is deleted; the orders dataset sits untouched in S3, waiting for tomorrow's 20 fresh nodes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Coupled architecture ties data lifetime to cluster lifetime; separating them makes compute ephemeral and storage permanent — this is the definition of storage/compute separation.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Pricing the Two Architectures</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">cost model</span></div>
+                <ul>
+                    <li><b>The rate</b> — each node costs $0.50/hr, so the 20-node cluster costs $10 for every hour it is up</li>
+                    <li><b>Coupled</b> — the cluster must stay up to keep the data: 720 hr/month &times; $10 = $7,200/month</li>
+                    <li><b>Separated compute</b> — 2 hr/night &times; 30 nights &times; $10 = $600/month, paid only while the job runs</li>
+                    <li><b>Separated storage</b> — 2 TB in S3 at $0.023/GB-month &asymp; $47/month, paid whether or not compute runs</li>
+                    <li><b>Hand-check</b> — $600 + $47 = $647 vs $7,200: the same nightly job for roughly 1/11th the bill</li>
+                </ul>
+                <p class="example">The job itself is identical both nights — the $6,553/month difference is purely the idle hours the coupled cluster spends babysitting its own disks.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Separation changes the cost model from "pay to keep data alive" to "pay for storage always (cheap) plus compute only while running (metered)".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Copy of Data, Many Engines</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">shared data</span></div>
+                <ul>
+                    <li><b>One source</b> — the 2 TB orders dataset in S3 is the single copy every tool reads</li>
+                    <li><b>Many readers</b> — the nightly Spark job, a SQL warehouse, an ML training run, and ad-hoc notebooks</li>
+                    <li><b>No copies</b> — in the coupled world each engine needed the data loaded into its own cluster's disks</li>
+                    <li><b>Independent scaling</b> — the ML team runs 40 nodes for an hour; the SQL team runs 4 all day; neither waits</li>
+                    <li><b>Independent failure</b> — killing the notebook cluster cannot corrupt or delete the shared orders data</li>
+                </ul>
+                <p class="example">On Monday the ML team spins up 40 nodes against the same S3 path the 20-node nightly job used on Sunday — no export, no copy, no coordination.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because storage outlives any cluster, multiple engines of different sizes and lifetimes can share one authoritative copy of the data — the pattern behind modern lakehouse stacks.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not Free: Network Reads vs Data Locality</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">trade-off</span></div>
+                <ul>
+                    <li><b>The confusion</b> — treating S3 like a local disk: every read now crosses the network</li>
+                    <li><b>Locality lost</b> — Hadoop's trick was moving compute to the data; separation moves data to the compute</li>
+                    <li><b>The numbers</b> — the 2 TB scan runs in 8 min on local disks, 12 min cold over the network</li>
+                    <li><b>The mitigation</b> — a local SSD/RAM cache on the workers brings warm re-reads back to about 8.5 min</li>
+                    <li><b>The mistake</b> — benchmarking only the cold first read and concluding separation "doesn't scale"</li>
+                </ul>
+                <p class="example">The nightly job's first pass over the orders data pays the 12-minute network price; its second and third passes hit the cache and run at near-local speed.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming separation costs nothing. The first network read is genuinely slower than a local-disk read — the architecture works because caching makes repeat reads cheap, not because the network penalty disappeared.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: coupled cluster (data on workers) vs separated (S3 + ephemeral workers)
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Coupled: Data Lives on the Workers — Separated: Data Lives in S3', w / 2, 24);
+
+    // divider + sub-labels
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 40); ctx.lineTo(360, 280); ctx.stroke();
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('coupled (classic Hadoop)', 180, 55);
+    ctx.fillText('separated (S3 + ephemeral)', 540, 55);
+
+    // left half: three workers with local disk shards
+    var lxs = [45, 145, 245];
+    for (var i = 0; i < 3; i++) {
+        var x = lxs[i], y = 90;
+        rrect(ctx, x, y, 90, 70, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('worker', x + 45, y + 22);
+        // inner disk box
+        ctx.fillStyle = 'rgba(212,81,129,0.18)';
+        ctx.fillRect(x + 15, y + 34, 60, 22);
+        ctx.strokeStyle = P.magenta; ctx.lineWidth = 1;
+        ctx.strokeRect(x + 15, y + 34, 60, 22);
+        ctx.fillStyle = P.magenta; ctx.font = '11px system-ui';
+        ctx.fillText('orders shard', x + 45, y + 49);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('kill a node = lose its shard — runs 24/7', 180, 215);
+
+    // right half: S3 box below, disposable workers above
+    var rxs = [415, 510, 605];
+    for (var i = 0; i < 3; i++) {
+        var x = rxs[i], y = 90;
+        // arrow from worker down to S3
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x + 40, y + 55); ctx.lineTo(x + 40, 195); ctx.stroke();
+        arrowHead(ctx, x + 40, 197, Math.PI / 2, 8, P.mute);
+        // dashed worker box
+        ctx.setLineDash([6, 4]);
+        rrect(ctx, x, y, 80, 55, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('worker', x + 40, y + 32);
+    }
+    // S3 box
+    rrect(ctx, 410, 200, 280, 46, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('S3: orders/ 2 TB', 550, 227);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cluster is disposable, data is not', 550, 175);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('diagram schematic, illustrative', w - 14, h - 6);
+});
+
+// c2: monthly cost — coupled bar vs stacked separated bar
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Nightly Job, Two Bills: $7,200 vs $647 per Month', w / 2, 24);
+
+    var ox = 70, baseY = 250, pw = 580, ph = 190, maxV = 8000;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines + labels
+    var gvals = [2000, 4000, 6000, 8000];
+    var glabs = ['2,000', '4,000', '6,000', '8,000'];
+    ctx.font = '12px system-ui';
+    for (var g = 0; g < gvals.length; g++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(gvals[g])); ctx.lineTo(ox + pw, yOf(gvals[g])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[g], ox - 6, yOf(gvals[g]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // coupled bar: $7,200
+    var cH = 7200 / maxV * ph;
+    ctx.fillStyle = 'rgba(231,76,60,0.30)';
+    ctx.fillRect(230 - 60, baseY - cH, 120, cH);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(230 - 60, baseY - cH, 120, cH);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('$7,200', 230, baseY - cH - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('coupled — cluster up 24/7', 230, baseY + 18);
+
+    // separated stacked bar: $600 compute + $47 storage
+    var compH = 600 / maxV * ph;
+    var storH = Math.max(47 / maxV * ph, 2);
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(490 - 60, baseY - compH, 120, compH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+    ctx.strokeRect(490 - 60, baseY - compH, 120, compH);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(490 - 60, baseY - compH - storH, 120, storH);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('compute $600', 490 + 66, baseY - compH / 2 + 4);
+    ctx.fillStyle = P.green;
+    ctx.fillText('storage $47', 490 + 66, baseY - compH - storH - 6);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('$647', 490, baseY - compH - storH - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('separated — 2 hr/night', 490, baseY + 18);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('~11× cheaper: idle hours were the real cost', 360, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative: $0.50/node-hr, $0.023/GB-mo', w - 14, h - 8);
+});
+
+// c3: hub-and-spoke — one S3 copy, four engines
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Engines, One Copy: s3://lake/orders/', w / 2, 24);
+
+    var hub = { x: 360, y: 165 };
+    var spokes = [
+        { x: 110, y: 75,  label: 'Spark nightly job', sub: '20 nodes, 2 hr' },
+        { x: 610, y: 75,  label: 'SQL warehouse',     sub: '4 nodes, all day' },
+        { x: 110, y: 250, label: 'ML training',       sub: '40 nodes, 1 hr' },
+        { x: 610, y: 250, label: 'ad-hoc notebooks',  sub: '2 nodes, on demand' }
+    ];
+
+    // spoke lines first (boxes drawn on top)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    for (var i = 0; i < spokes.length; i++) {
+        ctx.beginPath(); ctx.moveTo(spokes[i].x, spokes[i].y); ctx.lineTo(hub.x, hub.y); ctx.stroke();
+    }
+
+    // spoke labels near line midpoints
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(spokes[0].sub, 235, 112);
+    ctx.fillText(spokes[1].sub, 485, 112);
+    ctx.fillText(spokes[2].sub, 235, 224);
+    ctx.fillText(spokes[3].sub, 485, 224);
+
+    // engine boxes
+    for (var i = 0; i < spokes.length; i++) {
+        var sp = spokes[i];
+        rrect(ctx, sp.x - 70, sp.y - 22, 140, 44, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(sp.label, sp.x, sp.y + 4);
+    }
+
+    // hub box
+    rrect(ctx, hub.x - 100, hub.y - 27, 200, 54, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('S3: orders/', hub.x, hub.y - 4);
+    ctx.fillText('one 2 TB copy', hub.x, hub.y + 15);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('engines come and go — the data never moves', 360, 288);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cluster sizes illustrative', w - 14, h - 6);
+});
+
+// c4: scan time — local disk vs cold S3 vs cached S3
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Scanning 2 TB: Local Disk vs Cold S3 vs Cached S3', w / 2, 24);
+
+    var bx = 230, maxW = 420, maxMin = 14; // 30 px per minute
+    function wOf(min) { return min / maxMin * maxW; }
+
+    // light grid + tick labels at 0 / 5 / 10 min
+    var ticks = [0, 5, 10];
+    ctx.font = '12px system-ui';
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = bx + wOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, 65); ctx.lineTo(tx, 250); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i] + (ticks[i] === 10 ? ' min' : ''), tx, 266);
+    }
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 65); ctx.lineTo(bx, 250); ctx.stroke();
+
+    // rows
+    var rows = [
+        { y: 85,  label: 'local disk (coupled)',      min: 8,   vlab: '8 min',   color: P.green },
+        { y: 150, label: 'S3 cold read (separated)',  min: 12,  vlab: '12 min',  color: '#e74c3c' },
+        { y: 215, label: 'S3 + warm cache',           min: 8.5, vlab: '8.5 min', color: P.blue }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.label, 220, r.y + 17);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(bx, r.y, wOf(r.min), 26);
+        ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.vlab, bx + wOf(r.min) + 8, r.y + 17);
+    }
+
+    // local-disk baseline guide at the 8-min mark
+    var gx = bx + wOf(8);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(gx, 70); ctx.lineTo(gx, 245); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('local-disk baseline', gx + 6, 66);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pay the network price once, then cache', w - 20, 260);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('scan times illustrative', w - 14, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

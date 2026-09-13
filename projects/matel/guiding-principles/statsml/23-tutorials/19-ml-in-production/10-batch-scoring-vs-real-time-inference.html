@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batch Scoring vs Real-Time Inference</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Batch Scoring vs Real-Time Inference</h1>
+<p class="subtitle">You can compute predictions ahead of time for everyone, or on the spot for whoever asks — the choice is a three-way trade between cost, latency, and freshness</p>
+
+<div class="card-section">
+    <h2>Two Ways to Hand Out Tomorrow's Coupon</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">serving paths</span><span class="tag orange">when the work happens</span></div>
+                <ul>
+                    <li><b>The app</b> — a coffee-shop loyalty app shows each customer one personalized coupon when they open it</li>
+                    <li><b>Batch path</b> — a 3 AM job scores all 60,000 customers, writes a results table; the app just looks up</li>
+                    <li><b>Real-time path</b> — nothing is precomputed; when a customer opens the app, a model server scores them</li>
+                    <li><b>Same model</b> — both paths run the identical model; what differs is <i>when</i> the work happens</li>
+                    <li><b>The trade</b> — batch does the work before the question, real-time does it at the moment of the question</li>
+                </ul>
+                <p class="example">Maria opens the app at 8:15 AM — batch hands her a coupon computed at 3 AM; real-time computes one from what she did seconds ago.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Batch scoring answers before anyone asks; real-time inference answers when someone asks — everything else about the trade-off follows from that one difference.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Dollars: 60,000 Scores, 6,000 Opens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">cost math</span></div>
+                <ul>
+                    <li><b>Batch bill</b> — one nightly job scores all 60,000 customers on rented machines: $6 per night</li>
+                    <li><b>Real-time bill</b> — a model server must stay on all day waiting for requests: $24 per day</li>
+                    <li><b>Wasted work</b> — only 6,000 customers open the app next day, so 54,000 batch scores go unused</li>
+                    <li><b>Per used score</b> — batch: $6 / 6,000 opens = $1 per 1,000 used; real-time: $24 / 6,000 = $4 per 1,000</li>
+                    <li><b>Still cheaper</b> — batch throws away 9 of every 10 scores and still costs a quarter as much per use</li>
+                    <li><b>Why</b> — one big overnight run packs the hardware full; an always-on server mostly sits idle</li>
+                </ul>
+                <p class="example">$6 buys 60,000 batch scores of which 6,000 get used; $24 buys exactly the 6,000 real-time scores that were asked for — batch wins $1 to $4 per 1,000 used.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Cost per used score: batch $6/6,000 = $1 per 1,000, real-time $24/6,000 = $4 per 1,000 — bulk overnight work beats an idle always-on server even with 90% waste.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Triangle: Cost, Latency, Freshness — Pick Two</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">trade-off triangle</span><span class="tag orange">rule of thumb</span></div>
+                <ul>
+                    <li><b>Three wants</b> — low cost, low latency (answer fast), high freshness (answer built from recent data)</li>
+                    <li><b>The catch</b> — no serving setup gets all three for free; picking two decides the architecture</li>
+                    <li><b>Batch corner-pair</b> — cheap and fast to serve ($1 per 1,000, 5 ms lookup) but up to 24 h stale</li>
+                    <li><b>Real-time pair</b> — fresh and fast (80 ms, uses seconds-old behavior) but 4&times; the cost per use</li>
+                    <li><b>Fresh-and-cheap pair</b> — compute on request but reply later (queued jobs); nobody waits online</li>
+                    <li><b>Match the job</b> — fraud checks need fresh + fast; a weekly email blast is happily batch</li>
+                </ul>
+                <p class="example">The coupon app ships batch coupons to everyone but calls the real-time path for one case — a brand-new signup who has no row in last night's table.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Ask "how stale can this prediction be before it's wrong?" — if the answer is hours, batch; if seconds, pay for real-time; if nobody is waiting, queue it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Mix-Up: Batch Isn't the Slow One</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">latency vs freshness</span></div>
+                <ul>
+                    <li><b>The instinct</b> — "real-time" sounds fast and "batch" sounds slow, so people assume batch users wait</li>
+                    <li><b>Reality</b> — the batch answer was finished at 3 AM; serving it is a 5 ms table lookup</li>
+                    <li><b>Real-time is slower to serve</b> — running the model per request takes 80 ms, sixteen times longer</li>
+                    <li><b>The real gap</b> — batch answers are old (up to 24 h since scoring); real-time answers are seconds old</li>
+                    <li><b>Name it right</b> — batch vs real-time is a <i>freshness</i> choice; both can feel instant to the user</li>
+                </ul>
+                <p class="example">Maria's batch coupon appears in 5 ms but ignores the espresso she bought an hour ago; a real-time coupon takes 80 ms and knows about it.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Rejecting batch because "users can't wait for a batch job". Nobody waits for it — it already ran. The question to ask is whether a prediction up to 24 hours old is still the right prediction.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: two-lane flow diagram — batch pipeline vs real-time pipeline
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Model, Two Serving Paths', w / 2, 24);
+
+    function roundedBox(x1, x2, cy, color, fill, line1, line2) {
+        var bh = 46, y = cy - bh / 2, r = 8;
+        ctx.beginPath();
+        ctx.moveTo(x1 + r, y);
+        ctx.lineTo(x2 - r, y); ctx.arcTo(x2, y, x2, y + r, r);
+        ctx.lineTo(x2, y + bh - r); ctx.arcTo(x2, y + bh, x2 - r, y + bh, r);
+        ctx.lineTo(x1 + r, y + bh); ctx.arcTo(x1, y + bh, x1, y + bh - r, r);
+        ctx.lineTo(x1, y + r); ctx.arcTo(x1, y, x1 + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        var cx = (x1 + x2) / 2;
+        ctx.fillText(line1, cx, cy - 3);
+        ctx.fillText(line2, cx, cy + 13);
+    }
+
+    function arrow(x1, x2, cy, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, cy); ctx.lineTo(x2 - 8, cy); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, cy);
+        ctx.lineTo(x2 - 9, cy - 5);
+        ctx.lineTo(x2 - 9, cy + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // lane labels
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue; ctx.fillText('BATCH', 20, 75);
+    ctx.fillStyle = P.orange; ctx.fillText('REAL-TIME', 20, 195);
+
+    // batch lane, boxes centered on y=95
+    var bFill = 'rgba(42,120,214,0.10)';
+    roundedBox(85, 225, 95, P.blue, bFill, '3 AM job', 'scores all 60,000');
+    roundedBox(295, 405, 95, P.blue, bFill, 'results', 'table');
+    roundedBox(475, 665, 95, P.blue, bFill, 'app opens:', 'lookup, 5 ms');
+    arrow(225, 295, 95, P.blue);
+    arrow(405, 475, 95, P.blue);
+
+    // real-time lane, boxes centered on y=215
+    var rFill = 'rgba(217,89,38,0.10)';
+    roundedBox(85, 225, 215, P.orange, rFill, 'app opens:', 'request');
+    roundedBox(295, 405, 215, P.orange, rFill, 'model server', 'scores 1 customer');
+    roundedBox(475, 665, 215, P.orange, rFill, 'coupon back', 'in 80 ms');
+    arrow(225, 295, 215, P.orange);
+    arrow(405, 475, 215, P.orange);
+
+    // clock marks above each lane's first box
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('work done at 3 AM', 155, 62);
+    ctx.fillText('work done at 8:15 AM', 155, 182);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('batch: work before the question — real-time: work at the question', w / 2, 285);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one coffee-shop app, two pipelines', w - 14, 262);
+});
+
+// c2: grouped bars — total daily cost and cost per 1,000 used scores
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var px = 70, pw = 590, baseY = 245, chH = 185, vMax = 25;
+
+    function yOf(v) { return baseY - v / vMax * chH; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Daily Bill and Cost per Used Score (60,000 customers, 6,000 opens)', w / 2, 24);
+
+    // gridlines and y labels
+    for (var v = 0; v <= 25; v += 5) {
+        var y = yOf(v);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + v, px - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+
+    var bw = 60, gap = 20;
+    var groups = [
+        { cx: 220, label: 'total cost per day', batch: 6, rt: 24 },
+        { cx: 510, label: 'cost per 1,000 used scores', batch: 1, rt: 4 }
+    ];
+    for (var g = 0; g < 2; g++) {
+        var gr = groups[g];
+        var bx = gr.cx - gap / 2 - bw, rx = gr.cx + gap / 2;
+        // batch bar
+        var bh = gr.batch / vMax * chH;
+        ctx.fillStyle = 'rgba(42,120,214,0.75)';
+        ctx.fillRect(bx, baseY - bh, bw, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(bx, baseY - bh); ctx.lineTo(bx + bw, baseY - bh); ctx.stroke();
+        ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + gr.batch, bx + bw / 2, baseY - bh - 8);
+        // real-time bar
+        var rh = gr.rt / vMax * chH;
+        ctx.fillStyle = 'rgba(217,89,38,0.75)';
+        ctx.fillRect(rx, baseY - rh, bw, rh);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(rx, baseY - rh); ctx.lineTo(rx + bw, baseY - rh); ctx.stroke();
+        ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+        ctx.fillText('$' + gr.rt, rx + bw / 2, baseY - rh - 8);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(gr.label, gr.cx, baseY + 20);
+    }
+
+    // legend top right
+    var lgx = 570, lgy = 55;
+    ctx.fillStyle = 'rgba(42,120,214,0.75)'; ctx.fillRect(lgx, lgy - 9, 14, 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('batch', lgx + 20, lgy);
+    ctx.fillStyle = 'rgba(217,89,38,0.75)'; ctx.fillRect(lgx, lgy + 7, 14, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('real-time', lgx + 20, lgy + 16);
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('54,000 of 60,000 batch scores never get used —', 330, 100);
+    ctx.fillText('and batch is still 4× cheaper per use', 330, 116);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative prices', w - 14, h - 8);
+});
+
+// c3: serving triangle — freshness, low latency, low cost
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var vTop = [360, 70], vLeft = [150, 250], vRight = [570, 250];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Serving Triangle: Any Edge Is Cheap, the Third Corner Costs', w / 2, 24);
+
+    // triangle
+    ctx.beginPath();
+    ctx.moveTo(vTop[0], vTop[1]);
+    ctx.lineTo(vLeft[0], vLeft[1]);
+    ctx.lineTo(vRight[0], vRight[1]);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(26,82,118,0.05)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.stroke();
+
+    // corner labels
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('FRESHNESS', vTop[0], vTop[1] - 12);
+    ctx.fillText('LOW LATENCY', vLeft[0], vLeft[1] + 22);
+    ctx.fillText('LOW COST', vRight[0], vRight[1] + 22);
+
+    // edge labels just outside each edge midpoint
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = P.orange; ctx.textAlign = 'right';
+    ctx.fillText('real-time inference', 235, 150);
+    ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+    ctx.fillText('batch + table lookup', 360, 272);
+    ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('queued / async scoring', 495, 150);
+
+    // workload dots on edge midpoints
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(255, 160, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fraud check', 268, 164);
+
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(360, 250, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('nightly coupons', 374, 243);
+
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(465, 160, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('report on request', 478, 176);
+
+    // annotation inside the triangle
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('pick an edge — the far corner is the price', 360, 200);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative placement of example workloads', w - 14, h - 8);
+});
+
+// c4: staleness vs serving latency — batch and real-time in opposite corners
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var px = 80, pw = 570, baseY = 240, chH = 170;
+    var xMax = 24, yMax = 100;
+
+    function xOf(hrs) { return px + hrs / xMax * pw; }
+    function yOf(ms) { return baseY - ms / yMax * chH; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Real Trade Is Age, Not Speed', w / 2, 24);
+
+    // gridlines and ticks
+    var yTicks = [0, 25, 50, 75, 100];
+    var yLabs = ['0', '25', '50', '75', '100 ms'];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], px - 8, y + 4);
+    }
+    var xTicks = [0, 6, 12, 18, 24];
+    for (var i = 0; i < xTicks.length; i++) {
+        var x = xOf(xTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, baseY - chH); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(xTicks[i] + ' h', x, baseY + 18);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+
+    // age whisker through the batch dot (5 ms), from 0 to 24 h
+    var wy = yOf(5);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(0), wy); ctx.lineTo(xOf(24), wy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(xOf(0), wy - 5); ctx.lineTo(xOf(0), wy + 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(24), wy - 5); ctx.lineTo(xOf(24), wy + 5); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('score ages until the next 3 AM run', xOf(24), wy + 16);
+
+    // real-time dot: age ~0 h, 80 ms (just right of the y axis)
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(px + 7, yOf(80), 9, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('real-time: 80 ms to serve,', px + 22, yOf(80) - 2);
+    ctx.fillText('seconds old', px + 22, yOf(80) + 14);
+
+    // batch dot: age 12 h, 5 ms
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(xOf(12), yOf(5), 9, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('batch lookup: 5 ms to serve,', xOf(12), yOf(5) - 34);
+    ctx.fillText('up to 24 h old', xOf(12), yOf(5) - 18);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("batch answers arrive faster — they're just older", 400, 90);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — coffee-shop coupon app numbers', w - 14, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic Optimizations</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Classic Optimizations</h1>
+<p class="subtitle">What -O2 actually does: the compiler rewrites your code into a faster version it can prove gives the same answer — folding constants, hoisting repeated work out of loops, and deleting code that can never run</p>
+
+<div class="card-section">
+    <h2>The Checkout Loop the Compiler Rewrites</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">constant folding</span><span class="tag orange">hoisting</span></div>
+                <ul>
+                    <li><b>The loop</b> — a shop's checkout code adds up 1,000 item prices, each with 8% tax on top</li>
+                    <li><b>What you wrote</b> — every item recomputes rate = 1 + 0.08, multiplies the price, adds to total</li>
+                    <li><b>Constant folding</b> — the compiler computes 1 + 0.08 = 1.08 once, at compile time, not at runtime</li>
+                    <li><b>Loop-invariant hoisting</b> — rate never changes inside the loop, so it moves above the loop</li>
+                    <li><b>The promise</b> — -O2 only makes rewrites it can prove leave the receipt total unchanged</li>
+                </ul>
+                <p class="example">You wrote three steps per item; the compiled program runs two — and nobody can tell the difference from the receipt.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> -O2 is not magic: it is a fixed list of small rewrites, each provably answer-preserving, applied in a fixed pipeline of passes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Steps: 3,000 Down to 2,001</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hand count</span></div>
+                <ul>
+                    <li><b>The count</b> — 1,000 items × 3 steps each = 3,000 steps, exactly as the source is written</li>
+                    <li><b>After folding</b> — 1 + 0.08 becomes the literal 1.08; that addition never runs at all</li>
+                    <li><b>After hoisting</b> — rate = 1.08 runs once before the loop instead of 1,000 times inside it</li>
+                    <li><b>New total</b> — 1,000 items × 2 steps + 1 hoisted step = 2,001 steps; a third of the work gone</li>
+                    <li><b>Check by hand</b> — trace 3 items yourself: 9 steps as written, 7 steps after -O2 (1 + 3×2)</li>
+                </ul>
+                <p class="example">For three items the original runs 9 steps; the optimized build runs 7 — same three line totals, same receipt, fewer steps.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 3,000 steps become 2,001: the multiply and the running add survive, and the 1,000 identical "1 + 0.08" additions simply vanish.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Same Code Runs Nearly 4× Faster</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">classic passes</span><span class="tag orange">benchmarking</span></div>
+                <ul>
+                    <li><b>The gap</b> — the same checkout loop over a million items: 9.2 ms at -O0, 2.4 ms at -O2, no source change</li>
+                    <li><b>Dead-code elimination</b> — code that can never run, or results never used, is deleted outright</li>
+                    <li><b>Inlining</b> — small functions get pasted in at the call site, killing the call overhead</li>
+                    <li><b>Strength reduction</b> — pricey operations become cheap ones, like x × 2 turning into x + x</li>
+                    <li><b>The benchmarking trap</b> — timing a debug (-O0) build tells you nothing about production speed</li>
+                    <li><b>Fast libraries</b> — much of numpy's and BLAS's speed is exactly this: compiled, optimized inner loops</li>
+                </ul>
+                <p class="example">A data scientist times a C extension at -O0, reports 9.2 ms, and ships the conclusion — the production -O2 build runs it in 2.4 ms.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> -O2 bundles dozens of small proven-safe rewrites; each saves a little, and inside a loop that runs a million times the savings multiply.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Optimizer Never Changes the Answer — Almost</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">float order</span></div>
+                <ul>
+                    <li><b>The fear</b> — people expect -O2 to change results; it refuses any rewrite it cannot prove safe</li>
+                    <li><b>Float order</b> — (a + b) + c and a + (b + c) can differ in the last digits for floating point</li>
+                    <li><b>The rewrite it skips</b> — total = 1.08 × sum(prices) needs reordering, so -O2 leaves your sum alone</li>
+                    <li><b>-Ofast is different</b> — it trades that guarantee for speed; float sums may shift in the last digits</li>
+                    <li><b>Debugging pain</b> — optimized code is reshuffled, which is why debuggers say "value optimized out"</li>
+                </ul>
+                <p class="example">The 9.2 ms build, the 2.4 ms -O2 build, and the 2.2 ms -O3 build all print the identical receipt — only the 1.9 ms -Ofast build may not.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating -O3 and -Ofast as "just more -O2". -O3 keeps the same-answer guarantee; -Ofast drops it, and float totals can quietly change.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// c1: before/after loop body — 3 written steps vs hoisted constant + 2-step loop
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Checkout Item: What You Wrote vs What -O2 Runs', w / 2, 24);
+
+    function stepBox(x, y, bw, bh, text, fill, border) {
+        ctx.fillStyle = fill;
+        rr(ctx, x, y, bw, bh, 5);
+        ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        rr(ctx, x, y, bw, bh, 5);
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + bw / 2, y + bh / 2 + 4);
+    }
+
+    // left panel
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    rr(ctx, 40, 60, 290, 200, 6);
+    ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('you wrote — 3 steps per item', 185, 82);
+    stepBox(60, 95, 250, 40, 'rate = 1 + 0.08', 'rgba(217,89,38,0.15)', P.orange);
+    stepBox(60, 145, 250, 40, 'line = price * rate', 'rgba(42,120,214,0.12)', P.blue);
+    stepBox(60, 195, 250, 40, 'total = total + line', 'rgba(42,120,214,0.12)', P.blue);
+
+    // right panel
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    rr(ctx, 390, 60, 290, 200, 6);
+    ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('-O2 runs — 2 steps per item', 535, 82);
+    stepBox(410, 92, 250, 34, 'rate = 1.08  (once, before loop)', 'rgba(0,131,0,0.12)', P.green);
+    // dashed inner loop box
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    rr(ctx, 400, 140, 270, 113, 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('loop', 408, 154);
+    stepBox(410, 160, 250, 40, 'line = price * 1.08', 'rgba(42,120,214,0.12)', P.blue);
+    stepBox(410, 205, 250, 40, 'total = total + line', 'rgba(42,120,214,0.12)', P.blue);
+
+    // arrow between panels
+    ctx.strokeStyle = P.violet; ctx.fillStyle = P.violet; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(335, 160); ctx.lineTo(377, 160); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(385, 160); ctx.lineTo(374, 154); ctx.lineTo(374, 166);
+    ctx.closePath(); ctx.fill();
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fold the constant,', 360, 278);
+    ctx.fillText('hoist it out of the loop', 360, 294);
+});
+
+// c2: step counts as two stacked horizontal bars, 3,000 vs 2,001
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Steps to Ring Up 1,000 Items: 3,000 → 2,001', w / 2, 24);
+
+    var ax = 140, axW = 520, axY = 240;
+    var px = axW / 3000; // 1 step in px
+
+    // gridlines + ticks
+    var tickLabs = ['0', '500', '1,000', '1,500', '2,000', '2,500', '3,000'];
+    for (var i = 0; i <= 6; i++) {
+        var x = ax + i * 500 * px;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 70); ctx.lineTo(x, axY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], x, axY + 18);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+
+    function seg(x, y, steps, fill, label) {
+        var sw = steps * px;
+        ctx.fillStyle = fill;
+        ctx.fillRect(x, y, sw, 34);
+        ctx.fillStyle = '#fff'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + sw / 2, y + 21);
+        return x + sw;
+    }
+
+    // row 1: you wrote
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('you wrote', 20, 121);
+    var x1 = ax;
+    x1 = seg(x1, 100, 1000, 'rgba(217,89,38,0.55)', '1 + 0.08');
+    x1 = seg(x1, 100, 1000, 'rgba(42,120,214,0.55)', 'price × rate');
+    x1 = seg(x1, 100, 1000, 'rgba(25,158,112,0.55)', 'total + line');
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3,000', x1 + 8, 121);
+
+    // row 2: -O2 build
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('-O2 build', 20, 191);
+    var x2 = ax;
+    x2 = seg(x2, 170, 1000, 'rgba(42,120,214,0.55)', 'price × rate');
+    x2 = seg(x2, 170, 1000, 'rgba(25,158,112,0.55)', 'total + line');
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('2,001', x2 + 8, 185);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui';
+    ctx.fillText('incl. 1 hoisted step', x2 + 8, 200);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1,000 identical additions gone — one third of the work', 380, 82);
+});
+
+// c3: -O0 vs -O2 runtime bars for the million-item loop
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Source, Two Builds: 1,000,000 Items', w / 2, 24);
+
+    var ox = 90, baseY = 250, msPx = 19;
+
+    // gridlines + y ticks every 2 ms
+    var yLabs = ['0', '2', '4', '6', '8', '10 ms'];
+    for (var i = 0; i <= 5; i++) {
+        var y = baseY - i * 2 * msPx;
+        if (i > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(680, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(680, baseY); ctx.stroke();
+
+    function bar(x, ms, fill, border, valLab, nameLab) {
+        var bh = ms * msPx;
+        ctx.fillStyle = fill;
+        ctx.fillRect(x, baseY - bh, 120, bh);
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        ctx.strokeRect(x, baseY - bh, 120, bh);
+        ctx.fillStyle = border; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLab, x + 60, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(nameLab, x + 60, baseY + 18);
+    }
+    bar(200, 9.2, 'rgba(42,120,214,0.35)', P.blue, '9.2 ms', '-O0 debug build');
+    bar(440, 2.4, 'rgba(0,131,0,0.30)', P.green, '2.4 ms', '-O2 release build');
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same total to the cent —', 590, 110);
+    ctx.fillText('3.8× faster', 590, 128);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings — real ratios vary by code and machine', 705, 294);
+});
+
+// c4: five optimization levels, -Ofast flagged as breaking the same-answer promise
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Optimization Levels: Diminishing Returns, One Broken Promise', w / 2, 24);
+
+    var ox = 90, baseY = 250, msPx = 19;
+
+    // gridlines + y ticks every 2 ms
+    var yLabs = ['0', '2', '4', '6', '8', '10 ms'];
+    for (var i = 0; i <= 5; i++) {
+        var y = baseY - i * 2 * msPx;
+        if (i > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(680, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(680, baseY); ctx.stroke();
+
+    var levels = ['-O0', '-O1', '-O2', '-O3', '-Ofast'];
+    var times = [9.2, 3.6, 2.4, 2.2, 1.9];
+    var xs = [110, 225, 340, 455, 570];
+    for (var i = 0; i < 5; i++) {
+        var bh = times[i] * msPx;
+        var isOfast = (i === 4);
+        var border = isOfast ? '#e74c3c' : P.blue;
+        ctx.fillStyle = isOfast ? 'rgba(231,76,60,0.20)' : 'rgba(42,120,214,0.35)';
+        ctx.fillRect(xs[i], baseY - bh, 80, bh);
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        ctx.strokeRect(xs[i], baseY - bh, 80, bh);
+        ctx.fillStyle = border; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(times[i]), xs[i] + 40, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(levels[i], xs[i] + 40, baseY + 18);
+    }
+
+    // guarantee bracket over the first four bars
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(110, 62); ctx.lineTo(110, 55); ctx.lineTo(535, 55); ctx.lineTo(535, 62);
+    ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same answer, guaranteed', 322, 48);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui';
+    ctx.fillText('no guarantee', 610, 48);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('-Ofast may reorder float math —', 560, 140);
+    ctx.fillText('the total can change', 560, 158);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings — real ratios vary by code and machine', 705, 294);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

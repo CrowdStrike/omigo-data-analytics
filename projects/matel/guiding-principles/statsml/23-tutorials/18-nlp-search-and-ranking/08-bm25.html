@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BM25</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>BM25</h1>
+<p class="subtitle">BM25 ranks search results with three plain rules — rare words count more, repeated words help less and less, and long documents don't get to win just by being long</p>
+
+<div class="card-section">
+    <h2>Searching a Recipe Box for "Lemon Tart"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">rare words</span><span class="tag orange">word weight</span></div>
+                <ul>
+                    <li><b>The site</b> — a recipe website holds 1,000 recipes and someone types "lemon tart" into its search box</li>
+                    <li><b>Common is cheap</b> — "the" appears in 990 recipes, so matching it says nothing; its weight is 0.01</li>
+                    <li><b>Rare is loud</b> — "lemon" is in 100 recipes (weight 2.30) but "tart" is in only 20 (weight 3.89)</li>
+                    <li><b>The rule</b> — a word's weight grows as the share of documents containing it shrinks</li>
+                    <li><b>Rarest of all</b> — "meringue" sits in just 5 recipes, earning weight 5.20, the loudest vote here</li>
+                    <li><b>The score</b> — BM25 adds up, per query word, its rarity weight times a tamed repeat count</li>
+                </ul>
+                <p class="example">A recipe matching only "tart" (3.89) outranks one matching only "lemon" (2.30) — the rarer word is the better clue to what the searcher wants.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> BM25's first ingredient is rarity: matching a word found in 20 recipes tells you far more than matching one found in 990.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Scoring Three Recipes by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hand-checkable</span></div>
+                <ul>
+                    <li><b>Three candidates</b> — recipe A "Classic Lemon Tart" (120 words), B "Lemon Everything Cake" (240 words), C a short 60-word note</li>
+                    <li><b>The counts</b> — A says lemon 4&times; and tart 3&times;; B says lemon 10&times; and tart 0&times;; C says each word once</li>
+                    <li><b>Tame the repeats</b> — each tf becomes tf&times;2.2 / (tf + 1.2&times;(0.25 + 0.75&times;length ratio)), so repeats flatten fast</li>
+                    <li><b>Recipe A</b> — lemon part 3.9 plus tart part 6.1 gives 10.0; average length, both words present</li>
+                    <li><b>Recipe C</b> — one mention of each still earns 2.9 + 4.9 = 7.8, boosted by being half the average length</li>
+                    <li><b>Recipe B</b> — ten lemons and no tart in a double-length page score only 4.2; last place</li>
+                </ul>
+                <p class="example">B shouts "lemon" ten times yet loses to C's single "lemon tart" — 4.2 vs 7.8 — because B misses the rare word and pays a length penalty.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Final order A (10.0) &gt; C (7.8) &gt; B (4.2): covering both query words in a short document beats hammering one common word in a long one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Old Formula That Still Wins</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">strong baseline</span><span class="tag orange">no training</span></div>
+                <ul>
+                    <li><b>Everywhere</b> — BM25 from the 1990s is still the default ranker inside most search and log-query engines</li>
+                    <li><b>The upset</b> — on searches full of new jargon, plain BM25 often beats neural rankers trained elsewhere</li>
+                    <li><b>Exact words</b> — a searcher typing an error code or drug name wants that exact string, and BM25 lives for that</li>
+                    <li><b>No training</b> — it needs only word counts from the collection itself: no labels, no GPUs, no drift</li>
+                    <li><b>Cheap and clear</b> — every score decomposes by word, so a ranking can be explained in one sentence</li>
+                    <li><b>Team player</b> — modern systems keep BM25 for the first cut, then let a neural model re-rank its top hits</li>
+                </ul>
+                <p class="example">A support portal swaps in a neural searcher; queries like "error 0x80070057" get worse until BM25 is restored for exact-term matching.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Neural search shines on topics it was trained on; on unfamiliar vocabulary it can fall below the 1990s formula — which is why BM25 remains the baseline to beat.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Saying It Ten Times Doesn't Make It Ten Times Better</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">saturation</span></div>
+                <ul>
+                    <li><b>The mistake</b> — assuming ten mentions of "lemon" count ten times as much as one mention</li>
+                    <li><b>Diminishing repeats</b> — the 1st mention adds 1.00 to the tamed count, the 10th adds only 0.02 more</li>
+                    <li><b>The ceiling</b> — with k1 = 1.2 the tamed count can never pass 2.2, no matter how many repeats</li>
+                    <li><b>Why it's there</b> — a page saying "lemon" 50 times is about lemons, not 50 times more about lemons</li>
+                    <li><b>Spam armor</b> — keyword-stuffed pages gain almost nothing, which is why the cap survived 30 years</li>
+                    <li><b>Old TF-IDF</b> — classic TF-IDF grows without a ceiling; BM25 adds a hard cap plus length normalization</li>
+                </ul>
+                <p class="example">Going from 1 to 4 mentions lifts the tamed count 1.00 to 1.69, but going from 10 to 15 only moves it 1.96 to 2.04 — the curve has gone flat.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading BM25 as "count the keyword matches". Repeats saturate toward a hard cap of k1 + 1 = 2.2, so the second mention is worth far more than the tenth — presence matters, piling on doesn't.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrow(ctx, x1, y1, x2, y2, size) {
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - size * Math.cos(ang - 0.4), y2 - size * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - size * Math.cos(ang + 0.4), y2 - size * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: IDF weight by document count
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var words = ['the', 'lemon', 'tart', 'meringue'];
+    var docLabs = ['in 990', 'in 100', 'in 20', 'in 5'];
+    var vals = [0.01, 2.30, 3.89, 5.20];
+    var valLabs = ['0.01', '2.30', '3.89', '5.20'];
+    var fills = ['rgba(107,114,128,0.35)', 'rgba(42,120,214,0.35)', 'rgba(0,131,0,0.35)', 'rgba(217,89,38,0.35)'];
+    var borders = [P.mute, P.blue, P.green, P.orange];
+    var ox = 70, baseY = 245, plotW = 590, plotH = 185, yMax = 6, barW = 90;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rarer Word, Louder Vote: Weight by Document Count (N = 1,000 recipes)', w / 2, 24);
+
+    // gridlines and y ticks 0..6
+    for (var t = 0; t <= 6; t++) {
+        var y = baseY - t / yMax * plotH;
+        if (t > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(t), ox - 8, y + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    // four equal slots
+    for (var i = 0; i < 4; i++) {
+        var cx = ox + (i + 0.5) * plotW / 4;
+        var bh = vals[i] / yMax * plotH;
+        var bx = cx - barW / 2;
+        ctx.fillStyle = fills[i];
+        ctx.fillRect(bx, baseY - bh, barW, bh);
+        ctx.strokeStyle = borders[i]; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, baseY - bh, barW, bh);
+        ctx.fillStyle = borders[i]; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLabs[i], cx, baseY - bh - 8);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(words[i], cx, baseY + 18);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(docLabs[i], cx, baseY + 34);
+    }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("matching 'the' is worthless —", 140, 90);
+    ctx.fillText("matching 'meringue' is gold", 140, 108);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('weights are ln((N−n+0.5)/(n+0.5)+1), the BM25 IDF', w - 12, h - 10);
+});
+
+// c2: stacked score bars for recipes A, C, B
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ax = 250, axW = 430, axY = 245, sMax = 11, barH = 26;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Query 'lemon tart': Where Each Recipe's Score Comes From", w / 2, 24);
+
+    // legend under the title, top right
+    ctx.fillStyle = 'rgba(42,120,214,0.55)'; ctx.fillRect(470, 36, 14, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lemon part', 490, 46);
+    ctx.fillStyle = 'rgba(0,131,0,0.55)'; ctx.fillRect(575, 36, 14, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('tart part', 595, 46);
+
+    // gridlines and ticks 0..10 by 2
+    var ticks = [0, 2, 4, 6, 8, 10];
+    for (var i = 0; i < ticks.length; i++) {
+        var x = ax + ticks[i] / sMax * axW;
+        if (ticks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, axY); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(ticks[i]), x, axY + 18);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+
+    var rows = [
+        { y: 95, name: 'A — Classic Lemon Tart, 120 words', counts: 'lemon ×4, tart ×3',
+          lemonEnd: 3.9, tartEnd: 10.0, total: '10.0', segLabs: ['3.9', '6.1'] },
+        { y: 150, name: 'C — short note, 60 words', counts: 'lemon ×1, tart ×1',
+          lemonEnd: 2.9, tartEnd: 7.8, total: '7.8', segLabs: ['2.9', '4.9'] },
+        { y: 205, name: 'B — Lemon Everything Cake, 240 words', counts: 'lemon ×10, tart ×0',
+          lemonEnd: 4.2, tartEnd: null, total: '4.2', segLabs: ['4.2'] }
+    ];
+    function xOf(v) { return ax + v / sMax * axW; }
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var y = r.y - barH / 2;
+        // lemon segment
+        ctx.fillStyle = 'rgba(42,120,214,0.55)';
+        ctx.fillRect(ax, y, xOf(r.lemonEnd) - ax, barH);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.segLabs[0], (ax + xOf(r.lemonEnd)) / 2, r.y + 4);
+        // tart segment
+        var endX = xOf(r.lemonEnd);
+        if (r.tartEnd !== null) {
+            ctx.fillStyle = 'rgba(0,131,0,0.55)';
+            ctx.fillRect(xOf(r.lemonEnd), y, xOf(r.tartEnd) - xOf(r.lemonEnd), barH);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui';
+            ctx.fillText(r.segLabs[1], (xOf(r.lemonEnd) + xOf(r.tartEnd)) / 2, r.y + 4);
+            endX = xOf(r.tartEnd);
+        }
+        // total
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.total, endX + 8, r.y + 4);
+        // two-line label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(r.name, 20, r.y - 4);
+        ctx.fillText(r.counts, 20, r.y + 12);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("ten lemons couldn't buy one missing tart", 430, 180);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('k1 = 1.2, b = 0.75, average length 120 words; illustrative recipe box', w - 12, h - 10);
+});
+
+// c3: neural vs BM25, familiar vs unfamiliar queries
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, plotW = 590, plotH = 180, yMax = 0.8;
+    var barW = 80, innerGap = 20;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Search Quality: Neural Wins at Home, BM25 Wins Away (illustrative)', w / 2, 24);
+
+    // gridlines and y ticks
+    var ticks = [0, 0.2, 0.4, 0.6, 0.8];
+    var tickLabs = ['0%', '20%', '40%', '60%', '80%'];
+    for (var i = 0; i < ticks.length; i++) {
+        var y = baseY - ticks[i] / yMax * plotH;
+        if (ticks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(tickLabs[i], ox - 8, y + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var groups = [
+        { cx: 250, lab1: 'familiar topics', lab2: '(like its training data)', bm25: 0.62, neural: 0.70,
+          bmLab: '62%', nnLab: '70%' },
+        { cx: 510, lab1: 'unfamiliar jargon', lab2: '(codes, legal, medical)', bm25: 0.55, neural: 0.35,
+          bmLab: '55%', nnLab: '35%' }
+    ];
+    for (var g = 0; g < 2; g++) {
+        var gr = groups[g];
+        var bx = gr.cx - barW - innerGap / 2;
+        var nx = gr.cx + innerGap / 2;
+        // BM25 bar
+        var bh = gr.bm25 / yMax * plotH;
+        ctx.fillStyle = 'rgba(42,120,214,0.55)';
+        ctx.fillRect(bx, baseY - bh, barW, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, baseY - bh, barW, bh);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gr.bmLab, bx + barW / 2, baseY - bh - 8);
+        // neural bar
+        var nh = gr.neural / yMax * plotH;
+        ctx.fillStyle = 'rgba(74,58,167,0.45)';
+        ctx.fillRect(nx, baseY - nh, barW, nh);
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+        ctx.strokeRect(nx, baseY - nh, barW, nh);
+        ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(gr.nnLab, nx + barW / 2, baseY - nh - 8);
+        // group labels, two lines
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(gr.lab1, gr.cx, baseY + 18);
+        ctx.fillText(gr.lab2, gr.cx, baseY + 34);
+    }
+
+    // legend, top left inside the plot
+    ctx.fillStyle = 'rgba(42,120,214,0.55)'; ctx.fillRect(85, 62, 14, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('BM25', 105, 72);
+    ctx.fillStyle = 'rgba(74,58,167,0.45)'; ctx.fillRect(85, 82, 14, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('neural ranker', 105, 92);
+
+    // annotation with a short green arrow to the 55% BM25 bar
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('off home turf, the 1990s formula wins by 20 points', 470, 95);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    arrow(ctx, 435, 102, 428, 116, 7);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative numbers — pattern seen when rankers leave their training domain', w - 12, h - 10);
+});
+
+// c4: saturation curve vs naive proportional line
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, plotW = 590, plotH = 180, yMax = 3;
+    var tfs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    var vals = [1.00, 1.38, 1.57, 1.69, 1.77, 1.83, 1.88, 1.91, 1.94, 1.96, 1.98, 2.00, 2.01, 2.03, 2.04];
+
+    function xOf(tf) { return ox + (tf - 1) / 14 * plotW; }
+    function yOf(v) { return baseY - v / yMax * plotH; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Repeats Saturate: What the 1st vs the 10th 'lemon' Is Worth", w / 2, 24);
+
+    // gridlines and y ticks
+    for (var t = 0; t <= 3; t++) {
+        var y = yOf(t);
+        if (t > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(t), ox - 8, y + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    // x ticks
+    var xTicks = [1, 3, 5, 7, 9, 11, 13, 15];
+    for (var i = 0; i < xTicks.length; i++) {
+        var x = xOf(xTicks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(xTicks[i]), x, baseY + 20);
+    }
+
+    // naive proportional line, dashed, exits top of plot at tf=3
+    // through (1, 1.0) and (3, 3.0): v = tf
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(xOf(1), yOf(1.0)); ctx.lineTo(xOf(3), yOf(3.0)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('if repeats counted in full', xOf(2.3) + 6, yOf(2.3));
+
+    // ceiling line at 2.2
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(2.2)); ctx.lineTo(ox + plotW, yOf(2.2)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cap: k1 + 1 = 2.2', ox + 6, yOf(2.2) - 8);
+
+    // BM25 curve
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < tfs.length; i++) {
+        var x = xOf(tfs[i]), y = yOf(vals[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // dots + labels at tf = 1, 4, 10, 15
+    var marks = [
+        { tf: 1, v: 1.00, lab: '1.00' },
+        { tf: 4, v: 1.69, lab: '1.69' },
+        { tf: 10, v: 1.96, lab: '1.96' },
+        { tf: 15, v: 2.04, lab: '2.04' }
+    ];
+    for (var i = 0; i < marks.length; i++) {
+        var m = marks[i];
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(m.tf), yOf(m.v), 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(m.lab, xOf(m.tf), yOf(m.v) - 10);
+    }
+
+    // annotation with short green arrow to the curve at tf=10
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1st mention adds 1.00 —', xOf(9), 170);
+    ctx.fillText('10th adds just 0.02', xOf(9), 188);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    arrow(ctx, xOf(9.5), 160, xOf(10), yOf(1.96) + 10, 7);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('curve is tf×2.2/(tf+1.2) at average document length', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

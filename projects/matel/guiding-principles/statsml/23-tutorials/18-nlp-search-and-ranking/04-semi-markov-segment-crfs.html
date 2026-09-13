@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semi-Markov / Segment CRFs</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Semi-Markov / Segment CRFs</h1>
+<p class="subtitle">A semi-Markov (segment) CRF labels whole chunks of words instead of one word at a time — so a four-word dish name can be scored, and recognized, as one single thing</p>
+
+<div class="card-section">
+    <h2>One Query, Two Ways to Read It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">spans not tokens</span><span class="tag orange">search queries</span></div>
+                <ul>
+                    <li><b>The query</b> — someone types "new york style cheesecake" into a food-delivery search box</li>
+                    <li><b>Word-at-a-time</b> — a token tagger labels each word alone and confidently tags "new york" as a city</li>
+                    <li><b>Span-at-a-time</b> — a segment CRF first cuts the query into chunks, then labels each whole chunk</li>
+                    <li><b>The right chunk</b> — here the best chunk is all four words together, one span labeled "dish"</li>
+                    <li><b>The name</b> — "semi-Markov" just means the model steps span by span instead of word by word</li>
+                </ul>
+                <p class="example">The customer wants cheesecake delivered, not a trip to Manhattan — reading the four words as one span is what gets the order right.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A semi-Markov (segment) CRF labels chunks of words as units, so "new york style cheesecake" can be one dish instead of a city plus leftovers.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Scoring Three Splits by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">segment scores</span></div>
+                <ul>
+                    <li><b>Segment scores</b> — give each possible chunk-plus-label some points, e.g. "new york" as city earns 4</li>
+                    <li><b>Split A</b> — "new york" city (4) + "style cheesecake" dish (2) adds up to 6 points</li>
+                    <li><b>Split B</b> — the whole line "new york style cheesecake" as one dish earns 7 points</li>
+                    <li><b>Split C</b> — "new york style" dish (2) + "cheesecake" dish (3) adds up to 5 points</li>
+                    <li><b>The winner</b> — the model returns the split with the highest total, so split B wins with 7</li>
+                    <li><b>Why 7</b> — a whole-span check ("this exact 4-word chunk appears on menus") fires only in split B</li>
+                </ul>
+                <p class="example">You can redo the whole prediction by hand: 4 + 2 = 6, 7 alone, and 2 + 3 = 5 — the single big span beats both chopped splits.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The prediction is just "the segmentation whose segment scores add to the biggest total" — here 7 beats 6 and 5.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where Whole-Span Features Win</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">whole-span features</span><span class="tag orange">search ranking</span></div>
+                <ul>
+                    <li><b>Search ranking</b> — whether a query span means "dish" or "location" decides which restaurants come back</li>
+                    <li><b>Multi-word names</b> — dishes, addresses, song titles, and people's names usually spread over several words</li>
+                    <li><b>Whole-span features</b> — the span's length, an exact dictionary match, the look of the chunk as a unit</li>
+                    <li><b>Token taggers fragment</b> — word-at-a-time models often split one name into two half-labeled pieces</li>
+                    <li><b>The gap</b> — exact-span accuracy on multi-word names: 62% word tagger vs 81% segment model (illustrative)</li>
+                </ul>
+                <p class="example">A pizza app that reads "buffalo chicken pizza" as the city Buffalo plus a dish returns restaurants in the wrong state.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Segment models earn their keep exactly where names span many words — the whole-span features a token model can never ask about.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>But BIO Tags Can Mark Spans Too — So What's New?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">BIO vs segments</span></div>
+                <ul>
+                    <li><b>The BIO trick</b> — token taggers mark spans with B-dish / I-dish tags, so span outputs are not the new part</li>
+                    <li><b>What each sees</b> — a BIO score reads any word but scores one tag at a time; a segment score sees the whole chunk</li>
+                    <li><b>Whole-span questions</b> — "is this exact chunk a known dish?" or "is it 4 words long?" needs the full span</li>
+                    <li><b>The price</b> — the model must consider chunks up to some max length L, so decoding is roughly L times slower</li>
+                    <li><b>Same family</b> — both are CRFs; semi-Markov just moves the scoring unit from the word to the span</li>
+                </ul>
+                <p class="example">Both models can output "dish covering four words" — only the segment model could score "this exact chunk appears on thousands of menus" as one feature.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Thinking BIO tags already give you a span model. They give span-shaped outputs, but not span-level features — and span-level features are the whole reason semi-CRFs exist.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x, y + r, r);
+    ctx.closePath();
+}
+
+// c1: word-by-word vs span-by-span reading of "new york style cheesecake"
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Query, Read Word-by-Word vs Span-by-Span', w / 2, 24);
+
+    var words = ['new', 'york', 'style', 'cheesecake'];
+    var xs = [90, 240, 390, 540];
+    var boxW = 130, boxH = 32, boxY = 58;
+
+    // word boxes
+    for (var i = 0; i < 4; i++) {
+        roundedRect(ctx, xs[i], boxY, boxW, boxH, 6);
+        ctx.fillStyle = '#f8f9fa'; ctx.fill();
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(words[i], xs[i] + boxW / 2, boxY + boxH / 2 + 5);
+    }
+
+    // row 1: token tagger chips at y=112
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('word-at-a-time', 20, 129);
+    var chipY = 112, chipH = 26;
+    var chips = [
+        { x: xs[0], lab: 'city', fill: 'rgba(217,89,38,0.15)', border: P.orange, fg: P.orange },
+        { x: xs[1], lab: 'city', fill: 'rgba(217,89,38,0.15)', border: P.orange, fg: P.orange },
+        { x: xs[2], lab: 'dish', fill: 'rgba(42,120,214,0.12)', border: P.blue, fg: P.blue },
+        { x: xs[3], lab: 'dish', fill: 'rgba(42,120,214,0.12)', border: P.blue, fg: P.blue }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var c = chips[i];
+        roundedRect(ctx, c.x, chipY, boxW, chipH, 8);
+        ctx.fillStyle = c.fill; ctx.fill();
+        ctx.strokeStyle = c.border; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = c.fg; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.lab, c.x + boxW / 2, chipY + chipH / 2 + 4);
+    }
+
+    // annotation between rows
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('word-by-word chops the dish into a city + leftovers', 400, 170);
+
+    // row 2: segment CRF span at y=205
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('segment CRF', 20, 226);
+    roundedRect(ctx, 90, 205, 580, 34, 10);
+    ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('dish — one span of 4 words', 90 + 290, 205 + 21);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one search query read two ways', 690, 290);
+});
+
+// c2: horizontal stacked bars for the three candidate splits
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Splits of the Same Query — Highest Total Wins', w / 2, 24);
+
+    var ax = 230, axW = 450, axY = 255, maxPts = 8;
+    function px(v) { return ax + v / maxPts * axW; }
+
+    // vertical gridlines at 2, 4, 6
+    var gl = [2, 4, 6];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px(gl[i]), 78); ctx.lineTo(px(gl[i]), axY); ctx.stroke();
+    }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+    var tickVals = [0, 2, 4, 6, 8];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tickVals.length; i++) {
+        ctx.fillText(String(tickVals[i]), px(tickVals[i]), axY + 18);
+    }
+
+    var barH = 26;
+    var rows = [
+        {
+            top: 85, label: 'A: [new york]=city + [style cheesecake]=dish',
+            segs: [
+                { from: 0, to: 4, fill: 'rgba(42,120,214,0.35)', border: P.blue, bw: 1, txt: '4' },
+                { from: 4, to: 6, fill: 'rgba(25,158,112,0.35)', border: P.aqua, bw: 1, txt: '2' }
+            ],
+            total: '6', totalCol: '#444', totalBold: true
+        },
+        {
+            top: 148, label: 'B: [new york style cheesecake]=dish',
+            segs: [
+                { from: 0, to: 7, fill: 'rgba(0,131,0,0.30)', border: P.green, bw: 2, txt: '7' }
+            ],
+            total: '7  ← winner', totalCol: P.green, totalBold: true
+        },
+        {
+            top: 211, label: 'C: [new york style]=dish + [cheesecake]=dish',
+            segs: [
+                { from: 0, to: 2, fill: 'rgba(74,58,167,0.30)', border: P.violet, bw: 1, txt: '2' },
+                { from: 2, to: 5, fill: 'rgba(213,81,129,0.30)', border: P.magenta, bw: 1, txt: '3' }
+            ],
+            total: '5', totalCol: '#444', totalBold: true
+        }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        // row label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.label, 20, row.top + barH / 2 + 4);
+        var endX = ax;
+        for (var si = 0; si < row.segs.length; si++) {
+            var sg = row.segs[si];
+            var x1 = px(sg.from), x2 = px(sg.to);
+            ctx.fillStyle = sg.fill;
+            ctx.fillRect(x1, row.top, x2 - x1, barH);
+            ctx.strokeStyle = sg.border; ctx.lineWidth = sg.bw;
+            ctx.strokeRect(x1, row.top, x2 - x1, barH);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(sg.txt, (x1 + x2) / 2, row.top + barH / 2 + 4);
+            endX = x2;
+        }
+        // total right of bar
+        ctx.fillStyle = row.totalCol; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.total, endX + 10, row.top + barH / 2 + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the whole-span menu-match feature adds the winning points', 470, 68);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('segment points are illustrative', 690, 292);
+});
+
+// c3: grouped bars — exact-match accuracy, single-word vs multi-word names
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Exact-Match Accuracy: Word Tagger vs Segment Model', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180, maxV = 100;
+
+    // gridlines at 25/50/75 + tick labels 0..100
+    var ticks = [0, 25, 50, 75, 100];
+    for (var i = 0; i < ticks.length; i++) {
+        var y = baseY - ticks[i] / maxV * ph;
+        if (ticks[i] === 25 || ticks[i] === 50 || ticks[i] === 75) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(ticks[i] + '%', ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var groups = [
+        { cx: 240, lab: 'single-word names', word: 91, seg: 92 },
+        { cx: 500, lab: 'multi-word names', word: 62, seg: 81 }
+    ];
+    var bw = 70, gap = 16;
+
+    for (var g = 0; g < 2; g++) {
+        var gr = groups[g];
+        // word tagger bar (left)
+        var wx = gr.cx - bw - gap / 2;
+        var wh = gr.word / maxV * ph;
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(wx, baseY - wh, bw, wh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(wx, baseY - wh, bw, wh);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gr.word + '%', wx + bw / 2, baseY - wh - 8);
+        // segment model bar (right)
+        var sx = gr.cx + gap / 2;
+        var sh = gr.seg / maxV * ph;
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(sx, baseY - sh, bw, sh);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+        ctx.strokeRect(sx, baseY - sh, bw, sh);
+        ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(gr.seg + '%', sx + bw / 2, baseY - sh - 8);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(gr.lab, gr.cx, baseY + 18);
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fillRect(560, 40, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(560, 40, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('word tagger', 578, 51);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)'; ctx.fillRect(560, 58, 12, 12);
+    ctx.strokeStyle = P.green; ctx.strokeRect(560, 58, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('segment model', 578, 69);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+19 points where names span many words', 440, 90);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative numbers — invented for the example', 690, 290);
+});
+
+// c4: BIO chips (per-word evidence) vs one semi-CRF span (whole-span features)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('BIO Gives Span Outputs — a Semi-CRF Gives Span Features', w / 2, 24);
+
+    // row 1: BIO tagger chips
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('BIO tagger', 20, 90);
+    var chipXs = [140, 275, 410, 545];
+    var chipLabs = ['B-dish', 'I-dish', 'I-dish', 'I-dish'];
+    var chipW = 120, chipH = 30, chipY = 70;
+    for (var i = 0; i < 4; i++) {
+        roundedRect(ctx, chipXs[i], chipY, chipW, chipH, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(chipLabs[i], chipXs[i] + chipW / 2, chipY + chipH / 2 + 4);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText('scores 1 tag', chipXs[i] + chipW / 2, 120);
+    }
+
+    // annotation between rows
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same answer on paper — different evidence to earn it', 400, 155);
+
+    // row 2: semi-CRF span
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('semi-CRF', 20, 207);
+    roundedRect(ctx, 140, 185, 525, 34, 10);
+    ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('dish (words 1–4)', 140 + 525 / 2, 185 + 21);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('features: span length = 4 · exact menu match · starts the query', 140 + 525 / 2, 242);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — how each model scores the same span', 690, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

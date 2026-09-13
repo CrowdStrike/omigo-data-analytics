@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lexing (lex)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Lexing (lex)</h1>
+<p class="subtitle">Before a computer can understand anything you type, it chops the stream of raw characters into labeled words called tokens — lexing is that chopping</p>
+
+<div class="card-section">
+    <h2>The Spreadsheet Reads Your Formula</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">tokens</span><span class="tag orange">character chopping</span></div>
+                <ul>
+                    <li><b>The cell</b> — you type <code>total = 12 + 3.5 * 40</code> into a spreadsheet cell and press enter</li>
+                    <li><b>What arrives</b> — the computer receives 21 raw characters, one keystroke at a time, no words yet</li>
+                    <li><b>The chop</b> — lexing groups those characters into 7 meaningful chunks: a name, numbers, symbols</li>
+                    <li><b>Tokens</b> — each chunk gets a type label: NAME <code>total</code>, EQUALS <code>=</code>, NUMBER <code>12</code>, PLUS <code>+</code>, and so on</li>
+                    <li><b>Spaces vanish</b> — the 6 spaces only separate words; the lexer reads them and throws them away</li>
+                </ul>
+                <p class="example">You read "12+3.5" as three things — a twelve, a plus, a three-and-a-half — without thinking; lexing is a program doing exactly that grouping.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A lexer turns raw characters into labeled words called tokens: <code>total = 12 + 3.5 * 40</code> goes in as 21 characters and comes out as 7 tokens.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Chopping 21 Characters into 7 Tokens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">longest match</span></div>
+                <ul>
+                    <li><b>Start</b> — the cursor sits on char 1 <code>t</code>; letters keep coming, so it keeps reading until the space</li>
+                    <li><b>First cut</b> — chars 1&ndash;5 spell <code>total</code>, then char 6 is a space: emit NAME <code>total</code>, skip the space</li>
+                    <li><b>One-char tokens</b> — char 7 <code>=</code> is a symbol that stands alone: emit EQUALS and step past it</li>
+                    <li><b>Longest match</b> — at char 14 it reads <code>3</code>, sees <code>.</code>, keeps going, sees <code>5</code>: one NUMBER <code>3.5</code>, not three pieces</li>
+                    <li><b>Done</b> — one left-to-right walk over 21 chars: NAME, <code>=</code>, <code>12</code>, <code>+</code>, <code>3.5</code>, <code>*</code>, <code>40</code> — 7 tokens, 6 spaces dropped</li>
+                </ul>
+                <p class="example">Redo it by hand — put a finger on each character of <code>total = 12 + 3.5 * 40</code> and cut wherever the kind of character changes or a space appears; you get the same 7 pieces.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One pass, left to right, always grabbing the longest chunk that still looks like a single token — that greedy rule is essentially the whole algorithm.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Every Language Tool Starts by Lexing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">pipeline</span><span class="tag orange">history</span></div>
+                <ul>
+                    <li><b>Everywhere</b> — compilers, spreadsheets, SQL engines, JSON readers, and syntax highlighters all lex first</li>
+                    <li><b>The name</b> — the 1975 Unix tool <code>lex</code> generated lexers from token patterns; the job inherited its name</li>
+                    <li><b>Patterns</b> — each token type is one simple rule, e.g. NUMBER = digits with an optional dot</li>
+                    <li><b>Error messages</b> — "unexpected token" in an error message is the lexer's vocabulary showing through</li>
+                    <li><b>Cheap first pass</b> — lexing is fast and dumb on purpose, so later stages never touch raw characters again</li>
+                </ul>
+                <p class="example">When your editor colors <code>3.5</code> green and <code>total</code> blue before you even finish the line, a lexer just ran over your keystrokes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every tool that reads a language makes the same first move — chop characters into tokens — so everything downstream can think in words instead of letters.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Lexing Is Not Understanding</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">lexer vs parser</span></div>
+                <ul>
+                    <li><b>Two jobs</b> — the lexer checks that the words are legal; the parser checks that the sentence makes sense</li>
+                    <li><b>Legal nonsense</b> — <code>total = 12 + + 40</code> lexes fine into 6 tokens; only the parser rejects it</li>
+                    <li><b>Illegal word</b> — <code>total = 12 $ 40</code> dies inside the lexer: <code>$</code> matches no token rule at all</li>
+                    <li><b>No memory</b> — the lexer never looks back and never counts brackets; it labels one chunk at a time</li>
+                    <li><b>The tell</b> — "unexpected character" is a lexer complaint; "unexpected token" is a parser complaint</li>
+                </ul>
+                <p class="example">A spell-checker happily accepts "colorless green ideas sleep furiously" because every word is legal — just as a lexer accepts <code>12 + + 40</code>.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting the lexer to catch grammar mistakes. It only knows spelling: any string of legal tokens sails through it, however meaningless their order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// the running example: total = 12 + 3.5 * 40 (21 chars, positions 1-21)
+var CHARS = ['t','o','t','a','l',' ','=',' ','1','2',' ','+',' ','3','.','5',' ','*',' ','4','0'];
+// tokens: [type, lexeme, startChar, endChar, kind]
+var TOKENS = [
+    ['NAME', 'total', 1, 5, 'name'],
+    ['EQUALS', '=', 7, 7, 'op'],
+    ['NUMBER', '12', 9, 10, 'num'],
+    ['PLUS', '+', 12, 12, 'op'],
+    ['NUMBER', '3.5', 14, 16, 'num'],
+    ['STAR', '*', 18, 18, 'op'],
+    ['NUMBER', '40', 20, 21, 'num']
+];
+var KIND_FILL = { name: 'rgba(42,120,214,0.15)', op: 'rgba(217,89,38,0.15)', num: 'rgba(0,131,0,0.12)' };
+var KIND_BORDER = { name: P.blue, op: P.orange, num: P.green };
+
+// c1: character strip chopped into token boxes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Keystroke Stream, Seven Tokens', w / 2, 24);
+
+    var cellW = 26, stripX = 87, stripY = 70, cellH = 30;
+    // position labels
+    var posLabs = [1, 5, 10, 15, 21];
+    for (var i = 0; i < posLabs.length; i++) {
+        var p = posLabs[i];
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(p), stripX + (p - 1) * cellW + cellW / 2, stripY - 8);
+    }
+    // character cells
+    for (var i = 0; i < 21; i++) {
+        var x = stripX + i * cellW;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.strokeRect(x, stripY, cellW, cellH);
+        var ch = CHARS[i];
+        if (ch === ' ') {
+            ctx.fillStyle = P.mute; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+            ctx.fillText('␣', x + cellW / 2, stripY + 20);
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '13px monospace'; ctx.textAlign = 'center';
+            ctx.fillText(ch, x + cellW / 2, stripY + 20);
+        }
+    }
+
+    // token boxes + connectors
+    var tokY = 185, tokH = 44;
+    for (var i = 0; i < TOKENS.length; i++) {
+        var t = TOKENS[i];
+        var x1 = stripX + (t[2] - 1) * cellW;
+        var x2 = stripX + t[3] * cellW;
+        var bx = x1, bw = Math.max(x2 - x1, 34);
+        // center small boxes under their char group
+        if (x2 - x1 < 34) { bx = (x1 + x2) / 2 - 17; }
+        roundRect(ctx, bx, tokY, bw, tokH, 4);
+        ctx.fillStyle = KIND_FILL[t[4]]; ctx.fill();
+        ctx.strokeStyle = KIND_BORDER[t[4]]; ctx.lineWidth = 1; ctx.stroke();
+        // type above the box
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t[0], bx + bw / 2, tokY - 6);
+        // lexeme inside
+        ctx.fillStyle = KIND_BORDER[t[4]]; ctx.font = 'bold 13px monospace';
+        ctx.fillText(t[1], bx + bw / 2, tokY + 27);
+        // connectors from char group bottom to token box top
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo((x1 + x2) / 2, stripY + cellH);
+        ctx.lineTo(bx + bw / 2, tokY - 16);
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('6 spaces are thrown away — only the words survive', 470, 262);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the formula is the page\'s single running example —', 20, h - 24);
+    ctx.fillText('21 characters in, 7 tokens out', 20, h - 10);
+});
+
+// c2: lane chart of the left-to-right scan with token span bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Cursor Walks Left to Right, Cutting at Boundaries', w / 2, 24);
+
+    var ax = 70, aw = 600, ay = 245, unit = aw / 21;
+    function centerX(p) { return ax + (p - 0.5) * unit; }
+    function edgeX(p) { return ax + (p - 1) * unit; } // boundary before char p
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + aw, ay); ctx.stroke();
+
+    // characters below the axis
+    for (var i = 0; i < 21; i++) {
+        var ch = CHARS[i];
+        if (ch === ' ') {
+            ctx.fillStyle = P.mute; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+            ctx.fillText('␣', centerX(i + 1), ay + 18);
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+            ctx.fillText(ch, centerX(i + 1), ay + 18);
+        }
+    }
+    var posLabs = [1, 5, 10, 15, 21];
+    for (var i = 0; i < posLabs.length; i++) {
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(posLabs[i]), centerX(posLabs[i]), ay + 36);
+    }
+
+    // token span bars
+    var barY = 150, barH = 22;
+    var barFills = { name: 'rgba(42,120,214,0.35)', op: 'rgba(217,89,38,0.35)', num: 'rgba(0,131,0,0.30)' };
+    var barLabels = ['NAME total', '=', 'NUMBER 12', '+', 'NUMBER 3.5', '*', 'NUMBER 40'];
+    var labYs = [132, 112, 132, 112, 132, 112, 132]; // staggered so neighbors never overlap
+    for (var i = 0; i < TOKENS.length; i++) {
+        var t = TOKENS[i];
+        var x1 = edgeX(t[2]), x2 = edgeX(t[3] + 1);
+        roundRect(ctx, x1, barY, x2 - x1, barH, 3);
+        ctx.fillStyle = barFills[t[4]]; ctx.fill();
+        ctx.fillStyle = KIND_BORDER[t[4]]; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(barLabels[i], (x1 + x2) / 2, labYs[i]);
+    }
+
+    // cut markers: before chars 1, 7, 9, 12, 14, 18, 20 and after 21
+    var cuts = [1, 7, 9, 12, 14, 18, 20, 22];
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    for (var i = 0; i < cuts.length; i++) {
+        var x = edgeX(cuts[i]);
+        ctx.beginPath(); ctx.moveTo(x, barY); ctx.lineTo(x, ay); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("sees '3', then '.', then '5' —", 430, 58);
+    ctx.fillText('keeps going while it still looks like one number', 430, 74);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('every cut lands on a space or a change of character kind', w - 16, h - 10);
+});
+
+// c3: five-stage pipeline with the lexer highlighted
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Lexing Is Step One of Every Language Pipeline', w / 2, 24);
+
+    var xs = [20, 160, 300, 440, 580];
+    var by = 105, bw = 116, bh = 74;
+    var stageLabs = ['you type', 'chop', 'words', 'grammar', 'compute'];
+    var countLabs = ['21 characters', '', '7 tokens', '1 tree', '1 value'];
+
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(stageLabs[i], xs[i] + bw / 2, by - 12);
+        if (countLabs[i]) {
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+            ctx.fillText(countLabs[i], xs[i] + bw / 2, by + bh + 18);
+        }
+    }
+
+    // box 1: CHARACTERS
+    roundRect(ctx, xs[0], by, bw, bh, 6);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('CHARACTERS', xs[0] + bw / 2, by + 18);
+    ctx.fillStyle = P.text; ctx.font = '11px monospace';
+    ctx.fillText('total = 12', xs[0] + bw / 2, by + 40);
+    ctx.fillText('+ 3.5 * 40', xs[0] + bw / 2, by + 56);
+
+    // box 2: LEXER (highlighted)
+    roundRect(ctx, xs[1], by, bw, bh, 6);
+    ctx.fillStyle = P.ink; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('LEXER', xs[1] + bw / 2, by + bh / 2 + 5);
+
+    // box 3: TOKENS
+    roundRect(ctx, xs[2], by, bw, bh, 6);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('TOKENS', xs[2] + bw / 2, by + 18);
+    ctx.fillStyle = P.text; ctx.font = '11px monospace';
+    ctx.fillText('total = 12', xs[2] + bw / 2, by + 40);
+    ctx.fillText('+ 3.5 * 40', xs[2] + bw / 2, by + 56);
+
+    // box 4: PARSER
+    roundRect(ctx, xs[3], by, bw, bh, 6);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('PARSER', xs[3] + bw / 2, by + 24);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('builds the', xs[3] + bw / 2, by + 44);
+    ctx.fillText('grammar tree', xs[3] + bw / 2, by + 58);
+
+    // box 5: ANSWER (12 + 3.5 * 40 = 152)
+    roundRect(ctx, xs[4], by, bw, bh, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ANSWER', xs[4] + bw / 2, by + 18);
+    ctx.fillStyle = P.green; ctx.font = 'bold 20px system-ui';
+    ctx.fillText('152', xs[4] + bw / 2, by + 50);
+
+    // arrows between boxes
+    for (var i = 0; i < 4; i++) {
+        arrow(ctx, xs[i] + bw + 2, by + bh / 2, xs[i + 1] - 2, by + bh / 2, P.mute);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('after the lexer, no stage ever reads a raw character again', w / 2, 232);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('for scale: a 1,000-line program yields on the order of 8,000 tokens', 20, h - 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("token-count scale figure is illustrative; the formula's 21 → 7 → 152 numbers are exact", w - 16, h - 26);
+});
+
+// c4: two broken inputs through the LEX gate and the PARSE gate
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Lexer Checks Spelling, the Parser Checks Grammar', w / 2, 24);
+
+    var gateW = 130, gateH = 56;
+    var lexCx = 390, parseCx = 580;
+
+    function gate(cx, cy, fill, border, dashed) {
+        if (dashed) ctx.setLineDash([4, 3]);
+        roundRect(ctx, cx - gateW / 2, cy - gateH / 2, gateW, gateH, 6);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        ctx.strokeStyle = border; ctx.lineWidth = dashed ? 1 : 1.5; ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Row 1: total = 12 + + 40 — lexes, parse fails
+    var y1 = 105;
+    ctx.fillStyle = P.text; ctx.font = '13px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('total = 12 + + 40', 30, y1 + 4);
+
+    gate(lexCx, y1, 'rgba(0,131,0,0.12)', P.green, false);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('LEX', lexCx, y1 - 12);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('✓', lexCx - 30, y1 + 12);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('6 legal tokens', lexCx - 16, y1 + 12);
+
+    gate(parseCx, y1, 'rgba(231,76,60,0.12)', '#e74c3c', false);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('PARSE', parseCx, y1 - 12);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('✗', parseCx - 38, y1 + 12);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('two pluses', parseCx - 26, y1 + 6);
+    ctx.fillText('in a row', parseCx - 26, y1 + 19);
+
+    arrow(ctx, 200, y1, lexCx - gateW / 2 - 4, y1, P.mute);
+    arrow(ctx, lexCx + gateW / 2 + 2, y1, parseCx - gateW / 2 - 4, y1, P.mute);
+
+    // Row 2: total = 12 $ 40 — dies in the lexer
+    var y2 = 200;
+    ctx.fillStyle = P.text; ctx.font = '13px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('total = 12 $ 40', 30, y2 + 4);
+
+    gate(lexCx, y2, 'rgba(231,76,60,0.12)', '#e74c3c', false);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('LEX', lexCx, y2 - 12);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('✗', lexCx - 42, y2 + 12);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("'$' is not a token", lexCx - 30, y2 + 12);
+
+    gate(parseCx, y2, null, P.mute, true);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('PARSE', parseCx, y2 - 12);
+    ctx.font = '11px system-ui';
+    ctx.fillText('never reached', parseCx, y2 + 12);
+
+    arrow(ctx, 200, y2, lexCx - gateW / 2 - 4, y2, P.mute);
+    // no arrow into the second PARSE gate
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("nonsense sentences made of legal words pass the lexer — grammar is the parser's job", w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

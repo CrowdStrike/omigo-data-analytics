@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Stores</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Feature Stores</h1>
+<p class="subtitle">A feature store computes each model input once, from one shared recipe, and hands the exact same number to both the training table and the live app</p>
+
+<div class="card-section">
+    <h2>One Average, Two Kitchens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">one recipe</span><span class="tag orange">two worlds</span></div>
+                <ul>
+                    <li><b>The app</b> — a food-delivery app wants to predict, at checkout, whether an order will arrive late</li>
+                    <li><b>The feature</b> — one key input: this driver's average delivery time over the last 7 days</li>
+                    <li><b>Two kitchens</b> — the training team computes it from logs; the app team re-writes it in app code</li>
+                    <li><b>The drift</b> — two hand-written copies of "average delivery time" slowly stop agreeing</li>
+                    <li><b>The store</b> — a feature store keeps ONE recipe, runs it once, and serves the result to both sides</li>
+                </ul>
+                <p class="example">Training reads the driver's 7-day average from history, the app needs it in milliseconds at checkout — a feature store gives both the same 32.0 minutes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A feature store is one shared recipe per feature, computed once, so training and the live app never disagree about the same number.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Averaging the Driver's Week by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">training-serving skew</span></div>
+                <ul>
+                    <li><b>The week</b> — the driver's last 7 daily averages, in minutes: 28, 34, 31, 40, 26, 33, 32</li>
+                    <li><b>The recipe</b> — the feature store's definition: mean of all 7 days = 224 / 7 = 32.0 minutes</li>
+                    <li><b>The app's copy</b> — the app team's re-write quietly used only the last 5 days: 31, 40, 26, 33, 32</li>
+                    <li><b>The skew</b> — the app's version gives 162 / 5 = 32.4 minutes, while training saw 32.0</li>
+                    <li><b>The bite</b> — the model was trained on 32.0-style inputs but is fed 32.4-style ones at checkout</li>
+                </ul>
+                <p class="example">Same driver, same week, two recipes: 224/7 = 32.0 for training, 162/5 = 32.4 in the app — the model meets numbers it was never trained on.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Training-serving skew is two hand-written copies of one recipe drifting apart — 32.0 vs 32.4 here — and the feature store removes it by having only one copy.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Live Model Quietly Got Worse</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">silent failure</span><span class="tag green">reuse</span></div>
+                <ul>
+                    <li><b>Offline it shone</b> — on held-out history the late-order model scored 84% accuracy</li>
+                    <li><b>Live it sagged</b> — in the app it managed only 71%, with no error, no crash, no alert</li>
+                    <li><b>The culprit</b> — every input was a slightly different re-implementation of the training recipe</li>
+                    <li><b>The fix</b> — routing both worlds through the feature store brought the live score back to 83%</li>
+                    <li><b>The bonus</b> — the ETA team reuses "driver 7-day average" from the store instead of re-writing it</li>
+                </ul>
+                <p class="example">The model never broke — it scored 84% offline, 71% live, and 83% once training and serving read the same stored features.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Skew fails silently: nothing crashes, the live model just underperforms its offline promise until both worlds read the same computed features.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Is Not Just a Database</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">offline vs online</span></div>
+                <ul>
+                    <li><b>The mistake</b> — "why not just query the warehouse at checkout?" — because checkout has ~50 ms</li>
+                    <li><b>Two doors</b> — one store, two access paths: a slow offline door and a millisecond online door</li>
+                    <li><b>Offline door</b> — months of history for building training tables, where a 900 ms query is fine</li>
+                    <li><b>Online door</b> — the latest value per driver, pre-computed, answering a lookup in about 5 ms</li>
+                    <li><b>Same recipe</b> — both doors serve values produced by the one shared recipe; only the speed differs</li>
+                </ul>
+                <p class="example">The warehouse answers the 7-day average in about 900 ms — 18 times the checkout budget of 50 ms — while the online store returns the pre-computed 32.0 in about 5 ms.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a feature store as just another database. The point is one recipe with two doors — slow-and-deep for training, instant for serving — not a new place to dump tables.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, width, color) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    var hx = x2 - 8 * Math.cos(ang), hy = y2 - 8 * Math.sin(ang);
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: flow diagram — logs -> feature store -> training table and live app
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Recipe, Computed Once, Served to Both Worlds', w / 2, 24);
+
+    // left box: raw delivery logs
+    roundRect(ctx, 30, 115, 160, 55, 4);
+    ctx.fillStyle = 'rgba(107,114,128,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('raw delivery logs', 110, 138);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('every trip, every day', 110, 156);
+
+    // center box: feature store
+    roundRect(ctx, 255, 95, 210, 95, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('FEATURE STORE', 360, 125);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('one recipe:', 360, 147);
+    ctx.fillText('mean of last 7 days', 360, 164);
+
+    // top-right box: training table
+    roundRect(ctx, 535, 50, 165, 55, 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('training table', 617, 66);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('months of history', 617, 82);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('32.0 min', 617, 99);
+
+    // bottom-right box: live app
+    roundRect(ctx, 535, 180, 165, 55, 4);
+    ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('live app', 617, 196);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('this order, right now', 617, 212);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('32.0 min', 617, 229);
+
+    // arrows
+    arrowLine(ctx, 190, 142, 255, 142, 3, P.mute);
+    arrowLine(ctx, 465, 120, 535, 78, 3, P.blue);
+    arrowLine(ctx, 465, 165, 535, 207, 3, P.green);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('computed once — both worlds read 32.0', 360, 265);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("illustrative — one driver's feature flowing to training and serving", w - 12, 292);
+});
+
+// c2: the driver's week as bars with two mean lines (7-day vs accidental 5-day)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Week of Data, Two Recipes, Two Answers', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 185, maxV = 50;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    var ticks = [10, 20, 30, 40];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(ticks[i]), ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var vals = [28, 34, 31, 40, 26, 33, 32];
+    var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    var bw = 52, gap = 32;
+    var startX = ox + (pw - (7 * bw + 6 * gap)) / 2;
+    for (var i = 0; i < 7; i++) {
+        var x = startX + i * (bw + gap);
+        var y = yOf(vals[i]);
+        ctx.fillStyle = i < 2 ? 'rgba(42,120,214,0.20)' : 'rgba(42,120,214,0.40)';
+        ctx.fillRect(x, y, bw, baseY - y);
+        if (i >= 2) {
+            // the days the app's code used: 2px orange top edge
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + bw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(vals[i]), x + bw / 2, y - 6);
+        ctx.fillText(days[i], x + bw / 2, baseY + 16);
+    }
+
+    // feature store mean line at 32.0 (solid blue)
+    var yStore = yOf(32.0);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(ox, yStore); ctx.lineTo(ox + pw, yStore); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('feature store: 224/7 = 32.0', ox + 4, yStore + 20);
+
+    // app copy mean line at 32.4 (dashed orange)
+    var yApp = yOf(32.4);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yApp); ctx.lineTo(ox + pw, yApp); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("app's copy: 162/5 = 32.4", ox + pw - 4, 100);
+
+    // zoom inset: the two mean lines sit 0.4 min apart, invisible at full scale
+    var ix = 88, iy = 34, iw = 180, ih = 64;
+    ctx.fillStyle = '#fff'; ctx.fillRect(ix, iy, iw, ih);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.strokeRect(ix, iy, iw, ih);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('zoom: 0.4 min apart', ix + 6, 47);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
+    ctx.beginPath(); ctx.moveTo(ix + 6, 58); ctx.lineTo(ix + iw - 40, 58); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui';
+    ctx.fillText('32.4', ix + iw - 36, 62);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ix + 6, 88); ctx.lineTo(ix + iw - 40, 88); ctx.stroke();
+    ctx.fillStyle = P.blue;
+    ctx.fillText('32.0', ix + iw - 36, 92);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('two hand-written recipes drifted: 32.0 vs 32.4 min', 450, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("illustrative — one driver's daily average delivery times", w - 12, 292);
+});
+
+// c3: three accuracy bars — offline, live before store, live after store
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Model, Three Scores — the Gap Was the Features', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180, maxV = 100;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    var ticks = [0, 25, 50, 75, 100];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        if (ticks[i] > 0 && ticks[i] < 100) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(ticks[i] + '%', ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bars = [
+        { label: 'offline test', v: 84, fill: 'rgba(42,120,214,0.40)', stroke: P.blue },
+        { label: 'live, own recipes', v: 71, fill: 'rgba(217,89,38,0.35)', stroke: P.orange },
+        { label: 'live, feature store', v: 83, fill: 'rgba(0,131,0,0.30)', stroke: P.green }
+    ];
+    var bw = 120;
+    for (var i = 0; i < 3; i++) {
+        var cx = ox + pw * (2 * i + 1) / 6;
+        var y = yOf(bars[i].v);
+        ctx.fillStyle = bars[i].fill;
+        ctx.fillRect(cx - bw / 2, y, bw, baseY - y);
+        ctx.strokeStyle = bars[i].stroke; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw / 2, y, bw, baseY - y);
+        ctx.fillStyle = bars[i].stroke; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bars[i].v + '%', cx, y - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(bars[i].label, cx, baseY + 18);
+    }
+
+    // guide line at 84%
+    var yGuide = yOf(84);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yGuide); ctx.lineTo(ox + pw, yGuide); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offline promise', ox + pw - 4, yGuide - 5);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the 13-point drop was skew, not the model', 330, 85);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative accuracy numbers', w - 12, 292);
+});
+
+// c4: horizontal lookup-speed bars — warehouse query vs online store lookup
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Feature, Two Doors: 900 ms vs 5 ms', w / 2, 24);
+
+    var ax = 250, aw = 430, baseY = 235, maxMs = 1000;
+    function xOf(ms) { return ax + ms / maxMs * aw; }
+
+    // baseline + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, baseY); ctx.lineTo(ax + aw, baseY); ctx.stroke();
+    var tickVals = [0, 250, 500, 750, 1000];
+    var tickLabs = ['0', '250', '500', '750', '1000 ms'];
+    for (var i = 0; i < tickVals.length; i++) {
+        var tx = xOf(tickVals[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 6); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], tx, baseY + 22);
+    }
+
+    // row 1: warehouse query, 900 ms
+    var barH = 40;
+    var w1 = xOf(900) - ax;
+    ctx.fillStyle = 'rgba(217,89,38,0.35)';
+    ctx.fillRect(ax, 105 - barH / 2, w1, barH);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(ax, 105 - barH / 2, w1, barH);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('900 ms', ax + w1 + 8, 109);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('warehouse query', 20, 100);
+    ctx.fillText('(offline door)', 20, 116);
+
+    // row 2: online store lookup, 5 ms (minimum 4px sliver)
+    var w2 = Math.max(xOf(5) - ax, 4);
+    ctx.fillStyle = 'rgba(0,131,0,0.35)';
+    ctx.fillRect(ax, 180 - barH / 2, w2, barH);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(ax, 180 - barH / 2, w2, barH);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('5 ms', ax + w2 + 8, 184);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('online store lookup', 20, 175);
+    ctx.fillText('(online door)', 20, 191);
+
+    // budget line at 50 ms
+    var bx = xOf(50);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('checkout budget: 50 ms', bx + 30, 52);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same recipe, same 32.0 —', 460, 170);
+    ctx.fillText('only the door speed differs', 460, 186);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative latencies', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

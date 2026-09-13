@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Spark-Style Engines Execute</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>How Spark-Style Engines Execute</h1>
+<p class="subtitle">Distributed dataframe engines don't run your code line by line — they collect it into a lazy plan, cut the plan into stages at every shuffle, and the shuffle is where the money goes</p>
+
+<div class="card-section">
+    <h2>Four Lines of Code, Zero Rows Read</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">lazy evaluation</span><span class="tag orange">distributed</span></div>
+                <ul>
+                    <li><b>The job</b> — revenue per city from a 40M-row orders table, stored as 8 partitions of 5M rows each</li>
+                    <li><b>The code</b> — read the table, filter to year 2025, select (city, revenue), group by city and sum</li>
+                    <li><b>The surprise</b> — after all four lines run, the engine has read exactly zero rows from disk</li>
+                    <li><b>The plan</b> — each line only appends a step to a query plan; these steps are called transformations</li>
+                    <li><b>The trigger</b> — an action (collect, write, count) hands the whole plan to the scheduler at once</li>
+                </ul>
+                <p class="example">The read/filter/select/groupBy lines return in milliseconds; the <code>collect()</code> on line five is where the cluster finally spins up and the 40M rows get touched.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Transformations are lazy — they build a plan, not results. Nothing executes until an action asks for an answer, which lets the engine see the whole plan before choosing how to run it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where Stage 1 Ends: Reshuffling Rows by City</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">shuffle</span><span class="tag green">stages</span></div>
+                <ul>
+                    <li><b>Narrow steps</b> — filter and select need only their own partition, so all 8 tasks run independently</li>
+                    <li><b>The wide step</b> — summing per city needs every "London" row together, but London sits in all 8 partitions</li>
+                    <li><b>The cut</b> — the planner splits the plan into Stage 1 (scan/filter/select) and Stage 2 (sum) at the groupBy</li>
+                    <li><b>The reshuffle</b> — each Stage 1 task hashes city into 4 output buckets: hash(city) % 4 picks the target</li>
+                    <li><b>Hand-check</b> — 8 map tasks &times; 4 buckets = 32 shuffle blocks; each Stage 2 task fetches its 8 over the network</li>
+                </ul>
+                <p class="example">hash("London") % 4 = 2, so every one of the 8 Stage 1 tasks writes its London rows into bucket 2 — Stage 2's task 2 fetches those 8 blocks and is the only task that ever sums London.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A wide dependency (groupBy, join) forces a shuffle: every task repartitions its output by key and ships it across the network, and the plan breaks into a new stage on the far side.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Shuffle Is the Whole Bill</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">job cost</span><span class="tag green">pipelining</span></div>
+                <ul>
+                    <li><b>Free chaining</b> — narrow ops pipeline: each task filters and selects a row in one pass, no wait, no I/O</li>
+                    <li><b>The heavy part</b> — the shuffle writes 6M surviving rows to disk, ships them, and re-reads them sorted</li>
+                    <li><b>The split (illustrative)</b> — Stage 1 pipelined scan takes 12s; the shuffle takes 85s; Stage 2 sums in 3s</li>
+                    <li><b>The share</b> — 85s of a 100s job is the shuffle: disk write, network transfer, and fetch dominate</li>
+                    <li><b>The instinct</b> — tuning a Spark-style job usually means shuffling fewer bytes, not computing faster</li>
+                </ul>
+                <p class="example">Cutting the 6M shuffled rows in half would save more time than making the 12s scan infinitely fast — the shuffle's 85s is 85% of the 100s job.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Narrow transformations fuse into one pass over each partition, so they're nearly free; the shuffle pays for disk, network, and coordination, which is why it dominates job cost.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Filtering After the Shuffle Ships Rows for Nothing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">shuffle size</span></div>
+                <ul>
+                    <li><b>The mistake</b> — grouping by (city, year) first and filtering to 2025 after the shuffle, not before</li>
+                    <li><b>The cost</b> — the shuffle now repartitions all 40M rows by city instead of the 6M that survive the filter</li>
+                    <li><b>The ratio</b> — 40M vs 6M shuffled rows is 6.7&times; the disk, network, and fetch work for the same answer</li>
+                    <li><b>The safety net</b> — good optimizers push filters below the shuffle, but UDF filters often block the push</li>
+                    <li><b>The habit</b> — shrink data before every wide step: filter early, drop unused columns, pre-aggregate</li>
+                </ul>
+                <p class="example">Moving the year filter above the groupBy drops the shuffle from 40M rows to 6M — the result is identical, but 34M rows never touch the network.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming line order is free because execution is lazy. The plan's shape decides how many rows cross the shuffle, and a filter placed after a wide step can multiply job cost several-fold.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: lazy plan of transformations, then the action fires execution
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Transformations Build a Plan — the Action Runs It', w / 2, 24);
+
+    // dashed plan region
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+    rrect(ctx, 30, 55, 530, 95, 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lazy plan — nothing executed', 42, 71);
+
+    // transformation boxes + arrows
+    var boxes = [
+        { x: 45,  label: 'read orders' },
+        { x: 175, label: 'filter year=2025' },
+        { x: 305, label: 'select city, rev' },
+        { x: 435, label: 'groupBy city .sum' }
+    ];
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        rrect(ctx, b.x, 85, 115, 42, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, b.x + 57, 110);
+        if (i > 0) {
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(b.x - 15, 106); ctx.lineTo(b.x - 3, 106); ctx.stroke();
+            arrowHead(ctx, b.x - 2, 106, 0, 7, P.blue);
+        }
+    }
+
+    // rows-read counter
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('rows read so far: 0', 45, 180);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(45, 185); ctx.lineTo(165, 185); ctx.stroke();
+
+    // arrow from plan region right edge down into action box
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(560, 130); ctx.lineTo(625, 130); ctx.lineTo(625, 194); ctx.stroke();
+    arrowHead(ctx, 625, 196, Math.PI / 2, 9, P.green);
+
+    // action box
+    rrect(ctx, 560, 200, 130, 44, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('collect() — ACTION', 625, 226);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('only now do 40M rows get read', 330, 235);
+
+    // caption (bottom left)
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('row counts illustrative', 20, h - 10);
+});
+
+// c2: the shuffle — 8 map tasks x 4 buckets = 32 blocks
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Shuffle: 8 Map Tasks × 4 Buckets = 32 Blocks Over the Network', w / 2, 24);
+
+    var mapYs = [52, 79, 106, 133, 160, 187, 214, 241];
+    var bucketYs = [58, 115, 172, 229];
+    var mapX = 95, mapW = 110, mapH = 20;
+    var bkX = 515, bkW = 130, bkH = 34;
+
+    // column headers
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.ink;
+    ctx.fillText('Stage 1 (8 tasks)', mapX, 40);
+    ctx.fillStyle = P.green;
+    ctx.fillText('Stage 2 (4 tasks)', bkX, 40);
+
+    // faint edges: every map task to every bucket
+    ctx.strokeStyle = 'rgba(107,114,128,0.25)'; ctx.lineWidth = 1;
+    for (var i = 0; i < 8; i++) {
+        for (var j = 0; j < 4; j++) {
+            ctx.beginPath();
+            ctx.moveTo(mapX + mapW, mapYs[i] + mapH / 2);
+            ctx.lineTo(bkX, bucketYs[j] + bkH / 2);
+            ctx.stroke();
+        }
+    }
+
+    // highlighted edges into bucket 2
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5;
+    for (var i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.moveTo(mapX + mapW, mapYs[i] + mapH / 2);
+        ctx.lineTo(bkX, bucketYs[2] + bkH / 2);
+        ctx.stroke();
+    }
+
+    // map task boxes
+    for (var i = 0; i < 8; i++) {
+        rrect(ctx, mapX, mapYs[i], mapW, mapH, 4);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('map task ' + (i + 1), mapX + mapW / 2, mapYs[i] + 14);
+    }
+
+    // bucket boxes
+    for (var j = 0; j < 4; j++) {
+        rrect(ctx, bkX, bucketYs[j], bkW, bkH, 6);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('bucket ' + j, bkX + bkW / 2, bucketYs[j] + 14);
+        ctx.fillText('sum task', bkX + bkW / 2, bucketYs[j] + 27);
+    }
+
+    // mid label
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('network', 360, 52);
+
+    // highlight label
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all London rows → hash % 4 = 2', 300, 285);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('4 reduce partitions illustrative', w - 14, h - 6);
+});
+
+// c3: where the 100 seconds go — phase bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where the 100 Seconds Go (illustrative timings)', w / 2, 24);
+
+    var bx = 185, barH = 26; // 5.2 px per second
+    var rows = [
+        { y: 85,  label: 'Stage 1: scan+filter+select (12s)',    width: 62,  fill: 'rgba(42,120,214,0.30)', color: P.blue,  vlab: '12s' },
+        { y: 150, label: 'Shuffle: write + network + fetch (85s)', width: 442, fill: 'rgba(231,76,60,0.20)',  color: '#e74c3c', vlab: '85s' },
+        { y: 215, label: 'Stage 2: per-city sum (3s)',            width: 16,  fill: 'rgba(0,131,0,0.20)',    color: P.green, vlab: '3s' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y - 8);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.width, barH);
+        ctx.strokeStyle = r.color; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y, r.width, barH);
+        ctx.fillStyle = r.color; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(r.vlab, bx + r.width + 8, r.y + 18);
+    }
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('85% of the job is moving rows, not computing', 320, 130);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; proportions are the point', w - 14, h - 10);
+});
+
+// c4: rows crossing the shuffle — filter after vs filter before
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rows Crossing the Shuffle: Filter After vs Filter Before', w / 2, 24);
+
+    var bx = 210, barH = 34; // 11.5 px per million rows
+
+    // row 1: filter after — 40M rows
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('filter AFTER groupBy', 20, 95 + 21);
+    ctx.fillStyle = 'rgba(231,76,60,0.20)';
+    ctx.fillRect(bx, 95, 460, barH);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 95, 460, barH);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('40M rows shuffled', bx + 460 - 10, 95 + 21);
+
+    // row 2: filter before — 6M rows
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('filter BEFORE groupBy', 20, 185 + 21);
+    ctx.fillStyle = 'rgba(0,131,0,0.20)';
+    ctx.fillRect(bx, 185, 69, barH);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 185, 69, barH);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('6M rows shuffled', bx + 69 + 8, 185 + 21);
+
+    // dashed guides at the two bar ends
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(bx + 460, 133); ctx.lineTo(bx + 460, 240); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx + 69, 140); ctx.lineTo(bx + 69, 181); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ratio label
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('6.7× less network traffic', 350, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts illustrative; same final answer both ways', w - 14, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

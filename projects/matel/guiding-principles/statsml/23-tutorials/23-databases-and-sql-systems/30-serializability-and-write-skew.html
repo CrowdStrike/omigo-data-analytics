@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serializability &amp; Write Skew</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Serializability &amp; Write Skew</h1>
+<p class="subtitle">Two transactions can each read a consistent snapshot, write different rows, both commit &mdash; and still break a rule that spans rows; only serializable isolation catches it</p>
+
+<div class="card-section">
+    <h2>The Night Both On-Call Doctors Went Home</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">concurrency</span><span class="tag orange">hidden anomaly</span></div>
+                <ul>
+                    <li><b>The rule</b> &mdash; a hospital requires at least 1 doctor on call at all times; tonight Alice and Bob both are</li>
+                    <li><b>The check</b> &mdash; before going off call, a doctor's app counts who is on call and allows leaving if count &ge; 2</li>
+                    <li><b>The race</b> &mdash; at 6:00pm Alice and Bob both tap "end my shift" within the same second</li>
+                    <li><b>The snapshot</b> &mdash; each transaction reads a frozen snapshot of the table: both count 2 doctors on call</li>
+                    <li><b>The writes</b> &mdash; Alice's transaction updates only Alice's row, Bob's updates only Bob's row</li>
+                    <li><b>The break</b> &mdash; no two writes touch the same row, so both commit &mdash; and now 0 doctors are on call</li>
+                </ul>
+                <p class="example">Both apps ran the same safety check, both saw "2 on call, safe to leave", and the hospital ended the night with nobody on call.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Write skew is two transactions reading the same data, deciding based on it, and writing to <i>different</i> rows &mdash; each is fine alone, but together they break an invariant no single row owns.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Stepping Through Both Transactions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">snapshot reads</span></div>
+                <ul>
+                    <li><b>Step 1 (6:00:00)</b> &mdash; Alice's transaction begins; its snapshot freezes the table: Alice on, Bob on</li>
+                    <li><b>Step 2 (6:00:01)</b> &mdash; Bob's transaction begins; his snapshot also shows Alice on, Bob on</li>
+                    <li><b>Step 3</b> &mdash; Alice counts on-call doctors in her snapshot: 2, so 2 &minus; 1 = 1 remains &mdash; check passes</li>
+                    <li><b>Step 4</b> &mdash; Bob counts in his snapshot: also 2, so his check passes too</li>
+                    <li><b>Steps 5&ndash;6</b> &mdash; Alice writes <code>on_call = false</code> on her row; Bob writes it on his &mdash; different rows</li>
+                    <li><b>Steps 7&ndash;8 (6:00:06&ndash;07)</b> &mdash; Alice commits, then Bob; no conflict is detected; real count hits 0</li>
+                </ul>
+                <p class="example">Each snapshot kept showing "2 on call" from begin to commit, while the real table went 2 &rarr; 1 &rarr; 0 underneath both of them.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Each transaction is internally consistent &mdash; its reads never contradict each other &mdash; yet the decision each based on its snapshot was stale by the time it committed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Every Check-Then-Write Rule Is at Risk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">fixes</span><span class="tag orange">invariants</span></div>
+                <ul>
+                    <li><b>The pattern</b> &mdash; read some rows, check a condition, write other rows: every such rule can skew</li>
+                    <li><b>Inventory floor</b> &mdash; two orders each see 1 unit in stock, both sell it, and stock lands at &minus;1</li>
+                    <li><b>Budget cap</b> &mdash; two teams each see $9,500 spent of a $10,000 cap, each add $400: total $10,300</li>
+                    <li><b>Double booking</b> &mdash; two people check a room is free for 2pm, and both insert a booking row</li>
+                    <li><b>Fix 1: serializable</b> &mdash; run at serializable isolation; the database aborts one of the pair, it retries</li>
+                    <li><b>Fix 2: lock the check</b> &mdash; <code>SELECT ... FOR UPDATE</code> on the rows you counted makes the second reader wait</li>
+                </ul>
+                <p class="example">The doctors' fix is one line &mdash; lock the on-call rows during the count, or run the shift-change transaction at serializable and retry on abort.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Any constraint that spans more than one row &mdash; floors, caps, uniqueness across rows &mdash; is invisible to per-row conflict checks; you must lock what you read or run serializable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"Snapshot Isolation" Is Not "Serializable"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">isolation levels</span></div>
+                <ul>
+                    <li><b>The belief</b> &mdash; "my reads are consistent and my writes don't conflict, so it's as if I ran alone"</li>
+                    <li><b>The truth</b> &mdash; snapshot isolation checks write-write conflicts on the <i>same</i> rows, nothing more</li>
+                    <li><b>The gap</b> &mdash; write skew has zero same-row conflicts, so snapshot isolation waves it through</li>
+                    <li><b>Naming trap</b> &mdash; some databases label snapshot behavior with a stronger-sounding level name</li>
+                    <li><b>The test</b> &mdash; ask: does any transaction write based on rows it only <i>read</i>? If yes, skew is possible</li>
+                    <li><b>True serializable</b> &mdash; also tracks read-write conflicts and aborts one transaction of the doctor pair</li>
+                </ul>
+                <p class="example">The doctors' app was "fully isolated" by snapshot rules &mdash; the outcome (0 on call) still matches no serial order, because whoever ran second would have counted 1 and stayed.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming snapshot isolation gives serializability. It prevents dirty reads and lost updates, but write skew is exactly the anomaly it misses &mdash; that gap is why serializable exists as a separate, stricter level.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: two-lane swimlane — Alice and Bob commit in parallel, invariant collapses
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('6:00pm: Two Transactions, Two Different Rows, One Broken Rule', w / 2, 24);
+
+    // lane divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(20, 140); ctx.lineTo(700, 140); ctx.stroke();
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("Alice's txn", 20, 99);
+    ctx.fillText("Bob's txn", 20, 189);
+
+    var bw = 120, bh = 34;
+
+    function laneBoxes(xs, y, border, fill, texts) {
+        // arrows between consecutive boxes
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        for (var i = 0; i < xs.length - 1; i++) {
+            var x1 = xs[i] + bw / 2, x2 = xs[i + 1] - bw / 2;
+            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 6, y); ctx.stroke();
+            ctx.fillStyle = border;
+            ctx.beginPath();
+            ctx.moveTo(x2, y); ctx.lineTo(x2 - 8, y - 4); ctx.lineTo(x2 - 8, y + 4);
+            ctx.closePath(); ctx.fill();
+        }
+        for (var i = 0; i < xs.length; i++) {
+            ctx.fillStyle = fill; ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+            rr(ctx, xs[i] - bw / 2, y - bh / 2, bw, bh, 6);
+            ctx.fill(); ctx.stroke();
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(texts[i], xs[i], y + 4);
+        }
+    }
+
+    laneBoxes([170, 320, 470, 600], 95, P.blue, 'rgba(42,120,214,0.15)',
+        ['read: 2 on call', '2 ≥ 2 — ok', 'set Alice off', 'commit ✓']);
+    laneBoxes([200, 350, 500, 630], 185, P.aqua, 'rgba(25,158,112,0.15)',
+        ['read: 2 on call', '2 ≥ 2 — ok', 'set Bob off', 'commit ✓']);
+
+    // result box
+    ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    rr(ctx, 635 - 75, 262 - 15, 150, 30, 6);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('on call now: 0', 635, 266);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no write touched the same row — both commits succeed', 360, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('timings illustrative', 20, 292);
+});
+
+// c2: snapshot count (flat 2) vs actual on-call count (2 -> 1 -> 0)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What the Snapshots See vs What Is Actually True', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var steps = [1, 2, 3, 4, 5, 6, 7, 8];
+    var snapVals = [2, 2, 2, 2, 2, 2, 2, 2];
+    var actVals = [2, 2, 2, 2, 2, 2, 1, 0];
+
+    function xOf(st) { return ox + (st - 1) / 7 * pw; }
+    function yOf(v) { return baseY - v / 3 * ph; }
+
+    // gridlines at 1 and 2
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [1, 2].forEach(function(v) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // y labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    [0, 1, 2, 3].forEach(function(v) { ctx.fillText(String(v), ox - 8, yOf(v) + 4); });
+
+    // x tick labels
+    ctx.textAlign = 'center';
+    for (var i = 0; i < 8; i++) ctx.fillText('s' + steps[i], xOf(steps[i]), baseY + 18);
+
+    // commit markers
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    [7, 8].forEach(function(st) {
+        ctx.beginPath(); ctx.moveTo(xOf(st), 44); ctx.lineTo(xOf(st), baseY); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Alice commits', xOf(7), 40);
+    ctx.fillText('Bob commits', xOf(8), 40);
+
+    // invariant floor at 1
+    ctx.strokeStyle = P.yellow; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(1)); ctx.lineTo(ox + pw, yOf(1)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.yellow; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('rule: at least 1', ox + 6, yOf(1) - 8);
+
+    // snapshot line (flat blue)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 8; i++) {
+        var x = xOf(steps[i]), y = yOf(snapVals[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both snapshots: 2', xOf(3), yOf(2) - 12);
+
+    // actual step line (red)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xOf(steps[0]), yOf(actVals[0]));
+    for (var i = 1; i < 8; i++) {
+        ctx.lineTo(xOf(steps[i]), yOf(actVals[i - 1]));
+        ctx.lineTo(xOf(steps[i]), yOf(actVals[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('actual: 0', xOf(8) - 8, yOf(0) - 10);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the reads were true once — just not at commit time', xOf(5) - 40, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('step timings illustrative', w - 12, 292);
+});
+
+// c3: what each transaction checked vs what both commits produced
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What Each Transaction Checked vs What Both Commits Produced', w / 2, 24);
+
+    var bx = 230;
+    var groups = [
+        { y: 80, label: 'on-call doctors (min 1)', chkLab: 'checked: 2', chkW: 160, actLab: 'actual: 0', actW: 4, limW: 80 },
+        { y: 150, label: 'stock (min 0)', chkLab: 'checked: 1', chkW: 80, actLab: 'actual: −1', actW: 4, limW: 0 },
+        { y: 220, label: 'budget of $10,000 (cap)', chkLab: 'checked: $9,500', chkW: 350, actLab: 'actual: $10,300', actW: 400, limW: 380 }
+    ];
+
+    groups.forEach(function(g) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(g.label, 20, g.y + 4);
+
+        // checked bar (blue)
+        ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+        ctx.fillRect(bx, g.y - 18, g.chkW, 16);
+        ctx.strokeRect(bx, g.y - 18, g.chkW, 16);
+        ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(g.chkLab, bx + g.chkW + 6, g.y - 6);
+
+        // actual bar (red)
+        ctx.fillStyle = 'rgba(231,76,60,0.25)'; ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+        ctx.fillRect(bx, g.y + 2, g.actW, 16);
+        ctx.strokeRect(bx, g.y + 2, g.actW, 16);
+        ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(g.actLab, bx + g.actW + 6, g.y + 14);
+
+        // limit marker
+        ctx.strokeStyle = P.yellow; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(bx + g.limW, g.y - 26); ctx.lineTo(bx + g.limW, g.y + 24); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.yellow; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('limit', bx + g.limW, g.y - 30);
+    });
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('every check passed; every limit broke', w - 30, 255);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative; bar widths schematic', w - 12, 292);
+});
+
+// c4: anomaly-coverage matrix — which isolation level blocks which anomaly
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Which Level Blocks Which Anomaly', w / 2, 24);
+
+    var rowLabels = ['read committed', 'snapshot isolation', 'serializable'];
+    var colHeaders = ['dirty read', 'lost update', 'write skew'];
+    var matrix = [
+        ['blocked', 'allowed', 'allowed'],
+        ['blocked', 'blocked', 'allowed'],
+        ['blocked', 'blocked', 'blocked']
+    ];
+    var rowY = [105, 165, 225];
+    var cellW = 148, cellH = 44, gap = 155;
+    function colX(c) { return 250 + c * gap; }
+
+    // column headers
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    for (var c = 0; c < 3; c++) ctx.fillText(colHeaders[c], colX(c) + cellW / 2, 68);
+
+    // row labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var r = 0; r < 3; r++) ctx.fillText(rowLabels[r], 240, rowY[r] + 4);
+
+    // cells
+    for (var r = 0; r < 3; r++) {
+        for (var c = 0; c < 3; c++) {
+            var blocked = matrix[r][c] === 'blocked';
+            var x = colX(c), y = rowY[r] - cellH / 2;
+            ctx.fillStyle = blocked ? 'rgba(0,131,0,0.12)' : 'rgba(231,76,60,0.12)';
+            ctx.strokeStyle = blocked ? P.green : '#e74c3c'; ctx.lineWidth = 1.5;
+            rr(ctx, x, y, cellW, cellH, 6);
+            ctx.fill(); ctx.stroke();
+            ctx.fillStyle = blocked ? P.green : '#e74c3c';
+            ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(blocked ? 'blocked ✓' : 'allowed ✗', x + cellW / 2, rowY[r] + 4);
+        }
+    }
+
+    // highlight the snapshot-isolation / write-skew cell
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5;
+    rr(ctx, colX(2) - 5, rowY[1] - cellH / 2 - 5, cellW + 10, cellH + 10, 8);
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("this one cell is the doctors' bug — and the whole reason serializable exists", w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

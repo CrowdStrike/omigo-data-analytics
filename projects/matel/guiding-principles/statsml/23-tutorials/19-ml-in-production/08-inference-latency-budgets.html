@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inference Latency Budgets</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Inference Latency Budgets</h1>
+<p class="subtitle">A latency budget is the total time a model is allowed at answer time — and every feature fetch spends from it, which is why a 50ms model cannot afford a 200ms feature</p>
+
+<div class="card-section">
+    <h2>Fifty Milliseconds to Pick a Coupon</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">serving time</span><span class="tag orange">time budget</span></div>
+                <ul>
+                    <li><b>The app</b> — a pizza app picks a discount coupon the instant a customer opens the checkout page</li>
+                    <li><b>The clock</b> — the whole page must appear within 300ms, or customers start abandoning carts</li>
+                    <li><b>The slice</b> — network, login, cart, and rendering claim 250ms, leaving the coupon model just 50ms</li>
+                    <li><b>The budget</b> — that 50ms is the model's entire allowance: fetch every feature AND do the math</li>
+                    <li><b>The catch</b> — the model's best feature, 90-day average spend, is a 200ms database query</li>
+                </ul>
+                <p class="example">At 8ms of pure math the model looks fast, but its 50ms allowance must also cover every ingredient it asks for.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An inference latency budget is the total wall-clock time a model gets at answer time — feature fetches spend from it just like the model math does.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Adding Up the Milliseconds</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">feature fetch</span></div>
+                <ul>
+                    <li><b>The wish list</b> — the model wants three features: cart contents, loyalty tier, 90-day average spend</li>
+                    <li><b>Cheap features</b> — cart contents ride in with the request (2ms); loyalty tier sits in a cache (5ms)</li>
+                    <li><b>The expensive one</b> — 90-day average spend means a live warehouse query: 200ms on a good day</li>
+                    <li><b>Add it up</b> — 2 + 5 + 200, plus 8ms of model math = 215ms, over four times the 50ms budget</li>
+                    <li><b>The fix</b> — compute average spend every night, store it in a fast lookup: 5ms instead of 200ms</li>
+                    <li><b>New total</b> — 2 + 5 + 5 + 8 = 20ms, comfortably inside the budget with 30ms to spare</li>
+                </ul>
+                <p class="example">Same model, same feature value — fetched live it costs 200ms, precomputed overnight it costs 5ms.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 2 + 5 + 200 + 8 = 215ms fails a 50ms budget; precomputing turns it into 2 + 5 + 5 + 8 = 20ms — and the model itself never changed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Timeouts, Tails, and the Fallback Coupon</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">tail latency</span><span class="tag green">timeouts</span></div>
+                <ul>
+                    <li><b>The timeout</b> — when the 50ms runs out, the page ships without the model and shows a generic coupon</li>
+                    <li><b>The tail</b> — the precomputed plan averages 20ms, but 1 request in 100 takes 48ms, 1 in 1,000 takes 85ms</li>
+                    <li><b>Tail budgeting</b> — teams promise the budget at p99, not the average; the slow cases are real customers</li>
+                    <li><b>Stacked tails</b> — every extra service call brings its own slow days, so chains of calls multiply the risk</li>
+                    <li><b>Design pressure</b> — the budget decides the feature list, so it belongs in the design, not the launch review</li>
+                </ul>
+                <p class="example">A plan that fits the budget "on average" still hands 1 in every 1,000 customers the fallback coupon.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Set and test the budget at the tail: an average of 20ms with a p99.9 of 85ms still means real customers hit the timeout.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The 8ms Model That Takes 215ms to Answer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">benchmarking</span></div>
+                <ul>
+                    <li><b>The benchmark trap</b> — timing model.predict() in a notebook measures the math (8ms), not the answer</li>
+                    <li><b>The real wait</b> — in production the same model answers in 215ms because features are fetched live</li>
+                    <li><b>The share</b> — the model math is roughly 4% of the wait; feature fetches are nearly all the rest</li>
+                    <li><b>Wrong fix</b> — shrinking the model from 8ms to 4ms saves 4ms; fixing the feature fetch saves 195ms</li>
+                    <li><b>Right habit</b> — benchmark the full request path, features included, before promising a budget</li>
+                </ul>
+                <p class="example">A team distilled their model to half its size and shaved 4ms — the 200ms warehouse call was untouched.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reporting the model's math time as its latency. The budget is spent on the whole answer path, and feature fetches usually dominate it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: the 300ms checkout page budget as one stacked bar, model slice highlighted
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Checkout, 300ms Total — the Model's Slice Is 50ms", w / 2, 24);
+
+    var bx = 60, scale = 2, barY = 130, barH = 46;
+    var segs = [
+        { name: 'network 60', ms: 60, color: P.mute, labY: 105 },
+        { name: 'login 30', ms: 30, color: P.aqua, labY: 88 },
+        { name: 'cart 80', ms: 80, color: P.blue, labY: 105 },
+        { name: 'model 50', ms: 50, color: P.orange, labY: 88 },
+        { name: 'render 80', ms: 80, color: P.violet, labY: 105 }
+    ];
+    var x = bx;
+    for (var i = 0; i < segs.length; i++) {
+        var segW = segs[i].ms * scale;
+        ctx.fillStyle = segs[i].color;
+        ctx.fillRect(x, barY, segW, barH);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(segs[i].name, x + segW / 2, segs[i].labY);
+        x += segW;
+    }
+
+    // axis with tick labels
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 245); ctx.lineTo(660, 245); ctx.stroke();
+    var ticks = [
+        { lab: '0ms', x: 60 }, { lab: '100ms', x: 260 },
+        { lab: '200ms', x: 460 }, { lab: '300ms', x: 660 }
+    ];
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ticks[i].x, 245); ctx.lineTo(ticks[i].x, 251); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i].lab, ticks[i].x, 266);
+    }
+
+    // bracket under the model segment (x=400..500)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(400, 184); ctx.lineTo(400, 190);
+    ctx.lineTo(500, 190); ctx.lineTo(500, 184);
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the model's whole world: 50ms —", 450, 215);
+    ctx.fillText('features included', 450, 231);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — a typical checkout page budget', w - 12, 292);
+});
+
+// c2: live-query plan (215ms) vs precomputed plan (20ms) against the 50ms budget
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Ways to Get the Same Feature: 215ms vs 20ms', w / 2, 24);
+
+    var ax = 200, scale = 2, axisY = 250;
+    function xOf(ms) { return ax + ms * scale; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(680, axisY); ctx.stroke();
+    var ticks = [0, 50, 100, 150, 200];
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = xOf(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, axisY); ctx.lineTo(tx, axisY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(i === ticks.length - 1 ? '200 ms' : String(ticks[i]), tx, axisY + 20);
+    }
+
+    // legend
+    var legend = [
+        { lab: 'cart contents', color: P.blue },
+        { lab: 'loyalty cache', color: P.aqua },
+        { lab: 'spend (live)', color: '#e74c3c' },
+        { lab: 'spend (precomputed)', color: P.green },
+        { lab: 'model math', color: P.violet }
+    ];
+    var lx = 200;
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    for (var i = 0; i < legend.length; i++) {
+        ctx.fillStyle = legend[i].color;
+        ctx.fillRect(lx, 54, 10, 10);
+        ctx.fillStyle = '#444';
+        ctx.fillText(legend[i].lab, lx + 14, 63);
+        lx += 14 + ctx.measureText(legend[i].lab).width + 14;
+    }
+
+    function stackedRow(y, segs) {
+        var x = ax;
+        for (var i = 0; i < segs.length; i++) {
+            ctx.fillStyle = segs[i].color;
+            ctx.fillRect(x, y, segs[i].ms * scale, 26);
+            x += segs[i].ms * scale;
+        }
+        return x;
+    }
+
+    // row 1: live warehouse query — 2 + 5 + 200 + 8 = 215ms
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('live warehouse query', 20, 127);
+    var end1 = stackedRow(110, [
+        { ms: 2, color: P.blue }, { ms: 5, color: P.aqua },
+        { ms: 200, color: '#e74c3c' }, { ms: 8, color: P.violet }
+    ]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('215ms', end1 + 8, 120);
+    ctx.fillText('4× over', end1 + 8, 134);
+
+    // row 2: precomputed lookup — 2 + 5 + 5 + 8 = 20ms
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('precomputed lookup', 20, 197);
+    var end2 = stackedRow(180, [
+        { ms: 2, color: P.blue }, { ms: 5, color: P.aqua },
+        { ms: 5, color: P.green }, { ms: 8, color: P.violet }
+    ]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('20ms — 30ms to spare', end2 + 8, 197);
+
+    // budget line at 50ms
+    var bx = xOf(50);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(bx, 75); ctx.lineTo(bx, axisY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('budget: 50ms', bx, 88);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one slow feature blows the whole budget', 440, 90);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings — same trained model in both rows', w - 12, 292);
+});
+
+// c3: latency percentiles of the precomputed plan vs the 50ms budget
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Budgets Live at the Tail: p99 Must Fit, Not the Average', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190, maxV = 100;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    var ticks = [25, 50, 75];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(ticks[i] + 'ms', ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var vals = [20, 31, 48, 85];
+    var labs = ['p50 (≈ mean)', 'p90', 'p99', 'p99.9'];
+    var centers = [170, 310, 450, 590];
+    var bw = 70;
+    for (var i = 0; i < 4; i++) {
+        var color = i === 3 ? '#e74c3c' : P.green;
+        var y = yOf(vals[i]);
+        ctx.fillStyle = color;
+        ctx.fillRect(centers[i] - bw / 2, y, bw, baseY - y);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillStyle = color;
+        ctx.fillText(vals[i] + 'ms', centers[i], y - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(labs[i], centers[i], baseY + 18);
+    }
+
+    // budget line at 50ms
+    var by = yOf(50);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, by); ctx.lineTo(ox + pw, by); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('budget 50ms', ox + pw - 4, by - 6);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1 in 1,000 checkouts still times out', 470, 95);
+    ctx.fillText('→ fallback coupon', 470, 111);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — latency percentiles of the precomputed plan', w - 12, 292);
+});
+
+// c4: notebook benchmark (8ms) vs full production request (215ms)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Notebook Says 8ms; the Customer Waits 215ms', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190, maxV = 240;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    var ticks = [50, 100, 150, 200];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(ticks[i] + 'ms', ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bw = 120;
+
+    // bar 1: notebook benchmark — 8ms of model math only
+    var y1 = yOf(8);
+    ctx.fillStyle = P.violet;
+    ctx.fillRect(240 - bw / 2, y1, bw, baseY - y1);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('8ms', 240, y1 - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('notebook benchmark (model math only)', 240, baseY + 18);
+
+    // bar 2: production request — stacked 8 + 2 + 5 + 200 = 215ms
+    var segs = [
+        { ms: 8, color: P.violet },
+        { ms: 2, color: P.blue },
+        { ms: 5, color: P.aqua },
+        { ms: 200, color: '#e74c3c' }
+    ];
+    var yCur = baseY;
+    var redTop = 0, redBot = 0;
+    for (var i = 0; i < segs.length; i++) {
+        var segH = segs[i].ms / maxV * ph;
+        yCur -= segH;
+        ctx.fillStyle = segs[i].color;
+        ctx.fillRect(500 - bw / 2, yCur, bw, segH);
+        if (i === 3) { redTop = yCur; redBot = yCur + segH; }
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('215ms', 500, yCur - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('production request (features fetched live)', 500, baseY + 18);
+
+    // label inside the red segment
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('warehouse 200ms', 500, (redTop + redBot) / 2 + 4);
+
+    // shared note for the three thin segments, with a thin pointer line
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(560, (redBot + baseY) / 2); ctx.lineTo(572, (redBot + baseY) / 2); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('math + cheap features: 15ms', 576, (redBot + baseY) / 2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('model math is ~4% of the wait —', 370, 80);
+    ctx.fillText('features are the rest', 370, 96);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — same trained model in both bars', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instrumentation &amp; Event Logging</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Instrumentation &amp; Event Logging</h1>
+<p class="subtitle">How a click becomes a row — instrumentation is the code that turns a user action into a named, timestamped event that lands in a raw events table</p>
+
+<div class="card-section">
+    <h2>From a Tap on "Buy Now" to a Row in a Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">tracking event</span><span class="tag orange">pipeline</span></div>
+                <ul>
+                    <li><b>The tap</b> — at 14:02:11 a shopper taps "Buy Now" on a $34 blender in a shopping app</li>
+                    <li><b>The event</b> — the SDK builds a small JSON: name <code>checkout_click</code>, properties, ids, timestamp</li>
+                    <li><b>The send</b> — a beacon POSTs it to a collector endpoint without blocking the screen</li>
+                    <li><b>The landing</b> — the collector appends it to a raw events table: one row per user action</li>
+                    <li><b>The point</b> — every funnel, DAU chart, and A/B test is downstream of rows born this way</li>
+                </ul>
+                <p class="example">The 14:02:11 tap becomes a row in <code>raw_events</code> about 90 seconds later — name, properties, timestamp, and ids intact.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Instrumentation is the code that converts a user action into a named, timestamped, id-stamped event — analytics can only ever see what this code chose to record.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Anatomy of One Event, and the Batch It Rides In</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">event schema</span></div>
+                <ul>
+                    <li><b>The name</b> — <code>checkout_click</code>: object_action, snake_case, exactly one name per action app-wide</li>
+                    <li><b>The properties</b> — <code>product_id: 8817</code>, <code>price: 34.00</code>, <code>cart_size: 2</code> describe this one click</li>
+                    <li><b>The ids</b> — <code>user_id</code>, <code>session_id</code>, <code>device_id</code> let this row join every other row later</li>
+                    <li><b>The timestamp</b> — client time 14:02:11.482 plus server receive time, because device clocks drift</li>
+                    <li><b>The batch</b> — the SDK queues events and flushes every 10 s; one session's 7 events ship in 3 batches</li>
+                </ul>
+                <p class="example">In a 30-second session the shopper fires 7 events; flushes at 10 s, 20 s, and 30 s carry 3, 2, and 2 events into the same raw table.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An event is name + properties + ids + timestamp, and the SDK ships them in batches — so rows arrive in small bursts, not one HTTP call per click.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Client-Side Sees the Click, Server-Side Sees the Truth</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">client vs server</span></div>
+                <ul>
+                    <li><b>Client-side</b> — the SDK in the app sees everything on screen: views, clicks, scrolls, hovers</li>
+                    <li><b>The leak</b> — ad blockers and closed tabs silently eat client events: ~9% lost here (illustrative)</li>
+                    <li><b>Server-side</b> — the backend logs the purchase when the order API commits: complete, but blind to browsing</li>
+                    <li><b>The taxonomy</b> — a shared event dictionary (names, required properties, owners) keeps teams consistent</li>
+                    <li><b>The pairing</b> — mature shops track both and reconcile: client for behavior, server for revenue truth</li>
+                </ul>
+                <p class="example">Of 1,000 real purchases the client SDK logs 914 and the server logs all 1,000; of 10,000 product views the server logs none.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Client-side tracking gives breadth with loss; server-side gives accuracy without context — count money server-side and behavior client-side, and expect the two to disagree.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>You Can't Log the Past</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">unrecoverable</span></div>
+                <ul>
+                    <li><b>The launch</b> — the blender "Buy Now" redesign ships January 5 with no tracking event on the button</li>
+                    <li><b>The question</b> — in June a PM asks: did the redesign lift checkout clicks?</li>
+                    <li><b>The fix</b> — the <code>checkout_click</code> event is added April 1; data flows from that day at ~4,200 clicks/day</li>
+                    <li><b>The hole</b> — January 5 to March 31 is 86 days of clicks that were never logged; no backfill exists</li>
+                    <li><b>The contrast</b> — a code bug can be patched and stored data reprocessed; an unlogged click is simply gone</li>
+                </ul>
+                <p class="example">The June analysis can chart April–June (4,180 / 4,230 / 4,210 clicks per day), but the 86 launch days that mattered most are a permanent blank.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating instrumentation as something to add later. A bug fix repairs the future and lets you reprocess stored data; a missing event is an unrecoverable hole — you cannot log the past.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), hl = 8;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: five-hop flow from tap to warehouse row
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Tap, Five Hops: How a Click Becomes a Row', w / 2, 24);
+
+    var boxes = [
+        { x: 20,  lines: ['tap', "'Buy Now'"],         fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { x: 160, lines: ['SDK builds', 'event JSON'], fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { x: 300, lines: ['beacon', 'POST'],           fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { x: 440, lines: ['collector', 'buffers'],     fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { x: 580, lines: ['row in', 'raw_events'],     fill: 'rgba(0,131,0,0.12)',    edge: P.green }
+    ];
+    var elapsed = ['14:02:11.482', '+2 ms', '+38 ms', '+1 s', '+90 s'];
+    var bw = 110, bh = 54, cy = 140;
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        ctx.fillStyle = b.fill;
+        roundRect(ctx, b.x, cy - bh / 2, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = b.edge; ctx.lineWidth = 2;
+        roundRect(ctx, b.x, cy - bh / 2, bw, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.lines[0], b.x + bw / 2, cy - 4);
+        ctx.fillText(b.lines[1], b.x + bw / 2, cy + 12);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(elapsed[i], b.x + bw / 2, 215);
+    }
+    for (var i = 0; i < boxes.length - 1; i++) {
+        arrow(ctx, boxes[i].x + bw, cy, boxes[i + 1].x - 6, cy, P.mute, 3);
+    }
+
+    // payload snippet box with connector to stage 2
+    ctx.fillStyle = 'rgba(201,133,0,0.10)';
+    roundRect(ctx, 160, 35, 260, 44, 6); ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1;
+    roundRect(ctx, 160, 35, 260, 44, 6); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('{name:"checkout_click", product_id:8817,', 290, 53);
+    ctx.fillText('price:34.00, user_id, session_id, ts}', 290, 68);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(215, 79); ctx.lineTo(215, cy - bh / 2); ctx.stroke();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no event code, no row — ever', 560, 250);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 12, h - 8);
+});
+
+// c2: 30-second session timeline, 7 events swept into 3 batches
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One 30-Second Session: 7 Events, 3 Batches', w / 2, 24);
+
+    var ty = 120;
+    function xOf(sec) { return 60 + sec * 20; }
+
+    // raw_events box (drawn first so arrows land on it)
+    var boxW = 300, boxH = 44, boxCx = 360, boxCy = 225;
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundRect(ctx, boxCx - boxW / 2, boxCy - boxH / 2, boxW, boxH, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    roundRect(ctx, boxCx - boxW / 2, boxCy - boxH / 2, boxW, boxH, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('raw_events table — 7 new rows', boxCx, boxCy + 4);
+
+    // flush markers
+    var flushes = [{ sec: 10, lab: 'flush (3)' }, { sec: 20, lab: 'flush (2)' }, { sec: 30, lab: 'flush (2)' }];
+    for (var i = 0; i < flushes.length; i++) {
+        var fx = xOf(flushes[i].sec);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(fx, 95); ctx.lineTo(fx, 190); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(flushes[i].lab, fx, 88);
+        arrow(ctx, fx, 190, boxCx + (fx - boxCx) * 0.3, boxCy - boxH / 2 - 4, P.orange, 2);
+    }
+
+    // timeline axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, ty); ctx.lineTo(660, ty); ctx.stroke();
+    var tickSecs = [0, 10, 20, 30], tickLabs = ['0s', '10s', '20s', '30s'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tickSecs.length; i++) {
+        var tx = xOf(tickSecs[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, ty - 4); ctx.lineTo(tx, ty + 4); ctx.stroke();
+        ctx.fillText(tickLabs[i], tx, ty + 34);
+    }
+
+    // event dots and labels alternating above/below
+    var secs = [1, 4, 8, 13, 16, 22, 27];
+    var names = ['page_view', 'product_view', 'add_to_cart', 'checkout_click', 'payment_info', 'purchase', 'confirmation_view'];
+    for (var i = 0; i < secs.length; i++) {
+        var ex = xOf(secs[i]);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(ex, ty, 6, 0, 2 * Math.PI); ctx.fill();
+        var above = (i % 2 === 0);
+        if (names[i] === 'checkout_click') {
+            ctx.fillStyle = P.ink; ctx.font = 'bold 11px system-ui';
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+        }
+        ctx.textAlign = 'center';
+        ctx.fillText(names[i], ex, above ? ty - 14 : ty + 20);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('batching: bursts of rows, not one call per click', 520, 60);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('event times illustrative', w - 12, h - 8);
+});
+
+// c3: capture rate by tracking side, grouped horizontal bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Who Sees What: Capture Rate by Tracking Side (illustrative)', w / 2, 24);
+
+    var axisX = 230, barH = 18;
+
+    // gridlines at 50% and 100%
+    var grids = [{ x: 440, lab: '50%' }, { x: 650, lab: '100%' }];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(grids[i].x, 40); ctx.lineTo(grids[i].x, 240); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(grids[i].lab, grids[i].x, 252);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axisX, 40); ctx.lineTo(axisX, 240); ctx.stroke();
+
+    // group 1: product views
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('10,000 product views', 20, 85);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(axisX, 70, 384, barH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    ctx.strokeRect(axisX, 70, 384, barH);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('client: 9,140 (91.4%)', axisX + 384 - 8, 84);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(axisX, 100, 2, barH);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('server: 0 — never reaches the backend', axisX + 10, 114);
+
+    // group 2: purchases
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1,000 purchases', 20, 195);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(axisX, 180, 384, barH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    ctx.strokeRect(axisX, 180, 384, barH);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('client: 914 (91.4%)', axisX + 384 - 8, 194);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.fillRect(axisX, 210, 420, barH);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(axisX, 210, 420, barH);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('server: 1,000 (100%)', axisX + 420 - 158, 204);
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(530, 40, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+    ctx.strokeRect(530, 40, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('client SDK', 547, 50);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.fillRect(620, 40, 12, 12);
+    ctx.strokeStyle = P.green;
+    ctx.strokeRect(620, 40, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('server log', 637, 50);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the 86 missing client purchases are ad blockers and closed tabs, not lost sales', w / 2, 265);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 12, h - 8);
+});
+
+// c4: checkout_click per day, Jan-Jun, with the 86-day hole
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Instrumented April 1: 86 Launch Days Are Gone Forever', w / 2, 24);
+
+    var baseY = 245, plotH = 180, maxV = 5000;
+    function yOf(v) { return baseY - v / maxV * plotH; }
+    var monthX = [60, 180, 300, 420, 540, 660];
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    var clicks = [0, 0, 0, 4180, 4230, 4210];
+
+    // missing window shading
+    ctx.fillStyle = 'rgba(107,114,128,0.15)';
+    ctx.fillRect(60, baseY - plotH, 420 - 60, plotH);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no event existed — 86 days, no backfill', (60 + 420) / 2, 90);
+
+    // gridlines
+    var ticks = [1250, 2500, 3750];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = yOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(ticks[i]), 54, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - plotH); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < months.length; i++) {
+        ctx.fillText(months[i], monthX[i], baseY + 18);
+    }
+
+    // data line: flat at zero through March, vertical step at April
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(monthX[0], yOf(0));
+    ctx.lineTo(monthX[1], yOf(0));
+    ctx.lineTo(monthX[2], yOf(0));
+    ctx.lineTo(monthX[3], yOf(0));
+    ctx.lineTo(monthX[3], yOf(clicks[3]));
+    ctx.lineTo(monthX[4], yOf(clicks[4]));
+    ctx.lineTo(monthX[5], yOf(clicks[5]));
+    ctx.stroke();
+    for (var i = 0; i < months.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(monthX[i], yOf(clicks[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // launch marker at Jan 5 (x ~ 76)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(76, baseY - plotH); ctx.lineTo(76, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('redesign ships', 82, baseY - plotH + 10);
+
+    // instrumentation marker at Apr 1 (x = 420)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(420, baseY - plotH); ctx.lineTo(420, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('event added Apr 1', 426, baseY - plotH + 10);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the question is about here — the data starts there', 200, 180);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('clicks/day illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
