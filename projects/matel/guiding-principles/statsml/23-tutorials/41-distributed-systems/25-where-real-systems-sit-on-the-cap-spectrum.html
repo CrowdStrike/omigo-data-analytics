@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Where Real Systems Sit on the CAP Spectrum</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Where Real Systems Sit on the CAP Spectrum</h1>
+<p class="subtitle">CAP is not "pick 2 of 3" — a partition is weather, not a design option, so every system only really chooses what to do when the network splits, and what to pay when it does not</p>
+
+<div class="card-section">
+    <h2>The Only Choice a Partition Gives You</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag red">not pick 2 of 3</span><span class="tag orange">PACELC</span></div>
+                <ul>
+                    <li><b>The setup</b> — one value lives on 5 servers; a switch fails and cuts them into a group of 3 and a group of 2</li>
+                    <li><b>No third door</b> — a client talking to the small side asks to write; the system answers or it refuses</li>
+                    <li><b>Refuse the write (CP)</b> — the small side says "no leader, try later": consistent, but this client is down</li>
+                    <li><b>Accept the write (AP)</b> — the small side stores it anyway: available, but two sides now disagree</li>
+                    <li><b>Why "CA" is empty</b> — dropping P means "we stop when the wire breaks", which is just choosing C</li>
+                    <li><b>The bigger half of the bill (PACELC)</b> — partitions are rare, so the everyday trade is latency vs consistency</li>
+                    <li><b>Read a system twice</b> — once for "P → A or C", once for "Else → L or C"; most labels only state the first</li>
+                </ul>
+                <p class="example">A 5-node cluster split 3 | 2 has no way to let the 2-node side accept a write and still promise one global value.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You never choose P. You choose what happens on the losing side of a split — and, far more often, whether every normal read pays for a round trip to the leader.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Coordination Services: Consistency Is the Product</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">ZooKeeper &amp; etcd</span><span class="tag green">CP</span><span class="tag red">stale local reads</span></div>
+                <ul>
+                    <li><b>What they store</b> — tiny critical facts: who is the leader, which shard is where, is the lock held</li>
+                    <li><b>Writes need a majority</b> — a write commits only once ⌊N/2⌋+1 of the nodes log it (ZAB in one, Raft in the other)</li>
+                    <li><b>The minority stops</b> — on a 3 | 2 split the 2-node side has no majority and rejects every write</li>
+                    <li><b>Why that is correct</b> — a lock service that hands the same lock to both sides of a split is worse than one that pauses</li>
+                    <li><b>The read footnote</b> — ZooKeeper reads answer from whatever node you connected to, so they can be stale</li>
+                    <li><b>Paying for a fresh read</b> — <code>sync()</code> first in ZooKeeper, or a leader-confirmed read in etcd, buys recency for a round trip</li>
+                    <li><b>The everyday cost</b> — small quorum, small data, but each write is a majority round trip, so throughput is modest</li>
+                </ul>
+                <p class="example">A node cut off from the majority still answers "the leader is A" long after the majority elected B — the answer is old, not wrong-for-its-time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> These systems are CP on purpose: they exist so that everything else can assume one answer. The subtlety is that a fast local read is not automatically a current one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Global SQL: Buy Consistency With Time</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">Spanner</span><span class="tag green">CP + external consistency</span><span class="tag orange">clock uncertainty</span></div>
+                <ul>
+                    <li><b>The claim</b> — a globally distributed SQL database whose transactions look like one machine executed them in order</li>
+                    <li><b>How</b> — Paxos per shard, two-phase commit across shards, and timestamps from a clock service with known error bars</li>
+                    <li><b>The clock trick</b> — <code>TrueTime</code> never returns a point, it returns an interval guaranteed to contain the true time</li>
+                    <li><b>Commit wait</b> — a writer picks a timestamp, then waits until that instant is certainly past before releasing the commit</li>
+                    <li><b>What that buys</b> — any transaction starting later gets a larger timestamp, so ordering is real, not merely plausible</li>
+                    <li><b>What it costs</b> — every commit pays the clock uncertainty as latency; that is the "EC" half of PACELC, always on</li>
+                    <li><b>Still CP</b> — a shard that loses its majority stops taking writes; availability comes from rare partitions, not from choosing A</li>
+                </ul>
+                <p class="example">If the clock interval is 6 ms wide, the commit waits out those 6 ms before acknowledging — the price of an order nobody can dispute.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Spanner does not beat CAP. It stays CP and makes partitions rare enough that CP feels available, paying for strictness in per-commit latency.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Object Storage: Strong per Key, Eventual per Region</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">S3</span><span class="tag green">read-after-write</span><span class="tag orange">async replication</span></div>
+                <ul>
+                    <li><b>The old behaviour</b> — for years a <code>PUT</code> overwriting an existing key could be followed by a <code>GET</code> returning the old bytes</li>
+                    <li><b>What changed in 2020</b> — reads of a single object became strongly consistent: after a successful <code>PUT</code>, every <code>GET</code> sees it</li>
+                    <li><b>Listings too</b> — a bucket listing now reflects the writes that already succeeded, which it previously might not</li>
+                    <li><b>What did not change</b> — there is still no transaction across two objects, so a pair of keys can be seen half-updated</li>
+                    <li><b>Cross-region is still eventual</b> — replication to another region is asynchronous, so the copy lags by seconds or more</li>
+                    <li><b>A read is not a lock</b> — two writers overwriting the same key still race; the service picks one, the loser vanishes silently</li>
+                    <li><b>Where pipelines break</b> — a manifest listing parts written a moment ago is safe; the same manifest replicated elsewhere is not</li>
+                </ul>
+                <p class="example">Write <code>part-001</code> then <code>manifest.json</code>; a reader in the same region always sees both, a reader in the mirrored region may see the manifest before the part.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> "Strongly consistent" here means per object, per region. Cross-object and cross-region are both still eventual, and that is where the surprises live.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tunable Reads: Pay More for Fresher</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">DynamoDB</span><span class="tag green">read-your-choice</span><span class="tag orange">global tables</span></div>
+                <ul>
+                    <li><b>Three copies</b> — every item is stored on three replicas in three failure zones of one region</li>
+                    <li><b>The cheap read</b> — the default read answers from any replica: about half the price, and possibly one write behind</li>
+                    <li><b>The strict read</b> — a strongly consistent read is served by the item's leader replica: current, dearer, and slower</li>
+                    <li><b>Writes go to the leader</b> — a write is acknowledged after the leader plus enough peers have durably stored it</li>
+                    <li><b>The knob is per call</b> — the same table can serve a stale-tolerant dashboard and a strict balance check</li>
+                    <li><b>Global tables flip the model</b> — multi-region tables replicate asynchronously and settle conflicts by last writer wins</li>
+                    <li><b>The lost update</b> — two regions writing one item inside the replication window leave exactly one survivor, no error</li>
+                </ul>
+                <p class="example">A read of a counter can legally return 41 while the leader holds 42 — unless you asked for, and paid for, the strong read.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Consistency here is a per-request purchase inside a region, and an unavoidable eventual model across regions.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c5" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Wide-Column AP: The Dial Goes Both Ways</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">Cassandra</span><span class="tag orange">AP by default</span><span class="tag green">R + W &gt; N</span></div>
+                <ul>
+                    <li><b>No leader</b> — any replica takes a write, so a partition cannot remove the node that writes must go through</li>
+                    <li><b>Consistency level per query</b> — <code>ONE</code>, <code>QUORUM</code>, <code>ALL</code> chosen per statement, on both reads and writes</li>
+                    <li><b>The strong corner</b> — <code>QUORUM</code> reads with <code>QUORUM</code> writes on 3 replicas gives 2 + 2 &gt; 3, so reads see the newest write</li>
+                    <li><b>Still not linearizable</b> — quorum overlap fixes staleness, not two conflicting writes racing at the same instant</li>
+                    <li><b>Conflicts settle by timestamp</b> — last writer wins per column, so a clock skew silently picks the wrong winner</li>
+                    <li><b>The stronger tool</b> — lightweight transactions run a Paxos round per partition key for compare-and-set, at real cost</li>
+                    <li><b>Availability by design</b> — hinted handoff lets a stand-in hold a write for an unreachable node and deliver it later</li>
+                </ul>
+                <p class="example">On 3 replicas, <code>ONE</code> reads are fast and may be stale; switching both reads and writes to <code>QUORUM</code> closes the gap and roughly doubles the coordination.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An AP system with a consistency dial can be turned toward C per query — but the dial changes staleness and latency, not the underlying last-writer-wins conflict rule.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c6" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>In-Memory Replication: Neither Letter, Honestly</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">Redis</span><span class="tag red">async failover</span><span class="tag orange">write loss window</span></div>
+                <ul>
+                    <li><b>One writable node per shard</b> — clients write to a primary; replicas follow it asynchronously</li>
+                    <li><b>The ack is local</b> — the primary answers "OK" before any replica has the write, which is why it is fast</li>
+                    <li><b>The failover</b> — a supervisor promotes a replica when the primary looks dead, and the promoted node may be behind</li>
+                    <li><b>Writes evaporate</b> — anything acknowledged but not yet replicated is gone, with no error ever reaching the writer</li>
+                    <li><b>Not available either</b> — the detection-plus-promotion gap is a window where the shard accepts nothing</li>
+                    <li><b>The partial fix</b> — a wait-for-replicas command blocks until N replicas confirm, trading latency for durability</li>
+                    <li><b>The rule of thumb</b> — treat it as a cache whose contents may regress, not as a source of record</li>
+                </ul>
+                <p class="example">Increment a counter to 500, the primary dies a millisecond later, the promoted replica knows only 497 — three acknowledged increments never happened.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Asynchronous replication plus automatic failover is neither C nor A: it can drop acknowledged writes and still be unreachable during the switch.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c7" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Replicated Logs: Choose C, and Say So Loudly</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">Kafka</span><span class="tag green">ISR</span><span class="tag orange">configured trade</span></div>
+                <ul>
+                    <li><b>The unit</b> — a partition is an ordered log with one leader and a set of replicas that are caught up, the ISR</li>
+                    <li><b>The durable ack</b> — with <code>acks=all</code> a produce request succeeds only after every in-sync replica has the record</li>
+                    <li><b>The floor</b> — <code>min.insync.replicas=2</code> on 3 replicas means the leader refuses writes once the ISR drops to itself</li>
+                    <li><b>That refusal is the C choice</b> — the producer sees an error instead of a write only one machine knows about</li>
+                    <li><b>Consumers see less</b> — reads stop at the high watermark, the offset every in-sync replica already has</li>
+                    <li><b>The AP switch</b> — letting an out-of-sync replica become leader restores writes and truncates committed records</li>
+                    <li><b>So the letters are yours</b> — the same cluster is CP or AP depending on three settings nobody reads twice</li>
+                </ul>
+                <p class="example">Replication factor 3 with <code>min.insync.replicas=2</code> survives losing one replica; losing two stops producers rather than accepting a single-copy write.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Kafka does not have a CAP position — its configuration does. The default-looking settings and the safe settings are not the same settings.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c8" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Single-Primary SQL: "CA" Means It Stops</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">PostgreSQL</span><span class="tag red">no partition to tolerate</span><span class="tag green">sync levels</span></div>
+                <ul>
+                    <li><b>One node, no theorem</b> — a single database has nothing to partition, so calling it CA says nothing useful</li>
+                    <li><b>Add a standby</b> — streaming replication ships the write-ahead log to a replica that replays it</li>
+                    <li><b>Asynchronous</b> — the primary acks first and ships after: fast, but a promotion after a crash can lose the tail</li>
+                    <li><b><code>remote_write</code></b> — the standby confirms receipt; a standby crash right after can still lose it</li>
+                    <li><b><code>remote_apply</code></b> — the standby confirms the change is visible there, so a reader on it cannot go backwards</li>
+                    <li><b>The availability bite</b> — synchronous with one named standby means losing that standby freezes commits</li>
+                    <li><b>Quorum synchronous</b> — require any 2 of 3 standbys and a single standby failure stops mattering</li>
+                    <li><b>Reads on replicas lag</b> — an async standby answers with older data, which breaks read-your-writes</li>
+                </ul>
+                <p class="example">With one synchronous standby, taking that standby down for patching stops every commit on the primary until it returns or is de-listed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The classic relational setup is not exempt from CAP; it faces the same choice, expressed as a replication-mode setting and a failover policy.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c9" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>In-Process Analytics: No Network, No Theorem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">DuckDB</span><span class="tag red">off the map</span><span class="tag orange">borrowed consistency</span></div>
+                <ul>
+                    <li><b>Not a server</b> — it is a library linked into your process; a query and its data share one address space</li>
+                    <li><b>Nothing to partition</b> — CAP needs two machines that can stop hearing each other, and there is only one here</li>
+                    <li><b>Its own guarantees are local</b> — ACID transactions on its file, with a single writer process holding the lock</li>
+                    <li><b>The multi-process rule</b> — one writer at a time; other processes attach read-only or wait, they do not coordinate</li>
+                    <li><b>Where distribution sneaks in</b> — querying Parquet on object storage makes the network part of the query plan</li>
+                    <li><b>Inherited, not owned</b> — reading remote files, your consistency is exactly the object store's, never better</li>
+                    <li><b>The stale-cache trap</b> — a cached file handle or listing can serve last hour's partition with no error at all</li>
+                    <li><b>The honest label</b> — a local engine reading a remote eventually-consistent surface, not a CP or AP system</li>
+                </ul>
+                <p class="example">Two DuckDB processes scanning the same S3 prefix a second apart can return different row counts — the engine is consistent, the prefix is not.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> DuckDB has no CAP position because it has no partition to suffer. Point it at remote storage and it silently adopts that storage's position instead.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c10" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Reading a System's Real Position</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">PACELC map</span><span class="tag green">two questions</span><span class="tag orange">where it's used</span></div>
+                <ul>
+                    <li><b>First question</b> — when the network splits, does the losing side error out or accept the write anyway</li>
+                    <li><b>Second question</b> — with no split at all, does a normal read pay a round trip for recency or answer locally</li>
+                    <li><b>Most labels stop early</b> — "eventually consistent" gives the P answer and hides the everyday latency answer</li>
+                    <li><b>Coordination and global SQL</b> — refuse on partition, pay latency always: the strict corner of the map</li>
+                    <li><b>Object storage and cheap reads</b> — strong for one key in one region, eventual as soon as you cross either boundary</li>
+                    <li><b>Dials, not positions</b> — wide-column stores, log brokers, and relational replication all move on the map by config</li>
+                    <li><b>Some things are off the map</b> — an in-process engine has no partition, so it inherits whatever it reads from</li>
+                    <li><b>What to ask of a data source</b> — not "is it consistent" but "which of these two bills does my query pay"</li>
+                </ul>
+                <p class="example">Two systems both described as "highly available" can differ completely: one serves stale reads locally, the other errors out rather than serve them.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Place a system with two answers, not one letter — behaviour during a partition, and the latency it charges when everything is healthy.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c11" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef',
+  red: '#e74c3c'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function title(ctx, w, s) {
+    ctx.fillStyle = P.ink; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(s, w / 2, 24);
+}
+
+function node(ctx, x, y, r, label, stroke, fill) {
+    ctx.fillStyle = fill || '#fff';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillStyle = stroke; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(label, x, y + 5);
+}
+
+function roundRect(ctx, x, y, w, h, r, stroke, fill, dash) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) {
+        ctx.setLineDash(dash || []);
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.setLineDash([]);
+    }
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width || 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1), s = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - s * Math.cos(a - 0.4), y2 - s * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - s * Math.cos(a + 0.4), y2 - s * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function seg(ctx, x1, x2, y, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width || 4;
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+}
+
+function dot(ctx, x, y, r, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill();
+}
+
+function cross(ctx, x, y, s, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y + s);
+    ctx.moveTo(x + s, y - s); ctx.lineTo(x - s, y + s);
+    ctx.stroke();
+}
+
+function check(ctx, x, y, s, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x - s, y); ctx.lineTo(x - s * 0.2, y + s * 0.8); ctx.lineTo(x + s, y - s * 0.8);
+    ctx.stroke();
+}
+
+function txt(ctx, s, x, y, font, color, align) {
+    ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align || 'left';
+    ctx.fillText(s, x, y);
+}
+
+// c1 — the only choice a partition gives you
+__charts.push(function () {
+    var s = setup('c1'), ctx = s.ctx;
+    title(ctx, s.w, 'A Partition Offers Two Answers, Never Three');
+
+    var maj = [[95, 110, 'A'], [160, 90, 'B'], [128, 165, 'C']];
+    var min = [[270, 110, 'D'], [295, 170, 'E']];
+    maj.forEach(function (n) { node(ctx, n[0], n[1], 20, n[2], P.blue); });
+    min.forEach(function (n) { node(ctx, n[0], n[1], 20, n[2], P.orange); });
+
+    // partition zigzag
+    ctx.strokeStyle = P.red; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    for (var y = 60; y <= 250; y += 19) {
+        var xo = 212 + ((y / 19) % 2 === 0 ? -7 : 7);
+        if (y === 60) ctx.moveTo(xo, y); else ctx.lineTo(xo, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    txt(ctx, 'network split', 212, 50, 'bold 12px system-ui', P.red, 'center');
+
+    txt(ctx, 'majority — 3 nodes', 128, 215, 'bold 12px system-ui', P.blue, 'center');
+    txt(ctx, 'minority — 2 nodes', 283, 215, 'bold 12px system-ui', P.orange, 'center');
+    arrow(ctx, 283, 255, 283, 200, P.mute, 2);
+    txt(ctx, 'write?', 283, 274, '11px system-ui', P.mute, 'center');
+
+    roundRect(ctx, 380, 80, 300, 74, 8, P.green, 'rgba(0,131,0,0.08)');
+    txt(ctx, 'CP — refuse the write', 395, 105, 'bold 13px system-ui', P.green);
+    txt(ctx, 'one value stays true everywhere', 395, 127, '12px system-ui', P.text);
+    txt(ctx, 'this client sees an error', 395, 145, '12px system-ui', P.text);
+
+    roundRect(ctx, 380, 180, 300, 74, 8, P.yellow, 'rgba(201,133,0,0.10)');
+    txt(ctx, 'AP — accept the write', 395, 205, 'bold 13px system-ui', P.yellow);
+    txt(ctx, 'every client is served', 395, 227, '12px system-ui', P.text);
+    txt(ctx, 'the two sides now disagree', 395, 245, '12px system-ui', P.text);
+
+    var strike = 'CA — keep both, ignore the split';
+    txt(ctx, strike, 530, 285, '12px system-ui', P.mute, 'center');
+    ctx.font = '12px system-ui';
+    var tw = ctx.measureText(strike).width;
+    ctx.strokeStyle = P.red; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(530 - tw / 2, 281); ctx.lineTo(530 + tw / 2, 281); ctx.stroke();
+});
+
+// c2 — coordination services
+__charts.push(function () {
+    var s = setup('c2'), ctx = s.ctx;
+    title(ctx, s.w, 'Majority Commits, Minority Refuses');
+
+    node(ctx, 140, 100, 22, 'A', P.blue, 'rgba(42,120,214,0.18)');
+    node(ctx, 215, 100, 22, 'B', P.blue);
+    node(ctx, 290, 100, 22, 'C', P.blue);
+    txt(ctx, 'leader', 140, 145, 'bold 11px system-ui', P.blue, 'center');
+    txt(ctx, '3 of 5', 40, 105, 'bold 12px system-ui', P.blue);
+    check(ctx, 350, 100, 12, P.green);
+    txt(ctx, 'committed', 378, 105, 'bold 13px system-ui', P.green);
+
+    node(ctx, 140, 210, 22, 'D', P.orange);
+    node(ctx, 215, 210, 22, 'E', P.orange);
+    txt(ctx, '2 of 5', 40, 215, 'bold 12px system-ui', P.orange);
+    cross(ctx, 350, 210, 11, P.red);
+    txt(ctx, 'rejected — no majority', 378, 215, 'bold 13px system-ui', P.red);
+
+    // quorum bar
+    txt(ctx, 'quorum line at 3 of 5', 545, 132, 'bold 12px system-ui', P.ink, 'center');
+    var bx = 400, bw = 290, cellW = (bw - 8) / 5;
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = i < 3 ? P.blue : P.orange;
+        ctx.fillRect(bx + i * (cellW + 2), 145, cellW, 16);
+    }
+    txt(ctx, 'a local read on D still returns the old leader', 545, 255, 'bold 12px system-ui', P.orange, 'center');
+    txt(ctx, 'writes: majority round trip · reads: local unless you ask', 690, 288, '12px system-ui', '#444', 'right');
+});
+
+// c3 — Spanner commit wait
+__charts.push(function () {
+    var s = setup('c3'), ctx = s.ctx;
+    title(ctx, s.w, 'Commit Wait: Pay Clock Uncertainty as Latency (illustrative)');
+
+    var x0 = 90, x1 = 680, y = 215, step = 98;
+    // uncertainty band
+    ctx.fillStyle = 'rgba(201,133,0,0.16)';
+    ctx.fillRect(188, 100, 294, 50);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5;
+    ctx.strokeRect(188, 100, 294, 50);
+    txt(ctx, 'TrueTime interval — true now is somewhere in here', 335, 90, 'bold 12px system-ui', P.yellow, 'center');
+
+    arrow(ctx, x0, y, x1, y, P.ink, 2);
+    txt(ctx, 'time', x1, 238, '12px system-ui', P.mute, 'right');
+    var labels = ['0', '2 ms', '4 ms', '6 ms', '8 ms', '10 ms', '12 ms'];
+    for (var i = 0; i < labels.length; i++) {
+        var tx = x0 + i * step;
+        if (tx > x1) break;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, y); ctx.lineTo(tx, y + 6); ctx.stroke();
+        txt(ctx, labels[i], tx, y + 20, '11px system-ui', P.mute, 'center');
+    }
+
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(188, 95); ctx.lineTo(188, 225); ctx.stroke();
+    txt(ctx, 'write ready', 188, 75, 'bold 12px system-ui', P.blue, 'center');
+
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(482, 95); ctx.lineTo(482, 225); ctx.stroke();
+    txt(ctx, 'chosen commit timestamp', 482, 75, 'bold 12px system-ui', P.violet, 'center');
+
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(188, 175); ctx.lineTo(482, 175);
+    ctx.moveTo(188, 169); ctx.lineTo(188, 181);
+    ctx.moveTo(482, 169); ctx.lineTo(482, 181);
+    ctx.stroke();
+    txt(ctx, 'commit wait — 6 ms of doing nothing', 335, 166, 'bold 13px system-ui', P.orange, 'center');
+
+    dot(ctx, 482, y, 6, P.green);
+    txt(ctx, 'ack released', 496, 205, 'bold 12px system-ui', P.green);
+
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(580, 150); ctx.lineTo(580, 245); ctx.stroke();
+    ctx.setLineDash([]);
+    txt(ctx, 'any later txn gets a larger timestamp', 580, 262, '12px system-ui', P.green, 'center');
+    txt(ctx, 'interval width is the configured clock error bound, not a measurement', x0, 288, '12px system-ui', '#444');
+});
+
+// c4 — S3 three promises
+__charts.push(function () {
+    var s = setup('c4'), ctx = s.ctx;
+    title(ctx, s.w, 'Same Key, Three Different Promises');
+
+    var lanes = [
+        { y: 95, label: 'then: overwrite GET' },
+        { y: 165, label: 'now: same-region GET' },
+        { y: 235, label: 'always: other-region GET' }
+    ];
+    ctx.fillStyle = 'rgba(201,133,0,0.10)';
+    ctx.fillRect(250, 212, 340, 40);
+
+    lanes.forEach(function (l) {
+        seg(ctx, 210, 680, l.y, P.grid, 2);
+        txt(ctx, l.label, 200, l.y + 4, '12px system-ui', P.text, 'right');
+    });
+
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(250, 70); ctx.lineTo(250, 255); ctx.stroke();
+    txt(ctx, 'PUT succeeds', 250, 58, 'bold 12px system-ui', P.ink, 'center');
+
+    seg(ctx, 250, 420, 95, P.mute, 4);
+    seg(ctx, 420, 680, 95, P.green, 4);
+    dot(ctx, 420, 95, 5, P.green);
+    txt(ctx, 'may return old bytes', 335, 84, 'bold 12px system-ui', P.mute, 'center');
+
+    seg(ctx, 250, 680, 165, P.green, 4);
+    dot(ctx, 250, 165, 5, P.green);
+    txt(ctx, 'new bytes immediately', 400, 154, 'bold 12px system-ui', P.green, 'center');
+
+    seg(ctx, 250, 590, 235, P.mute, 4);
+    seg(ctx, 590, 680, 235, P.yellow, 4);
+    dot(ctx, 590, 235, 5, P.yellow);
+    txt(ctx, 'async replication lag', 420, 224, 'bold 12px system-ui', P.yellow, 'center');
+
+    txt(ctx, 'one object is safe — two objects are never atomic', 450, 278, 'bold 12px system-ui', P.orange, 'center');
+    txt(ctx, 'lag shown illustratively', 40, 288, '12px system-ui', '#444');
+});
+
+// c5 — DynamoDB read paths
+__charts.push(function () {
+    var s = setup('c5'), ctx = s.ctx;
+    title(ctx, s.w, 'Two Read Paths to the Same Item');
+
+    txt(ctx, '3 replicas, one region', 40, 58, '12px system-ui', '#444');
+
+    // replication arrows first
+    ctx.setLineDash([5, 4]);
+    arrow(ctx, 200, 133, 160, 186, P.mute, 1.5);
+    arrow(ctx, 232, 133, 275, 186, P.mute, 1.5);
+    ctx.setLineDash([]);
+
+    node(ctx, 215, 105, 30, 'leader', P.blue);
+    node(ctx, 150, 215, 30, 'replica', P.mute);
+    node(ctx, 290, 215, 30, 'replica', P.mute);
+    txt(ctx, 'v42', 215, 128, 'bold 14px system-ui', P.blue, 'center');
+    txt(ctx, 'v41', 150, 238, 'bold 14px system-ui', P.mute, 'center');
+    txt(ctx, 'v42', 290, 238, 'bold 14px system-ui', P.mute, 'center');
+
+    arrow(ctx, 215, 50, 215, 72, P.ink, 2);
+    txt(ctx, 'write v42', 215, 42, '12px system-ui', P.ink, 'center');
+
+    arrow(ctx, 430, 120, 252, 110, P.green, 2.5);
+    txt(ctx, 'strong read', 440, 112, 'bold 13px system-ui', P.green);
+    txt(ctx, 'leader only · full price · v42', 440, 133, '12px system-ui', P.text);
+
+    arrow(ctx, 430, 225, 325, 220, P.yellow, 2.5);
+    txt(ctx, 'default read', 440, 215, 'bold 13px system-ui', P.yellow);
+    txt(ctx, 'any replica · half price · v41 or v42', 440, 236, '12px system-ui', P.text);
+
+    txt(ctx, 'across regions there is no strong option — last writer wins', 360, 284, 'bold 12px system-ui', P.orange, 'center');
+});
+
+// c6 — Cassandra dial
+__charts.push(function () {
+    var s = setup('c6'), ctx = s.ctx;
+    title(ctx, s.w, 'Turning the Dial on 3 Replicas (illustrative)');
+
+    var ax = 110, ay0 = 60, ay1 = 235, H = ay1 - ay0;
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [0.25, 0.5, 0.75, 1].forEach(function (f) {
+        var gy = ay1 - H * f;
+        ctx.beginPath(); ctx.moveTo(ax, gy); ctx.lineTo(660, gy); ctx.stroke();
+    });
+    txt(ctx, 'low', ax - 8, ay1 - H * 0.25 + 4, '11px system-ui', P.mute, 'right');
+    txt(ctx, 'med', ax - 8, ay1 - H * 0.55 + 4, '11px system-ui', P.mute, 'right');
+    txt(ctx, 'high', ax - 8, ay1 - H * 0.85 + 4, '11px system-ui', P.mute, 'right');
+
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay0); ctx.lineTo(ax, ay1); ctx.lineTo(660, ay1); ctx.stroke();
+    ctx.save();
+    ctx.translate(72, 150); ctx.rotate(-Math.PI / 2);
+    txt(ctx, 'relative cost / risk', 0, 0, '12px system-ui', P.mute, 'center');
+    ctx.restore();
+
+    var groups = [
+        { x: 175, cost: 0.18, stale: 0.92, w: 'W=ONE', r: 'R=ONE' },
+        { x: 300, cost: 0.48, stale: 0.55, w: 'W=QUORUM', r: 'R=ONE' },
+        { x: 425, cost: 0.66, stale: 0.10, w: 'W=QUORUM', r: 'R=QUORUM' },
+        { x: 550, cost: 0.95, stale: 0.10, w: 'W=ALL', r: 'R=ONE' }
+    ];
+    groups.forEach(function (g) {
+        var bw = 34;
+        var h1 = H * g.cost, h2 = H * g.stale;
+        ctx.fillStyle = P.blue; ctx.fillRect(g.x - bw - 3, ay1 - h1, bw, h1);
+        ctx.fillStyle = P.yellow; ctx.fillRect(g.x + 3, ay1 - h2, bw, h2);
+        txt(ctx, g.w, g.x, ay1 + 16, '12px system-ui', P.text, 'center');
+        txt(ctx, g.r, g.x, ay1 + 31, '12px system-ui', P.text, 'center');
+    });
+
+    ctx.fillStyle = P.blue; ctx.fillRect(470, 68, 12, 12);
+    txt(ctx, 'coordination cost', 488, 79, '12px system-ui', P.text);
+    ctx.fillStyle = P.yellow; ctx.fillRect(470, 88, 12, 12);
+    txt(ctx, 'staleness risk', 488, 99, '12px system-ui', P.text);
+
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(425 - 40, 268); ctx.lineTo(425 + 40, 268);
+    ctx.moveTo(425 - 40, 268); ctx.lineTo(425 - 40, 262);
+    ctx.moveTo(425 + 40, 268); ctx.lineTo(425 + 40, 262);
+    ctx.stroke();
+    txt(ctx, '2 + 2 > 3 — overlap reached', 425, 285, 'bold 12px system-ui', P.green, 'center');
+    txt(ctx, 'bars are relative, not measured', 110, 285, '12px system-ui', '#444');
+});
+
+// c7 — Redis failover
+__charts.push(function () {
+    var s = setup('c7'), ctx = s.ctx;
+    title(ctx, s.w, 'Acknowledged, Replicated, Lost');
+
+    ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fillRect(310, 70, 120, 75);
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = P.red; ctx.lineWidth = 1.5;
+    ctx.strokeRect(310, 70, 120, 75); ctx.setLineDash([]);
+    txt(ctx, '3 acked writes lost', 370, 60, 'bold 12px system-ui', P.red, 'center');
+
+    ctx.fillStyle = 'rgba(201,133,0,0.14)'; ctx.fillRect(430, 160, 90, 80);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5; ctx.strokeRect(430, 160, 90, 80);
+    txt(ctx, 'no writes accepted', 475, 258, 'bold 12px system-ui', P.yellow, 'center');
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(475, 240); ctx.lineTo(475, 248); ctx.stroke();
+
+    seg(ctx, 190, 680, 105, P.grid, 2);
+    seg(ctx, 190, 680, 200, P.grid, 2);
+    txt(ctx, 'primary', 180, 109, '12px system-ui', P.text, 'right');
+    txt(ctx, 'replica → new primary', 180, 204, '12px system-ui', P.text, 'right');
+
+    seg(ctx, 190, 430, 105, P.blue, 4);
+    [230, 270, 310, 350, 390].forEach(function (x) { dot(ctx, x, 105, 5, P.blue); });
+    txt(ctx, 'acks 496…500', 310, 88, 'bold 12px system-ui', P.blue, 'center');
+    cross(ctx, 430, 105, 11, P.red);
+    txt(ctx, 'crash', 430, 80, 'bold 12px system-ui', P.red, 'center');
+
+    seg(ctx, 190, 430, 200, P.mute, 4);
+    [230, 270, 310].forEach(function (x) { dot(ctx, x, 200, 5, P.mute); });
+    txt(ctx, 'replicated to 497', 270, 225, '12px system-ui', P.mute, 'center');
+    seg(ctx, 520, 680, 200, P.green, 4);
+    dot(ctx, 520, 200, 6, P.green);
+    txt(ctx, 'promoted, serving from 497', 600, 182, 'bold 12px system-ui', P.green, 'center');
+
+    arrow(ctx, 190, 278, 680, 278, P.mute, 1.5);
+    txt(ctx, 'time', 435, 294, '12px system-ui', P.mute, 'center');
+});
+
+// c8 — Kafka ISR
+__charts.push(function () {
+    var s = setup('c8'), ctx = s.ctx;
+    title(ctx, s.w, 'ISR Size Decides Whether the Producer Is Served');
+
+    var panels = [
+        { x: 45, color: P.green, fill: 'rgba(0,131,0,0.07)', head: 'ISR = 3', live: 3, foot: 'produce succeeds', footColor: P.text },
+        { x: 260, color: P.green, fill: 'rgba(0,131,0,0.07)', head: 'ISR = 2', live: 2, foot: 'still succeeds — floor met', footColor: P.text },
+        { x: 475, color: P.red, fill: 'rgba(231,76,60,0.09)', head: 'ISR = 1', live: 1, foot: 'produce fails — below floor', footColor: P.red }
+    ];
+    var names = ['L', 'R1', 'R2'];
+    panels.forEach(function (p) {
+        roundRect(ctx, p.x, 70, 200, 140, 8, p.color, p.fill);
+        txt(ctx, p.head, p.x + 100, 94, 'bold 13px system-ui', p.color, 'center');
+        for (var i = 0; i < 3; i++) {
+            var cx = p.x + 45 + i * 55;
+            if (i < p.live) {
+                node(ctx, cx, 135, 16, names[i], P.green);
+            } else {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(cx, 135, 16, 0, 2 * Math.PI); ctx.fill();
+                ctx.setLineDash([4, 3]); ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(cx, 135, 16, 0, 2 * Math.PI); ctx.stroke();
+                ctx.setLineDash([]);
+                txt(ctx, names[i], cx, 140, 'bold 13px system-ui', P.mute, 'center');
+            }
+        }
+        txt(ctx, p.foot, p.x + 100, 192, '12px system-ui', p.footColor, 'center');
+    });
+
+    ctx.setLineDash([6, 5]); ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(45, 228); ctx.lineTo(675, 228); ctx.stroke();
+    ctx.setLineDash([]);
+    txt(ctx, 'min.insync.replicas = 2', 45, 246, 'bold 12px system-ui', P.ink);
+    txt(ctx, 'replication factor 3, acks=all', 675, 246, '12px system-ui', '#444', 'right');
+    txt(ctx, 'unclean leader election = true → writes resume, committed records truncated', 360, 274, 'bold 12px system-ui', P.orange, 'center');
+});
+
+// c9 — PostgreSQL sync levels
+__charts.push(function () {
+    var s = setup('c9'), ctx = s.ctx;
+    title(ctx, s.w, 'Where the Commit Is Acknowledged');
+
+    var rows = [
+        { y: 90, label: 'async', ack: 250, cost: 'may lose tail', costColor: P.red },
+        { y: 160, label: 'sync: remote_write', ack: 390, cost: 'small loss window', costColor: P.yellow },
+        { y: 230, label: 'sync: remote_apply', ack: 520, cost: 'no loss', costColor: P.green }
+    ];
+    var stages = [[250, 'local WAL flush'], [390, 'standby received'], [520, 'standby applied']];
+    stages.forEach(function (st) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(st[0], 66); ctx.lineTo(st[0], 250); ctx.stroke();
+        txt(ctx, st[1], st[0], 58, '11px system-ui', P.mute, 'center');
+    });
+
+    rows.forEach(function (r) {
+        seg(ctx, 190, 600, r.y, P.grid, 2);
+        txt(ctx, r.label, 175, r.y + 4, '12px system-ui', P.text, 'right');
+        ctx.fillStyle = P.blue; ctx.fillRect(190, r.y - 7, r.ack - 190, 14);
+        dot(ctx, r.ack, r.y, 6, P.green);
+        txt(ctx, 'ack', r.ack, r.y - 14, 'bold 11px system-ui', P.green, 'center');
+        txt(ctx, r.cost, 650, r.y + 4, '11px system-ui', r.costColor, 'center');
+    });
+
+    txt(ctx, 'one named synchronous standby down = commits stop; quorum of 2 of 3 does not', 400, 274, 'bold 12px system-ui', P.orange, 'center');
+    txt(ctx, 'bar length = wait before ack', 190, 292, '12px system-ui', '#444');
+});
+
+// c10 — DuckDB: no network, no theorem
+__charts.push(function () {
+    var s = setup('c10'), ctx = s.ctx;
+    title(ctx, s.w, 'The Network Only Appears When the Data Is Remote');
+
+    // left panel — local file
+    roundRect(ctx, 40, 60, 300, 180, 8, P.green, 'rgba(0,131,0,0.06)');
+    txt(ctx, 'local file — one process', 190, 86, 'bold 13px system-ui', P.green, 'center');
+    roundRect(ctx, 90, 105, 200, 54, 6, P.blue, '#fff');
+    txt(ctx, 'your process: app + DuckDB', 190, 127, 'bold 12px system-ui', P.blue, 'center');
+    txt(ctx, 'one address space', 190, 145, '11px system-ui', P.mute, 'center');
+    roundRect(ctx, 90, 180, 200, 40, 6, P.ink, '#fff');
+    txt(ctx, 'data.duckdb on local disk', 190, 205, 'bold 12px system-ui', P.ink, 'center');
+    arrow(ctx, 190, 162, 190, 177, P.blue, 2);
+    arrow(ctx, 190, 177, 190, 162, P.blue, 2);
+    txt(ctx, 'no wire to cut — CAP does not apply', 190, 258, 'bold 12px system-ui', P.green, 'center');
+
+    // right panel — remote parquet
+    roundRect(ctx, 380, 60, 300, 180, 8, P.yellow, 'rgba(201,133,0,0.08)');
+    txt(ctx, 'remote Parquet — network in the plan', 530, 86, 'bold 13px system-ui', P.yellow, 'center');
+    roundRect(ctx, 430, 105, 200, 54, 6, P.blue, '#fff');
+    txt(ctx, 'your process: app + DuckDB', 530, 136, 'bold 12px system-ui', P.blue, 'center');
+    roundRect(ctx, 430, 180, 200, 40, 6, P.ink, '#fff');
+    txt(ctx, 'object store prefix', 530, 205, 'bold 12px system-ui', P.ink, 'center');
+
+    ctx.strokeStyle = P.red; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    for (var i = 0; i <= 14; i++) {
+        var zx = 400 + i * 18, zy = 170 + (i % 2 === 0 ? -4 : 4);
+        if (i === 0) ctx.moveTo(zx, zy); else ctx.lineTo(zx, zy);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    txt(ctx, 'the wire', 668, 163, 'bold 12px system-ui', P.red, 'right');
+    arrow(ctx, 530, 162, 530, 177, P.yellow, 2);
+    arrow(ctx, 530, 177, 530, 162, P.yellow, 2);
+    txt(ctx, "consistency is now the store's, not the engine's", 530, 258, 'bold 12px system-ui', P.orange, 'center');
+
+    txt(ctx, "the engine is unchanged in both panels — only the data's location differs", 40, 288, '12px system-ui', '#444');
+});
+
+// c11 — PACELC map
+__charts.push(function () {
+    var s = setup('c11'), ctx = s.ctx;
+    title(ctx, s.w, 'Two Questions, Four Quadrants (illustrative placement)');
+
+    var x0 = 150, x1 = 650, y0 = 55, y1 = 230, xm = 400, ym = 142.5;
+    ctx.fillStyle = 'rgba(0,131,0,0.06)'; ctx.fillRect(x0, y0, xm - x0, ym - y0);
+    ctx.fillStyle = 'rgba(74,58,167,0.05)'; ctx.fillRect(xm, y0, x1 - xm, ym - y0);
+    ctx.fillStyle = 'rgba(42,120,214,0.05)'; ctx.fillRect(x0, ym, xm - x0, y1 - ym);
+    ctx.fillStyle = 'rgba(201,133,0,0.07)'; ctx.fillRect(xm, ym, x1 - xm, y1 - ym);
+
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.beginPath();
+    ctx.moveTo(xm, y0); ctx.lineTo(xm, y1);
+    ctx.moveTo(x0, ym); ctx.lineTo(x1, ym);
+    ctx.stroke();
+
+    txt(ctx, 'partition → refuse (PC)', 275, 248, 'bold 12px system-ui', P.ink, 'center');
+    txt(ctx, 'partition → accept (PA)', 525, 248, 'bold 12px system-ui', P.ink, 'center');
+    ctx.save(); ctx.translate(135, 190); ctx.rotate(-Math.PI / 2);
+    txt(ctx, 'no split → local read (EL)', 0, 0, 'bold 12px system-ui', P.ink, 'center');
+    ctx.restore();
+    ctx.save(); ctx.translate(135, 100); ctx.rotate(-Math.PI / 2);
+    txt(ctx, 'no split → strict read (EC)', 0, 0, 'bold 12px system-ui', P.ink, 'center');
+    ctx.restore();
+
+    var items = [
+        [200, 80, 'ZooKeeper / etcd', P.green],
+        [200, 105, 'Spanner', P.green],
+        [200, 130, 'Kafka (acks=all)', P.green],
+        [200, 170, 'DynamoDB, strong read', P.blue],
+        [200, 196, 'S3, one key one region', P.blue],
+        [200, 218, 'PostgreSQL, sync standby', P.blue],
+        [430, 170, 'Cassandra (ONE)', P.yellow],
+        [430, 196, 'DynamoDB global tables', P.yellow],
+        [430, 218, 'Redis async', P.yellow]
+    ];
+    items.forEach(function (it) {
+        dot(ctx, it[0] - 10, it[1] - 4, 4, it[3]);
+        txt(ctx, it[2], it[0], it[1], 'bold 12px system-ui', it[3]);
+    });
+    txt(ctx, 'rare — pay latency, then diverge anyway', 430, 105, '12px system-ui', P.mute);
+
+    txt(ctx, 'several of these move between quadrants by configuration', 30, 282, 'bold 12px system-ui', P.orange);
+    roundRect(ctx, 458, 264, 232, 30, 6, P.mute, '#fff', [5, 4]);
+    txt(ctx, 'DuckDB — no partition to place', 574, 284, 'bold 12px system-ui', P.mute, 'center');
+});
+
+__charts.forEach(function (f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function () {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function () {
+        __charts.forEach(function (f) { f(); });
+    }, 150);
+});
+</script>
+
+</body>
+</html>

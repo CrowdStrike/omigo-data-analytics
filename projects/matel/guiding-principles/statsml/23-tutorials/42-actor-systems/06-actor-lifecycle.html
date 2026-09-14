@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Actor Lifecycle</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Actor Lifecycle</h1>
+<p class="subtitle">An actor is born, works, crashes, and is reborn at the same address — its mailbox survives the restart, its in-memory state does not</p>
+
+<div class="card-section">
+    <h2>A Cart Actor Is Born, Works, and Dies</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">lifecycle hooks</span><span class="tag orange">restart</span></div>
+                <ul>
+                    <li><b>The actor</b> — an online store spawns one shopping-cart actor per shopper the moment they add a first item</li>
+                    <li><b>preStart</b> — runs once at birth: the cart opens an empty item list and logs "cart created"</li>
+                    <li><b>The loop</b> — the actor then does one thing forever: take the next message from its mailbox, handle it</li>
+                    <li><b>The crash</b> — a malformed message throws; the supervisor replaces the actor with a fresh instance</li>
+                    <li><b>postStop</b> — runs at the true end (checkout or timeout): release resources, log "cart closed"</li>
+                </ul>
+                <p class="example">Shopper #4127 adds an item at 2:01pm — preStart fires, the cart actor lives at <code>/user/cart-4127</code> and starts handling AddItem messages one at a time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An actor's life is a fixed script — preStart, a receive loop, optional crash-and-restart cycles, postStop — and the restart cycle is the part everyone underestimates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Crash at Message Five</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">state loss</span></div>
+                <ul>
+                    <li><b>The stream</b> — shopper #4127 fires 8 AddItem messages in a burst; all 8 land in the mailbox</li>
+                    <li><b>Messages 1–4</b> — each adds one item; after message 4 the in-memory cart holds 4 items</li>
+                    <li><b>Message 5</b> — malformed payload, the handler throws, the supervisor restarts the actor</li>
+                    <li><b>The wipe</b> — the fresh instance starts with an empty list: the 4 items existed only in memory</li>
+                    <li><b>Messages 6–8</b> — still queued in the surviving mailbox, they process normally: cart ends at 3 items</li>
+                </ul>
+                <p class="example">8 messages sent, 7 processed, message 5 dropped — the cart ends the burst holding 3 items, not the 7 the shopper added.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The restart wiped 4 items of in-memory state but lost zero queued messages — the mailbox belongs to the actor's address, not to the crashed instance.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Same Address, Fresh Memory</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">supervision</span></div>
+                <ul>
+                    <li><b>The design</b> — supervisors restart a broken actor instead of letting one bad message kill the app</li>
+                    <li><b>Stable address</b> — the path <code>/user/cart-4127</code> and every ActorRef held by senders keep working</li>
+                    <li><b>Invisible to senders</b> — other actors keep sending to the same ref; they never learn a crash happened</li>
+                    <li><b>The rule</b> — anything worth keeping across a restart must live outside the actor: a DB, an event log</li>
+                    <li><b>Where you meet it</b> — streaming pipeline workers, game session actors, per-device IoT handlers</li>
+                </ul>
+                <p class="example">The checkout actor keeps messaging <code>/user/cart-4127</code> all afternoon; across two silent restarts, its reference never went stale.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A restart swaps the instance behind an address, not the address itself — the identity, mailbox, and supervision links persist while the memory starts over.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Restart Is Not a Rewind</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">lost message</span></div>
+                <ul>
+                    <li><b>The assumption</b> — people expect the restarted actor to retry message 5 and keep its 4 items</li>
+                    <li><b>Neither happens</b> — the failing message is dropped by default, and the item list is rebuilt empty</li>
+                    <li><b>preRestart / postRestart</b> — hooks on the old and new instance for cleanup and re-initialization</li>
+                    <li><b>The fix</b> — persist each add as an event and replay in postRestart, or park bad messages aside</li>
+                    <li><b>The tell</b> — "counts drift down after deploys or error spikes" is often silent restart state loss</li>
+                </ul>
+                <p class="example">A dashboard shows carts mysteriously shrinking during an error spike — each restart quietly rebuilt a cart from nothing while shoppers kept clicking.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a restart as a rewind. The mailbox picks up where it left off — the state does not, and the failing message is dropped, not retried; anything only in memory must be persisted or replayed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), hl = 7;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: lifecycle flow — preStart -> receive -> postStop, crash/restart loop above
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Actor\'s Life: preStart → receive → (crash, restart) → postStop', w / 2, 25);
+
+    // main row boxes 150x46 at y=170
+    var mainY = 170;
+    var boxes = [
+        { x: 50, fill: 'rgba(0,131,0,0.12)', edge: P.green, l1: 'preStart', l2: 'cart created' },
+        { x: 285, fill: 'rgba(42,120,214,0.15)', edge: P.blue, l1: 'receive', l2: 'handles messages' },
+        { x: 520, fill: 'rgba(107,114,128,0.12)', edge: P.mute, l1: 'postStop', l2: 'cart closed' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var b = boxes[i];
+        ctx.fillStyle = b.fill;
+        roundRect(ctx, b.x, mainY, 150, 46, 8);
+        ctx.fill(); ctx.strokeStyle = b.edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.l1, b.x + 75, mainY + 19);
+        ctx.fillText(b.l2, b.x + 75, mainY + 36);
+    }
+    arrow(ctx, 200, mainY + 23, 281, mainY + 23, P.text, 3);
+    arrow(ctx, 435, mainY + 23, 516, mainY + 23, P.text, 3);
+
+    // crash loop above the receive box
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    roundRect(ctx, 140, 70, 150, 40, 8);
+    ctx.fill(); ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crash on a message', 215, 94);
+
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundRect(ctx, 420, 70, 170, 40, 8);
+    ctx.fill(); ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('restart: fresh instance', 505, 94);
+
+    // arrows: receive top -> crash box, crash -> restart, restart -> receive top
+    arrow(ctx, 310, mainY - 4, 230, 114, '#e74c3c', 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('crash', 240, 140);
+    arrow(ctx, 290, 90, 416, 90, P.text, 3);
+    arrow(ctx, 495, 114, 415, mainY - 4, P.green, 3);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the mailbox lives outside this loop — it survives the restart', w / 2, 280);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hook names from Akka; the pattern is generic', w - 14, h - 6);
+});
+
+// c2: items in cart across the 8-message burst with the crash at message 5
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Message 5 Crashes the Cart: Items Reset to 0, Mailbox Loses Nothing', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(m) { return ox + (m - 1) / 7 * pw; }
+    function yOf(items) { return baseY - items / 5 * ph; }
+
+    // gridlines at 1..4
+    for (var g = 1; g <= 4; g++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    }
+
+    // axes and message ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var m = 1; m <= 8; m++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('msg ' + m, xOf(m), baseY + 18);
+    }
+
+    // before-crash step line: messages 1-4, items 1-4
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(1), yOf(0));
+    ctx.lineTo(xOf(1), yOf(1));
+    for (var m = 2; m <= 4; m++) {
+        ctx.lineTo(xOf(m), yOf(m - 1));
+        ctx.lineTo(xOf(m), yOf(m));
+    }
+    ctx.lineTo(xOf(5), yOf(4));
+    ctx.stroke();
+
+    // crash marker at message 5
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(5), yOf(4)); ctx.lineTo(xOf(5), yOf(0)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', xOf(5), yOf(4) - 8);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('crash — restart, state wiped', xOf(5) + 10, yOf(4) - 4);
+
+    // after-restart step line: messages 6-8, items 1-3
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(6), yOf(0));
+    ctx.lineTo(xOf(6), yOf(1));
+    for (var m = 7; m <= 8; m++) {
+        ctx.lineTo(xOf(m), yOf(m - 6));
+        ctx.lineTo(xOf(m), yOf(m - 5));
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('messages 6–8 were waiting in the mailbox — none lost', 460, 70);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('message 5 itself is dropped', xOf(5), 225);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('item counts illustrative', w - 14, h - 10);
+});
+
+// c3: what survives a restart vs what is gone
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('After a Restart: What Survives vs What Is Gone', w / 2, 24);
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = P.green; ctx.fillText('survives the restart', 190, 60);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('gone with the old instance', 530, 60);
+
+    var ys = [85, 140, 195];
+    var left = ['actor path — /user/cart-4127', 'the mailbox and every queued message', 'the ActorRef held by senders'];
+    var right = ['in-memory state — the 4 cart items', 'the message that caused the crash', 'running timers and scheduled ticks'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        roundRect(ctx, 50, ys[i], 280, 38, 8);
+        ctx.fill(); ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(left[i], 190, ys[i] + 24);
+
+        ctx.fillStyle = 'rgba(231,76,60,0.12)';
+        roundRect(ctx, 400, ys[i], 280, 38, 8);
+        ctx.fill(); ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(right[i], 540, ys[i] + 24);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same address, same queue — brand-new memory', w / 2, 265);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cart example illustrative', w - 14, h - 10);
+});
+
+// c4: expected restart behavior vs what actually happens
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Restart Illusion: Message 5 Is Not Retried, State Is Not Restored', w / 2, 24);
+
+    // row 1: what people expect
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what people expect', 20, y1 - 10);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 160, y1, 150, 40, 8);
+    ctx.fill(); ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cart: 4 items', 235, y1 + 24);
+    ctx.fillStyle = 'rgba(107,114,128,0.12)';
+    roundRect(ctx, 350, y1, 170, 40, 8);
+    ctx.fill(); ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('retry msg 5, keep items', 435, y1 + 24);
+    arrow(ctx, 310, y1 + 20, 346, y1 + 20, P.text, 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ neither happens', 560, y1 + 24);
+
+    // row 2: what happens
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what happens', 20, y2 - 10);
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    roundRect(ctx, 160, y2, 150, 40, 8);
+    ctx.fill(); ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crash on msg 5', 235, y2 + 17);
+    ctx.fillText('— dropped', 235, y2 + 33);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundRect(ctx, 350, y2, 150, 40, 8);
+    ctx.fill(); ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('fresh cart: 0 items', 425, y2 + 24);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 540, y2, 160, 40, 8);
+    ctx.fill(); ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('resumes at msg 6', 620, y2 + 24);
+    arrow(ctx, 310, y2 + 20, 346, y2 + 20, P.text, 3);
+    arrow(ctx, 500, y2 + 20, 536, y2 + 20, P.text, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓', 705, y2 - 4);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('if state only lived in memory, the restart erased it — persist or replay', w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

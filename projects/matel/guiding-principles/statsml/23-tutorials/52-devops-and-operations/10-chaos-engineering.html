@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chaos Engineering</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Chaos Engineering</h1>
+<p class="subtitle">Your system claims it survives a server dying — chaos engineering breaks things on purpose, in controlled conditions, to check the claim before 3am does</p>
+
+<div class="card-section">
+    <h2>The Monkey That Kills Servers on Purpose</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">Netflix origin</span><span class="tag green">resilience</span></div>
+                <ul>
+                    <li><b>The claim</b> — a checkout service runs on 10 instances and claims any one can die with no harm</li>
+                    <li><b>The problem</b> — a claim never tested is a hope; nobody knows if failover works until it runs</li>
+                    <li><b>Chaos Monkey</b> — Netflix (publicly documented, ~2010) built a tool that kills random production instances</li>
+                    <li><b>Business hours</b> — kills happen during the workday, when engineers are at their desks to respond</li>
+                    <li><b>The effect</b> — instances died daily, so every team HAD to build auto-recovery; resilience became habit</li>
+                </ul>
+                <p class="example">At 10:14am Chaos Monkey kills one of 10 checkout instances; autoscaling replaces it by 10:18am and checkout success never leaves 99.9%.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Chaos engineering tests resilience claims by deliberately injecting the failure — if recovery is automatic, the kill is a non-event; if not, you learn at 10am instead of 3am.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Experiment: Kill a Zone, Watch Checkout</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">blast radius</span><span class="tag orange">hypothesis</span></div>
+                <ul>
+                    <li><b>Hypothesis first</b> — state the steady state: "checkout success rate stays above 99.9% if one zone dies"</li>
+                    <li><b>Blast radius</b> — start in staging, then 1% of production traffic, then 25%; never everything at once</li>
+                    <li><b>Safety rails</b> — run in business hours with a hand on the abort switch, not at 2am unattended</li>
+                    <li><b>Measure</b> — compare the success rate during the injected zone failure against the 99.9% hypothesis</li>
+                    <li><b>The find</b> — at 25% the rate falls to 99.42%: a retry storm hammers the surviving zone; fix and rerun</li>
+                </ul>
+                <p class="example">Staging holds 99.93%, 1% of production holds 99.91%, but the 25% run drops to 99.42% and is aborted — after capping retries, the rerun holds 99.91%.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The published method is a controlled experiment: hypothesis about steady state, bounded blast radius, measurement against the hypothesis, and a fix for whatever broke.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Experiment Menu, from Kills to Latency</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">game days</span></div>
+                <ul>
+                    <li><b>Instance and zone kills</b> — the classics: terminate a server, then a whole availability zone</li>
+                    <li><b>Injected latency</b> — add 300ms to a dependency; often nastier than clean death, it trips timeouts and retries</li>
+                    <li><b>Dependency blackhole</b> — drop all traffic to one downstream service and see who actually handles it</li>
+                    <li><b>Resource exhaustion</b> — burn CPU or fill a disk to test limits, alerts, and shedding behavior</li>
+                    <li><b>Game days</b> — the human layer: teams practice incident response on a simulated outage, on the clock</li>
+                    <li><b>Why production</b> — staging never matches real traffic, real data, or real config; eventually you test live</li>
+                </ul>
+                <p class="example">In an illustrative program, injected latency surfaces 9 distinct bugs (5 in staging, 4 more only in production) — more than any clean-kill experiment.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Slow is a different failure than dead — latency experiments expose timeout and retry bugs that clean kills never touch, and some only appear under real production traffic.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Chaos Without Observability Is Just Vandalism</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">prerequisites</span></div>
+                <ul>
+                    <li><b>The prerequisite</b> — before injecting failure you must be able to SEE its impact and STOP it fast</li>
+                    <li><b>No dashboards</b> — inject a zone failure blind and you've caused an outage you can't even detect</li>
+                    <li><b>No abort switch</b> — an experiment you can't halt is not an experiment, it's an incident with a signature</li>
+                    <li><b>The order</b> — observability and rollback first, chaos second; skipping the order breaks production for nothing</li>
+                    <li><b>The payoff</b> — with both in place, a breached hypothesis is caught and aborted in under a minute</li>
+                </ul>
+                <p class="example">Team A blackholes a dependency with no dashboards and debugs a mystery outage for 45 minutes; Team B runs the same experiment, sees the 99.9% breach at 40 seconds, and aborts.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Running chaos experiments before the system has observability and a rollback path — breaking production without the ability to see or stop the damage is vandalism, not engineering.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.45), y2 - 9 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.45), y2 - 9 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one business-hours kill, instance count dips and recovers
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var mins = [0, 5, 10, 14, 14.5, 16, 18, 20, 25, 30];
+    var inst = [10, 10, 10, 10, 9, 9, 10, 10, 10, 10];
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(m) { return ox + m / 30 * pw; }
+    function yOf(v) { return baseY - v / 12 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Chaos Monkey Kills an Instance at 10:14am — Autoscaling Refills by 10:18am', w / 2, 24);
+
+    // gridlines + y labels
+    var yTicks = [3, 6, 9];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 6, yOf(yTicks[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 5 minutes
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var xLabs = ['10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30'];
+    for (var i = 0; i <= 6; i++) {
+        ctx.fillText(xLabs[i], xOf(i * 5), baseY + 16);
+    }
+
+    // kill marker
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(14), baseY); ctx.lineTo(xOf(14), baseY - ph); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('chaos monkey kill', xOf(14), baseY - ph - 4);
+
+    // recovery marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(18), baseY); ctx.lineTo(xOf(18), baseY - ph + 18); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('autoscaler refills', xOf(18) + 6, baseY - ph + 24);
+
+    // instance line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(mins[i]), yOf(inst[i])) : ctx.lineTo(xOf(mins[i]), yOf(inst[i]));
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('checkout success stays 99.9% — kill is a non-event', 460, 90);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c2: success rate per experiment run vs the 99.9% hypothesis
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var centers = [140, 280, 420, 560];
+    var vals = [99.93, 99.91, 99.42, 99.91];
+    var valLabs = ['99.93%', '99.91%', '99.42%', '99.91%'];
+    var isRed = [false, false, true, false];
+    var xLab1 = ['staging', '1% prod', '25% prod', '25% prod'];
+    var xLab2 = ['', '', '(run 1)', '(run 2)'];
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    function yOf(v) { return baseY - (v - 99.0) / 1.0 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Zone Killed: Success Rate vs the 99.9% Hypothesis', w / 2, 24);
+
+    // gridlines + y labels
+    var yTicks = [99.25, 99.5, 99.75];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yTicks[i].toFixed(2) + '%', ox - 6, yOf(yTicks[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // bars
+    for (var i = 0; i < 4; i++) {
+        var bh = baseY - yOf(vals[i]);
+        var edge = isRed[i] ? '#e74c3c' : P.green;
+        ctx.fillStyle = isRed[i] ? 'rgba(231,76,60,0.25)' : 'rgba(0,131,0,0.30)';
+        ctx.fillRect(centers[i] - 45, yOf(vals[i]), 90, bh);
+        ctx.strokeStyle = edge; ctx.lineWidth = 2;
+        ctx.strokeRect(centers[i] - 45, yOf(vals[i]), 90, bh);
+        ctx.fillStyle = edge; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLabs[i], centers[i], yOf(vals[i]) - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(xLab1[i], centers[i], baseY + 16);
+        if (xLab2[i]) ctx.fillText(xLab2[i], centers[i], baseY + 30);
+    }
+
+    // hypothesis line
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(99.9)); ctx.lineTo(ox + pw, yOf(99.9)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hypothesis: ≥ 99.9%', ox + pw - 4, 58);
+
+    // extra bar labels
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ABORTED — retry storm', centers[2], yOf(vals[2]) - 24);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui';
+    ctx.fillText('after retry cap', centers[3], yOf(99.75) + 40);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative', w - 12, h - 8);
+});
+
+// c3: bugs surfaced per experiment type, staging vs prod-only
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rows = [
+        { y: 65,  lab: 'instance kill',              seg: [3, 1] },
+        { y: 105, lab: 'zone failure',               seg: [2, 3] },
+        { y: 145, lab: 'injected latency (+300ms)',  seg: [5, 4] },
+        { y: 185, lab: 'dependency blackhole',       seg: [4, 2] },
+        { y: 225, lab: 'resource exhaustion',        seg: [2, 1] }
+    ];
+    var bx = 230, scale = 30;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Bugs Surfaced per Experiment Type: Staging vs Production-Only', w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 52); ctx.lineTo(bx, 252); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        // row label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 13);
+        // staging segment
+        var w1 = r.seg[0] * scale;
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(bx, r.y, w1, 18);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, r.y, w1, 18);
+        // prod-only segment
+        var w2 = r.seg[1] * scale;
+        ctx.fillStyle = 'rgba(217,89,38,0.35)';
+        ctx.fillRect(bx + w1, r.y, w2, 18);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+        ctx.strokeRect(bx + w1, r.y, w2, 18);
+        // total
+        ctx.fillStyle = P.text; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(String(r.seg[0] + r.seg[1]), bx + w1 + w2 + 6, r.y + 13);
+    }
+
+    // legend (top right under title)
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(440, 40, 12, 10);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(440, 40, 12, 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('found in staging', 458, 49);
+    ctx.fillStyle = 'rgba(217,89,38,0.35)';
+    ctx.fillRect(560, 40, 12, 10);
+    ctx.strokeStyle = P.orange; ctx.strokeRect(560, 40, 12, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('found only in production', 578, 49);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('slow beats dead: latency', 530, 150);
+    ctx.fillText('finds the most bugs', 530, 168);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bug counts illustrative', w - 12, h - 8);
+});
+
+// c4: same failure, no observability vs dashboards + abort
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function box(x, cy, bw, lines, fill, border) {
+        var y = cy - 20;
+        ctx.fillStyle = fill;
+        roundedRect(ctx, x, y, bw, 40, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+        roundedRect(ctx, x, y, bw, 40, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 13);
+        }
+    }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Failure Injected, Two Very Different Endings', w / 2, 24);
+
+    var blueFill = 'rgba(42,120,214,0.15)';
+
+    // row 1: no dashboards, no abort
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no dashboards, no abort', 20, 68);
+    box(180, 95, 160, ['blackhole dependency'], blueFill, P.blue);
+    arrow(ctx, 340, 95, 430, 95, P.text, 3);
+    box(430, 95, 170, ['invisible outage —', '45 min of guessing'], 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ vandalism', 515, 133);
+
+    // row 2: dashboards + abort switch
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('dashboards + abort switch', 20, 178);
+    box(180, 205, 160, ['blackhole dependency'], blueFill, P.blue);
+    arrow(ctx, 340, 205, 360, 205, P.text, 3);
+    box(360, 205, 150, ['breach seen at 40s'], 'rgba(0,131,0,0.12)', P.green);
+    arrow(ctx, 510, 205, 560, 205, P.text, 3);
+    box(560, 205, 150, ['abort — traffic', 'restored'], 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ experiment', 635, 243);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('observability and rollback come first; the chaos comes second', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('durations illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

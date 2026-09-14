@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akka — The Actor Model on the JVM</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Akka — The Actor Model on the JVM</h1>
+<p class="subtitle">An actor is a tiny worker with a private notebook and a mailbox — it handles one message at a time, so nothing it owns ever needs a lock</p>
+
+<div class="card-section">
+    <h2>One Order at a Time, No Locks Anywhere</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">mailbox</span><span class="tag orange">private state</span></div>
+                <ul>
+                    <li><b>The shop</b> — a coffee shop has 3 cashiers all firing orders at one order-processing actor</li>
+                    <li><b>The mailbox</b> — orders #47, #48 and #49 queue up in the actor's mailbox, in arrival order</li>
+                    <li><b>One at a time</b> — the actor pulls exactly one order, updates its notebook, then takes the next</li>
+                    <li><b>Private state</b> — its running count (handled = 46) lives inside the actor; nobody else can touch it</li>
+                    <li><b>No locks</b> — since only the actor reads or writes its own state, there is nothing to synchronize</li>
+                </ul>
+                <p class="example">Cashier B's order #48 waits in the mailbox while #47 is processed; the count goes 46 &rarr; 47 &rarr; 48 with no race and no <code>synchronized</code> anywhere.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An actor = private state + a mailbox + a behavior, processing one message at a time — serial processing per actor is what replaces locks.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Greeter, a Crash, and a Supervisor</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">supervision</span><span class="tag orange">hello world</span></div>
+                <ul>
+                    <li><b>Define</b> — a Greeter actor's behavior: on <code>Greet(name)</code>, print "Hello, name" and wait for the next message</li>
+                    <li><b>Spawn</b> — the actor system creates one Greeter and hands back an address (an <code>ActorRef</code>), not the object</li>
+                    <li><b>Tell</b> — send <code>Greet("Ada")</code> then <code>Greet("Bob")</code>: two lines printed, messages 1 and 2 done</li>
+                    <li><b>Crash</b> — message 3 is <code>Greet("")</code>; the behavior throws on the empty name and the actor dies mid-run</li>
+                    <li><b>Restart</b> — the parent supervisor's strategy says restart: a fresh Greeter takes over the same mailbox</li>
+                    <li><b>Resume</b> — messages 4 and 5 (<code>"Cleo"</code>, <code>"Dev"</code>) are greeted by the new incarnation; 4 greetings, 1 crash</li>
+                </ul>
+                <p class="example">Of 5 messages sent, the Greeter prints 4 greetings; the crash on message 3 costs only that one message — the supervisor restarts it before message 4 arrives.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You never call an actor — you <code>tell</code> its address. Failure handling lives in the parent: supervisors restart crashed children, so error recovery is a tree, not a try/catch.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Erlang's Big Idea, Ported to the JVM</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">scale</span></div>
+                <ul>
+                    <li><b>The lineage</b> — Akka (2009) brought Erlang's actor-and-supervisor model to Java and Scala</li>
+                    <li><b>Cheap workers</b> — an actor costs ~300 bytes of overhead; an OS thread costs ~1 MB of stack</li>
+                    <li><b>The count</b> — one 8 GB box runs &asymp;4,000 comfortable OS threads but &asymp;2,500,000 actors</li>
+                    <li><b>No shared state</b> — actors exchange messages instead of sharing memory, so data races vanish by construction</li>
+                    <li><b>Where it runs</b> — Akka-style systems power streaming pipelines and IoT backends: one actor per device or session</li>
+                </ul>
+                <p class="example">An IoT platform gives each of 2 million thermostats its own actor — one box, one mailbox per device, no lock contention anywhere.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Actors make concurrency a modeling tool: because they are ~3,000&times; cheaper than threads, you can give every entity in the domain its own serial, lock-free worker.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Telling Is Not Calling</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">async</span><span class="tag blue">dispatcher</span></div>
+                <ul>
+                    <li><b>The confusion</b> — <code>greeter.tell(msg)</code> looks like a method call but returns instantly with no result</li>
+                    <li><b>Fire-and-forget</b> — <code>tell</code> only enqueues the message; the reply, if any, arrives as another message</li>
+                    <li><b>Ask</b> — when you need an answer, <code>ask</code> hands back a future — still no waiting on the caller's thread</li>
+                    <li><b>Shared threads</b> — a dispatcher runs many actors on a small pool; here 4 threads push 400 msgs/s</li>
+                    <li><b>The mistake</b> — a blocking database call inside an actor pins one pool thread for its full duration</li>
+                    <li><b>The cliff</b> — each blocked actor removes ~100 msgs/s; at 4 blocked actors the whole system is frozen</li>
+                </ul>
+                <p class="example">Four actors each start a 10-second blocking DB call; the 4-thread dispatcher drops from 400 msgs/s to 0 — every other actor on the pool starves too.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a message send like a method call. It is asynchronous fire-and-forget — and blocking inside an actor starves the shared dispatcher; hand blocking work to a separate pool or an async client instead.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), hl = 7;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: three cashiers -> mailbox queue -> single actor with private state
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Senders, One Mailbox, One Actor: Serial by Design', w / 2, 24);
+
+    // cashier boxes
+    var cashY = [70, 135, 200];
+    var cashLabs = ['Cashier A', 'Cashier B', 'Cashier C'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        roundRect(ctx, 30, cashY[i], 110, 36, 6);
+        ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(cashLabs[i], 85, cashY[i] + 23);
+        // arrow from cashier to mailbox area
+        arrow(ctx, 140, cashY[i] + 18, 212, 153, P.mute, 2);
+    }
+
+    // mailbox queue: three boxes, front of queue on the right
+    var mbLabs = ['#49', '#48', '#47'];
+    for (var i = 0; i < 3; i++) {
+        var bx = 220 + i * 70;
+        ctx.fillStyle = 'rgba(201,133,0,0.15)';
+        ctx.fillRect(bx, 135, 70, 36);
+        ctx.strokeStyle = P.yellow; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, 135, 70, 36);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(mbLabs[i], bx + 35, 158);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mailbox (FIFO)', 325, 190);
+
+    // actor box
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundRect(ctx, 490, 110, 190, 80, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Order actor', 585, 143);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('state: handled = 46', 585, 165);
+
+    // single arrow from front of queue into the actor
+    arrow(ctx, 430, 153, 486, 150, P.green, 3);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one message at a time — the state needs no lock', w / 2, 265);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order numbers illustrative', w - 14, h - 10);
+});
+
+// c2: five messages on a Greeter lifeline, crash on message 3, supervisor restart
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Five Messages, One Crash: the Supervisor Restarts the Child', w / 2, 24);
+
+    // supervisor box
+    ctx.fillStyle = 'rgba(74,58,167,0.12)';
+    roundRect(ctx, 300, 45, 160, 34, 6);
+    ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Supervisor (parent)', 380, 67);
+
+    // lifeline
+    var lifeY = 210;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(50, lifeY); ctx.lineTo(670, lifeY); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Greeter', 20, lifeY - 10);
+
+    // five message boxes sitting on the lifeline
+    var centers = [110, 225, 340, 455, 570];
+    var labs = ['Greet("Ada")', 'Greet("Bob")', 'Greet("") ✗', 'Greet("Cleo")', 'Greet("Dev")'];
+    for (var i = 0; i < 5; i++) {
+        var bx = centers[i] - 50, by = lifeY - 36;
+        var bad = (i === 2);
+        ctx.fillStyle = bad ? 'rgba(231,76,60,0.12)' : 'rgba(0,131,0,0.12)';
+        ctx.fillRect(bx, by, 100, 36);
+        ctx.strokeStyle = bad ? '#e74c3c' : P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, 100, 36);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labs[i], centers[i], by + 23);
+    }
+
+    // escalation: dashed red arrow from message 3 up to the supervisor
+    ctx.setLineDash([4, 3]);
+    arrow(ctx, 345, lifeY - 40, 385, 83, '#e74c3c', 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('crash', 375, 130);
+
+    // restart: solid green arrow from supervisor down to between messages 3 and 4
+    arrow(ctx, 400, 83, 398, lifeY - 40, P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('restart', 408, 155);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('messages 4 and 5 greet from the fresh incarnation', 470, 108);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('message timing illustrative', w - 14, h - 10);
+});
+
+// c3: workers per 8 GB box — OS threads vs actors (pixel widths schematic)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Workers per 8 GB Box: Threads vs Actors', w / 2, 24);
+
+    var baseX = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 70); ctx.lineTo(baseX, 235); ctx.stroke();
+
+    // thread row
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('OS threads (~1 MB stack each)', 20, 100);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(baseX, 105 - 13, 70, 26);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(baseX, 105 - 13, 70, 26);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('≈ 4,000', baseX + 70 + 10, 109);
+
+    // actor row
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('Akka actors (~300 bytes each)', 20, 180);
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(baseX, 185 - 13, 440, 26);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(baseX, 185 - 13, 440, 26);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('≈ 2,500,000', baseX + 440 - 10, 189);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('625× more workers — each ~3,000× cheaper (300 B vs 1 MB)', w / 2, 255);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; pixel widths schematic, not to log scale', w - 14, h - 10);
+});
+
+// c4: dispatcher throughput steps down as blocking calls pile up, async stays flat
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Blocking Inside Actors Starves the 4-Thread Dispatcher', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(sec) { return ox + sec / 10 * pw; }
+    function yOf(t) { return baseY - t / 400 * ph; }
+
+    // gridlines at 100/200/300
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    var grids = [100, 200, 300];
+    for (var i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, yOf(grids[i]) + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('400', ox - 8, yOf(400) + 4);
+    ctx.fillText('0', ox - 8, baseY + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var t = 0; t <= 10; t += 2) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + 's', xOf(t), baseY + 18);
+    }
+
+    // vertical dashed block markers at seconds 2, 4, 6, 8
+    var blocks = [2, 4, 6, 8];
+    ctx.setLineDash([4, 3]);
+    for (var i = 0; i < 4; i++) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(blocks[i]), baseY - ph + 12); ctx.lineTo(xOf(blocks[i]), baseY); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('block #' + (i + 1), xOf(blocks[i]), baseY - ph + 8);
+    }
+    ctx.setLineDash([]);
+
+    // blocking step line
+    var secs = [0, 2, 2, 4, 4, 6, 6, 8, 8, 10];
+    var thr = [400, 400, 300, 300, 200, 200, 100, 100, 0, 0];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(thr[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // async flat line at 400
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(0), yOf(400)); ctx.lineTo(xOf(10), yOf(400)); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('async handoff — all 4 threads stay free', xOf(5), yOf(400) - 8);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 blocked actors = every actor on the pool frozen', xOf(7.2), 200);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput numbers illustrative', w - 14, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

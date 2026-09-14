@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Observability</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Observability</h1>
+<p class="subtitle">Metrics, logs, and traces each answer a different question about a failing system — IS something wrong, WHAT exactly happened, and WHERE</p>
+
+<div class="card-section">
+    <h2>Three Questions About One Slow Checkout</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">three pillars</span><span class="tag orange">metrics</span></div>
+                <ul>
+                    <li><b>The shop</b> — an online store handles 12,000 checkout requests per minute across a dozen services</li>
+                    <li><b>The spike</b> — at 14:07 the checkout p99 latency jumps from about 320ms to 2,400ms</li>
+                    <li><b>Metrics</b> — numeric time series, pre-aggregated and cheap at scale; they answer "IS something wrong?"</li>
+                    <li><b>The limit</b> — aggregation destroys detail: the p99 line says slow, never WHICH requests are slow</li>
+                    <li><b>Logs</b> — structured event records with all the detail; they answer "WHAT exactly happened?"</li>
+                    <li><b>Traces</b> — one request's path across services, timed span by span; they answer "WHERE did it happen?"</li>
+                </ul>
+                <p class="example">The p99 dashboard fires an alert at 14:07 — it proves checkout is sick, but points at zero of the 12,000 requests per minute causing it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Each pillar answers one question — metrics detect (IS), traces locate (WHERE), logs explain (WHAT) — and no single pillar can do the other two jobs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Following Request 7f3a Through the Stack</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">traces</span><span class="tag orange">correlation ID</span></div>
+                <ul>
+                    <li><b>Step 1: metric</b> — the 14:07 alert says checkout is slow; it cannot say more, so we go to traces</li>
+                    <li><b>Step 2: trace</b> — filtering traces for checkout requests over 800ms, every slow one crosses payment-svc</li>
+                    <li><b>The waterfall</b> — <code>7f3a</code> totals 2,380ms: cart-svc 60ms, payment-svc 2,100ms, inventory-svc 80ms, gateway 140ms</li>
+                    <li><b>Step 3: logs</b> — the payment span's logs, joined by trace ID <code>7f3a</code>, name the cause in one line</li>
+                    <li><b>The line</b> — "pool exhausted: waited 2,000ms for a connection; query took 100ms" — 2,000 + 100 &asymp; the 2,100ms span</li>
+                    <li><b>The glue</b> — the same correlation ID stamped on the trace and every log line is what makes the join possible</li>
+                </ul>
+                <p class="example">Metric (14:07 alert) &rarr; trace (payment-svc span is 2,100 of 2,380ms) &rarr; log (connection pool exhausted): three hops from "something is wrong" to the exact cause.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The pillars work as a funnel — alert on a METRIC, narrow to the guilty service with a TRACE, read the WHAT in that span's LOGS — and correlation IDs are the thread through all three.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Monitoring Watches Known Failures; Observability Asks New Questions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">high cardinality</span></div>
+                <ul>
+                    <li><b>Monitoring</b> — pre-built dashboards and alerts for failure modes you already predicted (CPU, error rate)</li>
+                    <li><b>Observability</b> — being able to ask a question you never predicted, after the incident starts</li>
+                    <li><b>The new question</b> — "is the pool exhaustion only hitting one payment provider?" — no dashboard exists for it</li>
+                    <li><b>High cardinality</b> — answering it needs per-request fields like provider, user tier, region on every event</li>
+                    <li><b>Why metrics can't</b> — a metric with 2 million user IDs as a label explodes; traces and logs carry them fine</li>
+                    <li><b>Structured logging</b> — key=value logs (not free text) are what make those fields queryable at all</li>
+                </ul>
+                <p class="example">Querying traces by <code>payment_provider</code> shows 96% of slow checkouts use provider B — a question nobody had thought to dashboard before 14:07.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Monitoring answers questions you wrote down in advance; observability is the ability to ask new ones — and high-cardinality, structured telemetry is what makes new questions answerable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Telemetry Is a Data Pipeline With Its Own Bill</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cost</span></div>
+                <ul>
+                    <li><b>The mistake</b> — treating telemetry as free exhaust; it is a data pipeline you build, ship, store, and pay for</li>
+                    <li><b>The shape</b> — for the same day of traffic: metrics ~4 GB, sampled traces ~60 GB, raw logs ~1,200 GB (illustrative)</li>
+                    <li><b>Why logs dominate</b> — every request writes many detailed events; detail is exactly what makes logs expensive</li>
+                    <li><b>Sampling</b> — keeping 1% of traces (and 100% of errors) preserves the WHERE while cutting volume 100&times;</li>
+                    <li><b>Retention tiers</b> — hot search for 7 days, warm for 30, cold archive for 365 — most log bytes are never read</li>
+                    <li><b>The trap</b> — cutting logs blindly to save money, then losing the WHAT during the next incident</li>
+                </ul>
+                <p class="example">At 1,200 GB of logs per day, one chatty debug statement left on in checkout can add more daily volume than every metric in the company combined.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Instrumenting everything at full volume forever. Telemetry needs the same volume/retention engineering as any data pipeline — sample traces, tier log storage, and keep metrics for the long haul because they are the cheap pillar.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: checkout p99 latency with alert threshold
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(m) { return ox + m / 20 * pw; }
+    function yOf(ms) { return baseY - ms / 2500 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Metric Says WRONG, Not WHICH: Checkout p99 at 14:07', w / 2, 24);
+
+    // gridlines
+    var grids = [500, 1000, 1500, 2000];
+    for (var g = 0; g < grids.length; g++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[g])); ctx.lineTo(ox + pw, yOf(grids[g])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[g]), ox - 8, yOf(grids[g]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var tmins = [0, 4, 8, 12, 16, 20];
+    var tlabs = ['14:00', '14:04', '14:08', '14:12', '14:16', '14:20'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tmins.length; i++) {
+        ctx.fillText(tlabs[i], xOf(tmins[i]), baseY + 16);
+    }
+
+    // threshold at 800ms
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(800)); ctx.lineTo(ox + pw, yOf(800)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('alert threshold 800ms', ox + 4, yOf(800) - 6);
+
+    // p99 line
+    var mins = [0, 2, 4, 6, 7, 8, 10, 12, 14, 16, 18, 20];
+    var p99 = [310, 322, 318, 305, 2400, 2350, 2410, 2380, 2320, 2390, 2360, 2400];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(p99[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // alert marker at (7, 2400)
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xOf(7), yOf(2400), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('alert fires 14:07', xOf(7) + 10, yOf(2400) - 8);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('12,000 req/min behind this one line — zero named', xOf(13), 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latency values illustrative', w - 14, h - 8);
+});
+
+// c2: trace waterfall for request 7f3a
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ax = 170, axY = 250;
+    function xOf(ms) { return ax + ms * (520 / 2400); }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Trace 7f3a: One Span Owns 2,100 of 2,380ms', w / 2, 24);
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(690, axY); ctx.stroke();
+    var ticks = [0, 600, 1200, 1800, 2400];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var x = xOf(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 4); ctx.stroke();
+        ctx.fillText(ticks[i] + 'ms', x, axY + 16);
+    }
+
+    function roundBar(x, y, ww, hh, r, fill, stroke, lw) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + ww - r, y);
+        ctx.arcTo(x + ww, y, x + ww, y + r, r);
+        ctx.lineTo(x + ww, y + hh - r);
+        ctx.arcTo(x + ww, y + hh, x + ww - r, y + hh, r);
+        ctx.lineTo(x + r, y + hh);
+        ctx.arcTo(x, y + hh, x, y + hh - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+    }
+
+    var bh = 24;
+    // api-gateway
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('api-gateway', 20, 80 + bh / 2 + 4);
+    roundBar(xOf(0), 80, xOf(2380) - xOf(0), bh, 8, 'rgba(42,120,214,0.30)', P.blue, 2);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('2,380ms', xOf(2380) + 6, 80 + bh / 2 + 4);
+
+    // cart-svc
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('cart-svc', 20, 120 + bh / 2 + 4);
+    roundBar(xOf(40), 120, xOf(100) - xOf(40), bh, 6, 'rgba(25,158,112,0.30)', null, 0);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('60ms', xOf(100) + 6, 120 + bh / 2 + 4);
+
+    // payment-svc
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('payment-svc', 20, 160 + bh / 2 + 4);
+    roundBar(xOf(120), 160, xOf(2220) - xOf(120), bh, 8, 'rgba(231,76,60,0.25)', '#e74c3c', 2);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2,100ms — pool exhausted', (xOf(120) + xOf(2220)) / 2, 160 + bh / 2 + 4);
+
+    // inventory-svc
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('inventory-svc', 20, 200 + bh / 2 + 4);
+    roundBar(xOf(2240), 200, xOf(2320) - xOf(2240), bh, 6, 'rgba(0,131,0,0.25)', null, 0);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('80ms', xOf(2320) + 6, 200 + bh / 2 + 4);
+
+    // log callout: leader from payment bar to a box near the bottom
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(600), 184); ctx.lineTo(250, 268); ctx.stroke();
+    ctx.setLineDash([]);
+    roundBar(250, 258, 420, 20, 6, '#f8f9fa', P.mute, 1);
+    ctx.fillStyle = P.text; ctx.font = '11px ui-monospace, monospace'; ctx.textAlign = 'left';
+    ctx.fillText('trace=7f3a "waited 2,000ms for connection; query 100ms"', 258, 272);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("WHERE found — now read that span's logs", 520, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('span timings illustrative', w - 14, 250 - 8);
+});
+
+// c3: monitoring vs observability flow rows
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Known Questions vs New Questions', w / 2, 24);
+
+    function roundRect(x, y, ww, hh, r, stroke, fill) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + ww - r, y);
+        ctx.arcTo(x + ww, y, x + ww, y + r, r);
+        ctx.lineTo(x + ww, y + hh - r);
+        ctx.arcTo(x + ww, y + hh, x + ww - r, y + hh, r);
+        ctx.lineTo(x + r, y + hh);
+        ctx.arcTo(x, y + hh, x, y + hh - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    function hArrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.beginPath(); ctx.moveTo(x2, y); ctx.lineTo(x2 - 9, y - 4); ctx.lineTo(x2 - 9, y + 4); ctx.closePath(); ctx.fill();
+    }
+    function box(cx, y, ww, lines, stroke, fill) {
+        var bh = 44;
+        roundRect(cx - ww / 2, y - bh / 2, ww, bh, 8, stroke, fill);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], cx, y + 4);
+        } else {
+            ctx.fillText(lines[0], cx, y - 3);
+            ctx.fillText(lines[1], cx, y + 13);
+        }
+    }
+    var blueFill = 'rgba(42,120,214,0.15)', violetFill = 'rgba(74,58,167,0.12)', greenFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: monitoring
+    var y1 = 100;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('monitoring', 20, y1 - 32);
+    box(150, y1, 175, ['known failure mode:', "'error rate high?'"], P.blue, blueFill);
+    box(400, y1, 160, ['pre-built dashboard'], P.blue, blueFill);
+    box(600, y1, 150, ['answer in seconds'], P.green, greenFill);
+    hArrow(238, 320, y1);
+    hArrow(480, 525, y1);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(20, 155); ctx.lineTo(700, 155); ctx.stroke();
+
+    // row 2: observability
+    var y2 = 210;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('observability', 20, y2 - 32);
+    box(150, y2, 175, ['new question:', "'only provider B?'"], P.violet, violetFill);
+    box(400, y2, 180, ['query raw traces', 'by provider'], P.violet, violetFill);
+    box(600, y2, 150, ['96% provider B'], P.green, greenFill);
+    hArrow(238, 310, y2);
+    hArrow(490, 525, y2);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the second row only works if per-request fields were recorded before you needed them', w / 2, 275);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('provider split illustrative', w - 14, h - 4);
+});
+
+// c4: daily telemetry volume by pillar
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var bx = 210, bh = 22;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Day of Traffic, Three Very Different Bills', w / 2, 24);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 240); ctx.stroke();
+
+    function bar(y, wpx, color, alphaFill) {
+        ctx.fillStyle = alphaFill;
+        ctx.fillRect(bx, y, wpx, bh);
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, y, wpx, bh);
+    }
+
+    // metrics
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('metrics — 4 GB/day', 20, 80 + bh / 2 + 4);
+    bar(80, 60, P.green, 'rgba(0,131,0,0.30)');
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui';
+    ctx.fillText('4 GB', bx + 60 + 8, 80 + bh / 2 + 4);
+
+    // traces
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('traces (1% sampled) — 60 GB/day', 20, 140 + bh / 2 + 4);
+    bar(140, 170, P.blue, 'rgba(42,120,214,0.30)');
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui';
+    ctx.fillText('60 GB', bx + 170 + 8, 140 + bh / 2 + 4);
+    ctx.fillStyle = P.mute;
+    ctx.fillText('100% would be ~6,000 GB', bx, 140 + bh + 15);
+
+    // logs
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('logs — 1,200 GB/day', 20, 200 + bh / 2 + 4);
+    bar(200, 460, P.orange, 'rgba(217,89,38,0.30)');
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('1,200 GB', bx + 460 + 6, 200 + bh / 2 + 4);
+    // retention tier ticks at widths 110 / 260 / 460
+    var tiers = [{ wpx: 110, lab: 'hot 7d' }, { wpx: 260, lab: 'warm 30d' }, { wpx: 460, lab: 'cold 365d' }];
+    for (var i = 0; i < tiers.length; i++) {
+        var x = bx + tiers[i].wpx;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 200); ctx.lineTo(x, 200 + bh + 4); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(tiers[i].lab, x - 3, 200 + bh + 15);
+    }
+    ctx.textAlign = 'left';
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('aggregation is why metrics are cheap — and why they lack detail', 420, 55);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('volumes illustrative; pixel widths schematic', w - 14, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

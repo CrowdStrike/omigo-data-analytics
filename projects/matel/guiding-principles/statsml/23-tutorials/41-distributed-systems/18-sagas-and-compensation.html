@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sagas &amp; Compensation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Sagas &amp; Compensation</h1>
+<p class="subtitle">Split one big distributed transaction into a chain of small local ones &mdash; and if a later step fails, run each step's cancel action in reverse order instead of holding locks</p>
+
+<div class="card-section">
+    <h2>Booking a Trip Without a Global Lock</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">no 2PC</span><span class="tag orange">microservices</span></div>
+                <ul>
+                    <li><b>The trip</b> &mdash; a travel app books a flight, a hotel, and a car through three separate services</li>
+                    <li><b>Three local commits</b> &mdash; each service commits its own database transaction and immediately moves on</li>
+                    <li><b>The failure</b> &mdash; the car service finds no cars; the flight and hotel are already booked and charged</li>
+                    <li><b>The compensation</b> &mdash; the saga cancels the hotel, then the flight, in reverse booking order</li>
+                    <li><b>No 2PC</b> &mdash; at no moment did any coordinator hold locks across all three services at once</li>
+                </ul>
+                <p class="example">The $420 flight and the $540 hotel book fine; when the $190 car fails, both are canceled and the traveler ends up charged $0.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A saga replaces one distributed transaction with a chain of local transactions, each paired with a compensating action that runs if a later step fails.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Saga Log: Book, Fail, Unwind</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">saga log</span><span class="tag orange">orchestration</span></div>
+                <ul>
+                    <li><b>The log</b> &mdash; a coordinator writes each step before running it: T1 BookFlight, T2 BookHotel, T3 BookCar</li>
+                    <li><b>Forward pairs</b> &mdash; every action registers its compensation up front: BookHotel &harr; CancelHotel</li>
+                    <li><b>The turn</b> &mdash; T3 fails at 4s, so the log flips from forward mode into compensation mode</li>
+                    <li><b>Reverse replay</b> &mdash; T4 CancelHotel refunds $540 at 5s, T5 CancelFlight refunds $420 at 7s</li>
+                    <li><b>Orchestration</b> &mdash; one central coordinator reads the log and calls each service in turn</li>
+                    <li><b>Choreography</b> &mdash; the alternative: each service listens for the previous step's event; no central brain</li>
+                </ul>
+                <p class="example">The card charge peaks at $960 after the hotel books at 2s, then steps back down to $0 as the two compensations run.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The saga log makes recovery restartable &mdash; if the coordinator crashes mid-unwind, it replays the log on restart and finishes exactly the compensations still pending.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Long Business Flows Can't Hold Locks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">long-running</span><span class="tag orange">eventual consistency</span></div>
+                <ul>
+                    <li><b>Long flows</b> &mdash; a booking waits 15 minutes for payment confirmation; a loan approval waits days</li>
+                    <li><b>2PC cost</b> &mdash; two-phase commit locks rows in every service until the slowest participant votes</li>
+                    <li><b>Blocked neighbors</b> &mdash; while those locks are held, other customers touching the same rows must wait</li>
+                    <li><b>Saga cost</b> &mdash; each local transaction holds its own lock about 0.2 s; three steps total 0.6 s</li>
+                    <li><b>The trade</b> &mdash; the saga is eventually consistent: for 3 seconds the trip was half-booked on purpose</li>
+                </ul>
+                <p class="example">With 2PC, a 900-second payment wait pins locks in all three services; the saga's locks total 0.6 s and nobody else is blocked.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Sagas keep services available during long-running flows by never holding a lock while waiting on another service &mdash; the price is a visible window of temporary inconsistency instead of atomicity.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Canceling Is Not Ctrl-Z</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">idempotency</span><span class="tag blue">visible state</span></div>
+                <ul>
+                    <li><b>Not undo</b> &mdash; the hotel confirmation email went out at 2s; canceling at 5s cannot unsend it</li>
+                    <li><b>Visible window</b> &mdash; for 3 seconds, any other system could read a fully confirmed hotel booking</li>
+                    <li><b>Semantic reversal</b> &mdash; CancelHotel is a new business action (a refund), not a rollback of bytes</li>
+                    <li><b>Idempotency</b> &mdash; a retried CancelHotel must refund $540 exactly once, never $1,080</li>
+                    <li><b>Compensable design</b> &mdash; every forward step needs a defined counter-action before it ships</li>
+                </ul>
+                <p class="example">A crash makes the coordinator retry CancelHotel; keyed by booking id bk-712, the second call is a no-op and the refund stays $540.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating compensation as a database rollback. The intermediate state was already visible and acted on &mdash; compensation is a forward-moving business action, so every step must be idempotent and compensable by design.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: forward booking steps + backward compensations flow diagram
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Trip, Three Services: Forward Steps and Backward Compensations', w / 2, 24);
+
+    // forward row: boxes 160x44, centers at y=110
+    var boxY = 88, boxW = 160, boxH = 44;
+    var boxes = [
+        { x: 60, label: '1. BookFlight ✓ $420', border: P.green, fill: 'rgba(0,131,0,0.12)' },
+        { x: 280, label: '2. BookHotel ✓ $540', border: P.green, fill: 'rgba(0,131,0,0.12)' },
+        { x: 500, label: '3. BookCar ✗ no cars', border: '#e74c3c', fill: 'rgba(231,76,60,0.12)' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var b = boxes[i];
+        roundedRect(ctx, b.x, boxY, boxW, boxH, 8);
+        ctx.fillStyle = b.fill; ctx.fill();
+        ctx.strokeStyle = b.border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, b.x + boxW / 2, 114);
+    }
+    // forward arrows (blue 3px)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(220, 110); ctx.lineTo(272, 110); ctx.stroke();
+    arrowHead(ctx, 278, 110, 0, 9, P.blue);
+    ctx.beginPath(); ctx.moveTo(440, 110); ctx.lineTo(492, 110); ctx.stroke();
+    arrowHead(ctx, 498, 110, 0, 9, P.blue);
+
+    // fail marker above car box
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ step 3 fails', 580, 80);
+
+    // compensation boxes at y=200
+    var compY = 182, compW = 170, compH = 36;
+    var comps = [
+        { x: 290, label: 'CancelHotel −$540' },
+        { x: 70, label: 'CancelFlight −$420' }
+    ];
+    for (var i = 0; i < 2; i++) {
+        var c = comps[i];
+        roundedRect(ctx, c.x, compY, compW, compH, 8);
+        ctx.fillStyle = 'rgba(217,89,38,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.label, c.x + compW / 2, 204);
+    }
+
+    // dashed compensation arrows (right to left)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    // from below car box back to CancelHotel box
+    ctx.beginPath(); ctx.moveTo(580, 132); ctx.lineTo(580, 200); ctx.lineTo(468, 200); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 462, 200, Math.PI, 9, P.orange);
+    // from CancelHotel to CancelFlight
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(290, 200); ctx.lineTo(248, 200); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 242, 200, Math.PI, 9, P.orange);
+
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('reverse order', 524, 190);
+    ctx.fillText('reverse order', 268, 226);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('failure flows backward through compensations — no locks were ever shared', w / 2, 260);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('prices illustrative', w - 12, h - 10);
+});
+
+// c2: step chart of running charge on the card, $0 -> $960 -> $0
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Running Charge on the Card: $0 → $960 → $0 in Five Log Entries', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function X(sec) { return ox + sec / 8 * pw; }
+    function Y(v) { return baseY - v / 1000 * ph; }
+
+    // gridlines at 250/500/750
+    var grids = [250, 500, 750];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, Y(grids[i])); ctx.lineTo(ox + pw, Y(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + grids[i], ox - 6, Y(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 2s
+    for (var sec = 0; sec <= 8; sec += 2) {
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(X(sec), baseY); ctx.lineTo(X(sec), baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(sec + 's', X(sec), baseY + 20);
+    }
+
+    // step line: seconds [0,2,4,5,7,8], charged [420,960,960,420,0,0]
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(X(0), Y(0));
+    ctx.lineTo(X(0), Y(420));
+    ctx.lineTo(X(2), Y(420));
+    ctx.lineTo(X(2), Y(960));
+    ctx.lineTo(X(5), Y(960));
+    ctx.lineTo(X(5), Y(420));
+    ctx.lineTo(X(7), Y(420));
+    ctx.lineTo(X(7), Y(0));
+    ctx.lineTo(X(8), Y(0));
+    ctx.stroke();
+
+    // event markers
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(X(0), Y(420), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(2), Y(960), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('T1 BookFlight +$420', X(0) + 10, Y(420) - 8);
+    ctx.textAlign = 'center';
+    ctx.fillText('T2 BookHotel +$540', X(2) + 10, Y(960) - 24);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', X(4), Y(960) - 8);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('T3 BookCar fails', X(4) + 12, Y(960) - 8);
+
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(X(5), Y(420), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(7), Y(0), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('T4 CancelHotel −$540', X(5) + 10, Y(420) - 8);
+    ctx.textAlign = 'right';
+    ctx.fillText('T5 CancelFlight −$420', X(7) - 10, Y(0) - 10);
+
+    // annotation
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('peak exposure $960 lasts just 3 seconds', X(5.3), 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; dollar steps match the log', w - 12, h - 8);
+});
+
+// c3: horizontal bar chart of lock hold time, 2PC vs saga steps
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Lock Hold Time for One 15-Minute Booking Flow', w / 2, 24);
+
+    var axisX = 250;
+
+    var rows = [
+        { y: 70, label1: '2PC — locks held 900 s', label2: 'in all 3 services', width: 420, fill: 'rgba(231,76,60,0.25)', edge: '#e74c3c', end: '900 s', endColor: '#e74c3c' },
+        { y: 120, label1: 'Saga — flight txn 0.2 s', label2: null, width: 26, fill: 'rgba(42,120,214,0.30)', edge: P.blue, end: '0.2 s', endColor: '#444' },
+        { y: 170, label1: 'Saga — hotel txn 0.2 s', label2: null, width: 26, fill: 'rgba(42,120,214,0.30)', edge: P.blue, end: '0.2 s', endColor: '#444' },
+        { y: 220, label1: 'Saga — car txn 0.2 s', label2: null, width: 26, fill: 'rgba(42,120,214,0.30)', edge: P.blue, end: '0.2 s', endColor: '#444' }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axisX, 48); ctx.lineTo(axisX, 240); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        if (r.label2) {
+            ctx.fillText(r.label1, 20, r.y - 2);
+            ctx.fillText(r.label2, 20, r.y + 13);
+        } else {
+            ctx.fillText(r.label1, 20, r.y + 4);
+        }
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(axisX, r.y - 7, r.width, 14);
+        ctx.strokeStyle = r.edge; ctx.lineWidth = 1;
+        ctx.strokeRect(axisX, r.y - 7, r.width, 14);
+        ctx.fillStyle = r.endColor; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.end, axisX + r.width + 8, r.y + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the saga never holds a lock while waiting on another service', 430, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic; seconds exact for this example', w - 12, h - 8);
+});
+
+// c4: naive cancel retried (double refund) vs idempotent cancel (refund once)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Retry Safety: the Same Cancel Must Refund Only Once', w / 2, 24);
+
+    function box(x, y, bw, bh, fill, edge) {
+        roundedRect(ctx, x, y, bw, bh, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // row 1: naive cancel, y=95
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('naive cancel', 20, 99);
+
+    box(160, 75, 175, 40, 'rgba(217,89,38,0.12)', P.orange);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('CancelHotel −$540', 247.5, 100);
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(335, 95); ctx.lineTo(412, 95); ctx.stroke();
+    arrowHead(ctx, 418, 95, 0, 9, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crash → retry', 377, 84);
+
+    box(420, 75, 185, 40, 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('CancelHotel −$540 again', 512.5, 100);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ refunded $1,080', 512.5, 133);
+
+    // row 2: idempotent cancel, y=205
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('idempotent cancel', 20, 209);
+
+    box(160, 185, 175, 40, 'rgba(217,89,38,0.12)', P.orange);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('CancelHotel key=bk-712', 247.5, 202);
+    ctx.fillText('−$540', 247.5, 217);
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(335, 205); ctx.lineTo(412, 205); ctx.stroke();
+    arrowHead(ctx, 418, 205, 0, 9, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crash → retry', 377, 194);
+
+    box(420, 185, 185, 40, 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('key bk-712 seen — no-op', 512.5, 210);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ refunded $540', 512.5, 243);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a compensation is a business action — it must survive being run twice', w / 2, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('refund amounts illustrative', w - 12, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

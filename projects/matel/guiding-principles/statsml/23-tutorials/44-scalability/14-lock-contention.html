@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lock Contention</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Lock Contention</h1>
+<p class="subtitle">When every thread must wait its turn on one lock, adding cores stops helping &mdash; Amdahl's law shows up as a production incident</p>
+
+<div class="card-section">
+    <h2>One Hot Row Every Checkout Touches</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">serialization</span><span class="tag red">hot lock</span></div>
+                <ul>
+                    <li><b>The sale</b> &mdash; a store runs a flash sale on one item; every checkout decrements its stock counter row</li>
+                    <li><b>The lock</b> &mdash; the database locks that row per update, so checkouts pass through it one at a time</li>
+                    <li><b>The queue</b> &mdash; 32 worker threads run in parallel, but at the counter they form a single-file line</li>
+                    <li><b>The plateau</b> &mdash; throughput climbs with threads, flattens near 610 checkouts/s, then slips back</li>
+                    <li><b>The definition</b> &mdash; lock contention: many threads serialize on one lock, so one shared section bounds the whole system</li>
+                </ul>
+                <p class="example">Going from 16 to 64 threads moves throughput from 610/s to 540/s &mdash; more threads, less work done.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A lock turns parallel work into serial work; past some concurrency, every extra thread only lengthens the line at the lock.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Amdahl's Law by Hand: 5% Serial, 32 Cores</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">Amdahl's law</span></div>
+                <ul>
+                    <li><b>The split</b> &mdash; measure the checkout: 95% of the work runs in parallel, 5% happens under the counter lock</li>
+                    <li><b>The formula</b> &mdash; speedup on N cores = 1 / (0.05 + 0.95/N); the serial 5% never shrinks</li>
+                    <li><b>Hand-check</b> &mdash; N=32: 0.95/32 = 0.0297, plus 0.05 gives 0.0797, and 1/0.0797 &asymp; 12.5&times; &mdash; not 32&times;</li>
+                    <li><b>The ceiling</b> &mdash; as N &rarr; &infin; the parallel term vanishes: 1/0.05 = 20&times; is the hard cap, ever</li>
+                    <li><b>Diminishing steps</b> &mdash; 32&rarr;64 cores buys 12.5&times;&rarr;15.4&times;; 64&rarr;128 buys only 15.4&times;&rarr;17.4&times;</li>
+                </ul>
+                <p class="example">With 5% of each checkout serialized on the lock, buying 32 cores instead of 1 yields at most ~12.5&times; the throughput.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Amdahl's law: speedup = 1/(s + (1&minus;s)/N); a serial fraction s caps speedup at 1/s no matter how many cores you add.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Incident: CPU Idle, Latency on Fire</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">symptoms</span><span class="tag red">production</span></div>
+                <ul>
+                    <li><b>The page</b> &mdash; flash sale starts at 12:05; by 12:20 p99 checkout latency is 2,100 ms and climbing</li>
+                    <li><b>The paradox</b> &mdash; CPU utilization <i>drops</i> from 70% to ~35%: threads are asleep waiting on the lock, not computing</li>
+                    <li><b>The false fix</b> &mdash; on-call doubles the instance count; latency barely moves &mdash; the hot row is still one row</li>
+                    <li><b>The tell</b> &mdash; throughput plateaus as concurrency rises, then falls as lock handoffs add pure overhead</li>
+                    <li><b>The read</b> &mdash; idle CPU plus high latency plus a plateau is the signature of contention, not of undersized hardware</li>
+                </ul>
+                <p class="example">At 12:25 the dashboard shows 34% CPU and 2,400 ms p99 &mdash; the machine is bored and the users are furious.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Lock contention inverts the usual capacity signal: the system is slow <i>because</i> threads are waiting, so CPU looks healthy while latency explodes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Fix Is Less Lock, Not More Cores</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">fixes</span></div>
+                <ul>
+                    <li><b>The mistake</b> &mdash; throwing cores or replicas at a serialized section; Amdahl says the 5% still rules</li>
+                    <li><b>Shrink it</b> &mdash; do only the decrement under the lock; move validation, logging, and pricing outside</li>
+                    <li><b>Shard it</b> &mdash; split the one counter into 16 shard rows; a checkout picks one, contention drops 16-fold</li>
+                    <li><b>Go lock-free</b> &mdash; an atomic decrement shrinks an in-memory counter's lock to one instruction</li>
+                    <li><b>Accumulate locally</b> &mdash; each thread counts sales privately and flushes to the shared row every 100 ms</li>
+                </ul>
+                <p class="example">Sharding the stock counter into 16 rows takes 32-thread throughput from 590/s to about 4,800/s &mdash; no new hardware.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Scaling out a contended system. Adding cores raises N in 0.95/N but never touches the 0.05 &mdash; only shrinking or splitting the serial section moves the ceiling.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: checkout throughput vs worker threads — plateau, then fall
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('More Threads, Same Counter: Throughput Plateaus, Then Falls', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxV = 700;
+    var threads = [1, 2, 4, 8, 16, 32, 64];
+    var tput = [95, 180, 330, 520, 610, 590, 540];
+    function xOf(i) { return ox + i / (threads.length - 1) * pw; }
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines + y labels
+    ctx.font = '12px system-ui';
+    [175, 350, 525].forEach(function(v) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(v), 52, yOf(v) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < threads.length; i++) ctx.fillText(String(threads[i]), xOf(i), baseY + 18);
+
+    // peak marker at 16 threads
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(4), 50); ctx.lineTo(xOf(4), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('peak 610/s', xOf(4), 46);
+
+    // throughput line + dots
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < threads.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(i), yOf(tput[i])) : ctx.lineTo(xOf(i), yOf(tput[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < threads.length; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(tput[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // annotation above the right end
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('64 threads do less than 16 — the lock is the bottleneck', ox + pw + 4, yOf(540) - 20);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput numbers illustrative', w - 12, 292);
+});
+
+// c2: Amdahl speedup curve for 5% serial fraction
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('5% Serial Work Caps 32 Cores at ~12.5× (Amdahl’s Law)', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxV = 32;
+    var cores = [1, 2, 4, 8, 16, 32, 64, 128];
+    var speedup = [1.00, 1.90, 3.48, 5.93, 9.14, 12.55, 15.42, 17.41];
+    function xOf(i) { return ox + i / (cores.length - 1) * pw; }
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines + y labels
+    ctx.font = '12px system-ui';
+    [8, 16, 24].forEach(function(v) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(v + '×', 52, yOf(v) + 4);
+    });
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('32×', 52, yOf(32) + 4);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < cores.length; i++) ctx.fillText(String(cores[i]), xOf(i), baseY + 18);
+
+    // ideal linear line (clips at plot top: speedup 32 at 32 cores)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+    ctx.beginPath();
+    var ideal = [1, 2, 4, 8, 16, 32];
+    for (var i = 0; i < ideal.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(i), yOf(ideal[i])) : ctx.lineTo(xOf(i), yOf(ideal[i]));
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ideal linear', xOf(3) + 10, yOf(8) - 26);
+
+    // ceiling at 20x
+    ctx.strokeStyle = P.orange; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(20)); ctx.lineTo(ox + pw, yOf(20)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hard cap 20× = 1/0.05', ox + pw, yOf(20) - 8);
+
+    // Amdahl curve + dots
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < cores.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(i), yOf(speedup[i])) : ctx.lineTo(xOf(i), yOf(speedup[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue;
+    for (var i = 0; i < cores.length; i++) {
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(speedup[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // callout at the 32-core dot
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('32 cores → 12.5×', xOf(5), yOf(12.55) + 24);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('speedup values exact from 1/(0.05+0.95/N)', w - 12, 292);
+});
+
+// c3: incident timeline — p99 latency up, CPU utilization down
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('12:05 Flash Sale: Latency ×30 While CPU Goes Idle', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 590, ph = 180;
+    var mins = [0, 5, 10, 15, 20, 25, 30, 35, 40];
+    var p99 = [80, 120, 600, 1400, 2100, 2400, 2350, 2400, 2380];
+    var cpu = [65, 70, 55, 45, 38, 34, 35, 34, 35];
+    function xOf(m) { return ox + m / 40 * pw; }
+    function yLat(v) { return baseY - v / 2500 * ph; }
+    function yCpu(v) { return baseY - v / 100 * ph; }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [625, 1250, 1875].forEach(function(v) {
+        ctx.beginPath(); ctx.moveTo(ox, yLat(v)); ctx.lineTo(ox + pw, yLat(v)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 10 min
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [0, 10, 20, 30, 40].forEach(function(m) {
+        ctx.fillText('12:' + (m < 10 ? '0' + m : m), xOf(m), baseY + 18);
+    });
+
+    // left y labels (latency, red)
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'right';
+    ctx.fillText('0', 52, yLat(0) + 4);
+    ctx.fillText('1250', 52, yLat(1250) + 4);
+    ctx.fillText('2500 ms', 52, yLat(2500) + 4);
+
+    // right y labels (CPU, blue)
+    ctx.fillStyle = P.blue; ctx.textAlign = 'left';
+    ctx.fillText('0%', 660, yCpu(0) + 4);
+    ctx.fillText('50%', 660, yCpu(50) + 4);
+    ctx.fillText('100%', 660, yCpu(100) + 4);
+
+    // sale marker at minute 5
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(5), 54); ctx.lineTo(xOf(5), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sale starts', xOf(5), 50);
+
+    // latency line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(mins[i]), yLat(p99[i])) : ctx.lineTo(xOf(mins[i]), yLat(p99[i]));
+    }
+    ctx.stroke();
+
+    // CPU line (dashed)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(mins[i]), yCpu(cpu[i])) : ctx.lineTo(xOf(mins[i]), yCpu(cpu[i]));
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // annotations
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('p99 2,400 ms', xOf(27), 95);
+    ctx.fillStyle = P.blue;
+    ctx.fillText('CPU 34% — threads blocked, not busy', xOf(27), 212);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('incident timeline illustrative', w - 12, 292);
+});
+
+// c4: throughput at 32 threads under four designs
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 32 Threads, Four Designs: Shrink the Serial Section', w / 2, 24);
+
+    var bx = 230;
+    var rows = [
+        { y: 70, label: 'one lock, fat critical section', color: '#e74c3c', fill: 'rgba(231,76,60,0.85)', width: 25, val: '590/s' },
+        { y: 120, label: 'one lock, decrement only', color: P.orange, fill: 'rgba(217,89,38,0.85)', width: 90, val: '2,100/s' },
+        { y: 170, label: '16 shard counters', color: P.blue, fill: 'rgba(42,120,214,0.85)', width: 205, val: '4,800/s' },
+        { y: 220, label: 'per-thread + 100 ms flush', color: P.green, fill: 'rgba(0,131,0,0.85)', width: 380, val: '8,900/s' }
+    ];
+
+    rows.forEach(function(r) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.label, 220, r.y + 17);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.width, 26);
+        ctx.fillStyle = r.color; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.val, bx + r.width + 8, r.y + 17);
+    });
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 58); ctx.lineTo(bx, 254); ctx.stroke();
+
+    // annotation above the bottom bar
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('15× the throughput — zero new cores', bx + 6, 212);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput numbers illustrative; bar widths proportional', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

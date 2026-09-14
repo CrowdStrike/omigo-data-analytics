@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Guarantees in Akka</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Delivery Guarantees in Akka</h1>
+<p class="subtitle">When one actor sends a message to another, Akka promises surprisingly little by default — the message arrives at most once, which means it might not arrive at all</p>
+
+<div class="card-section">
+    <h2>The Order Confirmation That Never Arrived</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">at-most-once</span><span class="tag green">default</span></div>
+                <ul>
+                    <li><b>The setup</b> — an order service <code>tell</code>s a Notifier actor "email a confirmation for order #4821"</li>
+                    <li><b>Fire and forget</b> — <code>tell</code> returns instantly; nothing waits to see if the message landed</li>
+                    <li><b>The loss</b> — the Notifier's node restarts mid-flight; the message is simply gone</li>
+                    <li><b>The promise</b> — at-most-once: a message is delivered 0 or 1 times, never 2</li>
+                    <li><b>The count</b> — of 100 confirmations sent during the restart window, 4 vanish (illustrative)</li>
+                    <li><b>Why default</b> — no acks, no retries, no state to keep: it is the cheapest guarantee to provide</li>
+                </ul>
+                <p class="example">Customer #4821 never gets a confirmation email, and no error is raised anywhere — the send "succeeded" the moment <code>tell</code> returned.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Akka's default delivery guarantee is at-most-once — messages can be lost silently, but the transport will never duplicate one on its own.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Adding Acks: At-Least-Once by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">at-least-once</span><span class="tag orange">duplicates</span></div>
+                <ul>
+                    <li><b>The fix</b> — the Notifier now replies "Ack #4821" after emailing; the sender keeps unacked messages</li>
+                    <li><b>The rule</b> — resend anything unacked after 2 seconds, until an ack finally comes back</li>
+                    <li><b>The run</b> — 100 sends: 4 messages lost in flight, 3 delivered fine but their acks lost</li>
+                    <li><b>Hand-check</b> — 7 resends fire; the 4 lost ones now arrive, the 3 ack-lost ones arrive a 2nd time</li>
+                    <li><b>The totals</b> — Notifier processes 103 messages for 100 orders: 0 lost, 3 duplicate emails</li>
+                    <li><b>The trade</b> — at-least-once swaps silent loss for guaranteed delivery plus possible duplicates</li>
+                </ul>
+                <p class="example">Order #4907's email was sent and the ack was lost on the way back — the retry means customer #4907 gets the same confirmation twice.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> At-least-once is not free and not built into plain <code>tell</code> — you build it from acks, a resend buffer, and a timer, and the price is duplicates whenever an ack (not the message) is what got lost.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The One Ordering Promise You Do Get</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">ordering</span></div>
+                <ul>
+                    <li><b>The pair rule</b> — messages from sender A to receiver B arrive in the order A sent them</li>
+                    <li><b>Per pair only</b> — if A and C both write to B, B may see their messages interleaved any way</li>
+                    <li><b>The run</b> — A sends m1, m2, m3 and C sends m4, m5; B can see m1 m4 m2 m5 m3 — never m2 before m1</li>
+                    <li><b>Loss still allowed</b> — at-most-once still applies: m2 can vanish, but m3 cannot overtake m1</li>
+                    <li><b>Why it matters</b> — a "create account" then "set email" pair from one sender lands in that order</li>
+                    <li><b>The design habit</b> — funnel writes that must stay ordered through a single sender-receiver pair</li>
+                </ul>
+                <p class="example">The order service sends "reserve stock" then "charge card" for order #4821 to the same actor — Akka guarantees the charge is never processed before the reservation, though either message can still be lost outright.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Akka guarantees ordering per sender-receiver pair, not globally — two messages from the same sender to the same receiver never swap places, but anything can interleave between them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"Exactly-Once" Is Not a Transport Setting</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">idempotence</span></div>
+                <ul>
+                    <li><b>The wish</b> — teams ask for exactly-once delivery so no email is ever lost or doubled</li>
+                    <li><b>The catch</b> — no transport can promise it: a lost ack always forces a choice, drop or resend</li>
+                    <li><b>The real recipe</b> — exactly-once = at-least-once delivery + idempotent processing at the receiver</li>
+                    <li><b>The dedup</b> — the Notifier keeps seen order ids; a redelivered #4907 is recognized and skipped</li>
+                    <li><b>The run</b> — the 103 arrivals from the worked example become exactly 100 emails after dedup</li>
+                    <li><b>The mistake</b> — flipping on retries without dedup, then blaming the framework for double emails</li>
+                </ul>
+                <p class="example">With a seen-ids set, the retried #4907 arrives a second time, matches a stored id, and is dropped — the customer gets exactly one email despite two deliveries.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing exactly-once is a delivery guarantee a framework can switch on. Delivery can only be at-least-once; "exactly-once" is an effect you build by making the receiver ignore the duplicates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: at-most-once flow — 100 sent, 96 delivered, 4 lost, 0 duplicated
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('At-Most-Once: 100 Sent, 96 Delivered, 4 Lost, 0 Duplicated', w / 2, 24);
+
+    // delivered band from x=190 to x=520, 26px tall, centered at y=140
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.fillRect(190, 127, 330, 26);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('96 delivered', 355, 144);
+
+    // lost stub: thin red band forking down from x≈340
+    ctx.fillStyle = 'rgba(231,76,60,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(336, 153);
+    ctx.lineTo(348, 153);
+    ctx.lineTo(418, 212);
+    ctx.lineTo(406, 212);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 lost (node restart)', 412, 230);
+
+    // duplicated stub: dashed line forking up from x≈340
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(342, 127); ctx.lineTo(412, 82); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0 duplicated — never happens', 412, 70);
+
+    // left box: order service
+    rrectPath(ctx, 40, 110, 150, 60, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order service', 115, 136);
+    ctx.fillText('100 sends', 115, 152);
+
+    // right box: Notifier actor
+    rrectPath(ctx, 520, 110, 160, 60, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Notifier actor', 600, 136);
+    ctx.fillText('96 received', 600, 152);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the sender is never told about the 4', 190, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 12, h - 8);
+});
+
+// c2: grouped bars — the same 100-order run under both guarantees
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 100 Orders: Loss vs Duplicates', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    function py(v) { return baseY - v / 110 * ph; }
+
+    // gridlines + y labels
+    var grid = [25, 50, 75, 100];
+    for (var i = 0; i < 4; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var groups = ['sent', 'delivered', 'lost', 'duplicates'];
+    var cxs = [160, 300, 440, 580];
+    var amo = [100, 96, 4, 0];
+    var alo = [100, 100, 0, 3];
+    var bw = 40, gap = 8;
+
+    for (var g = 0; g < 4; g++) {
+        var cx = cxs[g];
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(groups[g], cx, baseY + 18);
+
+        // at-most-once bar (left)
+        var x1 = cx - gap / 2 - bw, t1 = py(amo[g]);
+        if (amo[g] > 0) {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(x1, t1, bw, baseY - t1);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(x1, t1, bw, baseY - t1);
+        }
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(amo[g]), x1 + bw / 2, t1 - 6);
+
+        // at-least-once bar (right)
+        var x2 = cx + gap / 2, t2 = py(alo[g]);
+        if (alo[g] > 0) {
+            ctx.fillStyle = 'rgba(0,131,0,0.30)';
+            ctx.fillRect(x2, t2, bw, baseY - t2);
+            ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+            ctx.strokeRect(x2, t2, bw, baseY - t2);
+        }
+        ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(alo[g]), x2 + bw / 2, t2 - 6);
+    }
+
+    // legend top right
+    ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.fillRect(520, 50, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(520, 50, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('at-most-once', 536, 60);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)'; ctx.fillRect(520, 68, 12, 12);
+    ctx.strokeStyle = P.green; ctx.strokeRect(520, 68, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('at-least-once', 536, 78);
+
+    // highlights beside the interesting bars
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('4 lost', cxs[2] - gap / 2 - bw - 6, py(4) - 6);
+    ctx.fillStyle = P.orange; ctx.textAlign = 'left';
+    ctx.fillText('3 dupes', cxs[3] + gap / 2 + bw + 6, py(3) - 6);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('delivery guaranteed — uniqueness no longer is', w / 2 - 60, 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative, same run both ways', w - 12, h - 8);
+});
+
+// c3: message-lane diagram — per-pair ordering with free interleaving
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Ordered Per Pair: A's m1<m2<m3 Holds, A vs C Interleaves Freely", w / 2, 24);
+
+    // sender boxes
+    rrectPath(ctx, 40, 70, 120, 44, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sender A', 100, 96);
+
+    rrectPath(ctx, 40, 180, 120, 44, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.fillText('sender C', 100, 206);
+
+    // receiver box, centered at y=140
+    rrectPath(ctx, 560, 110, 130, 60, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('receiver B', 625, 136);
+    ctx.fillText('mailbox', 625, 152);
+
+    // flow lines from senders to the strip's left edge
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(160, 92); ctx.quadraticCurveTo(200, 100, 228, 134); ctx.stroke();
+    ctx.strokeStyle = P.violet;
+    ctx.beginPath(); ctx.moveTo(160, 202); ctx.quadraticCurveTo(200, 190, 228, 148); ctx.stroke();
+
+    // arrival strip: five chips, arrival order left to right
+    var chips = [
+        { lab: 'm1', fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { lab: 'm4', fill: 'rgba(74,58,167,0.15)', edge: P.violet },
+        { lab: 'm2', fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { lab: 'm5', fill: 'rgba(74,58,167,0.15)', edge: P.violet },
+        { lab: 'm3', fill: 'rgba(42,120,214,0.15)', edge: P.blue }
+    ];
+    var chipW = 56, chipH = 34, chipY = 123;
+    var chipXs = [230, 291, 352, 413, 474];
+    for (var i = 0; i < 5; i++) {
+        rrectPath(ctx, chipXs[i], chipY, chipW, chipH, 8);
+        ctx.fillStyle = chips[i].fill; ctx.fill();
+        ctx.strokeStyle = chips[i].edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = chips[i].edge; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(chips[i].lab, chipXs[i] + chipW / 2, chipY + 21);
+    }
+
+    // arrow from strip's right edge into receiver B
+    ctx.strokeStyle = '#999'; ctx.fillStyle = '#999'; ctx.lineWidth = 3;
+    drawArrow(ctx, 532, 140, 556, 140);
+
+    // order ticks: blue arcs above connecting m1 -> m2 -> m3
+    var cA = [258, 380, 502]; // centers of m1, m2, m3
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cA[0], chipY - 2); ctx.quadraticCurveTo((cA[0] + cA[1]) / 2, 92, cA[1], chipY - 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cA[1], chipY - 2); ctx.quadraticCurveTo((cA[1] + cA[2]) / 2, 92, cA[2], chipY - 2); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("A's order preserved", 380, 78);
+
+    // violet arcs below connecting m4 -> m5
+    var cC = [319, 441]; // centers of m4, m5
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cC[0], chipY + chipH + 2); ctx.quadraticCurveTo((cC[0] + cC[1]) / 2, 188, cC[1], chipY + chipH + 2); ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("C's order preserved", 380, 205);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no promise about A vs C — only within each pair', w / 2, 265);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one possible interleaving, illustrative', w - 12, h - 8);
+});
+
+// c4: redelivered #4907 — naive receiver vs idempotent receiver
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Redelivered #4907: Naive Receiver vs Idempotent Receiver', w / 2, 24);
+
+    var boxH = 40;
+    var blueFill = 'rgba(42,120,214,0.15)', redFill = 'rgba(231,76,60,0.12)', greenFill = 'rgba(0,131,0,0.12)';
+
+    function flowBox(x, cy, bw, lines, fill, border) {
+        rrectPath(ctx, x, cy - boxH / 2, bw, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 11);
+        }
+    }
+
+    // tally chips top right, tying back to the worked example
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('103 arrivals → 100 emails', 690, 55);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(535, 60); ctx.lineTo(690, 60); ctx.stroke();
+
+    // row 1: no dedup
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no dedup', 20, y1 + 4);
+    flowBox(130, y1, 150, ['#4907 arrives twice'], blueFill, P.blue);
+    flowBox(360, y1, 150, ['process both'], redFill, '#e74c3c');
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 285, y1, 355, y1);
+    drawArrow(ctx, 515, y1, 552, y1);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ 2 emails sent', 560, y1 + 4);
+
+    // row 2: seen-ids check
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('seen-ids check', 20, y2 + 4);
+    flowBox(130, y2, 150, ['#4907 arrives twice'], blueFill, P.blue);
+    flowBox(330, y2, 160, ['id seen?', 'drop copy 2'], greenFill, P.green);
+    flowBox(530, y2, 150, ['process copy 1'], greenFill, P.green);
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 285, y2, 325, y2);
+    drawArrow(ctx, 495, y2, 525, y2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ 1 email', 605, y2 + 36);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the transport delivers at-least-once; the receiver makes it exactly-once', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

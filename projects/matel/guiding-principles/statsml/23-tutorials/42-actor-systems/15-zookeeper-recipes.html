@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZooKeeper Recipes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>ZooKeeper Recipes</h1>
+<p class="subtitle">Two small znode flags — auto-numbered and vanish-with-session — snap together into distributed locks, leader election, and group membership</p>
+
+<div class="card-section">
+    <h2>Five Workers, One 2am Report</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">two primitives</span><span class="tag orange">ZooKeeper</span></div>
+                <ul>
+                    <li><b>The fleet</b> — five workers (w1–w5) all boot at 2am; exactly one must build the nightly report</li>
+                    <li><b>The tree</b> — ZooKeeper keeps tiny named nodes (znodes) in a filesystem-like tree, e.g. <code>/jobs/report</code></li>
+                    <li><b>Sequential</b> — a create with the SEQUENTIAL flag gets a server-assigned counter suffix: <code>lock-0000000041</code></li>
+                    <li><b>Ephemeral</b> — an EPHEMERAL znode is tied to its creator's session; if heartbeats stop, it is deleted</li>
+                    <li><b>The combo</b> — ephemeral + sequential = a numbered ticket that self-destructs when its holder dies</li>
+                </ul>
+                <p class="example">w3 connects and creates an ephemeral sequential znode; the server names it lock-0000000041 — if w3 crashes, the znode vanishes when its 10-second session times out.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A znode is just a small named node in a shared tree; the ephemeral and sequential flags are the only two primitives every recipe on this page is built from.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Lock: Lowest Ticket Wins, Watch the One Ahead</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">distributed lock</span></div>
+                <ul>
+                    <li><b>Take a ticket</b> — each worker creates an ephemeral sequential znode under <code>/jobs/report</code>: 41–45</li>
+                    <li><b>Lowest wins</b> — w3 holds …41, the smallest number, so w3 holds the lock and builds the report</li>
+                    <li><b>Queue up</b> — every waiter watches the znode one place ahead of its own, not the holder's</li>
+                    <li><b>The crash</b> — at 2:07am w3 dies mid-job; its session times out and znode …41 is auto-deleted</li>
+                    <li><b>The handoff</b> — only w1 (watching …41) is notified; it re-lists, sees …42 is lowest, takes the lock</li>
+                    <li><b>No janitor</b> — nobody had to clean up w3's stale lock; ephemerality did it automatically</li>
+                </ul>
+                <p class="example">Tickets 41–45 belong to w3, w1, w5, w2, w4; when w3's znode vanishes at 2:07am, exactly one watch fires and w1 becomes the new holder.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Sequence numbers give a total order (who holds, who is next); ephemerality guarantees a dead holder releases automatically; watching only your predecessor means one wake-up per release.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Same Trick Elects Leaders and Counts Heads</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">election</span><span class="tag orange">membership</span></div>
+                <ul>
+                    <li><b>Leader election</b> — the identical chain under <code>/election</code>; the lowest znode is leader, not lock holder</li>
+                    <li><b>Failover</b> — when the leader's ephemeral znode vanishes, the next number is already leader-elect</li>
+                    <li><b>Membership</b> — each worker keeps one ephemeral child under <code>/workers</code>; listing children = live roster</li>
+                    <li><b>Barrier</b> — workers add children under <code>/barrier</code>; a watch on the parent opens it at the 5th arrival</li>
+                    <li><b>In the wild</b> — Kafka, HBase, and HDFS have all used ZooKeeper for exactly these recipes</li>
+                </ul>
+                <p class="example">The same five 41–45 tickets placed under /election make w3 the leader at 2:00am and w1 the leader at 2:07am — election is the lock recipe under a different name.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Locks, elections, rosters, and barriers are not separate ZooKeeper features — they are the same create / list / watch moves over ephemeral and sequential znodes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Everyone Watching the Holder: the Herd Effect</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">herd effect</span></div>
+                <ul>
+                    <li><b>The naive lock</b> — all waiters set a watch on the holder's znode …41 and wait for it to vanish</li>
+                    <li><b>The stampede</b> — one delete fires N−1 watches; 499 waiters in a 500-fleet hit the server at once</li>
+                    <li><b>The fix</b> — watch your predecessor: each release wakes exactly one client, whatever the fleet size</li>
+                    <li><b>One-shot watches</b> — a ZooKeeper watch fires once; after it fires you must re-list and re-watch</li>
+                    <li><b>Mid-queue deaths</b> — a fired watch means your predecessor died, not that you hold the lock</li>
+                </ul>
+                <p class="example">In a 500-worker fleet, herd-style watching wakes 499 clients on every release; predecessor-watching wakes 1 — and if w5 (…43) dies mid-queue, w2's watch fires but w1 still holds the lock.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming "my watch fired, so I have the lock." A fired watch only means your predecessor's znode vanished — re-list the children, confirm you are lowest, and if not, set a watch on the new node just ahead of you.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: two-panel diagram — SEQUENTIAL numbering (left) vs EPHEMERAL auto-delete (right)
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Znode Flags: Sequential Numbers It, Ephemeral Ties It to a Session', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 45); ctx.lineTo(360, 275); ctx.stroke();
+
+    // ---- left panel: SEQUENTIAL ----
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+    ctx.fillText('SEQUENTIAL', 180, 60);
+
+    var leftRows = [
+        { y: 95, lab: 'w3 create()', node: 'lock-0000000041' },
+        { y: 145, lab: 'w1 create()', node: '…42' },
+        { y: 195, lab: 'w5 create()', node: '…43' }
+    ];
+    for (var i = 0; i < leftRows.length; i++) {
+        var r = leftRows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 25, r.y + 4);
+        // arrow from label to box
+        ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+        drawArrow(ctx, 118, r.y, 166, r.y);
+        // blue rounded box 150x32
+        rrectPath(ctx, 170, r.y - 16, 150, 32, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.node, 245, r.y + 4);
+    }
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the server assigns the next number', 180, 250);
+
+    // ---- right panel: EPHEMERAL ----
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('EPHEMERAL', 540, 60);
+
+    // session box: green rounded 180x36 at x=450, y=85
+    rrectPath(ctx, 450, 85, 180, 36, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('w3 session (10s timeout)', 540, 107);
+    // crash mark at right edge
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', 638, 108);
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('heartbeats stop', 570, 78);
+
+    // znode box: blue rounded 180x36 at x=450, y=155
+    rrectPath(ctx, 450, 155, 180, 36, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('lock-0000000041', 540, 177);
+
+    // dashed connector session -> znode, labeled "owns"
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(540, 121); ctx.lineTo(540, 155); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('owns', 548, 141);
+
+    // result box: dashed grey rounded 180x36 at x=450, y=225
+    rrectPath(ctx, 450, 225, 180, 36, 8);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('znode auto-deleted', 540, 247);
+
+    // red arrow from znode box down to result box
+    ctx.strokeStyle = '#e74c3c'; ctx.fillStyle = '#e74c3c'; ctx.lineWidth = 2;
+    drawArrow(ctx, 540, 191, 540, 221);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sequence numbers and timeout illustrative', w - 12, h - 8);
+});
+
+// c2: the lock queue at 2:07am — one crash, one notification
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Lock Queue at 2:07am: One Crash, One Notification', w / 2, 24);
+
+    var boxW = 110, boxH = 46, boxY = 115;
+    var boxes = [
+        { x: 40, top: 'w3', bot: '…41', holder: true },
+        { x: 175, top: 'w1', bot: '…42', holder: false },
+        { x: 310, top: 'w5', bot: '…43', holder: false },
+        { x: 445, top: 'w2', bot: '…44', holder: false },
+        { x: 580, top: 'w4', bot: '…45', holder: false }
+    ];
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        rrectPath(ctx, b.x, boxY, boxW, boxH, 8);
+        ctx.fillStyle = b.holder ? 'rgba(0,131,0,0.12)' : 'rgba(42,120,214,0.15)';
+        ctx.fill();
+        ctx.strokeStyle = b.holder ? P.green : P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.top, b.x + boxW / 2, boxY + 19);
+        ctx.fillText(b.bot, b.x + boxW / 2, boxY + 36);
+    }
+    // HOLDER label above w3 box
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('HOLDER', 40 + boxW / 2, boxY - 8);
+
+    // watch arrows: each waiter points at its predecessor (4 arrows)
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+    var midY = boxY + boxH / 2;
+    for (var i = 1; i < boxes.length; i++) {
+        drawArrow(ctx, boxes[i].x - 4, midY, boxes[i - 1].x + boxW + 4, midY);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('watch', (40 + boxW + 175) / 2, midY - 8);
+
+    // crash marker over w3 box
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', 40 + boxW / 2, boxY + 8);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('session expires — znode …41 deleted', 40, 75);
+
+    // notification arrow w3 -> w1
+    ctx.strokeStyle = P.orange; ctx.fillStyle = P.orange; ctx.lineWidth = 3;
+    drawArrow(ctx, 40 + boxW / 2, boxY + boxH + 4, 175 + boxW / 2, boxY + boxH + 4);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('watch fires — only w1 wakes', 145, 185);
+
+    // result box: green rounded 250x34 centered at y=215
+    rrectPath(ctx, w / 2 - 125, 198, 250, 34, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('w1 re-lists: …42 is lowest → holds lock', w / 2, 219);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('w5, w2, w4 sleep through the whole handoff', w / 2, 268);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('ticket numbers illustrative', w - 12, h - 8);
+});
+
+// c3: three recipes, same two primitives
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Recipes, Same Two Primitives', w / 2, 24);
+
+    var smallW = 60, smallH = 28;
+
+    function chainRow(cy, leaderLabel) {
+        var xs = [170, 255, 340];
+        var labs = ['…41', '…42', '…43'];
+        for (var i = 0; i < 3; i++) {
+            rrectPath(ctx, xs[i], cy - smallH / 2, smallW, smallH, 6);
+            ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+            if (i === 0) { ctx.strokeStyle = P.green; ctx.lineWidth = 2; }
+            else { ctx.strokeStyle = P.blue; ctx.lineWidth = 1; }
+            ctx.stroke();
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(labs[i], xs[i] + smallW / 2, cy + 4);
+        }
+        // predecessor arrows (right box points to the one on its left)
+        ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 1.5;
+        for (var i = 1; i < 3; i++) {
+            drawArrow(ctx, xs[i] - 3, cy, xs[i - 1] + smallW + 3, cy);
+        }
+        if (leaderLabel) {
+            ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('LEADER', xs[0] + smallW / 2, cy - smallH / 2 - 6);
+        }
+    }
+
+    var rowYs = [85, 155, 225];
+    var recipeLabs = ['lock', 'leader election', 'membership / barrier'];
+    var ruleTexts = [
+        'lowest holds it; watch your predecessor',
+        'lowest is leader; next number is heir',
+        'list children = live roster; 5th arrival opens the barrier'
+    ];
+    for (var r = 0; r < 3; r++) {
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(recipeLabs[r], 20, rowYs[r] + 4);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(ruleTexts[r], 430, rowYs[r] + 4);
+    }
+
+    chainRow(rowYs[0], false);
+    chainRow(rowYs[1], true);
+
+    // row 3: parent box + five green dots
+    var py3 = rowYs[2];
+    rrectPath(ctx, 170, py3 - smallH / 2, 90, smallH, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('/workers', 215, py3 + 4);
+    // five green dots fanned to the right
+    var dotYs = [py3 - 24, py3 - 12, py3, py3 + 12, py3 + 24];
+    ctx.fillStyle = P.green;
+    for (var i = 0; i < 5; i++) {
+        ctx.beginPath(); ctx.arc(290, dotYs[i], 6, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('5 ephemeral children', 306, py3 + 4);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every recipe is create + list + watch — nothing else', w / 2, 278);
+});
+
+// c4: herd vs chain — clients woken per lock release at three fleet sizes
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Lock Release: How Many Waiters Wake Up?', w / 2, 24);
+
+    // legend, top right under title
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(370, 38, 12, 12);
+    ctx.fillStyle = '#444'; ctx.fillText('watch the holder (herd)', 386, 48);
+    ctx.fillStyle = P.green; ctx.fillRect(534, 38, 12, 12);
+    ctx.fillStyle = '#444'; ctx.fillText('watch your predecessor', 550, 48);
+
+    var bx = 230, barH = 14, gap = 6;
+    var rows = [
+        { y: 70, lab: 'fleet of 5', herdW: 90, herdLab: '4 wake', chainW: 12, chainLab: '1 wakes' },
+        { y: 135, lab: 'fleet of 50', herdW: 240, herdLab: '49 wake', chainW: 12, chainLab: '1 wakes' },
+        { y: 200, lab: 'fleet of 500', herdW: 440, herdLab: '499 wake', chainW: 12, chainLab: '1 wakes' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + barH + 2);
+        // herd bar (red, top of pair)
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(bx, r.y, r.herdW, barH);
+        ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.herdLab, bx + r.herdW + 6, r.y + barH - 3);
+        // chain bar (green, below)
+        var cy = r.y + barH + gap;
+        ctx.fillStyle = P.green;
+        ctx.fillRect(bx, cy, r.chainW, barH);
+        ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.chainLab, bx + r.chainW + 6, cy + barH - 3);
+    }
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('herd cost grows with the fleet; chain cost stays at 1', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic, wake counts exact (N−1 vs 1)', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

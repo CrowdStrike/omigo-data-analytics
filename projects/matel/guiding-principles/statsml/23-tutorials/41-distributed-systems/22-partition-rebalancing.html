@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partition Rebalancing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Partition Rebalancing</h1>
+<p class="subtitle">When a new server joins a cluster, only a few fixed slices of the data move to it &mdash; the rest stay put and queries never stop</p>
+
+<div class="card-section">
+    <h2>A Fourth Server Joins the Cluster</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">fixed partitions</span><span class="tag orange">no downtime</span></div>
+                <ul>
+                    <li><b>The table</b> — an online shop's orders table is split into 12 fixed partitions, P1 through P12</li>
+                    <li><b>The cluster</b> — three nodes hold them: A has P1&ndash;P4, B has P5&ndash;P8, C has P9&ndash;P12, four each</li>
+                    <li><b>The squeeze</b> — the shop grows, so a fourth node D is added to share the load</li>
+                    <li><b>The move</b> — D takes exactly one partition from each node: P4 from A, P8 from B, P12 from C</li>
+                    <li><b>The count</b> — only 3 of the 12 partitions move; the other 9 never leave their node</li>
+                    <li><b>The trick</b> — partitions are fixed at creation; rebalancing reassigns whole partitions, never re-splits rows</li>
+                </ul>
+                <p class="example">After D joins, every node holds 3 partitions, and 75% of the shop's order data never crossed the network at all.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Partition rebalancing moves whole pre-cut slices of data between nodes to even out load — the partition count stays fixed, so adding a node only relocates the minimum few slices.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Copy First, Flip Ownership Second</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">copy-then-switch</span></div>
+                <ul>
+                    <li><b>Before/after</b> — partition counts per node go A 4&rarr;3, B 4&rarr;3, C 4&rarr;3, D 0&rarr;3; total stays 12</li>
+                    <li><b>The copy</b> — D streams P4's 24 GB from A at 50 MB/s, reaching 100% caught up at minute 8</li>
+                    <li><b>Old node serves</b> — during the whole copy, A keeps answering P4's 500 queries per second</li>
+                    <li><b>The catch-up</b> — writes that land on A mid-copy are forwarded to D so its replica stays current</li>
+                    <li><b>The flip</b> — at minute 8 the cluster metadata switches P4's owner to D in one atomic step</li>
+                    <li><b>Hand-check</b> — at minute 4 the copy sits at 50% (12 of 24 GB), and A is still serving all 500 q/s</li>
+                </ul>
+                <p class="example">From minute 0 to 8 the copy runs 0% &rarr; 25% &rarr; 50% &rarr; 75% &rarr; 100% while P4's query rate holds at 500/s — shoppers never see a pause.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Rebalancing is copy-then-switch: the new node catches up in the background while the old owner keeps serving, and ownership flips only when the replica is complete.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Kafka and Elasticsearch Ship With Fixed Partitions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">hot shards</span><span class="tag green">scaling live</span></div>
+                <ul>
+                    <li><b>Streaming and storage</b> — Kafka topics and Elasticsearch indexes are pre-cut into fixed partitions for exactly this move</li>
+                    <li><b>Scaling live</b> — clusters grow from 3 to 4 to 40 nodes without ever taking the data offline</li>
+                    <li><b>The alternative</b> — assigning rows by <code>hash(key) mod N</code> means changing N reshuffles nearly every row</li>
+                    <li><b>The math</b> — going 3&rarr;4 nodes, mod-N moves 75% of keys; fixed partitions move 25% (3 of 12)</li>
+                    <li><b>Hot shards</b> — a partition getting outsized traffic can be moved alone to a quiet node, cooling the hotspot</li>
+                    <li><b>Steady service</b> — because moves are few and copy-then-switch, rebalancing runs during business hours</li>
+                </ul>
+                <p class="example">Growing 4&rarr;5 nodes, a mod-N scheme would reshuffle 80% of all keys, while the fixed-partition cluster moves ≈1/5 — with 12 partitions, just 2 or 3 of them.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Fixed partitions turn "add a server" from a full-data reshuffle into a handful of whole-slice moves, which is why Kafka- and Elasticsearch-style systems can scale while serving traffic.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Twelve Partitions Forever, and the Rebalancing Storm</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">capacity ceiling</span><span class="tag blue">network</span></div>
+                <ul>
+                    <li><b>The cap</b> — a node can only hold whole partitions, so 12 partitions can never use more than 12 nodes</li>
+                    <li><b>The mistake</b> — picking a partition count that fits today (12 for 3 nodes) and capping tomorrow's growth</li>
+                    <li><b>Node 13 idles</b> — with 12 partitions, cluster throughput stops rising at 12 nodes; extra machines sit empty</li>
+                    <li><b>The storm</b> — rebalancing too many partitions at once saturates the network and slows live queries</li>
+                    <li><b>The throttle</b> — real systems move a few partitions at a time and cap copy bandwidth for this reason</li>
+                    <li><b>The balance</b> — too many partitions has its own cost: per-partition overhead in memory and metadata</li>
+                </ul>
+                <p class="example">A cluster with 12 partitions grows fine to 12 nodes, but nodes 13 through 16 add zero throughput — the fix is re-splitting, which is the expensive full reshuffle rebalancing was meant to avoid.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the partition count as a detail. It is the hard ceiling on how far the cluster can scale, and moving too many partitions at once turns a smooth rebalance into a network-saturating storm.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: before/after box diagram — node D joins, only 3 of 12 partitions move
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Node D Joins: Only 3 of 12 Partitions Move', w / 2, 24);
+
+    function drawBox(cx, y, label, moved) {
+        var bw = 70, bh = 26;
+        ctx.fillStyle = moved ? 'rgba(217,89,38,0.18)' : 'rgba(42,120,214,0.15)';
+        ctx.fillRect(cx - bw / 2, y, bw, bh);
+        ctx.strokeStyle = moved ? P.orange : P.blue;
+        ctx.lineWidth = moved ? 2 : 1;
+        ctx.strokeRect(cx - bw / 2, y, bw, bh);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, y + 18);
+    }
+
+    // left panel: before
+    var beforeX = [80, 165, 250];
+    var beforeHeads = ['Node A', 'Node B', 'Node C'];
+    var beforeParts = [
+        ['P1', 'P2', 'P3', 'P4'],
+        ['P5', 'P6', 'P7', 'P8'],
+        ['P9', 'P10', 'P11', 'P12']
+    ];
+    var beforeYs = [85, 116, 147, 178];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(beforeHeads[i], beforeX[i], 70);
+        for (var j = 0; j < 4; j++) {
+            drawBox(beforeX[i], beforeYs[j], beforeParts[i][j], false);
+        }
+    }
+
+    // divider arrow
+    ctx.fillStyle = P.mute; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('→ D joins', 340, 155);
+
+    // right panel: after
+    var afterX = [420, 500, 580, 660];
+    var afterHeads = ['Node A', 'Node B', 'Node C', 'Node D'];
+    var afterParts = [
+        ['P1', 'P2', 'P3'],
+        ['P5', 'P6', 'P7'],
+        ['P9', 'P10', 'P11'],
+        ['P4', 'P8', 'P12']
+    ];
+    var afterYs = [85, 116, 147];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(afterHeads[i], afterX[i], 70);
+        for (var j = 0; j < 3; j++) {
+            drawBox(afterX[i], afterYs[j], afterParts[i][j], i === 3);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('9 of 12 partitions never move — 75% of the data stays put', 360, 245);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('partition layout illustrative; the 3-of-12 count is exact for this scheme', w - 15, h - 10);
+});
+
+// c2: timeline of P4's move — copy progress up, queries flat, flip at minute 8
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Moving P4: Copy in the Background, Flip at Minute 8', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(min) { return ox + min / 10 * pw; }
+    function yOf(pct) { return baseY - pct / 100 * ph; }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [25, 50, 75].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 10; m += 2) {
+        ctx.fillText(m + ' min', xOf(m), baseY + 16);
+    }
+    ctx.textAlign = 'right';
+    [0, 25, 50, 75, 100].forEach(function(g) {
+        ctx.fillText(g + '%', ox - 8, yOf(g) + 4);
+    });
+
+    // flip marker at minute 8
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(8), baseY - ph); ctx.lineTo(xOf(8), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ownership flips A → D', xOf(8), baseY - ph - 6);
+
+    // copy line: 0/25/50/75/100 at minutes 0-8, flat to 10
+    var copyMin = [0, 2, 4, 6, 8];
+    var copyPct = [0, 25, 50, 75, 100];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < copyMin.length; i++) {
+        var x = xOf(copyMin[i]), y = yOf(copyPct[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.lineTo(xOf(10), yOf(100));
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('D catching up', xOf(3), yOf(37) - 12);
+
+    // queries line: flat at 90%
+    var qMin = [0, 2, 4, 6, 8, 10];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(90)); ctx.lineTo(xOf(8), yOf(90)); ctx.stroke();
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xOf(8), yOf(90)); ctx.lineTo(xOf(10), yOf(90)); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('P4 queries: steady 500/s', xOf(1), 70);
+    ctx.fillStyle = P.aqua; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('now served by D', xOf(9), yOf(90) - 10);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('old owner serves every query until the copy is complete', xOf(5), 170);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('24 GB at 50 MB/s ≈ 8 min; query rate illustrative', w - 15, h - 10);
+});
+
+// c3: horizontal bars — share of data moved, mod-N vs fixed partitions
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Share of Data Moved When the Cluster Grows', w / 2, 24);
+
+    var bx = 230, maxW = 440;
+
+    // bottom scale rule
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bx, 255); ctx.lineTo(bx + maxW, 255); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0%', bx, 270);
+    ctx.fillText('50%', bx + maxW / 2, 270);
+    ctx.fillText('100%', bx + maxW, 270);
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 255); ctx.stroke();
+
+    var rows = [
+        { y: 75,  label: '3→4 nodes, hash mod N',       bw: 330, fill: 'rgba(231,76,60,0.75)', tcol: '#e74c3c', val: '75% of keys move' },
+        { y: 115, label: '3→4 nodes, fixed partitions', bw: 110, fill: 'rgba(0,131,0,0.75)',   tcol: P.green,   val: '25% (3 of 12)' },
+        { y: 165, label: '4→5 nodes, hash mod N',       bw: 352, fill: 'rgba(231,76,60,0.75)', tcol: '#e74c3c', val: '80% of keys move' },
+        { y: 205, label: '4→5 nodes, fixed partitions', bw: 88,  fill: 'rgba(0,131,0,0.75)',   tcol: P.green,   val: '≈20% (2–3 of 12)' }
+    ];
+    rows.forEach(function(r) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 13);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.bw, 18);
+        ctx.fillStyle = r.tcol; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.val, bx + r.bw + 8, r.y + 13);
+    });
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('fixed partitions move the minimum; mod-N reshuffles almost everything', w - 20, 250);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('mod-N fractions exact for uniform keys; partition moves round to whole partitions', w - 15, h - 10);
+});
+
+// c4: throughput vs node count with 12 fixed partitions — ceiling at 12 nodes
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('12 Partitions = a Hard Ceiling at 12 Nodes', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(n) { return ox + (n - 1) / 15 * pw; }
+    function yOf(t) { return baseY - t / 12 * ph; }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [3, 6, 9, 12].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+    });
+
+    // ceiling zone: light red band for nodes 12-16 over full plot height
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(xOf(12), baseY - ph, xOf(16) - xOf(12), ph);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [1, 4, 8, 12, 16].forEach(function(n) {
+        ctx.fillText(String(n), xOf(n), baseY + 16);
+    });
+    ctx.fillText('nodes', ox + pw / 2, baseY + 32);
+    ctx.textAlign = 'right';
+    [3, 6, 9, 12].forEach(function(g) {
+        ctx.fillText(g + '×', ox - 8, yOf(g) + 4);
+    });
+
+    // dashed red ceiling line at throughput 12
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(12)); ctx.lineTo(ox + pw, yOf(12)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ceiling: 12 partitions', ox + 8, yOf(12) - 6);
+
+    // throughput line
+    var nodes = [1, 2, 3, 4, 6, 8, 12, 13, 14, 16];
+    var thr = [1, 2, 3, 4, 6, 8, 12, 12, 12, 12];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < nodes.length; i++) {
+        var x = xOf(nodes[i]), y = yOf(thr[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // marker: node 13 adds nothing, arrow to flat segment
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('node 13 adds nothing', xOf(13), yOf(12) + 42);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(13), yOf(12) + 32); ctx.lineTo(xOf(13), yOf(12) + 8); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(xOf(13), yOf(12) + 6);
+    ctx.lineTo(xOf(13) - 4, yOf(12) + 14);
+    ctx.lineTo(xOf(13) + 4, yOf(12) + 14);
+    ctx.closePath();
+    ctx.fillStyle = P.mute; ctx.fill();
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('extra nodes past 12 sit idle — pick the partition count', xOf(8), 90);
+    ctx.fillText('for the cluster you’ll have, not the one you have', xOf(8), 108);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput in multiples of one node’s capacity, illustrative', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

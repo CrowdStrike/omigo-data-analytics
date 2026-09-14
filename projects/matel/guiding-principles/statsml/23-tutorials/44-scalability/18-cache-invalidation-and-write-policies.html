@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cache Invalidation &amp; Write Policies</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Cache Invalidation &amp; Write Policies</h1>
+<p class="subtitle">A cache is a copy, and every copy can go stale — the write policy decides how long the cache is allowed to lie about the source of truth</p>
+
+<div class="card-section">
+    <h2>The Mug That Stayed at $30</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag red">stale data</span><span class="tag green">source of truth</span></div>
+                <ul>
+                    <li><b>The setup</b> — a store caches product prices in memory so the product page never waits on the database</li>
+                    <li><b>The change</b> — at 2:00pm a sale drops the ceramic mug from $30 to $24 in the database</li>
+                    <li><b>The lie</b> — the cache still holds its old copy, so every shopper keeps seeing $30</li>
+                    <li><b>The expiry</b> — the cached entry was stored with a 5-minute TTL, so it dies on its own at 2:05pm</li>
+                    <li><b>The problem</b> — for 5 minutes the cache and the database disagree, and the cache wins every read</li>
+                </ul>
+                <p class="example">From 2:00 to 2:05pm the database says $24 while every product-page view serves the cached $30 — shoppers who add the mug see the wrong price.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Staleness is the gap between the source of truth changing and the cached copy catching up — write policies and invalidation exist to shrink or bound that gap.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Ways to Write the New Price</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">write policies</span></div>
+                <ul>
+                    <li><b>The costs</b> — in this store a database write takes 10 ms and a cache write takes 2 ms</li>
+                    <li><b>Write-through</b> — write cache and database together: 10 + 2 = 12 ms, but the cache is never stale</li>
+                    <li><b>Write-back</b> — write only the cache (2 ms) and flush to the database within 30 s: fast but risky</li>
+                    <li><b>The risk</b> — if the cache node dies before the flush, the $24 exists nowhere; the truth reverts to $30</li>
+                    <li><b>Cache-aside</b> — write the database (10 ms), then delete the cache key; the next read repopulates $24</li>
+                    <li><b>Hand-check</b> — write-through 12 ms, write-back 2 ms, cache-aside 10 ms + a 1 ms delete = 11 ms</li>
+                </ul>
+                <p class="example">The same $24 update costs 12 ms write-through, 2 ms write-back, and 11 ms cache-aside — write-back is 6× faster only because it postpones the database's copy.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every policy trades among three things — write latency, staleness, and durability; write-through pays latency, write-back risks loss, cache-aside (the most common) accepts a brief miss.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Race That Pins a Stale Price</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">race condition</span><span class="tag blue">cache-aside</span><span class="tag orange">TTL</span></div>
+                <ul>
+                    <li><b>The trigger</b> — cache-aside repopulates on a miss, and a repopulate can overlap an update</li>
+                    <li><b>Reader A</b> — at t=0 ms a page view misses the cache and starts reading the price from the database</li>
+                    <li><b>Writer B</b> — at t=3 ms the sale lands: database becomes $24, and at t=5 ms B deletes the cache key</li>
+                    <li><b>The stale write</b> — at t=8 ms A's read returns the old $30, and at t=10 ms A writes $30 into the cache</li>
+                    <li><b>The pin</b> — the delete already happened, so the stale $30 sits in the cache until the 300 s TTL kills it</li>
+                    <li><b>The safety net</b> — TTL cannot prevent this race, but it bounds the damage to at most one TTL period</li>
+                </ul>
+                <p class="example">B's delete at t=5 ms removes nothing useful; A's $30 arrives 5 ms later and stays pinned for up to 300 seconds — the TTL, not the invalidation, ends the lie.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> In cache-aside, a read that started before an update can repopulate the cache with pre-update data after the invalidation ran — TTL is the only bound on how long that stale value survives.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Invalidation Message That Never Arrives</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">TTL</span><span class="tag blue">two hard things</span></div>
+                <ul>
+                    <li><b>The design</b> — a price-change event tells every cache node to drop the mug's key immediately</li>
+                    <li><b>The mistake</b> — trusting that event so much that entries are stored with no TTL at all</li>
+                    <li><b>The failure</b> — the message queue drops one event, or the worker that applies it crashes mid-batch</li>
+                    <li><b>The result</b> — a cache entry nothing will ever invalidate: $30 served forever while the truth is $24</li>
+                    <li><b>The joke</b> — "there are only two hard things in computer science: cache invalidation and naming things"</li>
+                    <li><b>The fix</b> — keep event-driven invalidation for speed, keep TTL as the backstop that bounds staleness</li>
+                </ul>
+                <p class="example">One lost message with no TTL means the $30 mug outlives the sale, the quarter, and the on-call engineer who eventually greps the cache by hand.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating invalidation events as guaranteed delivery. Any missed message, crashed worker, or partitioned node turns "invalidate on change" into "never invalidate" — only a TTL converts unbounded staleness into a fixed worst case.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x, y + r, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-size, -size * 0.5);
+    ctx.lineTo(-size, size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+// c1: database price vs cached price step lines around 2:00pm
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Price Drops to $24 at 2:00 — the Cache Says $30 for 5 More Minutes', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    // time in minutes since 1:58, span 10 min (1:58 -> 2:08)
+    function px(t) { return ox + t / 10 * pw; }
+    // price $20 to $32
+    function py(p) { return baseY - (p - 20) / 12 * ph; }
+
+    // gridlines at $24 and $28
+    var glp = [24, 28];
+    for (var i = 0; i < glp.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, py(glp[i])); ctx.lineTo(ox + pw, py(glp[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + glp[i], ox - 6, py(glp[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 2 minutes
+    var tickLabs = ['1:58', '2:00', '2:02', '2:04', '2:06', '2:08'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 6; i++) {
+        var x = px(i * 2);
+        ctx.fillText(tickLabs[i], x, baseY + 18);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 4); ctx.stroke();
+    }
+
+    // stale window rect between the two lines from 2:00 (t=2) to 2:05 (t=7)
+    ctx.fillStyle = 'rgba(231,76,60,0.10)';
+    ctx.fillRect(px(2), py(30), px(7) - px(2), py(24) - py(30));
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('stale window: 5 min', (px(2) + px(7)) / 2, (py(30) + py(24)) / 2 + 5);
+
+    // TTL marker at 2:05 (t=7)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px(7), baseY - ph); ctx.lineTo(px(7), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('TTL expires', px(7), baseY - ph - 4);
+
+    // database step line (green): $30 until 2:00 then $24
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(30));
+    ctx.lineTo(px(2), py(30));
+    ctx.lineTo(px(2), py(24));
+    ctx.lineTo(px(10), py(24));
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('database (truth)', px(10), py(24) - 8);
+
+    // cache step line (red dashed): $30 until 2:05 then $24
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(30));
+    ctx.lineTo(px(7), py(30));
+    ctx.lineTo(px(7), py(24));
+    ctx.lineTo(px(10), py(24));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cache copy', px(3.5), py(30) - 8);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times and prices illustrative', 690, 292);
+});
+
+// c2: three write-policy flow rows
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same $24 Update, Three Write Policies', w / 2, 24);
+
+    var boxW = 110, boxH = 36;
+    var appStyle = { fill: 'rgba(42,120,214,0.15)', border: P.blue };
+    var storeStyle = { fill: 'rgba(0,131,0,0.12)', border: P.green };
+    var emptyStyle = { fill: 'rgba(231,76,60,0.08)', border: '#e74c3c' };
+
+    function drawBox(cxLeft, cy, lab, style) {
+        roundedRect(ctx, cxLeft, cy - boxH / 2, boxW, boxH, 8);
+        ctx.fillStyle = style.fill; ctx.fill();
+        ctx.strokeStyle = style.border; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, cxLeft + boxW / 2, cy + 4);
+    }
+
+    function drawArrow(x1, x2, cy, lab, dashed) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        if (dashed) ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, cy); ctx.lineTo(x2 - 4, cy); ctx.stroke();
+        ctx.setLineDash([]);
+        arrowHead(ctx, x2 - 4, cy, 0, 9, P.mute);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, (x1 + x2) / 2, cy - 10);
+    }
+
+    var rows = [
+        {
+            cy: 85, policy: 'write-through',
+            boxes: [
+                { x: 150, lab: 'app $24', style: appStyle },
+                { x: 310, lab: 'cache $24', style: storeStyle },
+                { x: 470, lab: 'db $24', style: storeStyle }
+            ],
+            arrows: [
+                { lab: '2 ms', dashed: false },
+                { lab: '10 ms', dashed: false }
+            ],
+            note: ['12 ms,', 'never stale'], noteCol: P.green
+        },
+        {
+            cy: 160, policy: 'write-back',
+            boxes: [
+                { x: 150, lab: 'app $24', style: appStyle },
+                { x: 310, lab: 'cache $24', style: storeStyle },
+                { x: 470, lab: 'db $30→$24', style: storeStyle }
+            ],
+            arrows: [
+                { lab: '2 ms', dashed: false },
+                { lab: 'flush ≤30 s later', dashed: true }
+            ],
+            note: ['lost if cache', 'dies first'], noteCol: P.orange
+        },
+        {
+            cy: 235, policy: 'cache-aside',
+            boxes: [
+                { x: 150, lab: 'app $24', style: appStyle },
+                { x: 310, lab: 'db $24', style: storeStyle },
+                { x: 470, lab: 'cache (empty)', style: emptyStyle }
+            ],
+            arrows: [
+                { lab: '10 ms', dashed: false },
+                { lab: '1 ms delete', dashed: false }
+            ],
+            note: ['next read', 'repopulates'], noteCol: P.blue
+        }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.policy, 20, row.cy + 4);
+        for (var i = 0; i < 3; i++) {
+            drawBox(row.boxes[i].x, row.cy, row.boxes[i].lab, row.boxes[i].style);
+        }
+        drawArrow(row.boxes[0].x + boxW, row.boxes[1].x, row.cy, row.arrows[0].lab, row.arrows[0].dashed);
+        drawArrow(row.boxes[1].x + boxW, row.boxes[2].x, row.cy, row.arrows[1].lab, row.arrows[1].dashed);
+        ctx.fillStyle = row.noteCol; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.note[0], 600, row.cy - 4);
+        ctx.fillText(row.note[1], 600, row.cy + 12);
+    }
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', 690, 292);
+});
+
+// c3: read-repopulate race sequence timeline
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Read-Repopulate Race: Old $30 Lands After the Delete', w / 2, 24);
+
+    var axL = 60, axR = 660, axY = 245;
+    function px(t) { return axL + t / 12 * (axR - axL); }
+
+    // lanes
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(axL, 100); ctx.lineTo(axR, 100); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(axL, 165); ctx.lineTo(axR, 165); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reader A', 20, 92);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('writer B', 20, 187);
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axL, axY); ctx.lineTo(axR, axY); ctx.stroke();
+    var ticks = [0, 3, 5, 8, 10, 12];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var x = px(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 5); ctx.stroke();
+        ctx.fillText(ticks[i] + ' ms', x, axY + 20);
+    }
+
+    // cache-state bar at y=210, 14px tall
+    var barY = 210, barH = 14;
+    // empty 0-10 ms
+    ctx.fillStyle = P.grid;
+    ctx.fillRect(px(0), barY, px(10) - px(0), barH);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('empty', (px(0) + px(10)) / 2, barY + 11);
+    // stale $30 from 10-12 ms
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(px(10), barY, px(12) - px(10), barH);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('$30 stale', (px(10) + px(12)) / 2, barY + 11);
+    // red arrow off right edge
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px(12), barY + barH / 2); ctx.lineTo(px(12) + 22, barY + barH / 2); ctx.stroke();
+    arrowHead(ctx, px(12) + 22, barY + barH / 2, 0, 8, '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('…pinned until TTL (300 s)', 690, barY - 6);
+
+    // reader A events (y=100)
+    var aEvents = [
+        { t: 0, lab: 'cache miss, read db', col: P.blue, labY: 84, align: 'left' },
+        { t: 8, lab: 'db returns $30', col: P.blue, labY: 84, align: 'center' },
+        { t: 10, lab: 'writes $30 to cache', col: '#e74c3c', labY: 68, align: 'center' }
+    ];
+    for (var i = 0; i < aEvents.length; i++) {
+        var e = aEvents[i];
+        ctx.fillStyle = e.col;
+        ctx.beginPath(); ctx.arc(px(e.t), 100, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.textAlign = e.align;
+        ctx.fillText(e.lab, e.align === 'left' ? px(e.t) - 4 : px(e.t), e.labY);
+    }
+
+    // writer B events (y=165), labels below
+    var bEvents = [
+        { t: 3, lab: 'db ← $24' },
+        { t: 5, lab: 'delete cache key' }
+    ];
+    for (var i = 0; i < bEvents.length; i++) {
+        var e = bEvents[i];
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(px(e.t), 165, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(e.lab, px(e.t), 187);
+    }
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the delete ran — but the stale write came later', 330, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', 690, 292);
+});
+
+// c4: worst-case staleness bars under three invalidation setups
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Worst-Case Staleness: What Bounds the Lie?', w / 2, 24);
+
+    var baseX = 250, barH = 18;
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 60); ctx.lineTo(baseX, 240); ctx.stroke();
+
+    var rows = [
+        { cy: 90, lab: 'event delivered (normal case)', width: 12, col: P.green, end: '≈1 s', endBold: false },
+        { cy: 155, lab: 'event lost, 5-min TTL backstop', width: 220, col: P.orange, end: '300 s', endBold: false },
+        { cy: 220, lab: 'event lost, no TTL', width: 400, col: '#e74c3c', end: null }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(row.lab, 240, row.cy + 4);
+        roundedRect(ctx, baseX, row.cy - barH / 2, row.width, barH, 4);
+        ctx.fillStyle = row.col; ctx.fill();
+        if (row.end) {
+            ctx.fillStyle = row.col; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(row.end, baseX + row.width + 8, row.cy + 4);
+        }
+    }
+
+    // arrowhead past x=650 on the "no TTL" bar
+    arrowHead(ctx, 662, 220, 0, 12, '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('unbounded — stale forever', 662, 220 - 16);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("TTL turns 'forever' into 'at most 5 minutes'", w / 2, 265);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('durations illustrative; pixel widths schematic', 690, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

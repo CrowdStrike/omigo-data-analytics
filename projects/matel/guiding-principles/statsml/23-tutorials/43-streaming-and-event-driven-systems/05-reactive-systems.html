@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reactive Systems</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Reactive Systems</h1>
+<p class="subtitle">Message-driven backends stay responsive under a traffic spike — components talk through queues, so overload is shed at the door instead of hanging every caller</p>
+
+<div class="card-section">
+    <h2>The 10am Ticket On-Sale That Melts a Server</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">message-driven</span><span class="tag orange">traffic spike</span></div>
+                <ul>
+                    <li><b>The on-sale</b> — a ticket-booking backend idles at 200 requests/s; at 10:01am a tour goes on sale and 2,000 requests/s arrive</li>
+                    <li><b>The old design</b> — thread-per-request: each booking holds a thread while it waits ~500 ms on the payment gateway</li>
+                    <li><b>The collapse</b> — all 200 threads block at once, new requests pile up on sockets, and p95 latency climbs to 30 s</li>
+                    <li><b>The reactive design</b> — requests become messages on a bounded queue; stateless workers pull them at their own pace</li>
+                    <li><b>The name</b> — systems built this way are called reactive: responsive, resilient, elastic, and message-driven (the Reactive Manifesto's four traits)</li>
+                </ul>
+                <p class="example">At 10:04am the thread-blocking service answers in 28 s (mostly timeouts) while the message-driven one still answers in about 1 s.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A reactive system decouples components with asynchronous messages, so a spike fills a queue it can measure and shed — instead of silently freezing every thread in the building.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Thread Math: 200 Threads, 400 Bookings a Second</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">backpressure</span></div>
+                <ul>
+                    <li><b>Capacity</b> — each request blocks a thread for 0.5 s, so 200 threads serve at most 200 &divide; 0.5 = 400 requests/s</li>
+                    <li><b>The gap</b> — the spike delivers 2,000 requests/s: 1,600/s more than the blocking service can ever finish</li>
+                    <li><b>Message version</b> — 8 workers each process 50 messages/s, the same 400/s baseline, but nothing holds a thread while waiting</li>
+                    <li><b>Bounded queue</b> — the queue caps at 5,000 messages; once full, extra requests get a 5 ms "you're in line, retry shortly" reply</li>
+                    <li><b>Hand-check</b> — at 8 workers, 400/s of the 2,000/s are served and the other 1,600/s are shed fast instead of hanging 30 s</li>
+                </ul>
+                <p class="example">Same hardware, same 400/s baseline throughput — the blocking service turns the extra 1,600/s into 30 s hangs, the reactive one into 5 ms retry replies.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Backpressure means the overloaded side says "not now" cheaply and immediately; the load doesn't vanish, but it stops taking healthy requests down with it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Elastic Under Load: Watch the Queue, Scale the Workers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">elastic</span><span class="tag orange">resilient</span></div>
+                <ul>
+                    <li><b>Load made visible</b> — queue depth is a number an autoscaler can read; blocked threads are invisible until the crash</li>
+                    <li><b>Elasticity</b> — workers scale 8 &rarr; 40 during the spike; 40 &times; 50 = 2,000 messages/s matches the incoming rate</li>
+                    <li><b>Failure isolation</b> — if the payment gateway dies, its messages wait in the queue; browsing and seat maps keep working</li>
+                    <li><b>Where you meet it</b> — Kafka consumer groups, actor systems like Erlang or Akka, serverless functions scaling on queue depth</li>
+                    <li><b>The trade</b> — every hop becomes eventually-consistent and asynchronous, which is harder to trace and reason about</li>
+                </ul>
+                <p class="example">The queue rides its 5,000 cap at 10:02–10:03am and is back to 4,900 by 10:04am; by then 40 workers match the spike, and the backlog drains to zero by 10:10am.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Message-driven is the mechanism, the other three traits are the payoff — the queue makes load measurable (elastic), failures local (resilient), and latency bounded (responsive).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Async Alone Is Not Reactive</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">unbounded queue</span></div>
+                <ul>
+                    <li><b>The confusion</b> — bolting a message queue onto the design and calling it reactive, with no bound and no backpressure</li>
+                    <li><b>Unbounded mailbox</b> — at a 1,600/s deficit the queue grows by ~96,000 messages per minute, quietly</li>
+                    <li><b>The new crash</b> — the failure moves from thread exhaustion to memory exhaustion; same outage, worse diagnosis</li>
+                    <li><b>Stale work</b> — even before crashing, a huge backlog means serving 10-minute-old booking requests nobody still wants</li>
+                    <li><b>Hidden blocking</b> — one synchronous call inside an "async" worker re-creates the thread-per-request problem in miniature</li>
+                </ul>
+                <p class="example">Unbounded, the queue holds ~384,000 messages by 10:05am and the worker process dies of memory; bounded at 5,000, it never exceeds its cap.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the queue as infinite. A queue without a bound doesn't remove overload — it hides it until memory runs out; backpressure means the system must be able to say no.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: p95 latency through the spike — thread-blocking vs message-driven
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('10:01am On-Sale: Thread-Blocking Hits 30 s, Message-Driven Stays Near 1 s', w / 2, 24);
+
+    var originX = 60, baseY = 245, plotW = 600, plotH = 180, maxS = 32;
+    var minutes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var blocking = [0.4, 0.5, 3, 12, 28, 30, 30, 30, 29, 28, 26];
+    var reactive = [0.4, 0.5, 0.9, 1.4, 1.1, 0.8, 0.6, 0.5, 0.5, 0.4, 0.4];
+
+    function xOf(m) { return originX + m / 10 * plotW; }
+    function yOf(sec) { return baseY - sec / maxS * plotH; }
+
+    // gridlines
+    var grids = [8, 16, 24];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(originX, gy); ctx.lineTo(originX + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[g] + ' s', originX - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(originX, baseY - plotH);
+    ctx.lineTo(originX, baseY);
+    ctx.lineTo(originX + plotW, baseY);
+    ctx.stroke();
+
+    // x ticks every 2 min
+    var tickLabs = ['10:00', '10:02', '10:04', '10:06', '10:08', '10:10'];
+    for (var t = 0; t <= 5; t++) {
+        var tx = xOf(t * 2);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[t], tx, baseY + 20);
+    }
+
+    // spike marker at minute 1
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(1), baseY - plotH); ctx.lineTo(xOf(1), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('on-sale opens — 2,000 req/s', xOf(1) + 6, baseY - plotH + 4);
+
+    // thread-blocking line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < minutes.length; i++) {
+        var x = xOf(minutes[i]), y = yOf(blocking[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('thread-blocking', xOf(7.6), yOf(30) - 10);
+
+    // message-driven line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < minutes.length; i++) {
+        var x = xOf(minutes[i]), y = yOf(reactive[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('message-driven', xOf(8.2), yOf(0.5) - 10);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('queue + backpressure keep answers near 1 s', xOf(6), 95);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 15, h - 10);
+});
+
+// c2: who can serve the 2,000 req/s spike
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('2,000 req/s Arrive — Who Can Serve Them?', w / 2, 24);
+
+    var baseY = 245, plotH = 180, maxR = 2000;
+    function yOf(r) { return baseY - r / maxR * plotH; }
+
+    // gridlines
+    var grids = [500, 1000, 1500];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(80, gy); ctx.lineTo(680, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[g].toLocaleString('en-US'), 70, gy + 4);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(80, baseY); ctx.lineTo(680, baseY); ctx.stroke();
+
+    var barW = 110;
+    var bars = [
+        { x: 130, cat: 'incoming spike', v: 2000, valLab: '2,000/s', style: 'spike' },
+        { x: 310, cat: 'thread-per-request', v: 400, valLab: '400/s served', style: 'red', note: 'rest hang until timeout' },
+        { x: 490, cat: 'message-driven, 8 workers', v: 400, valLab: '400/s served', style: 'green', note: 'rest shed in 5 ms' }
+    ];
+
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        var by = yOf(b.v);
+        if (b.style === 'spike') {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(b.x, by, barW, baseY - by);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(b.x, by, barW, baseY - by);
+            ctx.fillStyle = P.blue;
+        } else if (b.style === 'red') {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(b.x, by, barW, baseY - by);
+        } else {
+            ctx.fillStyle = P.green;
+            ctx.fillRect(b.x, by, barW, baseY - by);
+        }
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        if (b.style === 'red') ctx.fillStyle = '#e74c3c';
+        else if (b.style === 'green') ctx.fillStyle = P.green;
+        else ctx.fillStyle = P.blue;
+        ctx.fillText(b.valLab, b.x + barW / 2, by - 8);
+        if (b.note) {
+            ctx.font = 'bold 12px system-ui';
+            ctx.fillText(b.note, b.x + barW / 2, 130);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.cat, b.x + barW / 2, baseY + 18);
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('200 threads ÷ 0.5 s block = 400/s — the math nobody repealed', 90, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative; 8 workers × 50 msg/s = 400/s', w - 15, h - 10);
+});
+
+// c3: queue depth (area) and worker count (step line) through the spike
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Queue Depth Triggers the Scale-Up: 8 → 40 Workers', w / 2, 24);
+
+    var originX = 60, baseY = 245, plotW = 580, plotH = 180;
+    var minutes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var depth = [0, 4900, 5000, 5000, 4900, 3800, 2200, 900, 300, 100, 0];
+    var workers = [8, 8, 16, 32, 40, 40, 40, 40, 16, 8, 8];
+
+    function xOf(m) { return originX + m / 10 * plotW; }
+    function yQ(q) { return baseY - q / 5000 * plotH; }
+    function yW(wk) { return baseY - wk / 40 * plotH; }
+
+    // gridlines (left axis)
+    var grids = [1250, 2500, 3750];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yQ(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(originX, gy); ctx.lineTo(originX + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[g].toLocaleString('en-US'), originX - 6, gy + 4);
+    }
+
+    // right y labels (workers)
+    var wGrids = [10, 20, 30, 40];
+    for (var g = 0; g < wGrids.length; g++) {
+        ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(String(wGrids[g]), 655, yW(wGrids[g]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(originX, baseY - plotH);
+    ctx.lineTo(originX, baseY);
+    ctx.lineTo(originX + plotW, baseY);
+    ctx.lineTo(originX + plotW, baseY - plotH);
+    ctx.stroke();
+
+    // x ticks
+    var tickLabs = ['10:00', '10:02', '10:04', '10:06', '10:08', '10:10'];
+    for (var t = 0; t <= 5; t++) {
+        var tx = xOf(t * 2);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[t], tx, baseY + 18);
+    }
+
+    // queue depth area + line
+    ctx.fillStyle = 'rgba(42,120,214,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), baseY);
+    for (var i = 0; i < minutes.length; i++) ctx.lineTo(xOf(minutes[i]), yQ(depth[i]));
+    ctx.lineTo(xOf(10), baseY);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < minutes.length; i++) {
+        var x = xOf(minutes[i]), y = yQ(depth[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // queue cap line at 5,000
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(originX, yQ(5000)); ctx.lineTo(originX + plotW, yQ(5000)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cap 5,000 — overflow shed', originX + 4, yQ(5000) - 8);
+
+    // worker step line
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yW(workers[0]));
+    for (var i = 1; i < minutes.length; i++) {
+        ctx.lineTo(xOf(minutes[i]), yW(workers[i - 1]));
+        ctx.lineTo(xOf(minutes[i]), yW(workers[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('workers', xOf(4.4), yW(40) - 8);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('40 × 50/s = 2,000/s — backlog drains', xOf(7), 100);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('depths and worker counts illustrative', w - 15, h - 10);
+});
+
+// c4: unbounded vs bounded queue under the same spike
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Spike, Two Queues: Unbounded Grows Until Memory Dies', w / 2, 24);
+
+    var originX = 70, baseY = 245, plotW = 590, plotH = 180, maxK = 400;
+    var minutes = [0, 1, 2, 3, 4, 5];
+    var unbounded = [0, 0, 96, 192, 288, 384];
+    var bounded = [0, 0, 5, 5, 5, 5];
+
+    function xOf(m) { return originX + m / 6 * plotW; }
+    function yOf(k) { return baseY - k / maxK * plotH; }
+
+    // gridlines
+    var grids = [100, 200, 300];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(originX, gy); ctx.lineTo(originX + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[g] + 'k', originX - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(originX, baseY - plotH);
+    ctx.lineTo(originX, baseY);
+    ctx.lineTo(originX + plotW, baseY);
+    ctx.stroke();
+
+    // x ticks every minute
+    var tickLabs = ['10:00', '10:01', '10:02', '10:03', '10:04', '10:05', '10:06'];
+    for (var t = 0; t <= 6; t++) {
+        var tx = xOf(t);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[t], tx, baseY + 20);
+    }
+
+    // unbounded line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < minutes.length; i++) {
+        var x = xOf(minutes[i]), y = yOf(unbounded[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', xOf(5), yOf(384) + 5);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('worker OOMs at 10:05', xOf(5) - 12, yOf(384) + 4);
+
+    // bounded line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < minutes.length; i++) {
+        var x = xOf(minutes[i]), y = yOf(bounded[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('bounded at 5k, overflow shed', xOf(3.4), yOf(5) - 42);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xOf(3.8), yOf(5) - 34);
+    ctx.lineTo(xOf(4), yOf(5) - 8);
+    ctx.stroke();
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(xOf(4), yOf(5) - 4);
+    ctx.lineTo(xOf(4) - 6, yOf(5) - 13);
+    ctx.lineTo(xOf(4) + 3, yOf(5) - 14);
+    ctx.closePath(); ctx.fill();
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no backpressure = same outage, new symptom', w / 2, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1,600/s deficit × 60 s ≈ 96k msgs/min; depths illustrative', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

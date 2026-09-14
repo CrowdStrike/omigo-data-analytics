@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backups &amp; Disaster Recovery</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Backups &amp; Disaster Recovery</h1>
+<p class="subtitle">Two numbers turn "we have backups" into engineering — how much data you can afford to lose (RPO) and how long you can afford to be down (RTO); an untested backup is a hope</p>
+
+<div class="card-section">
+    <h2>The Day the Orders Table Vanished</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">RPO</span><span class="tag orange">RTO</span></div>
+                <ul>
+                    <li><b>The disaster</b> — a bad migration corrupts the orders table at 2:47pm on a Tuesday</li>
+                    <li><b>The last good copy</b> — the nightly backup finished at 1:00am, 13 hours 47 minutes earlier</li>
+                    <li><b>The data bill</b> — every order from 1:00am to 2:47pm is gone: a 13.8-hour gap — your de-facto RPO</li>
+                    <li><b>The time bill</b> — the restore takes 6 hours because nobody ever timed it: that is the RTO</li>
+                    <li><b>The definitions</b> — RPO: how much data you can afford to LOSE; RTO: how long you can afford to be DOWN</li>
+                    <li><b>The design rule</b> — an RPO of 1 hour means backups at least hourly; RTO is set by restore speed</li>
+                </ul>
+                <p class="example">The store is down from 2:47pm to 8:47pm (RTO: 6 hours) and every order placed after 1:00am is gone forever (RPO: 13.8 hours).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> RPO is the gap between the disaster and the last good backup; RTO is the time to actually restore. Both are decided by your design long before the disaster — the outage just reveals them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Buying a Smaller RPO: the Backup Taxonomy</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">full / incremental / continuous</span><span class="tag orange">3-2-1 rule</span></div>
+                <ul>
+                    <li><b>Full backup</b> — one complete nightly copy; simplest restore, worst-case RPO is 24 hours</li>
+                    <li><b>Incremental</b> — hourly copies of changes since the last backup; worst-case RPO drops to 1 hour</li>
+                    <li><b>Continuous</b> — ship the WAL/binlog as writes happen; RPO shrinks to about 1 minute</li>
+                    <li><b>Snapshot vs dump</b> — a disk snapshot restores in minutes; reloading the 500 GB logical dump took 4 of the 6 hours</li>
+                    <li><b>Restore cost</b> — incrementals replay a chain, WAL replays a log: smaller RPO can mean a longer restore</li>
+                    <li><b>3-2-1 rule</b> — keep 3 copies of the data, on 2 kinds of media, with 1 copy offsite</li>
+                </ul>
+                <p class="example">With hourly incrementals the 2:47pm corruption would have cost the 47 minutes since the 2:00pm backup — not 13.8 hours.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The schedule sets your RPO — at worst you lose one backup interval — and the restore path sets your RTO. Pick the style from the RPO you can afford, then time the restore to learn your real RTO.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Four Ways Backups Betray You</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag green">restore drills</span><span class="tag red">ransomware</span></div>
+                <ul>
+                    <li><b>Silent failure</b> — the backup job breaks and no one notices for months; alert when a backup does NOT appear</li>
+                    <li><b>Won't restore</b> — corruption or missing pieces surface only mid-restore; a backup is proven only by restoring it</li>
+                    <li><b>The doctrine</b> — an untested backup is a hope: schedule real restore drills and time them (that timing IS your RTO)</li>
+                    <li><b>Same blast radius</b> — the attacker or bug that hit primary also deletes every backup it can reach</li>
+                    <li><b>The ransomware lesson</b> — keep one immutable or offline copy that no online credential can erase</li>
+                    <li><b>Replication &ne; backup</b> — the replica applies the DELETE in milliseconds; it protects against hardware loss, not mistakes</li>
+                </ul>
+                <p class="example">The 2:47pm corruption reached the replica in under a second — the replica became a perfect copy of the disaster.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every failure mode has the same cure: prove it. Alert on missing backups, drill the restore end to end, and keep one copy that nothing online — attacker, bug, or admin — can touch.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Backup File Is Not a DR Plan</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">DR tiers</span></div>
+                <ul>
+                    <li><b>The mistake</b> — treating the dump file as the whole plan: the data survives but there is nothing to restore it INTO</li>
+                    <li><b>Rebuild list</b> — the runbook, DNS control, secrets, and infrastructure-as-code needed to stand up elsewhere</li>
+                    <li><b>The hidden hours</b> — 2 of the story's 6 restore hours were spent hunting for DB passwords and DNS access</li>
+                    <li><b>The tiers</b> — backup-restore &rarr; pilot light &rarr; warm standby &rarr; active-active</li>
+                    <li><b>The ladder</b> — each tier buys a shorter RTO at a higher standing cost for idle-but-ready infrastructure</li>
+                    <li><b>Choosing</b> — price your downtime per hour, then buy the cheapest tier whose RTO beats that bill</li>
+                </ul>
+                <p class="example">A warm standby would have cut the 6-hour outage to about 30 minutes — for roughly 5&times; the monthly infrastructure bill.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing the data is the disaster-recovery plan. A replica copies your mistakes and a dump cannot rebuild your stack — DR is the data plus the runbook, DNS, secrets, and IaC to bring it all back somewhere else.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: disaster-day timeline with RPO and RTO bands
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var axisY = 170;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Disaster, Two Numbers: 13.8 Hours Lost, 6 Hours Down', w / 2, 24);
+
+    // bands
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(85, 140, 430 - 85, 60);
+    ctx.fillStyle = 'rgba(230,126,34,0.18)';
+    ctx.fillRect(430, 140, 580 - 430, 60);
+
+    // baseline + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, axisY); ctx.lineTo(660, axisY); ctx.stroke();
+    var tickX = [60, 210, 360, 510, 660];
+    var tickLab = ['0:00', '6:00', '12:00', '18:00', '24:00'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tickX.length; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tickX[i], axisY - 4); ctx.lineTo(tickX[i], axisY + 4); ctx.stroke();
+        ctx.fillText(tickLab[i], tickX[i], 260);
+    }
+
+    // band labels
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('RPO reality: 13.8 h of orders lost', (85 + 430) / 2, 115);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('RTO reality: 6 h to restore', (430 + 580) / 2, 225);
+
+    // markers
+    function marker(x, col) {
+        ctx.strokeStyle = col; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x, 130); ctx.lineTo(x, 210); ctx.stroke();
+    }
+    marker(85, P.green);
+    marker(430, '#e74c3c');
+    marker(580, P.green);
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('last good backup 1:00am', 85, 132);
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('corruption 2:47pm', 430, 100);
+    ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('back online 8:47pm', 580, 132);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1:00am → 2:47pm = 13h47m ≈ 13.8 h', 700, 245);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('clock times exact for the scenario; scenario illustrative', w - 12, h - 8);
+});
+
+// c2: worst-case RPO by backup style
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rows = [
+        { y: 80,  lab: 'nightly full — up to 1,440 min',      width: 440, col: '#e74c3c', end: '24 h' },
+        { y: 145, lab: 'hourly incremental — up to 60 min',   width: 150, col: P.orange,  end: '1 h' },
+        { y: 210, lab: 'continuous WAL shipping — ~1 min',    width: 20,  col: P.green,   end: '~1 min' }
+    ];
+    var bx = 250;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Worst-Case RPO: You Lose, at Most, One Backup Interval', w / 2, 24);
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 11);
+        ctx.fillStyle = r.col;
+        ctx.fillRect(bx, r.y, r.width, 14);
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillText(r.end, bx + r.width + 8, r.y + 11);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('RPO of 1 hour ⇒ backups at least hourly', 300, 260);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bar widths log-feel schematic, minutes exact', w - 12, h - 8);
+});
+
+// c3: backup size flatlines at zero while monitoring stays green
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var daysA = [0, 5, 10, 15, 20, 25, 29];
+    var gbA = [214, 215, 217, 218, 220, 221, 222];
+    var daysB = [30, 45, 60, 75, 90];
+
+    var ox = 60, baseY = 245, pw = 600, ph = 170;
+    function xOf(d) { return ox + d / 90 * pw; }
+    function yOf(g) { return baseY - g / 240 * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Backup Job Died on Day 30 — the Dashboard Stayed Green', w / 2, 24);
+
+    // status strip
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(60, 52, 600, 12);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('monitoring: green all 90 days (it checks the cron, not the file)', w / 2, 48);
+
+    // gridlines + y labels
+    var yTicks = [60, 120, 180];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yTicks[i] + ' GB', ox - 6, yOf(yTicks[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 30 days
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 0; d <= 90; d += 30) {
+        ctx.fillText('day ' + d, xOf(d), baseY + 16);
+    }
+
+    // failure marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(30), baseY); ctx.lineTo(xOf(30), 80); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('job breaks', xOf(30), 76);
+
+    // size line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < daysA.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(daysA[i]), yOf(gbA[i])) : ctx.lineTo(xOf(daysA[i]), yOf(gbA[i]));
+    }
+    ctx.lineTo(xOf(30), yOf(222)); // to day 30 at last healthy size
+    ctx.lineTo(xOf(30), yOf(0));   // vertical drop
+    for (var i = 0; i < daysB.length; i++) {
+        ctx.lineTo(xOf(daysB[i]), yOf(0));
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('60 days with zero restorable backups', xOf(55), 150);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative', w - 12, h - 8);
+});
+
+// c4: DR tiers, RTO vs standing cost
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rows = [
+        { y: 65,  lab: 'backup-restore', rto: 440, rtoLab: 'RTO ~24 h',     cost: 44,  costLab: 'cost 1×' },
+        { y: 120, lab: 'pilot light',    rto: 220, rtoLab: 'RTO ~4 h',      cost: 88,  costLab: 'cost 2×' },
+        { y: 175, lab: 'warm standby',   rto: 90,  rtoLab: 'RTO ~30 min',   cost: 220, costLab: 'cost 5×' },
+        { y: 230, lab: 'active-active',  rto: 8,   rtoLab: 'RTO ~seconds',  cost: 440, costLab: 'cost 10×' }
+    ];
+    var bx = 230;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('DR Tiers: Buying Down RTO with Standing Cost', w / 2, 24);
+
+    function endLabel(text, barEnd, y, col) {
+        ctx.font = '11px system-ui'; ctx.fillStyle = col;
+        var tw = ctx.measureText(text).width;
+        if (barEnd + 6 + tw > 714) {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(text, barEnd - 6, y);
+            ctx.textAlign = 'left';
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(text, barEnd + 6, y);
+        }
+    }
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 12);
+        // RTO bar
+        ctx.fillStyle = 'rgba(42,120,214,0.85)';
+        ctx.fillRect(bx, r.y, r.rto, 14);
+        endLabel(r.rtoLab, bx + r.rto, r.y + 11, P.blue);
+        // cost bar
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(bx, r.y + 17, r.cost, 8);
+        endLabel(r.costLab, bx + r.cost, r.y + 25, P.orange);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('every rung down in RTO is a rung up in cost', 230, 282);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('RTO and cost multiples illustrative', w - 12, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

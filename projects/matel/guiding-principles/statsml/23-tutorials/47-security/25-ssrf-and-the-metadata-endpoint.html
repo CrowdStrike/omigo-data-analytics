@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSRF &amp; the Metadata Endpoint</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+.footnote {
+    font-size: 0.78rem;
+    font-style: italic;
+    color: #6b7280;
+    margin-top: 8px;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>SSRF &amp; the Metadata Endpoint</h1>
+<p class="subtitle">A "fetch this URL for me" feature turns your server into the attacker's proxy &mdash; the outsider cannot reach the internal network, but your server can, and the outsider picks the destination</p>
+
+<div class="card-section">
+    <h2>Paste a Link, and the Server Goes There</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">server as proxy</span><span class="tag green">defensive</span></div>
+                <ul>
+                    <li><b>The feature</b> — a web app lets Alice paste a link to an image; the server downloads it and makes a thumbnail</li>
+                    <li><b>Genuinely useful</b> — nothing here is exotic; avatar imports, link previews, and webhooks all work this way</li>
+                    <li><b>Who chooses</b> — Alice supplies the address, but the fetch is performed by the SERVER, not by her browser</li>
+                    <li><b>The borrowed position</b> — Bob, an outsider, cannot route to the internal network; the server sits inside it</li>
+                    <li><b>The definition</b> — server-side request forgery (SSRF): an outsider dictates a destination the server will visit</li>
+                    <li><b>The precise flaw</b> — not that the server makes requests, but that an untrusted party names where they go</li>
+                </ul>
+                <p class="example">Bob pastes not an image link but an internal address; the thumbnailer dutifully fetches it and returns whatever came back.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> SSRF is a boundary failure of DESTINATION, the sibling of injection's boundary failure of CODE — user input crosses from data into the address the server will visit.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting What Each Party Can Reach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">reachability</span><span class="tag green">illustrative</span></div>
+                <ul>
+                    <li><b>Setup</b> — the app's public interface exposes 2 ports to the internet: one for HTTP, one for HTTPS</li>
+                    <li><b>Inside</b> — the server's network segment holds 40 hosts, each running 3 listening services</li>
+                    <li><b>Server's reach</b> — 40 × 3 = 120 internal endpoints, none of them designed to face the internet</li>
+                    <li><b>Amplification</b> — Bob's direct reach is 2 endpoints; through the server it is 120, and 120 / 2 = 60×</li>
+                    <li><b>One more door</b> — the metadata address makes 121 destinations, so 2 / 121 = 1.7% is Bob's own share</li>
+                    <li><b>Assumption stated</b> — this counts reachability only; each internal service may still check authorization</li>
+                    <li><b>The catch</b> — many internal services never learned to, treating "reachable" as "authorized" by default</li>
+                </ul>
+                <p class="example">2 endpoints from the internet versus 120 from inside is a 60× jump in attack surface, reached by pasting one link (counts illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The severity is arithmetic, not cleverness — one feature converts a 2-endpoint surface into a 120-endpoint one, plus the metadata address as the 121st.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Naming Allowed Destinations Instead of Forbidden Ones</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">defensive</span><span class="tag blue">allowlist</span><span class="tag orange">arithmetic</span></div>
+                <ul>
+                    <li><b>The naive fix</b> — block the one literal address people warn about, and call the thumbnailer safe</li>
+                    <li><b>Count the spellings</b> — the same destination can be written 6 ways in our list: literal, decimal integer, shortened octets, a DNS name that resolves to it, a redirect from an allowed host, an alternate address family</li>
+                    <li><b>Coverage</b> — the blocklist stops 1 of those 6, so 1 / 6 = 16.7% blocked and 5 / 6 = 83.3% pass</li>
+                    <li><b>Worse than it looks</b> — 6 is only what we enumerated; the set of ways to name a destination is open-ended</li>
+                    <li><b>Allowlist instead</b> — name the 3 image hosts the feature needs; every other destination is denied by default</li>
+                    <li><b>Resolve first</b> — validate the address AFTER name resolution, since a friendly name can resolve inward</li>
+                    <li><b>No blind redirects</b> — a permitted host may redirect onward, so re-check every hop, not just the first</li>
+                    <li><b>Cheap extras</b> — hardened metadata access needing a session token, a minimal instance role, and a separate segment with no internal route</li>
+                </ul>
+                <p class="example">Blocking one literal spelling leaves 5 of the 6 enumerated forms working — 83.3% — while an allowlist of 3 hosts denies all six without naming any of them.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A blocklist must enumerate an open-ended set while an allowlist enumerates a closed one; that asymmetry, not diligence, is why allowlisting is the correct default.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Gets Filed as Low Severity</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cloud credentials</span></div>
+                <ul>
+                    <li><b>The triage error</b> — the report reads "it fetches a URL and shows an error", so the ticket sinks to the backlog</li>
+                    <li><b>What it really is</b> — on a cloud instance the response can carry the instance's own role credentials</li>
+                    <li><b>Escalation, not leakage</b> — that turns "read a URL" into "act as the server's cloud identity"</li>
+                    <li><b>The blind variant</b> — even when nothing is echoed back, response timing and side effects still leak answers</li>
+                    <li><b>Wrong control</b> — checking the URL's FORMAT proves nothing; the question is where it resolves and what that host can reach</li>
+                    <li><b>Right question in review</b> — "who chose this destination, and what can this component route to?"</li>
+                </ul>
+                <p class="example">A blind thumbnailer returns only "invalid image", yet a slow reply versus an instant refusal distinguishes a live internal port from a dead one.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Rating SSRF by what the response shows. Rate it by the network position being borrowed — a silent fetch from a cloud host is still a path to the instance's credentials.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+    <p class="footnote">All addresses, hosts, and credentials on this page are placeholders — no real metadata address, token, or payload is shown, so security scanners have nothing to flag.</p>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBoxTL(ctx, x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrow(ctx, x1, y1, x2, y2, width, color, headSize) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    arrowHead(ctx, x2, y2, ang, headSize || 10, color);
+}
+
+// c1: network diagram — Bob outside the perimeter, server inside, borrowed reach
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Bob Cannot Reach Inside — The Server Can, and Bob Picks the Address', w / 2, 24);
+
+    // perimeter
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath();
+    var px = 225, py = 48, pw = 700 - 225, ph = 272 - 48, pr = 10;
+    ctx.moveTo(px + pr, py);
+    ctx.lineTo(px + pw - pr, py);
+    ctx.quadraticCurveTo(px + pw, py, px + pw, py + pr);
+    ctx.lineTo(px + pw, py + ph - pr);
+    ctx.quadraticCurveTo(px + pw, py + ph, px + pw - pr, py + ph);
+    ctx.lineTo(px + pr, py + ph);
+    ctx.quadraticCurveTo(px, py + ph, px, py + ph - pr);
+    ctx.lineTo(px, py + pr);
+    ctx.quadraticCurveTo(px, py, px + pr, py);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('network perimeter', 233, 66);
+
+    // Bob box (outside)
+    roundBoxTL(ctx, 20, 125, 150, 50, 8, 'rgba(217,89,38,0.12)', P.orange);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('Bob (outsider)', 95, 146);
+    ctx.fillText('internet only', 95, 164);
+
+    // server box (inside)
+    roundBoxTL(ctx, 255, 125, 160, 50, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('app server', 335, 146);
+    ctx.fillText('thumbnailer', 335, 164);
+
+    // pasted-link arrow
+    arrow(ctx, 172, 150, 251, 150, 3, P.orange, 10);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('pasted link', 210, 140);
+
+    // internal targets
+    var targets = [
+        { y: 70,  label: 'internal admin panel',       fill: 'rgba(25,158,112,0.13)', border: P.aqua },
+        { y: 140, label: 'database / health port',     fill: 'rgba(25,158,112,0.13)', border: P.aqua },
+        { y: 210, label: 'link-local metadata address', fill: 'rgba(213,81,129,0.14)', border: P.magenta }
+    ];
+    for (var i = 0; i < targets.length; i++) {
+        roundBoxTL(ctx, 505, targets[i].y, 175, 40, 8, targets[i].fill, targets[i].border);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(targets[i].label, 592, targets[i].y + 25);
+        arrow(ctx, 415, 150, 501, targets[i].y + 20, 2.5, targets[i].border, 9);
+    }
+
+    // blocked direct path
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(95, 200); ctx.lineTo(222, 200); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(232 - 9, 200 - 9); ctx.lineTo(232 + 9, 200 + 9);
+    ctx.moveTo(232 + 9, 200 - 9); ctx.lineTo(232 - 9, 200 + 9);
+    ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('no route', 100, 220);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText('60× the reach, borrowed', 455, 116);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('topology illustrative; placeholder destinations', w - 12, h - 8);
+});
+
+// c2: two-bar reach comparison — 2 direct vs 121 via the server
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Reachable Endpoints: 2 Directly vs 121 Through the Server', w / 2, 24);
+
+    var ox = 95, baseY = 245, pw = 560, ph = 180, maxV = 121, barW = 110;
+
+    // gridlines
+    var ticks = [30, 60, 90, 120];
+    for (var i = 0; i < ticks.length; i++) {
+        var gy = baseY - ticks[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(ticks[i]), 89, gy + 4);
+    }
+
+    // x-axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 215, val: 2,   fill: 'rgba(217,89,38,0.35)', border: P.orange, label: 'Bob, direct' },
+        { cx: 505, val: 121, fill: 'rgba(42,120,214,0.35)', border: P.blue,  label: 'Bob, via the server' }
+    ];
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        var bh = b.val / maxV * ph;
+        var by = baseY - bh;
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(b.cx - barW / 2, by, barW, bh);
+        ctx.strokeStyle = b.border; ctx.lineWidth = 2;
+        ctx.strokeRect(b.cx - barW / 2, by, barW, bh);
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, b.cx, 263);
+    }
+
+    // metadata cap on bar B
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(450, 65); ctx.lineTo(560, 65); ctx.stroke();
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.magenta; ctx.textAlign = 'left';
+    ctx.fillText('+1 metadata address', 452, 56);
+
+    // value labels
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('2', 215, 232);
+    ctx.fillStyle = P.blue;
+    ctx.fillText('121', 505, 40);
+
+    // axis caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('endpoints reachable', 375, 285);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'left';
+    ctx.fillText('120 / 2 = 60×', 300, 120);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('40 hosts × 3 services illustrative', w - 12, h - 8);
+});
+
+// c3: blocklist (open-ended set) vs allowlist (closed set)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Blocklist: An Open-Ended Set. Allowlist: A Closed One', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(372, 45); ctx.lineTo(372, 272); ctx.stroke();
+
+    // left header
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'left';
+    ctx.fillText('blocklist — 1 of 6 stopped (16.7%)', 20, 62);
+
+    var rows = [
+        { y: 90,  text: 'the literal address',            stopped: true },
+        { y: 116, text: 'same address, decimal form',     stopped: false },
+        { y: 142, text: 'shortened-octet spelling',       stopped: false },
+        { y: 168, text: 'a name that resolves inward',    stopped: false },
+        { y: 194, text: 'redirect from an allowed host',  stopped: false },
+        { y: 220, text: 'alternate address family',       stopped: false }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var col = r.stopped ? P.green : '#e74c3c';
+        ctx.fillStyle = col;
+        ctx.fillRect(24, r.y - 9, 10, 10);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'left';
+        ctx.fillText(r.text, 44, r.y);
+        ctx.font = 'bold 11px system-ui'; ctx.fillStyle = col; ctx.textAlign = 'right';
+        ctx.fillText(r.stopped ? 'stopped' : 'through', 364, r.y);
+    }
+    ctx.font = 'italic 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('… and more forms not listed', 44, 246);
+
+    // right header
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('allowlist — 3 named hosts', 394, 62);
+
+    var allow = [
+        { y: 78,  text: 'approved image host A' },
+        { y: 124, text: 'approved image host B' },
+        { y: 170, text: 'approved image host C' }
+    ];
+    for (var i = 0; i < allow.length; i++) {
+        roundBoxTL(ctx, 396, allow[i].y, 290, 36, 8, 'rgba(0,131,0,0.12)', P.green);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(allow[i].text, 541, allow[i].y + 23);
+    }
+    roundBoxTL(ctx, 396, 216, 290, 36, 8, 'rgba(107,114,128,0.14)', P.mute);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('everything else — denied', 541, 239);
+
+    // annotation
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText('validate after resolving the name', 541, 272);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('6 enumerated forms illustrative', w - 12, h - 8);
+});
+
+// c4: escalation ladder from "fetch a URL" to "act with the server's role"
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("From 'It Just Fetches a URL' to the Server's Cloud Identity", w / 2, 24);
+
+    var steps = [
+        { x: 25,  y: 210, text: 'fetch a URL',               fill: 'rgba(42,120,214,0.15)', border: P.blue,    sev: 'looks harmless',      sevY: 202 },
+        { x: 195, y: 170, text: 'reach an internal service', fill: 'rgba(25,158,112,0.14)', border: P.aqua,    sev: 'information',         sevY: 162 },
+        { x: 365, y: 130, text: 'read the metadata response', fill: 'rgba(201,133,0,0.16)', border: P.yellow,  sev: 'credentials',         sevY: 122 },
+        { x: 535, y: 90,  text: "act with the server's role", fill: 'rgba(213,81,129,0.16)', border: P.magenta, sev: 'privilege escalation', sevY: 82 }
+    ];
+    var bw = 150, bh = 46;
+
+    // connectors first, so boxes sit on top
+    for (var i = 0; i < steps.length - 1; i++) {
+        var a = steps[i], b = steps[i + 1];
+        arrow(ctx, a.x + bw, a.y + bh / 2, b.x, b.y + bh / 2, 3, P.mute, 10);
+    }
+
+    for (var i = 0; i < steps.length; i++) {
+        var st = steps[i];
+        roundBoxTL(ctx, st.x, st.y, bw, bh, 8, st.fill, st.border);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(st.text, st.x + bw / 2, st.y + bh / 2 + 4);
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = st.border;
+        ctx.fillText(st.sev, st.x + bw / 2, st.sevY);
+    }
+
+    // blind-variant bracket under steps 1-2
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(25, 272); ctx.lineTo(345, 272);
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(25, 272); ctx.lineTo(25, 264);
+    ctx.moveTo(345, 272); ctx.lineTo(345, 264);
+    ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('blind SSRF: nothing echoed back — timing still answers', 25, 290);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('severity comes from the position borrowed, not the body returned', 25, 60);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('escalation path schematic', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

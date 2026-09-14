@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akka Cluster &amp; Sharding</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Akka Cluster &amp; Sharding</h1>
+<p class="subtitle">The actor tree spans machines — 9,000 user session actors live on 3 nodes, and a sender never needs to know which node holds which actor</p>
+
+<div class="card-section">
+    <h2>One Actor System, Three Machines</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">membership &amp; gossip</span><span class="tag orange">location transparency</span></div>
+                <ul>
+                    <li><b>The app</b> — a web shop keeps one session actor per logged-in user: 9,000 users, 9,000 actors</li>
+                    <li><b>Too big for one box</b> — suppose one machine can't carry the session load, so 3 nodes (A, B, C) share it</li>
+                    <li><b>The cluster</b> — the nodes gossip their membership to each other; every node learns who is up</li>
+                    <li><b>One tree</b> — the actors form a single logical system; a node is just where a branch happens to live</li>
+                    <li><b>Location transparency</b> — code on node A sends to user 4217's actor the same way whether it sits on A or B</li>
+                </ul>
+                <p class="example">Node A handles user 4217's HTTP request, but her session actor lives on node B — the send looks identical either way, and the cluster delivers it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A cluster stitches several machines into one actor system: gossip keeps a shared member list, and senders address actors by identity, never by machine.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Routing User 4217: Entity, Shard, Node</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">shard coordinator</span></div>
+                <ul>
+                    <li><b>The entity id</b> — each session actor is an entity keyed by its user id, here 4217</li>
+                    <li><b>The shard rule</b> — shard = userId mod 30, so user 4217 lands in shard 4217 % 30 = 17</li>
+                    <li><b>The coordinator</b> — one elected coordinator owns the table: shards 0–9 on A, 10–19 on B, 20–29 on C</li>
+                    <li><b>Hand-check</b> — shard 17 is in 10–19, so the message goes to node B; user 4230 → shard 0 → node A</li>
+                    <li><b>On arrival</b> — node B's shard 17 region finds (or spawns) entity 4217 and hands it the message</li>
+                </ul>
+                <p class="example">A message tagged userId 4217 is hashed to shard 17, looked up to node B, and delivered to that one session actor — the sender did none of this by hand.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Sharding routes by entity id in two hops — id → shard by a fixed rule, shard → node by the coordinator's table — so 9,000 actors need only a 30-row map.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When a Node Leaves, the Shards Move</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">rebalancing</span></div>
+                <ul>
+                    <li><b>The event</b> — node C is drained for maintenance at 2:00pm; its 10 shards need a new home</li>
+                    <li><b>The rebalance</b> — the coordinator reassigns shards 20–24 to node A and 25–29 to node B</li>
+                    <li><b>The recovery</b> — entities restart on their new node at the next message, rebuilding state from persistence</li>
+                    <li><b>The count</b> — A and B go from 3,000 sessions each to 4,500 each; the cluster serves all 9,000</li>
+                    <li><b>Node join</b> — when C returns, the coordinator hands shards back the same way, no code change</li>
+                </ul>
+                <p class="example">User 4230's shard 0 never moved, but user 25's shard 25 quietly restarted on node B — both users keep shopping through the whole rebalance.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Rebalancing is why sharding beats fixed placement — the id-to-shard rule never changes, only the shard-to-node table, so nodes can come and go under live traffic.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Too Few Shards to Balance</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">shard count</span></div>
+                <ul>
+                    <li><b>The mistake</b> — setting shard count equal to node count: 3 shards for 3 nodes "looks tidy"</li>
+                    <li><b>Why it breaks</b> — shards are the unit of movement; 3 coarse shards cannot split across 2 nodes evenly</li>
+                    <li><b>The numbers</b> — with 3 shards of 3,000, C leaving gives A two shards (6,000) and B one (3,000)</li>
+                    <li><b>The fix</b> — with 30 shards, the same event gives A and B 15 shards each: 4,500 and 4,500</li>
+                    <li><b>Rule of thumb</b> — pick roughly 10× the maximum node count; the shard table stays tiny either way</li>
+                </ul>
+                <p class="example">Same 9,000 users, same node loss — 3 shards leave node A carrying twice node B's load, while 30 shards split the loss exactly in half.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Confusing shards with nodes. A shard is a movable bundle of entities, not a machine — too few bundles and the coordinator has nothing fine-grained to rebalance with.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: three node boxes, gossip ring below, cross-node message arrow
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Nodes, One Actor System: Gossip Below, Actors Above', w / 2, 24);
+
+    var boxW = 170, boxH = 120, boxY = 90;
+    var boxXs = [55, 275, 495];
+    var labels = ['node A', 'node B', 'node C'];
+
+    // gossip ring first (behind the boxes)
+    var bots = [boxXs[0] + boxW / 2, boxXs[1] + boxW / 2, boxXs[2] + boxW / 2]; // 140, 360, 580
+    var by = boxY + boxH; // 210
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    // A -> B
+    ctx.beginPath(); ctx.moveTo(bots[0], by); ctx.quadraticCurveTo((bots[0] + bots[1]) / 2, by + 52, bots[1], by); ctx.stroke();
+    // B -> C
+    ctx.beginPath(); ctx.moveTo(bots[1], by); ctx.quadraticCurveTo((bots[1] + bots[2]) / 2, by + 52, bots[2], by); ctx.stroke();
+    // C -> A (wider, deeper arc)
+    ctx.beginPath(); ctx.moveTo(bots[2], by); ctx.quadraticCurveTo((bots[0] + bots[2]) / 2, by + 78, bots[0], by); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('gossip: member list, node health', w / 2, 262);
+
+    // node boxes and actors
+    for (var i = 0; i < 3; i++) {
+        var bx = boxXs[i];
+        rrectPath(ctx, bx, boxY, boxW, boxH, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labels[i], bx + boxW / 2, boxY + 20);
+        // three actor circles near the box bottom
+        for (var j = 0; j < 3; j++) {
+            var cx = bx + boxW / 2 + (j - 1) * 34;
+            ctx.beginPath(); ctx.arc(cx, boxY + boxH - 25, 9, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0,131,0,0.25)'; ctx.fill();
+            ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+        // caption under the box
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('3,000 sessions', bx + boxW / 2, boxY + boxH + 15);
+    }
+
+    // cross-node message: node A interior to node B's middle actor
+    var tx = boxXs[1] + boxW / 2, ty = boxY + boxH - 25; // middle actor of node B
+    ctx.strokeStyle = P.orange; ctx.fillStyle = P.orange; ctx.lineWidth = 3;
+    drawArrow(ctx, 200, 150, tx - 9, ty - 5);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('msg for user 4217', 270, 138);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sender never names a machine', 560, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('session counts illustrative', w - 12, h - 8);
+});
+
+// c2: routing flow — userId to shard to node to entity actor
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('userId 4217 → shard 17 → node B → entity actor', w / 2, 24);
+
+    var cy = 150, boxH = 40;
+
+    function stageBox(x, bw, label, fill, border, borderW) {
+        rrectPath(ctx, x, cy - boxH / 2, bw, boxH, 8);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        ctx.strokeStyle = border; ctx.lineWidth = borderW; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, cy + 4);
+    }
+
+    stageBox(30, 140, 'msg: userId 4217', 'rgba(42,120,214,0.15)', P.blue, 1.5);
+    stageBox(205, 150, '4217 % 30 = 17', 'rgba(74,58,167,0.12)', P.violet, 1.5);
+    stageBox(390, 160, 'coordinator table', null, P.yellow, 1.5);
+    stageBox(580, 130, 'entity 4217 on B', 'rgba(0,131,0,0.12)', P.green, 1.5);
+
+    // arrows between consecutive boxes
+    ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = 3;
+    drawArrow(ctx, 172, cy, 201, cy);
+    drawArrow(ctx, 357, cy, 386, cy);
+    drawArrow(ctx, 552, cy, 576, cy);
+
+    // coordinator table detail
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#444';
+    ctx.fillText('shards 0–9 → node A', 470, 210);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('shards 10–19 → node B', 470, 228);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('shards 20–29 → node C', 470, 246);
+
+    // second example
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same rule: userId 4230 → shard 0 → node A', 30, 60);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('9,000 actors, a 30-row map', 390, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('mod-30 rule exact, placement illustrative', w - 12, h - 8);
+});
+
+// c3: sessions per node before and after node C leaves
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Node C Leaves: 3,000 + 3,000 + 3,000 Becomes 4,500 + 4,500', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 175;
+    function py(v) { return baseY - v / 5000 * ph; }
+
+    // gridlines + y labels
+    var grid = [1250, 2500, 3750];
+    for (var i = 0; i < grid.length; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i].toLocaleString('en-US'), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var centers = [170, 365, 560];
+    var groupLabs = ['node A', 'node B', 'node C'];
+    var before = [3000, 3000, 3000];
+    var after = [4500, 4500, 0];
+    var bw = 55, gap = 14;
+
+    for (var g = 0; g < 3; g++) {
+        var cx = centers[g];
+        var bxL = cx - bw - gap / 2, bxR = cx + gap / 2;
+        // before bar
+        var topB = py(before[g]);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(bxL, topB, bw, baseY - topB);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(bxL, topB, bw, baseY - topB);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(before[g].toLocaleString('en-US'), bxL + bw / 2, topB - 6);
+        // after bar
+        if (after[g] > 0) {
+            var topA = py(after[g]);
+            ctx.fillStyle = P.green;
+            ctx.fillRect(bxR, topA, bw, baseY - topA);
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(after[g].toLocaleString('en-US'), bxR + bw / 2, topA - 6);
+        } else {
+            // empty-bar marker where node C's after-bar would be
+            var topM = py(3000);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+            ctx.strokeRect(bxR, topM, bw, baseY - topM);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('0', bxR + bw / 2, topM - 6);
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('shards 20–29 moved', bxR + bw / 2, topM - 24);
+        }
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(groupLabs[g], cx, baseY + 18);
+    }
+
+    // legend (top right)
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fillRect(430, 40, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(430, 40, 12, 12);
+    ctx.fillStyle = '#444'; ctx.fillText('before (3 nodes)', 446, 50);
+    ctx.fillStyle = P.green; ctx.fillRect(560, 40, 12, 12);
+    ctx.fillStyle = '#444'; ctx.fillText('after C leaves', 576, 50);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all 9,000 sessions still served', 200, 75);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative, split exact for mod-30', w - 12, h - 8);
+});
+
+// c4: load on surviving nodes after C leaves — 3 shards vs 30 shards
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('After C Leaves: 3 Shards Skew the Load, 30 Shards Split It', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 175;
+    function py(v) { return baseY - v / 7000 * ph; }
+
+    // gridlines + y labels
+    var grid = [1750, 3500, 5250];
+    for (var i = 0; i < grid.length; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i].toLocaleString('en-US'), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bw = 60, gap = 20;
+
+    // left group: 3 shards — A 6,000 (red), B 3,000 (blue outline)
+    var cL = 220;
+    var aX = cL - bw - gap / 2, bX = cL + gap / 2;
+    var topA3 = py(6000);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(aX, topA3, bw, baseY - topA3);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('A: 6,000', aX + bw / 2, topA3 - 6);
+    var topB3 = py(3000);
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(bX, topB3, bw, baseY - topB3);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(bX, topB3, bw, baseY - topB3);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('B: 3,000', bX + bw / 2, topB3 - 6);
+    ctx.fillStyle = '#444'; ctx.font = '13px system-ui';
+    ctx.fillText('3 shards', cL, baseY + 18);
+
+    // imbalance marker at the 4,500 level across the left group
+    var yBal = py(4500);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(aX - 12, yBal); ctx.lineTo(bX + bw + 12, yBal); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('A carries 2× B', cL, 60);
+
+    // right group: 30 shards — A and B both 4,500 (green)
+    var cR = 510;
+    var aX2 = cR - bw - gap / 2, bX2 = cR + gap / 2;
+    var top45 = py(4500);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(aX2, top45, bw, baseY - top45);
+    ctx.fillRect(bX2, top45, bw, baseY - top45);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('A: 4,500', aX2 + bw / 2, top45 - 6);
+    ctx.fillText('B: 4,500', bX2 + bw / 2, top45 - 6);
+    ctx.fillStyle = '#444'; ctx.font = '13px system-ui';
+    ctx.fillText('30 shards', cR, baseY + 18);
+
+    // annotation above the right group
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fine-grained shards rebalance evenly', cR, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('9,000 total sessions, counts illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

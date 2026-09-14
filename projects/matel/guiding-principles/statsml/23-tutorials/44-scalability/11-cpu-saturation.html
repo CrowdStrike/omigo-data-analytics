@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPU Saturation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>CPU Saturation</h1>
+<p class="subtitle">CPU % says how busy the cores are; the run queue says how much work is waiting — and the waiting is what your users feel</p>
+
+<div class="card-section">
+    <h2>Busy Is Not the Same as Backed Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">run queue</span><span class="tag orange">load average</span></div>
+                <ul>
+                    <li><b>The server</b> — an 8-core API server handles a morning traffic ramp starting at 9:00am</li>
+                    <li><b>The gauge</b> — CPU utilization climbs 35% &rarr; 100% by 9:30 and then just sits pinned at 100%</li>
+                    <li><b>The queue</b> — load average (runnable + disk-wait on Linux) climbs past 8: 10, 16, 24 by 10:00am</li>
+                    <li><b>The meaning</b> — at load 8 all 8 cores are busy and nothing waits; at load 24, 16 threads are waiting</li>
+                    <li><b>The blind spot</b> — utilization saturates at 100% and stops changing; the backlog does not stop growing</li>
+                </ul>
+                <p class="example">At 9:35 and at 10:00 the dashboard shows the same "CPU 100%", but load has gone from 10 to 24 — the second situation is far worse.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> CPU saturation is measured by the run queue, not the utilization gauge — load average above the core count means work is waiting, and utilization can't show how much.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Load 24 on 8 Cores: the 2&times; Wait, by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">queueing math</span></div>
+                <ul>
+                    <li><b>Per-core queue</b> — load 24 on 8 cores means 24 / 8 = 3 runnable threads sharing each core</li>
+                    <li><b>The share</b> — each thread gets 1/3 of a core, so 50ms of CPU work stretches to 150ms of wall time</li>
+                    <li><b>The wait</b> — 150ms wall &minus; 50ms running = 100ms waiting: every thread waits 2&times; its own run time</li>
+                    <li><b>The ladder</b> — same 50ms burst: load 4 &rarr; 50ms, load 12 &rarr; 75ms, load 16 &rarr; 100ms, load 24 &rarr; 150ms</li>
+                    <li><b>The rule</b> — when load &ge; cores, wall time &asymp; run time &times; (load / cores); below the core count, wait &asymp; 0</li>
+                </ul>
+                <p class="example">A request needing 50ms of CPU returns in 50ms at load 4 but 150ms at load 24 — the extra 100ms is pure run-queue waiting, not extra work.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Divide load average by core count: 1.0 means fully busy with no waiting; 3.0 means every runnable thread spends about two-thirds of its wall time waiting for a core.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Latency Bends Long Before 100%</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">tail latency</span><span class="tag orange">what to watch</span></div>
+                <ul>
+                    <li><b>Bursty arrivals</b> — requests arrive in clumps, so brief queues form even when cores average 70% busy</li>
+                    <li><b>The knee</b> — on the 8-core box, p50 latency is 63ms at 50% but 100ms at 80% and 210ms at 95%</li>
+                    <li><b>Two states</b> — a thread on a core is CPU-bound; a runnable thread in the queue is waiting, not working</li>
+                    <li><b>Better gauges</b> — watch load average &divide; cores and run-queue (scheduler) latency, not just "CPU %"</li>
+                    <li><b>The signal</b> — rising scheduler delay with flat CPU % is the earliest clean sign of saturation</li>
+                </ul>
+                <p class="example">The 8-core server's p50 climbs from 63ms at 50% to 100ms at 80% — double the 50ms of actual CPU work, and the pain starts a full 20 points before the gauge reads 100.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Latency follows the queue, and queues grow steeply as utilization approaches the core count — so "CPU is only 80%" is exactly when to start worrying, not when to relax.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Threads Don't Make More Cores</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">context switches</span></div>
+                <ul>
+                    <li><b>The reflex</b> — "requests are queueing, add worker threads" — the team bumps the pool 8 &rarr; 64</li>
+                    <li><b>The ceiling</b> — 8 cores can only ever run 8 CPU-bound threads at once; the rest just enter the queue</li>
+                    <li><b>The overhead</b> — each extra runnable thread adds context switches and cache evictions on every slice</li>
+                    <li><b>The numbers</b> — throughput: 3,400 req/s at 8 threads, 3,150 at 32, 2,300 at 128 — down 32% from peak</li>
+                    <li><b>The fix</b> — for CPU-bound work, size the pool near the core count and shed or queue load upstream</li>
+                </ul>
+                <p class="example">Going from 8 to 128 worker threads on the 8-core box cut throughput from 3,400 to 2,300 req/s — the cores spent their slices switching instead of serving.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a long run queue as a thread-shortage problem. If the work is CPU-bound, adding threads past the core count adds only waiting and context-switch overhead — throughput falls while load average climbs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: morning ramp — CPU % pins at 100 while load average keeps climbing
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('9:00–10:00am Ramp: CPU % Pins at 100, Load Keeps Climbing', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 590, ph = 180;
+    function xOf(min) { return ox + min / 60 * pw; }
+    function yCpu(p) { return baseY - p / 100 * ph; }
+    function yLoad(l) { return baseY - l / 24 * ph; }
+
+    // gridlines at left-axis 25/50/75
+    var cpuGrid = [25, 50, 75];
+    for (var i = 0; i < cpuGrid.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yCpu(cpuGrid[i])); ctx.lineTo(ox + pw, yCpu(cpuGrid[i])); ctx.stroke();
+    }
+
+    // left y labels (CPU %) in blue
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    var cpuTicks = [0, 50, 100];
+    for (var i = 0; i < cpuTicks.length; i++) {
+        ctx.fillText(cpuTicks[i] + '%', ox - 8, yCpu(cpuTicks[i]) + 4);
+    }
+
+    // right y labels (load) in orange at x=660
+    ctx.fillStyle = P.orange; ctx.textAlign = 'left';
+    var loadTicks = [0, 8, 16, 24];
+    for (var i = 0; i < loadTicks.length; i++) {
+        ctx.fillText(String(loadTicks[i]), 660, yLoad(loadTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 15 min
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var timeLabs = ['9:00', '9:15', '9:30', '9:45', '10:00'];
+    for (var i = 0; i < timeLabs.length; i++) {
+        ctx.fillText(timeLabs[i], xOf(i * 15), baseY + 16);
+    }
+
+    // core-count line at load 8 (right scale)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yLoad(8)); ctx.lineTo(ox + pw, yLoad(8)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('8 cores', ox + 6, yLoad(8) - 6);
+
+    var mins = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
+    var cpu = [35, 50, 65, 80, 92, 98, 100, 100, 100, 100, 100, 100, 100];
+    var load = [2.8, 4.0, 5.2, 6.4, 7.4, 7.9, 8.2, 10, 13, 16, 19, 22, 24];
+
+    // CPU % line (blue, left scale)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yCpu(cpu[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // load line (orange, right scale)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yLoad(load[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // line labels
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('CPU %', xOf(20) + 6, yCpu(92) - 10);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('load average', xOf(48), yLoad(19) + 20);
+
+    // annotation above the load line near minute 42
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("CPU % stopped talking at 9:30 — the queue didn't", xOf(42) - 60, 120);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('traffic ramp illustrative', w - 16, h - 8);
+});
+
+// c2: the same 50ms burst at four load levels — run vs wait segments
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same 50ms of Work at Four Load Levels (8 cores)', w / 2, 24);
+
+    var x0 = 190, pxPerMs = 3, barH = 24;
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, 60); ctx.lineTo(x0, 240); ctx.stroke();
+
+    var rows = [
+        { y: 75, label: 'load 4 (0.5/core)', wait: 0, end: '50ms' },
+        { y: 120, label: 'load 8 (1.0/core)', wait: 0, end: '50ms' },
+        { y: 165, label: 'load 16 (2.0/core)', wait: 50, end: '100ms' },
+        { y: 210, label: 'load 24 (3.0/core)', wait: 100, end: '150ms' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + barH / 2 + 4);
+        // run segment (constant 50ms = 150px)
+        var runW = 50 * pxPerMs;
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(x0, r.y, runW, barH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(x0, r.y, runW, barH);
+        // wait segment
+        var waitW = r.wait * pxPerMs;
+        if (waitW > 0) {
+            ctx.fillStyle = P.orange;
+            ctx.fillRect(x0 + runW, r.y, waitW, barH);
+        }
+        // end label
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.end, x0 + runW + waitW + 8, r.y + barH / 2 + 4);
+    }
+
+    // legend, top right under title
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(470, 40, 14, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+    ctx.strokeRect(470, 40, 14, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('running', 490, 50);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(555, 40, 14, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('waiting for a core', 575, 50);
+
+    // annotation below the load-24 bar
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('at load 24, waiting = 2× running', x0, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('even time-slicing assumed; numbers illustrative', w - 16, h - 10);
+});
+
+// c3: latency vs utilization — the knee near 80%
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Latency vs Utilization: the Knee Is Near 80%, Not 100%', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var uMin = 10, uMax = 95, lMax = 220;
+    function xOf(u) { return ox + (u - uMin) / (uMax - uMin) * pw; }
+    function yOf(ms) { return baseY - ms / lMax * ph; }
+
+    // gridlines
+    var yTicks = [50, 100, 150, 200];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, yOf(yTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var xTicks = [20, 40, 60, 80, 95];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < xTicks.length; i++) {
+        ctx.fillText(xTicks[i] + '%', xOf(xTicks[i]), baseY + 16);
+    }
+
+    // service floor at 50ms
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(50)); ctx.lineTo(ox + pw, yOf(50)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('50ms of actual CPU work', ox + 6, yOf(50) + 16);
+
+    // knee marker: vertical dashed at 80%
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(80), baseY - ph); ctx.lineTo(xOf(80), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var util = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95];
+    var lat = [52, 54, 56, 59, 63, 70, 81, 100, 145, 210];
+
+    // curve
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < util.length; i++) {
+        var x = xOf(util[i]), y = yOf(lat[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // orange dot on the curve at (80, 100)
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(xOf(80), yOf(100), 5, 0, 2 * Math.PI); ctx.fill();
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('p50 doubles by 80% — everything above the floor is queue wait', xOf(55) - 40, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative M/M/c-shaped curve', w - 16, h - 8);
+});
+
+// c4: throughput vs worker threads on 8 cores — peaks at 8, then decays
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8 Cores: Throughput Peaks at 8 Threads, Then Decays', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180;
+    var threads = [2, 4, 8, 16, 32, 64, 128];
+    var tput = [900, 1800, 3400, 3350, 3150, 2800, 2300];
+    var yMax = 3600;
+    function xOf(i) { return ox + (i + 0.5) * pw / 7; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // decay shading right of the 8-thread line
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(xOf(2), baseY - ph, ox + pw - xOf(2), ph);
+
+    // gridlines
+    var yTicks = [1000, 2000, 3000];
+    var yLabs = ['1k', '2k', '3k'];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 8, yOf(yTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < threads.length; i++) {
+        ctx.fillText(String(threads[i]), xOf(i), baseY + 16);
+    }
+
+    // peak marker at the 8-thread position
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(2), baseY - ph); ctx.lineTo(xOf(2), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('threads = cores', xOf(2), baseY - ph - 6);
+
+    // throughput line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < threads.length; i++) {
+        var x = xOf(i), y = yOf(tput[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < threads.length; i++) {
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(tput[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('past 8: same cores, more switching, −32% at 128', xOf(5) - 40, 100);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('CPU-bound workload, throughput illustrative', w - 16, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

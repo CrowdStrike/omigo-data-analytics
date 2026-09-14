@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stateful Stream Processing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Stateful Stream Processing</h1>
+<p class="subtitle">A running count per customer lives inside the stream engine as state — checkpoints snapshot that state together with the stream position, so a crash recovers to exactly where it was</p>
+
+<div class="card-section">
+    <h2>The Counter That Remembers Every Order</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">state</span><span class="tag orange">streaming</span></div>
+                <ul>
+                    <li><b>The stream</b> — a web shop's orders arrive one at a time: alice, bob, alice, carol, bob, alice, ...</li>
+                    <li><b>The question</b> — "is this alice's 4th order today?" must be answered the instant her order arrives</li>
+                    <li><b>Stateless forgets</b> — a filter or parser looks at one event and moves on; it can't count</li>
+                    <li><b>Stateful remembers</b> — a counting operator keeps a map {customer → count} between events</li>
+                    <li><b>Where it lives</b> — that map is state inside the engine's own memory, not a lookup to an outside database</li>
+                    <li><b>After 10 events</b> — the state reads alice: 4, bob: 3, carol: 2, dave: 1</li>
+                </ul>
+                <p class="example">When alice's 10th-position order arrives, the operator reads alice: 3 from its map, writes back alice: 4, and emits "alice, order #4" — no database call.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A stateful operator is one that remembers something between events; the remembered thing (the per-customer counts) is called state, and it lives inside the stream engine.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Key, One Worker: Splitting the State</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">partition by key</span></div>
+                <ul>
+                    <li><b>Three workers</b> — the same 10-event stream is too big for one machine, so the engine runs 3 workers</li>
+                    <li><b>The rule</b> — hash(customer) picks the worker; every event for one customer lands on the same worker</li>
+                    <li><b>The split</b> — worker 1 gets bob, worker 2 gets alice and dave, worker 3 gets carol</li>
+                    <li><b>Local state</b> — worker 2 holds {alice: 4, dave: 1} and never needs to ask another worker anything</li>
+                    <li><b>Hand-check</b> — the three workers' counts sum to 4 + 3 + 2 + 1 = 10, the full event total</li>
+                </ul>
+                <p class="example">Alice's 4th order hashes to worker 2, which reads alice: 3 from its own local map and writes alice: 4 — workers 1 and 3 never see an alice event.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> State is partitioned by key: each customer's counter lives on exactly one worker, so every update is a local read-and-write with no cross-worker coordination.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Crash Test: Checkpoint at Offset 10</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag green">checkpointing</span><span class="tag orange">recovery</span></div>
+                <ul>
+                    <li><b>The snapshot</b> — every few seconds the engine writes all state plus the stream offset to durable storage</li>
+                    <li><b>Checkpoint taken</b> — at offset 10 it saves {alice: 4, bob: 3, carol: 2, dave: 1} + "resume at 11"</li>
+                    <li><b>The crash</b> — the job crashes at offset 14, after four more events: alice, bob, alice, carol</li>
+                    <li><b>The recovery</b> — the restarted job loads the checkpoint, restores alice: 4, and replays offsets 11–14</li>
+                    <li><b>The landing</b> — after replay the state reads alice: 6, bob: 4, carol: 3 — exactly as if no crash happened</li>
+                    <li><b>Without it</b> — counts restart from zero, or the engine must replay all 14 events from the beginning</li>
+                </ul>
+                <p class="example">The restarted job replays only events 11–14 (alice, bob, alice, carol) on top of the offset-10 snapshot and lands on alice: 6 — the same answer the crash interrupted.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A checkpoint pairs a state snapshot with the stream offset it corresponds to; recovery = load snapshot + replay from that offset, so the engine resumes exactly where it was.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>State That Never Stops Growing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">state size</span><span class="tag green">TTL</span></div>
+                <ul>
+                    <li><b>The leak</b> — every first-time customer adds a key; one-time visitors never leave the map</li>
+                    <li><b>The math</b> — at an illustrative 1 GB of new keys per week, state hits 12 GB by week 12</li>
+                    <li><b>The cost</b> — checkpoints copy all state, so snapshots and recovery replay both slow down as it grows</li>
+                    <li><b>The fix</b> — a TTL (time-to-live) expires keys idle for 30 days; dead customers fall out of the map</li>
+                    <li><b>The plateau</b> — with a 30-day TTL, expiry roughly balances arrivals and state levels off near 4 GB</li>
+                    <li><b>The mistake</b> — keying state by an unbounded id (session id, request id) with no TTL at all</li>
+                </ul>
+                <p class="example">Without a TTL the week-12 checkpoint is 12 GB and recovery takes minutes; with a 30-day TTL it stays near 4 GB — same live counts, a third of the snapshot.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating engine state as free. Every keyed operator is a map that only grows unless something deletes entries — set a TTL sized to how long a key can matter.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: alice's running count stepping 1 -> 4 across 10 order events
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Operator, Ten Events: Alice’s Count Steps 1 → 4', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(e) { return ox + e / 10 * pw; }
+    function py(v) { return baseY - v / 5 * ph; }
+
+    // gridlines + y labels
+    var grid = [1, 2, 3, 4];
+    for (var i = 0; i < grid.length; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // event markers (customer letters) + event-number ticks
+    var letters = ['A', 'B', 'A', 'C', 'B', 'A', 'D', 'C', 'B', 'A'];
+    var aliceEvents = [1, 3, 6, 10];
+    for (var i = 0; i < 10; i++) {
+        var ev = i + 1;
+        var isAlice = aliceEvents.indexOf(ev) !== -1;
+        ctx.fillStyle = isAlice ? P.green : P.mute;
+        ctx.font = isAlice ? 'bold 12px system-ui' : '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(letters[i], px(ev), 262);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(String(ev), px(ev), 278);
+    }
+
+    // state box (top right)
+    rrectPath(ctx, 462, 64, 190, 58, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('state after event 10', 557, 82);
+    ctx.fillText('{alice:4, bob:3,', 557, 97);
+    ctx.fillText(' carol:2, dave:1}', 557, 112);
+
+    // step line of alice's count after each event
+    var counts = [1, 1, 2, 2, 2, 3, 3, 3, 3, 4];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(px(1), py(counts[0]));
+    for (var i = 1; i < counts.length; i++) {
+        ctx.lineTo(px(i + 1), py(counts[i - 1]));
+        ctx.lineTo(px(i + 1), py(counts[i]));
+    }
+    ctx.stroke();
+
+    // dots at the jump points (alice's events)
+    ctx.fillStyle = P.green;
+    var jumpCounts = [1, 2, 3, 4];
+    for (var i = 0; i < aliceEvents.length; i++) {
+        ctx.beginPath();
+        ctx.arc(px(aliceEvents[i]), py(jumpCounts[i]), 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the operator remembers between events', 455, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order stream illustrative', w - 12, h - 8);
+});
+
+// c2: hash(customer) routes each key to exactly one worker
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('hash(customer) Routes Each Key to Exactly One Worker', w / 2, 24);
+
+    // stream box
+    rrectPath(ctx, 30, 125, 130, 50, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order stream', 95, 146);
+    ctx.fillText('10 events', 95, 161);
+
+    // router box
+    rrectPath(ctx, 215, 125, 130, 50, 8);
+    ctx.fillStyle = 'rgba(201,133,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hash(customer) % 3', 280, 154);
+
+    // arrow from stream into router
+    ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = 3;
+    drawArrow(ctx, 164, 150, 211, 150);
+
+    // worker boxes
+    var workers = [
+        { y: 55, l1: 'worker 1 — state', l2: '{bob: 3}' },
+        { y: 130, l1: 'worker 2 — state', l2: '{alice: 4, dave: 1}' },
+        { y: 205, l1: 'worker 3 — state', l2: '{carol: 2}' }
+    ];
+    for (var i = 0; i < workers.length; i++) {
+        rrectPath(ctx, 440, workers[i].y, 200, 56, 8);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(workers[i].l1, 540, workers[i].y + 24);
+        ctx.fillText(workers[i].l2, 540, workers[i].y + 40);
+    }
+
+    // arrows from router to each worker, with key labels at midpoints
+    var routes = [
+        { y: 83, color: P.blue, key: 'bob', lx: 392, ly: 106 },
+        { y: 158, color: P.green, key: 'alice, dave', lx: 392, ly: 146 },
+        { y: 233, color: P.violet, key: 'carol', lx: 392, ly: 205 }
+    ];
+    for (var i = 0; i < routes.length; i++) {
+        ctx.strokeStyle = routes[i].color; ctx.fillStyle = routes[i].color; ctx.lineWidth = 3;
+        drawArrow(ctx, 349, 150, 436, routes[i].y);
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(routes[i].key, routes[i].lx, routes[i].ly);
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 + 3 + 2 + 1 = 10 — every event counted exactly once, all lookups local', w / 2, 280);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('3 workers, counts illustrative', w - 12, h - 8);
+});
+
+// c3: crash at offset 14 — replay 11-14 from the checkpoint, land on alice = 6
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Crash at Offset 14: Replay 11–14 From the Checkpoint, Land on alice = 6', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(o) { return ox + o / 14 * pw; }
+    function py(v) { return baseY - v / 7 * ph; }
+
+    // replay band (drawn first so lines sit on top)
+    ctx.fillStyle = 'rgba(42,120,214,0.12)';
+    ctx.fillRect(px(10), 90, px(14) - px(10), baseY - 90);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replay 11–14', (px(10) + px(14)) / 2, 175);
+
+    // gridlines + y labels
+    var grid = [2, 4, 6];
+    for (var i = 0; i < grid.length; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 2 offsets
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var o = 0; o <= 14; o += 2) ctx.fillText(String(o), px(o), baseY + 18);
+
+    // checkpoint marker at offset 10
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(10), 55); ctx.lineTo(px(10), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('checkpoint: state + offset 10', px(10), 48);
+
+    // count step line (pre-crash), held flat out to offset 14
+    var evOff = [1, 3, 6, 10, 11, 13];
+    var evCnt = [1, 2, 3, 4, 5, 6];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(px(evOff[0]), py(evCnt[0]));
+    for (var i = 1; i < evOff.length; i++) {
+        ctx.lineTo(px(evOff[i]), py(evCnt[i - 1]));
+        ctx.lineTo(px(evOff[i]), py(evCnt[i]));
+    }
+    ctx.lineTo(px(14), py(6));
+    ctx.stroke();
+
+    // no-checkpoint path: dashed red drop to zero at offset 14
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(px(14), py(6)); ctx.lineTo(px(14), py(0)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('no checkpoint: back to zero', px(14) - 8, 228);
+
+    // crash marker
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', px(14), py(6) + 5);
+    ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the job crashes', px(14) - 4, 70);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('recovered state = snapshot + 4 replayed events', px(5), 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offsets and counts illustrative', w - 12, h - 8);
+});
+
+// c4: keyed state over 12 weeks — no TTL grows forever, 30-day TTL plateaus
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Keyed State Over 12 Weeks: No TTL Grows Forever, 30-Day TTL Plateaus', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(wk) { return ox + wk / 12 * pw; }
+    function py(gb) { return baseY - gb / 14 * ph; }
+
+    // gridlines + y labels
+    var grid = [4, 8, 12];
+    for (var i = 0; i < grid.length; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i] + ' GB', ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 2 weeks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var wk = 0; wk <= 12; wk += 2) ctx.fillText(String(wk), px(wk), baseY + 18);
+
+    // TTL kick-in marker at week 4
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(4), 96); ctx.lineTo(px(4), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('first keys expire', px(4), 90);
+
+    var weeks = [0, 2, 4, 6, 8, 10, 12];
+
+    // no-TTL line: straight climb
+    var noTtl = [0, 2, 4, 6, 8, 10, 12];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < weeks.length; i++) {
+        i === 0 ? ctx.moveTo(px(weeks[i]), py(noTtl[i])) : ctx.lineTo(px(weeks[i]), py(noTtl[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('no TTL: 12 GB and rising', 655, 85);
+
+    // TTL line: climbs ~4 weeks then plateaus
+    var ttl = [0, 2, 4, 4.3, 4.2, 4.4, 4.3];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < weeks.length; i++) {
+        i === 0 ? ctx.moveTo(px(weeks[i]), py(ttl[i])) : ctx.lineTo(px(weeks[i]), py(ttl[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('30-day TTL: ~4 GB steady', px(8), 175);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('checkpoint size and recovery time track state size', px(6), 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('GB per week illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

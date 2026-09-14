@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atomic Commit &amp; 2PC</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Atomic Commit &amp; 2PC</h1>
+<p class="subtitle">Two-phase commit makes separate databases act like one &mdash; every side promises first, then a single decision commits them all, but a dead coordinator can freeze everyone mid-promise</p>
+
+<div class="card-section">
+    <h2>One Order, Two Databases: Both or Neither</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">all or nothing</span><span class="tag orange">atomic commit</span></div>
+                <ul>
+                    <li><b>The order</b> &mdash; order #4712 must subtract 2 espresso machines from stock AND record a $180 charge</li>
+                    <li><b>Two databases</b> &mdash; inventory and payments run on different servers, each with its own commit log</li>
+                    <li><b>The danger</b> &mdash; inventory commits, then payments crashes: stock is gone but the customer never paid</li>
+                    <li><b>The rule</b> &mdash; atomic commit means both databases apply the order, or neither does &mdash; no half-states</li>
+                    <li><b>The coordinator</b> &mdash; one extra process asks both sides to agree before anything becomes permanent</li>
+                </ul>
+                <p class="example">A power blip between the two writes leaves 2 machines missing from stock with no matching $180 payment &mdash; exactly the half-state atomic commit exists to prevent.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Atomic commit makes several independent databases behave like one: a single all-or-nothing decision covers every write in the order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Prepare, Vote, Commit &mdash; Message by Message</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">prepare/commit</span><span class="tag red">in-doubt</span></div>
+                <ul>
+                    <li><b>Phase 1: prepare</b> &mdash; at 0ms the coordinator sends PREPARE; each database logs the change and locks its rows</li>
+                    <li><b>The vote</b> &mdash; inventory answers YES at 10ms, payments YES at 12ms; one NO would abort both sides</li>
+                    <li><b>The decision</b> &mdash; at 20ms the coordinator writes COMMIT to its own log &mdash; that single write IS the outcome</li>
+                    <li><b>Phase 2: commit</b> &mdash; the coordinator sends COMMIT; both databases apply, release locks, ACK by 30ms</li>
+                    <li><b>The crash</b> &mdash; coordinator dies at 15ms, after the votes but before the decision: both sides are in-doubt</li>
+                    <li><b>No unilateral exit</b> &mdash; a YES voter can't abort alone; the coordinator may already have logged COMMIT</li>
+                </ul>
+                <p class="example">Both databases voted YES by 12ms; the coordinator crashed at 15ms, so neither can tell whether order #4712 committed until the coordinator comes back and reads its log.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The point of no return is one local log write on the coordinator &mdash; everything before it is revocable, everything after it must happen everywhere.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where 2PC Lives: XA, Sharded Databases, and Why Microservices Skip It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">XA</span><span class="tag green">microservices</span></div>
+                <ul>
+                    <li><b>XA</b> &mdash; the X/Open XA standard wires 2PC into Java app servers, message queues, and classic ERPs</li>
+                    <li><b>Inside databases</b> &mdash; sharded SQL databases still run 2PC between shards, hidden from the user</li>
+                    <li><b>Microservices</b> &mdash; teams avoid 2PC across services: locks held over HTTP couple everyone's uptime</li>
+                    <li><b>The saga instead</b> &mdash; services commit locally and compensate later (refund the $180 if stock fails)</li>
+                    <li><b>The cost</b> &mdash; a 2PC commit needs 2 round trips and extra log flushes: ~20ms vs ~5ms for one database</li>
+                    <li><b>The trade</b> &mdash; you buy all-or-nothing across machines; you pay latency and a blocking failure mode</li>
+                </ul>
+                <p class="example">An orders service calling inventory and payments over HTTP uses a saga with a compensating refund &mdash; no team wants its rows locked while another team's service is down.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 2PC survives inside tightly-operated systems &mdash; XA middleware and the shards of one distributed database &mdash; and is avoided between independently-run services.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Atomic, Not Available: Why 2PC Is Called Blocking</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">blocking</span><span class="tag blue">locks</span></div>
+                <ul>
+                    <li><b>The guarantee</b> &mdash; 2PC gives atomicity: order #4712 is never half-applied, no matter what crashes</li>
+                    <li><b>The gap</b> &mdash; it does not give availability: in-doubt participants must wait, holding their locks</li>
+                    <li><b>Locks pile up</b> &mdash; the locked payment row blocks every new order that touches the same accounts</li>
+                    <li><b>The math</b> &mdash; coordinator down 40s at 3 orders/sec means 120 orders queued behind in-doubt locks</li>
+                    <li><b>No timeout fix</b> &mdash; aborting on timeout risks contradicting a COMMIT the coordinator already logged</li>
+                    <li><b>The label</b> &mdash; this is why 2PC is called a blocking protocol; consensus-based commit attacks exactly this</li>
+                </ul>
+                <p class="example">A 40-second coordinator reboot freezes checkout &mdash; 120 orders queue behind one in-doubt transaction &mdash; yet not a single order ends up half-applied.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading "atomic" as "reliable". 2PC never corrupts the databases, but it can stop the world: correctness is guaranteed, progress is not.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two-row flow — the half-state problem vs atomic commit
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Order #4712 Touches Two Databases: the Half-State Problem', w / 2, 24);
+
+    var boxH = 40;
+
+    function box(x, y, bw, fill, stroke, lab) {
+        roundRectPath(ctx, x, y, bw, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, x + bw / 2, y + boxH / 2 + 4);
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)', greenFill = 'rgba(0,131,0,0.12)', redFill = 'rgba(231,76,60,0.12)';
+
+    // row 1: no atomic commit
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no atomic commit', 20, y1 + boxH / 2 + 4);
+    box(170, y1, 140, blueFill, '#2a78d6', 'order #4712');
+    arrowLine(ctx, 310, y1 + boxH / 2, 360, y1 + boxH / 2, P.text, 3);
+    box(360, y1, 140, greenFill, '#008300', 'inventory −2 ✓');
+    arrowLine(ctx, 500, y1 + boxH / 2, 550, y1 + boxH / 2, P.text, 3);
+    box(550, y1, 165, redFill, '#e74c3c', 'payments $180 ✗ crash');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('stock gone, no payment', 550 + 165 / 2, y1 + boxH + 18);
+
+    // row 2: atomic commit
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('atomic commit', 20, y2 + boxH / 2 + 4);
+    box(170, y2, 140, blueFill, '#2a78d6', 'order #4712');
+    arrowLine(ctx, 310, y2 + boxH / 2, 360, y2 + boxH / 2, P.text, 3);
+    box(360, y2, 140, greenFill, '#008300', 'inventory −2 ✓');
+    arrowLine(ctx, 500, y2 + boxH / 2, 550, y2 + boxH / 2, P.text, 3);
+    box(550, y2, 150, greenFill, '#008300', 'payments $180 ✓');
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one decision covers both', 550 + 150 / 2, y2 + boxH + 18);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both writes, or neither — never one', w / 2, 175);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order and dollar amounts illustrative', w - 12, h - 8);
+});
+
+// c2: message-sequence diagram with lifelines and the crash band
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var cX = 160, iX = 420, pX = 620;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Phases for Order #4712 — and the 15ms Crash Window', w / 2, 24);
+
+    // crash band first, so lifelines/arrows draw over it
+    ctx.fillStyle = 'rgba(231,76,60,0.10)';
+    ctx.fillRect(60, 150, 640, 25);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(60, 150); ctx.lineTo(700, 150); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('coordinator crash here → both stuck in-doubt, locks held', 250, 168);
+
+    // lifelines
+    var lifelines = [
+        { x: cX, lab: 'Coordinator' },
+        { x: iX, lab: 'Inventory' },
+        { x: pX, lab: 'Payments' }
+    ];
+    for (var i = 0; i < lifelines.length; i++) {
+        var L = lifelines[i];
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(L.x, 65); ctx.lineTo(L.x, 275); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(L.lab, L.x, 55);
+    }
+
+    // time labels on far left
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0ms', 25, 99);
+    ctx.fillText('10–12ms', 25, 139);
+    ctx.fillText('20ms', 25, 189);
+    ctx.fillText('30ms', 25, 239);
+
+    // prepare arrows at y=95
+    arrowLine(ctx, cX, 95, iX, 95, P.blue, 2);
+    arrowLine(ctx, cX, 98, pX, 98, P.blue, 2);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('PREPARE', (cX + iX) / 2, 88);
+
+    // vote arrows
+    arrowLine(ctx, iX, 130, cX, 130, P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('YES (10ms)', (cX + iX) / 2, 124);
+    arrowLine(ctx, pX, 140, cX, 140, P.green, 2);
+    ctx.fillStyle = P.green;
+    ctx.fillText('YES (12ms)', (iX + pX) / 2, 134);
+
+    // decision marker at y=185
+    ctx.fillStyle = P.violet;
+    ctx.fillRect(cX - 5, 180, 10, 10);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('log COMMIT — point of no return', cX + 12, 189);
+
+    // commit arrows at y=205
+    arrowLine(ctx, cX, 205, iX, 205, P.aqua, 2);
+    arrowLine(ctx, cX, 208, pX, 208, P.aqua, 2);
+    ctx.fillStyle = P.aqua; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('COMMIT', (cX + iX) / 2, 200);
+
+    // ack arrows at y=235
+    arrowLine(ctx, iX, 235, cX, 235, P.mute, 2);
+    arrowLine(ctx, pX, 238, cX, 238, P.mute, 2);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ACK — locks released', (cX + iX) / 2, 254);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c3: commit cost bars — single db vs healthy 2PC vs in-doubt 2PC
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 250;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What a Commit Costs: One Database vs 2PC vs 2PC In-Doubt', w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var barH = 22;
+
+    function row(y, lab, bw, fill, stroke, valLab, valColor, valBold, jagged) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(lab, 20, y + 4);
+        var top = y - barH / 2;
+        ctx.fillStyle = fill;
+        ctx.fillRect(bx, top, bw, barH);
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+        if (jagged) {
+            // stroke top, bottom, left edges solid; right edge dashed/jagged
+            ctx.beginPath();
+            ctx.moveTo(bx + bw, top); ctx.lineTo(bx, top);
+            ctx.lineTo(bx, top + barH); ctx.lineTo(bx + bw, top + barH);
+            ctx.stroke();
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(bx + bw, top);
+            ctx.lineTo(bx + bw - 8, top + barH * 0.33);
+            ctx.lineTo(bx + bw, top + barH * 0.66);
+            ctx.lineTo(bx + bw - 8, top + barH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        } else {
+            ctx.strokeRect(bx, top, bw, barH);
+        }
+        ctx.fillStyle = valColor; ctx.font = (valBold ? 'bold ' : '') + (valBold ? '12px' : '11px') + ' system-ui'; ctx.textAlign = 'left';
+        if (jagged) {
+            ctx.fillText(valLab, bx, top + barH + 18);
+        } else {
+            ctx.fillText(valLab, bx + bw + 8, y + 4);
+        }
+    }
+
+    row(90, 'single database — 1 log flush', 90, 'rgba(0,131,0,0.30)', '#008300', '5 ms', '#444', false, false);
+    row(150, '2PC, both healthy — 4 messages', 250, 'rgba(42,120,214,0.30)', '#2a78d6', '20 ms', '#444', false, false);
+    row(210, '2PC, coordinator dead in-doubt', 420, 'rgba(217,89,38,0.35)', '#d95926', 'unbounded — blocked until coordinator returns', '#e74c3c', true, true);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sagas trade locks for a visible compensation step', w - 30, 258);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative; last bar schematic', w - 12, h - 8);
+});
+
+// c4: 40-second outage — blocked orders climb to 120, then drain
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var x0 = 60, baseY = 245, plotW = 600, plotH = 180;
+    var tMax = 50, yMax = 120;
+    function xOf(t) { return x0 + t / tMax * plotW; }
+    function yOf(v) { return baseY - v / yMax * plotH; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('40 Seconds In-Doubt: Zero Corruption, 120 Blocked Orders', w / 2, 24);
+
+    // outage band 0-40s
+    ctx.fillStyle = 'rgba(217,89,38,0.12)';
+    ctx.fillRect(xOf(0), baseY - plotH, xOf(40) - xOf(0), plotH);
+    ctx.strokeStyle = '#d95926'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(40), baseY - plotH); ctx.lineTo(xOf(40), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#d95926'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('coordinator down — locks held', xOf(2), baseY - plotH + 16);
+
+    // gridlines at 30/60/90
+    var gvals = [30, 60, 90];
+    for (var i = 0; i < gvals.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, yOf(gvals[i])); ctx.lineTo(x0 + plotW, yOf(gvals[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gvals[i], x0 - 8, yOf(gvals[i]) + 4);
+    }
+    // baseline + x ticks every 10s
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 50; t += 10) {
+        ctx.fillText(t + 's', xOf(t), baseY + 18);
+    }
+
+    // blocked-orders pile-up line (blue)
+    var pileT = [0, 10, 20, 30, 40];
+    var pileV = [0, 30, 60, 90, 120];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < pileT.length; i++) {
+        var x = xOf(pileT[i]), y = yOf(pileV[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // drain segment (aqua)
+    var drainT = [40, 44, 48];
+    var drainV = [120, 60, 0];
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < drainT.length; i++) {
+        var x = xOf(drainT[i]), y = yOf(drainV[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // recovery marker at 40s
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(40), 44); ctx.lineTo(xOf(40), baseY - plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('coordinator back, reads log, sends COMMIT', xOf(40) - 60, 40);
+
+    // annotations
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('atomicity kept, availability lost', xOf(18) - 80, 80);
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('queue drains, still zero half-applied orders', xOf(48), 200);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order rates illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

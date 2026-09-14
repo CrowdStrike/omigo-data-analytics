@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Leaks &amp; GC Pauses</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Memory Leaks &amp; GC Pauses</h1>
+<p class="subtitle">A garbage collector can only free objects nobody references — a cache that never evicts keeps everything reachable, so the heap ratchets up for days until the process dies at 3am</p>
+
+<div class="card-section">
+    <h2>The Session Cache That Never Evicts</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag red">slow leak</span><span class="tag orange">garbage collection</span></div>
+                <ul>
+                    <li><b>The service</b> — a web service keeps a static in-memory map: session ID &rarr; session object, ~8 KB each</li>
+                    <li><b>The bug</b> — sessions are added on login but never removed; there is no eviction and no expiry</li>
+                    <li><b>Still reachable</b> — the GC only frees unreachable objects; every map entry is still referenced</li>
+                    <li><b>The ratchet</b> — each GC cycle frees the day's short-lived garbage but none of the cache entries</li>
+                    <li><b>The definition</b> — a leak in a GC language is memory you still reference but will never use again</li>
+                </ul>
+                <p class="example">After every GC run the heap drops — but never back to where it started; the post-GC floor creeps up ~0.1 GB every 6 hours while the code "works fine".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Garbage collection is not magic — objects held by a forgotten cache, an unremoved listener, or a growing static map are reachable, so the collector must keep them forever.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Four Hundred Megabytes a Day, Every Day</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hand-check</span></div>
+                <ul>
+                    <li><b>The arithmetic</b> — 50,000 logins/day &times; 8 KB per session entry = 400 MB of un-evictable heap per day</li>
+                    <li><b>The floor</b> — post-GC floor starts at 0.8 GB (real working set) and gains 0.4 GB every day</li>
+                    <li><b>The ceiling</b> — the process runs with a 4 GB heap limit</li>
+                    <li><b>Hand-check</b> — floor after n days = 0.8 + 0.4&middot;n GB; it hits the 4 GB limit at n = 8 days</li>
+                    <li><b>The 3am OOM</b> — on day 8 an allocation finds no free heap even after a full GC, and the process dies</li>
+                </ul>
+                <p class="example">Day 7's floor is 0.8 + 0.4&times;7 = 3.6 GB — the cache alone holds 350,000 entries &times; 8 KB = 2.8 GB; one more night of logins crosses 4 GB and the pager fires at 3am.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A slow leak is a countdown you can compute: (heap limit &minus; baseline) &divide; leak rate = days to OOM — here (4 &minus; 0.8) &divide; 0.4 = 8 days, which is why it always dies "about a week after each deploy".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>As the Heap Fills, the Pauses Grow</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">tail latency</span><span class="tag red">stop-the-world</span></div>
+                <ul>
+                    <li><b>Less headroom</b> — as the floor rises, each GC cycle has less free space to reclaim, so GC runs more often</li>
+                    <li><b>Stop-the-world</b> — during a full collection every request thread is frozen mid-flight</li>
+                    <li><b>Growing pauses</b> — day 1 pauses ~30 ms; by day 7 full collections take ~520 ms and fire every few seconds</li>
+                    <li><b>Tail latency</b> — a request that lands on a pause waits it out, so p99 latency tracks the pause length</li>
+                    <li><b>The smell</b> — "the service gets slower every day and a restart fixes it" is the classic leak signature</li>
+                </ul>
+                <p class="example">p99 request latency climbs from 80 ms on day 1 to 570 ms on day 7 with zero code or traffic change — the extra ~500 ms is requests parked behind stop-the-world pauses.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A leak hurts long before the OOM: the death spiral is rising floor &rarr; more frequent GC &rarr; longer stop-the-world pauses &rarr; p99 latency ruined for days before the 3am crash.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Restarting Nightly Is Not a Fix</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">heap dump</span></div>
+                <ul>
+                    <li><b>The mistake</b> — cron a 4am restart, or hand the GC more heap: both just reschedule the OOM</li>
+                    <li><b>Peaks lie</b> — heap peaks look scary but are normal; the diagnostic signal is the post-GC floor trend</li>
+                    <li><b>The dump</b> — a heap dump snapshots every live object and who references whom</li>
+                    <li><b>Retained size</b> — an object's retained size is everything that would become free if it were released</li>
+                    <li><b>The culprit</b> — sort the dump by retained size: one map holding 2.8 GB of a 3.6 GB floor names the bug</li>
+                </ul>
+                <p class="example">The day-7 heap dump shows <code>SessionCache.map</code> retaining 2.8 GB — 78% of the 3.6 GB floor — across 350,000 entries; the fix is a 10-line eviction policy, not a bigger heap.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the symptom — restarts, larger heaps, GC tuning flags — instead of dumping the heap. A leak is a reference-graph bug, and retained-size analysis points at the exact object holding the memory hostage.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: heap sawtooth over 72 hours with a rising post-GC floor
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Sawtooth With a Rising Floor: Heap Over 3 Days', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(t) { return ox + t / 72 * pw; }
+    function py(gb) { return baseY - gb / 3.5 * ph; }
+
+    // gridlines + y labels
+    var grid = [1.0, 2.0, 3.0];
+    for (var i = 0; i < 3; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i].toFixed(1) + ' GB', ox - 6, gy + 4);
+    }
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 72; t += 12) ctx.fillText(t + 'h', px(t), baseY + 18);
+
+    // sawtooth: GC every 6h, floor climbs 0.1 GB per cycle
+    var saw = [
+        [0, 0.8], [6, 1.8], [6, 0.9], [12, 1.9], [12, 1.0], [18, 2.0], [18, 1.1],
+        [24, 2.1], [24, 1.2], [30, 2.2], [30, 1.3], [36, 2.3], [36, 1.4],
+        [42, 2.4], [42, 1.5], [48, 2.5], [48, 1.6], [54, 2.6], [54, 1.7],
+        [60, 2.7], [60, 1.8], [66, 2.8], [66, 1.9], [72, 2.9]
+    ];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.beginPath();
+    for (var i = 0; i < saw.length; i++) {
+        i === 0 ? ctx.moveTo(px(saw[i][0]), py(saw[i][1])) : ctx.lineTo(px(saw[i][0]), py(saw[i][1]));
+    }
+    ctx.stroke();
+
+    // floor line through the post-GC troughs
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(px(0), py(0.8)); ctx.lineTo(px(72), py(2.0)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // labels
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('each drop = one GC run', px(10), py(2.3));
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the floor never comes back down — that's the leak", px(40), py(0.55));
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('heap sizes illustrative', w - 12, h - 8);
+});
+
+// c2: post-GC floor marching to the 4 GB heap limit — OOM on day 8
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Floor 0.8 GB + 0.4 GB/day: OOM on Day 8', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(d) { return ox + d / 8 * pw; }
+    function py(gb) { return baseY - gb / 4.5 * ph; }
+
+    // gridlines + y labels
+    for (var g = 1; g <= 4; g++) {
+        var gy = py(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g + ' GB', ox - 6, gy + 4);
+    }
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var d = 0; d <= 8; d++) ctx.fillText(String(d), px(d), baseY + 18);
+    ctx.fillText('days since deploy', ox + pw / 2, baseY + 36);
+
+    // 4 GB heap limit
+    var ly = py(4.0);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, ly); ctx.lineTo(ox + pw, ly); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 GB heap limit', ox + 5, ly - 7);
+
+    // healthy flat line at 0.8 GB
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px(0), py(0.8)); ctx.lineTo(px(8), py(0.8)); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('healthy service: floor stays put', px(4.5), py(0.95));
+
+    // leaking floor line with dots
+    var days = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    var floorGB = [0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.2, 3.6, 4.0];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < days.length; i++) {
+        i === 0 ? ctx.moveTo(px(days[i]), py(floorGB[i])) : ctx.lineTo(px(days[i]), py(floorGB[i]));
+    }
+    ctx.stroke();
+    for (var i = 0; i < days.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(px(days[i]), py(floorGB[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // OOM marker at (8, 4.0)
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(px(8), py(4.0), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('OOM, 3am day 8', px(8) - 14, py(4.0) - 10);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0.4 GB/day = 50,000 sessions × 8 KB, illustrative', w - 12, h - 8);
+});
+
+// c3: GC pause bars vs p99 latency line, days 1-7
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('GC Pauses Eat the p99: Days 1–7 of the Leak', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function cx(d) { return ox + (d - 0.5) / 7 * pw; }
+    function py(ms) { return baseY - ms / 600 * ph; }
+
+    // gridlines + y labels
+    var grid = [150, 300, 450];
+    for (var i = 0; i < 3; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i] + ' ms', ox - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var pauses = [30, 45, 70, 110, 180, 300, 520];
+    var p99 = [80, 95, 120, 160, 230, 350, 570];
+    var bw = 40;
+
+    // pause bars
+    for (var d = 1; d <= 7; d++) {
+        var top = py(pauses[d - 1]);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(cx(d) - bw / 2, top, bw, baseY - top);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(cx(d) - bw / 2, top, bw, baseY - top);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(pauses[d - 1]), cx(d), top - 6);
+        ctx.font = '12px system-ui';
+        ctx.fillText('day ' + d, cx(d), baseY + 18);
+    }
+
+    // p99 line + dots
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var d = 1; d <= 7; d++) {
+        d === 1 ? ctx.moveTo(cx(d), py(p99[d - 1])) : ctx.lineTo(cx(d), py(p99[d - 1]));
+    }
+    ctx.stroke();
+    for (var d = 1; d <= 7; d++) {
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(cx(d), py(p99[d - 1]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fillRect(75, 70, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(75, 70, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('worst GC pause', 92, 80);
+    ctx.fillStyle = P.orange; ctx.fillRect(75, 88, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('p99 request latency', 92, 98);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('day 7: a 520 ms freeze, every few seconds', 480, 66);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pause and latency numbers illustrative', w - 12, h - 8);
+});
+
+// c4: day-7 heap dump by retained size — one map holds 78% of the floor
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Day-7 Heap Dump by Retained Size: One Map Holds 78%', w / 2, 24);
+
+    var bx = 230, bh = 22;
+    var rows = [
+        { y: 70, lab: 'SessionCache.map (350k entries)', wpx: 440, leak: true, end: '2.8 GB — the leak' },
+        { y: 115, lab: 'framework buffers', wpx: 47, leak: false, end: '0.3 GB' },
+        { y: 160, lab: 'connection pool', wpx: 31, leak: false, end: '0.2 GB' },
+        { y: 205, lab: 'string pool', wpx: 24, leak: false, end: '0.15 GB' },
+        { y: 250, lab: 'everything else', wpx: 24, leak: false, end: '0.15 GB' }
+    ];
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 62); ctx.lineTo(bx, 275); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 15);
+        ctx.fillStyle = r.leak ? 'rgba(231,76,60,0.25)' : 'rgba(42,120,214,0.30)';
+        ctx.fillRect(bx, r.y, r.wpx, bh);
+        ctx.strokeStyle = r.leak ? '#e74c3c' : P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y, r.wpx, bh);
+        if (r.leak) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(r.end, bx + r.wpx - 8, r.y + 15);
+        } else {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(r.end, bx + r.wpx + 6, r.y + 15);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sums to the 3.6 GB floor — evict sessions and the sawtooth flattens', 330, 288);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('retained sizes illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

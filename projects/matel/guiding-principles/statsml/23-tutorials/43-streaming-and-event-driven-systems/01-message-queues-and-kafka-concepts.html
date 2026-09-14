@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Message Queues &amp; Kafka Concepts</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Message Queues &amp; Kafka Concepts</h1>
+<p class="subtitle">A Kafka topic is a named append-only log split into partitions — consumers read at their own pace and can rewind, because reading never deletes anything</p>
+
+<div class="card-section">
+    <h2>One Orders Topic, Three Partitions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">append-only log</span><span class="tag orange">partitions</span></div>
+                <ul>
+                    <li><b>The shop</b> — an online store writes every order as one record to a topic named <code>orders</code></li>
+                    <li><b>The log</b> — <code>orders</code> is an append-only file: new records go at the end, nothing is edited</li>
+                    <li><b>The split</b> — the topic is divided into 3 partitions (p0, p1, p2) so writes and reads spread out</li>
+                    <li><b>The key</b> — the producer hashes the customer id; the same key always lands on the same partition</li>
+                    <li><b>The payoff</b> — customer <code>cust-42</code> always maps to p1, so their orders stay in arrival order</li>
+                </ul>
+                <p class="example">Three orders from <code>cust-42</code> — placed, paid, shipped — all hash to p1 and sit there in exactly that sequence.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A topic is not a mailbox; it is a durable log split into partitions, and keyed writes guarantee that all records for one key line up in order on one partition.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Groups, Two Bookmarks in the Same Log</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">consumer groups</span><span class="tag orange">offsets</span></div>
+                <ul>
+                    <li><b>Two readers</b> — a billing service and an analytics service both consume the <code>orders</code> topic</li>
+                    <li><b>Groups</b> — each service is its own consumer group; within a group, each partition has one owner</li>
+                    <li><b>Offsets</b> — every record has a position number; a group commits how far it has read per partition</li>
+                    <li><b>The state</b> — on p1 with 8 records (offsets 0–7), billing has committed offset 5, analytics offset 2</li>
+                    <li><b>Hand-check</b> — billing still owes offsets 5, 6, 7 (lag 3); analytics owes 2 through 7 (lag 6)</li>
+                </ul>
+                <p class="example">Billing and analytics read the exact same 8 records on p1, yet billing is 3 behind the end and analytics is 6 behind — neither reader affects the other.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Consuming does not remove records; each group just advances its own committed offset per partition, so many independent readers share one log without interfering.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Retention and Replay: Why the Log Wins</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">replay</span></div>
+                <ul>
+                    <li><b>Classic queue</b> — a traditional message queue deletes each message once a consumer acks it</li>
+                    <li><b>The log</b> — Kafka keeps records for a configured retention window (say 7 days), read or not</li>
+                    <li><b>The bug</b> — Wednesday, analytics discovers Monday's revenue numbers were computed wrong</li>
+                    <li><b>The rewind</b> — analytics resets its offset back 2 days and reprocesses ~2,400 orders from the log</li>
+                    <li><b>The queue's answer</b> — in a delete-on-ack queue those 2,400 messages are gone; only re-sending helps</li>
+                </ul>
+                <p class="example">With 7-day retention holding ~8,400 orders, the 2-day rewind replays 2,400 of them — billing's offsets never move and billing never notices.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because the log deletes by age rather than by ack, an offset is just a position you can set backwards — replay after a bug is a one-line offset reset, not a data-recovery project.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Ordered — But Only Within a Partition</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">ordering</span></div>
+                <ul>
+                    <li><b>The claim</b> — "Kafka delivers our orders in order" is only true one partition at a time</li>
+                    <li><b>Within p1</b> — <code>cust-42</code>'s records at offsets 2, 4, 5 are always read in that sequence</li>
+                    <li><b>Across partitions</b> — a consumer reading p0, p1, p2 sees the three logs interleaved unpredictably</li>
+                    <li><b>The other trap</b> — a group with 4 consumers on 3 partitions leaves one consumer idle, owning nothing</li>
+                    <li><b>The fix</b> — put everything that must stay ordered under one key; scale partitions before consumers</li>
+                </ul>
+                <p class="example">An order placed on p0 at 9:00 can be read after an order placed on p2 at 9:05 — each partition is a separate line at the checkout.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting global order from a partitioned topic. Kafka guarantees order per partition only; cross-partition sequence depends on read timing, and extra consumers beyond the partition count sit idle.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: producer -> hash router -> three partition logs, keyed records highlighted
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Topic orders: One Log Split Into 3 Partitions, Routed by Key', w / 2, 24);
+
+    // producer box
+    rrectPath(ctx, 20, 125, 120, 50, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('producer', 80, 146);
+    ctx.font = '11px system-ui';
+    ctx.fillText('key = customer id', 80, 162);
+
+    // arrow producer -> router
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+    drawArrow(ctx, 142, 150, 181, 150);
+
+    // router (diamond-ish rounded box)
+    rrectPath(ctx, 185, 125, 110, 50, 16);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hash(key) % 3', 240, 154);
+
+    // partition rows
+    var rowYs = [70, 150, 230];
+    var rowLabs = ['p0', 'p1', 'p2'];
+    var cellCounts = [5, 6, 4];
+    var cellW = 44, cellH = 34, gap = 1, startX = 365;
+    var hlOffsets = { 1: [2, 4, 5] }; // cust-42 records on p1
+
+    // arrows fanning from router to rows
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+    for (var r = 0; r < 3; r++) {
+        drawArrow(ctx, 295, 150, 322, rowYs[r] + cellH / 2);
+    }
+
+    for (var r = 0; r < 3; r++) {
+        var y = rowYs[r];
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabs[r], 330, y + cellH / 2 + 4);
+        for (var c = 0; c < cellCounts[r]; c++) {
+            var x = startX + c * (cellW + gap);
+            var isHl = hlOffsets[r] && hlOffsets[r].indexOf(c) !== -1;
+            ctx.fillStyle = isHl ? 'rgba(0,131,0,0.25)' : 'rgba(26,82,118,0.10)';
+            ctx.fillRect(x, y, cellW, cellH);
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, cellW, cellH);
+            ctx.textAlign = 'center';
+            if (isHl) {
+                ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+                ctx.fillText(String(c), x + cellW / 2, y + 14);
+                ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+                ctx.fillText('42', x + cellW / 2, y + 28);
+            } else {
+                ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+                ctx.fillText(String(c), x + cellW / 2, y + cellH / 2 + 4);
+            }
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same key → same partition → same order', 430, 205);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('record counts illustrative', w - 12, h - 8);
+});
+
+// c2: partition p1 as 8 offset cells with two committed-offset bookmarks
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Partition p1: 8 Records, Two Groups, Two Independent Offsets', w / 2, 24);
+
+    var cellW = 70, cellH = 46, x0 = 70, y0 = 130;
+
+    // strip label
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('partition p1 →', x0, 118);
+
+    // log strip: 8 cells, offsets 0-7
+    for (var i = 0; i < 8; i++) {
+        var x = x0 + i * cellW;
+        ctx.fillStyle = 'rgba(26,82,118,0.10)';
+        ctx.fillRect(x, y0, cellW, cellH);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.strokeRect(x, y0, cellW, cellH);
+        ctx.fillStyle = '#444'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(i), x + cellW / 2, y0 + cellH / 2 + 5);
+    }
+
+    // billing bookmark: arrow down to left edge of cell 5 (x=420), bracket over cells 5-7
+    ctx.strokeStyle = P.blue; ctx.fillStyle = P.blue; ctx.lineWidth = 3;
+    drawArrow(ctx, 420, 95, 420, 127);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('billing: committed offset 5', 420, 80);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(422, 124); ctx.lineTo(422, 118); ctx.lineTo(628, 118); ctx.lineTo(628, 124);
+    ctx.stroke();
+    ctx.font = '12px system-ui';
+    ctx.fillText('lag 3', 525, 112);
+
+    // analytics bookmark: arrow up to left edge of cell 2 (x=210), bracket under cells 2-7
+    ctx.strokeStyle = P.magenta; ctx.fillStyle = P.magenta; ctx.lineWidth = 3;
+    drawArrow(ctx, 210, 220, 210, 179);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('analytics: committed offset 2', 210, 238);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(216, 182); ctx.lineTo(216, 190); ctx.lineTo(628, 190); ctx.lineTo(628, 182);
+    ctx.stroke();
+    ctx.font = '12px system-ui';
+    ctx.fillText('lag 6', 430, 204);
+
+    // end marker at right edge of cell 7 (x=630)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(630, 108); ctx.lineTo(630, 196); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('log end (8)', 638, 155);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('reading moves a bookmark — it never deletes a record', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offsets illustrative', w - 12, h - 8);
+});
+
+// c3: delete-on-ack queue vs retained log, with the Wednesday replay arrow
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Delete-on-Ack vs Retained Log: What a Wednesday Rewind Can Reach', w / 2, 24);
+
+    // shared x-axis: days Mon-Sun from x=110 to x=670 (80px per day)
+    var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 7; i++) ctx.fillText(days[i], 150 + i * 80, 265);
+
+    // row labels
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('classic queue', 15, 105);
+    ctx.fillText('Kafka log', 15, 195);
+
+    // queue row: Mon-Tue dashed empty outline (deleted), Wed onward small solid block
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(110, 85, 160, 40);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('acked = deleted', 190, 110);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(270, 85, 140, 40);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('only new messages', 340, 110);
+
+    // failure mark over the queue row's Mon-Tue gap
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ nothing to replay', 190, 76);
+
+    // log row: full Mon-Sun retained bar
+    ctx.fillStyle = 'rgba(0,131,0,0.20)';
+    ctx.fillRect(110, 175, 560, 40);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(110, 175, 560, 40);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('7-day retention — ~8,400 orders', 390, 199);
+
+    // replay arrow: curve from Wed back to Mon above the log row
+    ctx.strokeStyle = P.orange; ctx.fillStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(360, 170);
+    ctx.quadraticCurveTo(250, 138, 142, 168);
+    ctx.stroke();
+    // arrowhead at curve end, pointing along the end tangent
+    var ang = Math.atan2(168 - 138, 142 - 250);
+    ctx.beginPath();
+    ctx.moveTo(142, 168);
+    ctx.lineTo(142 - 8 * Math.cos(ang - 0.4), 168 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(142 - 8 * Math.cos(ang + 0.4), 168 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('reset offset −2 days: replay 2,400 orders', 300, 141);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order counts illustrative, retention window as configured', w - 12, h - 8);
+});
+
+// c4: per-key order inside one partition vs interleaved reads across partitions
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Order Holds Inside a Partition, Not Across Them', w / 2, 24);
+
+    // row 1: one key, one partition
+    var y1 = 80, gW = 110, gH = 36;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one key, one partition', 15, 60);
+    var greenBoxes = [
+        { x: 170, t: '42: placed' },
+        { x: 310, t: '42: paid' },
+        { x: 450, t: '42: shipped' }
+    ];
+    for (var i = 0; i < greenBoxes.length; i++) {
+        rrectPath(ctx, greenBoxes[i].x, y1 - gH / 2, gW, gH, 8);
+        ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(greenBoxes[i].t, greenBoxes[i].x + gW / 2, y1 + 4);
+    }
+    ctx.strokeStyle = P.green; ctx.fillStyle = P.green; ctx.lineWidth = 3;
+    drawArrow(ctx, 282, y1, 306, y1);
+    drawArrow(ctx, 422, y1, 446, y1);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ always this order', 585, y1 + 4);
+
+    // row 2: three partitions, one reader
+    var y2 = 190;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('three partitions, one reader', 15, 148);
+    var pTops = [160, 195, 230];
+    var pLabs = ['p0', 'p1', 'p2'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(170, pTops[i], 70, 30);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(170, pTops[i], 70, 30);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(pLabs[i], 205, pTops[i] + 19);
+    }
+    // arrows converging on the consumer box
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+    drawArrow(ctx, 242, 175, 326, 198);
+    drawArrow(ctx, 242, 210, 326, 206);
+    drawArrow(ctx, 242, 245, 326, 214);
+    // consumer box
+    rrectPath(ctx, 330, 185, 120, 40, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('consumer', 390, 209);
+    // read-sequence strip
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('p1:2  p0:3  p2:1  p1:3  p0:4', 480, 209);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ interleaving varies run to run', 480, 245);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('need total order? use one key — or accept per-key order only', w / 2, 280);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('record labels illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

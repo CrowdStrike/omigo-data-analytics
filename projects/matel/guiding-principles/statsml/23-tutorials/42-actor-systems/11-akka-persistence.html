@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akka Persistence</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Akka Persistence</h1>
+<p class="subtitle">A persistent actor never saves its current state — it saves every event that changed the state, and rebuilds itself by replaying them after a crash</p>
+
+<div class="card-section">
+    <h2>The Account That Writes Its Diary, Not Its Balance</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">event sourcing</span><span class="tag orange">Akka</span></div>
+                <ul>
+                    <li><b>The actor</b> — a bank-account actor holds one customer's balance in memory: 1,100 right now</li>
+                    <li><b>The old way</b> — save the number 1,100 to a database; yesterday's 950 is overwritten and gone</li>
+                    <li><b>The persistent way</b> — the actor writes each change as an event: "Deposited 300", "Withdrawn 150"</li>
+                    <li><b>The journal</b> — events are appended to a write-only log; nothing is ever updated or deleted</li>
+                    <li><b>The state</b> — the in-memory balance is just a cache; the journal is the real source of truth</li>
+                </ul>
+                <p class="example">When a customer deposits 300, the actor appends the event "Deposited 300" to the journal first, and only then bumps its in-memory balance from 800 to 1,100.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A persistent actor persists what happened, not what it currently is — state becomes a derived value you can always recompute from the event log.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Crash, Restart, Replay</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">replay</span></div>
+                <ul>
+                    <li><b>The journal</b> — 8 events on file: +500, +200, −150, +400, −300, +250, −100, +300 (deposits and withdrawals)</li>
+                    <li><b>The crash</b> — the server dies at 2:14pm; the in-memory balance of 1,100 vanishes with it</li>
+                    <li><b>The restart</b> — the actor comes back empty and reads its journal from event 1 onward</li>
+                    <li><b>The fold</b> — it re-applies each event in order: 500, 700, 550, 950, 650, 900, 800, 1,100</li>
+                    <li><b>Hand-check</b> — total deposits 1,650 minus total withdrawals 550 = 1,100, same as before the crash</li>
+                </ul>
+                <p class="example">After replaying all 8 events the rebuilt balance is exactly 1,100 — the actor resumes as if the crash never happened.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Recovery is just a fold over the journal — replay every event in order and the state comes back exactly, because the events are the state's complete history.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Snapshots Keep Restarts Fast</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">snapshots</span><span class="tag orange">rule of thumb</span></div>
+                <ul>
+                    <li><b>The problem</b> — a busy account collects 100 events a day; after 500 days the journal holds 50,000 events</li>
+                    <li><b>The cost</b> — replaying 50,000 events at 20,000 events/sec makes every restart wait about 2.5 seconds</li>
+                    <li><b>The snapshot</b> — every 1,000 events the actor also saves its current balance as a checkpoint</li>
+                    <li><b>The shortcut</b> — recovery loads the latest snapshot, then replays only the events after it: at most 999</li>
+                    <li><b>The bonus</b> — the full journal still exists, so auditors can see every deposit ever made</li>
+                </ul>
+                <p class="example">With snapshots every 1,000 events, the 50,000-event account restarts by loading one snapshot and replaying at most 999 events — about 0.05 seconds instead of 2.5.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Snapshots are an optimization, not the source of truth — they bound replay time to the events since the last checkpoint, while the journal keeps the complete history.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Persist the Fact, Not the Request</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">command vs event</span></div>
+                <ul>
+                    <li><b>The distinction</b> — a command is a request ("Withdraw 150") that may be refused; an event is a fact ("Withdrawn 150") that already happened</li>
+                    <li><b>The rule</b> — validate the command first, and persist only the event it produces</li>
+                    <li><b>The mistake</b> — persisting commands, so recovery re-runs validation on every restart</li>
+                    <li><b>The breakage</b> — if the overdraft rule changed since, replay now rejects an old withdrawal and rebuilds a different balance</li>
+                    <li><b>The fix</b> — event handlers apply facts blindly and never validate; all decisions live in the command handler</li>
+                </ul>
+                <p class="example">An account journal holds a "Withdraw 150" command from last year; after the overdraft limit is tightened, replay rejects it and the rebuilt balance is 150 too high — history has silently changed.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Persisting commands instead of events. Replay must be pure bookkeeping — if recovery can make decisions, the same journal can rebuild two different states.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: a Deposit command enters the actor, an event is appended, then state updates
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Persist the Event, Then Update the State', w / 2, 24);
+
+    // command box
+    rrectPath(ctx, 30, 110, 160, 44, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('command: Deposit 300', 110, 136);
+
+    // actor circle
+    var acx = 300, acy = 132, ar = 42;
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(acx, acy, ar, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('account actor', acx, acy + 4);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('balance: 800 → 1,100', acx, acy + ar + 16);
+
+    // arrow 1: command -> actor
+    ctx.strokeStyle = P.blue; ctx.fillStyle = P.blue; ctx.lineWidth = 3;
+    drawArrow(ctx, 194, 132, 252, 132);
+
+    // journal strip: five appended event cells (tail of the 8-event journal)
+    var cells = [
+        { lab: '… earlier events', fill: 'rgba(107,114,128,0.10)', bold: false },
+        { lab: 'Withdrawn 300', fill: 'rgba(0,131,0,0.12)', bold: false },
+        { lab: 'Deposited 250', fill: 'rgba(0,131,0,0.12)', bold: false },
+        { lab: 'Withdrawn 100', fill: 'rgba(0,131,0,0.12)', bold: false },
+        { lab: 'Deposited 300', fill: 'rgba(0,131,0,0.30)', bold: true }
+    ];
+    var cw = 118, ch = 38, cy = 220;
+    for (var i = 0; i < cells.length; i++) {
+        var cx = 60 + i * (cw + 10);
+        rrectPath(ctx, cx, cy, cw, ch, 6);
+        ctx.fillStyle = cells[i].fill; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text;
+        ctx.font = (cells[i].bold ? 'bold ' : '') + '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(cells[i].lab, cx + cw / 2, cy + 24);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('appended', 60 + 4 * (cw + 10) + cw / 2, cy - 8);
+
+    // arrow 2: actor -> fifth journal cell
+    ctx.strokeStyle = P.green; ctx.fillStyle = P.green; ctx.lineWidth = 3;
+    drawArrow(ctx, 322, 168, 618, 214);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1. persist event', 450, 176);
+
+    // arrow 3: loop from actor back to itself
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(272, 100);
+    ctx.bezierCurveTo(255, 45, 345, 45, 328, 98);
+    ctx.stroke();
+    var ang = Math.atan2(98 - 45, 328 - 345);
+    ctx.fillStyle = P.mute;
+    ctx.beginPath();
+    ctx.moveTo(328, 98);
+    ctx.lineTo(328 - 7 * Math.cos(ang - 0.4), 98 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(328 - 7 * Math.cos(ang + 0.4), 98 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2. apply to balance', 430, 78);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the journal only grows — no overwrites', 390, 286);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative', w - 12, h - 8);
+});
+
+// c2: step chart of the balance rebuilt during replay
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Replaying 8 Events Rebuilds the Balance: 0 → 1,100', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(i) { return ox + i / 8 * pw; }
+    function py(v) { return baseY - v / 1200 * ph; }
+
+    // gridlines + y labels
+    var grid = [300, 600, 900, 1200];
+    for (var i = 0; i < 4; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i].toLocaleString('en-US'), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels e1..e8
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 1; i <= 8; i++) ctx.fillText('e' + i, px(i), baseY + 18);
+
+    // target line: pre-crash balance 1,100
+    var ty = py(1100);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, ty); ctx.lineTo(ox + pw, ty); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pre-crash balance 1,100', ox + pw - 6, ty - 8);
+
+    // step line
+    var bal = [500, 700, 550, 950, 650, 900, 800, 1100];
+    var amts = ['+500', '+200', '−150', '+400', '−300', '+250', '−100', '+300'];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(0));
+    var prev = 0;
+    for (var i = 1; i <= 8; i++) {
+        ctx.lineTo(px(i), py(prev));
+        ctx.lineTo(px(i), py(bal[i - 1]));
+        prev = bal[i - 1];
+    }
+    ctx.stroke();
+
+    // dots + amount labels
+    for (var i = 1; i <= 8; i++) {
+        var dx = px(i), dy = py(bal[i - 1]);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        if (i < 8) {
+            ctx.textAlign = 'center';
+            ctx.fillText(amts[i - 1], dx, dy - 12);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(amts[i - 1], dx + 10, dy + 16);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('last replayed event lands exactly on 1,100', 450, 52);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative', w - 12, h - 8);
+});
+
+// c3: events replayed at restart, without vs with snapshots
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Events Replayed at Restart: Snapshot Every 1,000 Caps the Bill', w / 2, 24);
+
+    var bx = 250, bh = 16;
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 58); ctx.lineTo(bx, 232); ctx.stroke();
+
+    var rows = [
+        { y: 70,  lab: 'journal 5,000 events',    barW: 42,  fill: 'rgba(42,120,214,0.30)', end: '5,000',  snap: false },
+        { y: 115, lab: 'journal 20,000 events',   barW: 168, fill: 'rgba(42,120,214,0.30)', end: '20,000', snap: false },
+        { y: 160, lab: 'journal 50,000 events',   barW: 420, fill: 'rgba(217,89,38,0.35)',  end: null,     snap: false },
+        { y: 205, lab: 'any size, with snapshots', barW: 0,  fill: null,                    end: null,     snap: true }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 13);
+        if (r.barW > 0) {
+            ctx.fillStyle = r.fill;
+            ctx.fillRect(bx, r.y, r.barW, bh);
+        }
+        // snapshot overlay: at most 999 events, solid green (with-snapshots row only)
+        if (r.snap) {
+            ctx.fillStyle = P.green;
+            ctx.fillRect(bx, r.y, 8, bh);
+        }
+        // labels at bar ends
+        if (r.end) {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(r.end + ' events', bx + r.barW + 8, r.y + 12);
+        }
+    }
+
+    // 50,000-row label inside the orange bar
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('50,000 events — 2.5s replay', bx + 420 - 8, 172);
+
+    // with-snapshots row label
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('≤999 events ≈ 0.05s', bx + 8 + 8, 218);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('replay cost stops growing with the journal', w - 20, 255);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts and 20,000 events/sec rate illustrative', w - 12, h - 8);
+});
+
+// c4: replay a persisted command (wrong balance) vs a persisted event (same balance)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Replay a Command vs Replay an Event', w / 2, 24);
+
+    var boxH = 40;
+
+    function flowBox(x, cy, bw, lines, fill, border) {
+        rrectPath(ctx, x, cy - boxH / 2, bw, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 11);
+        }
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)', orangeFill = 'rgba(217,89,38,0.15)';
+    var redFill = 'rgba(231,76,60,0.12)', greenFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: persisted command
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('persisted command', 20, y1 + 4);
+    flowBox(170, y1, 160, ['Withdraw 150 (request)'], blueFill, P.blue);
+    flowBox(380, y1, 160, ['re-validate:', 'new rule says no'], orangeFill, P.orange);
+    flowBox(580, y1, 135, ['balance 1,250'], redFill, '#e74c3c');
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 334, y1, 376, y1);
+    drawArrow(ctx, 544, y1, 576, y1);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ history changed', 647, y1 + 36);
+
+    // row 2: persisted event
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('persisted event', 20, y2 + 4);
+    flowBox(170, y2, 160, ['Withdrawn 150 (fact)'], blueFill, P.blue);
+    flowBox(380, y2, 160, ['apply blindly: −150'], greenFill, P.green);
+    flowBox(580, y2, 135, ['balance 1,100'], greenFill, P.green);
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 334, y2, 376, y2);
+    drawArrow(ctx, 544, y2, 576, y2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ same as before', 647, y2 + 36);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('decide once in the command handler; replay only records the decision', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

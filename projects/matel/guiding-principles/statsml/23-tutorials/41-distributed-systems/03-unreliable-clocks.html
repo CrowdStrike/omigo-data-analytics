@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unreliable Clocks</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Unreliable Clocks</h1>
+<p class="subtitle">Two servers "synchronized" by NTP can still disagree by 100 milliseconds — enough to log an answer before its question and to silently lose your newest write</p>
+
+<div class="card-section">
+    <h2>The Reply That Arrived Before the Question</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">clock skew</span><span class="tag green">two servers</span></div>
+                <ul>
+                    <li><b>The setup</b> — a coffee shop's order app runs on two servers behind a load balancer, both NTP-synced</li>
+                    <li><b>The question</b> — a customer's "is my latte ready?" lands on server A at true time 12:00:00.000</li>
+                    <li><b>The reply</b> — the barista's "yes, ready now" lands on server B 40ms later, at true 12:00:00.040</li>
+                    <li><b>The skew</b> — server A's clock runs 100ms fast, so it stamps the question 12:00:00.100</li>
+                    <li><b>The scramble</b> — sorted by timestamp, the merged log shows the reply 60ms before the question</li>
+                    <li><b>The concept</b> — clocks on different machines never agree exactly; the gap between them is clock skew</li>
+                </ul>
+                <p class="example">Reading the merged log top to bottom, the barista appears to answer 60ms before anyone asked.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Two machines never share one clock — "synchronized" means "close", and close can still reorder any events that happen within the skew.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>How a Fast Clock Deletes the Newest Write</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">clock drift</span><span class="tag green">last write wins</span></div>
+                <ul>
+                    <li><b>The drift</b> — server A's quartz clock runs 100 ppm fast: it gains 100 microseconds every second</li>
+                    <li><b>Hand-check</b> — 100 µs/s × 1,000 s = 100 ms: about 17 minutes after a sync, A is 100ms ahead</li>
+                    <li><b>The first write</b> — at true 10:00:00.000 an order sets size=large via server A, stamped 10:00:00.100</li>
+                    <li><b>The correction</b> — 60ms later the customer taps size=medium via server B, stamped 10:00:00.060</li>
+                    <li><b>Last write wins</b> — the store keeps the "latest" stamp: .100 beats .060, so size=large wins</li>
+                    <li><b>The loss</b> — the newer write is discarded with no error; the medium simply never happened</li>
+                </ul>
+                <p class="example">The customer ordered medium 60ms after large, but the orders table remembers large forever.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Last-write-wins trusts timestamps; a clock only 100ms fast makes an older write look newer, so the real latest write is silently deleted.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where a 100ms Disagreement Bites</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">logs</span><span class="tag orange">two clock types</span></div>
+                <ul>
+                    <li><b>Debugging logs</b> — merged logs from many machines can put effects before causes; you chase ghosts</li>
+                    <li><b>Databases</b> — some replicated stores resolve write conflicts by timestamp, so skew becomes data loss</li>
+                    <li><b>The window</b> — with 100ms of skew, any two events closer than 100ms can appear in either order</li>
+                    <li><b>Two clock types</b> — time-of-day clocks answer "what time is it"; monotonic clocks answer "how long"</li>
+                    <li><b>NTP steps</b> — a sync can jump the time-of-day clock backward; a monotonic clock never moves back</li>
+                    <li><b>Durations</b> — measure elapsed time with the monotonic clock; the wall clock is for humans</li>
+                </ul>
+                <p class="example">Just before a sync, A runs 100ms ahead of B, so a request and its response 40ms apart can log in either order.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A timestamp orders events on one machine only; across machines, anything inside the skew window is effectively unordered.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Wall Clocks Are Not Stopwatches</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">monotonic clock</span></div>
+                <ul>
+                    <li><b>The mistake</b> — sorting cross-machine events by wall-clock stamps and treating the order as truth</li>
+                    <li><b>Its twin</b> — timing code as wall-clock end minus start, as if the clock can't change in between</li>
+                    <li><b>The step-back</b> — a request starts at wall reading 12:00:00.130; NTP steps the clock back 100ms</li>
+                    <li><b>Negative time</b> — the end reads 12:00:00.090, so the 60ms request "took" .090 − .130 = −40ms</li>
+                    <li><b>The fix</b> — the monotonic clock reads 5000.000s then 5000.060s: 60ms, immune to steps</li>
+                    <li><b>The other fix</b> — order cross-machine events with sequence numbers or logical clocks, not wall time</li>
+                </ul>
+                <p class="example">A latency dashboard averaging in a −40ms request quietly understates every percentile it reports.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Trusting the subtraction of two wall-clock readings. The wall clock can be adjusted between your two reads; only a monotonic clock guarantees the difference is a duration.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rbox(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: two-lane timeline, question/reply stamped out of order, merged log flipped
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Servers, One Chat: the Reply Is Stamped Before the Question', w / 2, 24);
+
+    // true-time axis: 3px per ms, x(t) = 60 + t*3, ticks every 50ms 0..200
+    var axY = 210;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, axY); ctx.lineTo(660, axY); ctx.stroke();
+    for (var t = 0; t <= 200; t += 50) {
+        var tx = 60 + t * 3;
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, axY - 4); ctx.lineTo(tx, axY + 4); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + 'ms', tx, axY + 18);
+    }
+
+    // lanes
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, 100); ctx.lineTo(660, 100); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(60, 150); ctx.lineTo(660, 150); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('server A (+100ms fast)', 62, 88);
+    ctx.fillText('server B (accurate)', 62, 138);
+
+    // question dot at (60, 100) — true 0ms on A
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(60, 100, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('question — stamped 12:00:00.100', 74, 76);
+
+    // reply dot at (180, 150) — true 40ms on B
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(180, 150, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('reply — stamped 12:00:00.040', 194, 136);
+
+    // merged-log strip
+    var logY = 255;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('log sorted by stamp:', 60, logY + 4);
+
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    rbox(ctx, 220, logY - 15, 160, 30, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+    rbox(ctx, 220, logY - 15, 160, 30, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1st — reply .040', 300, logY + 4);
+
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rbox(ctx, 420, logY - 15, 175, 30, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    rbox(ctx, 420, logY - 15, 175, 30, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('2nd — question .100', 507, logY + 4);
+
+    // crossing dashed arrows from dots to log boxes
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(60, 107); ctx.lineTo(507, logY - 15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(180, 157); ctx.lineTo(300, logY - 15); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sorted by stamp, the answer beats its question by 60ms', 420, 60);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timestamps illustrative', w - 14, h - 8);
+});
+
+// c2: true order vs what last-write-wins keeps
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Last Write Wins: a 100ms-Fast Clock Crowns the Wrong Winner', w / 2, 24);
+
+    var bh = 44;
+
+    function box(x, y, bwid, label, sub, fill, edge) {
+        ctx.fillStyle = fill;
+        rbox(ctx, x, y - bh / 2, bwid, bh, 8); ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 1.5;
+        rbox(ctx, x, y - bh / 2, bwid, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bwid / 2, y - 2);
+        ctx.font = '11px system-ui';
+        ctx.fillText(sub, x + bwid / 2, y + 14);
+    }
+
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x2, y); ctx.lineTo(x2 - 8, y - 5); ctx.lineTo(x2 - 8, y + 5);
+        ctx.closePath(); ctx.fillStyle = P.mute; ctx.fill();
+    }
+
+    // row 1: what happened
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what happened', 20, y1 + 4);
+    box(170, y1, 160, 'size=large', 'true .000 → stamp .100', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(332, 428, y1);
+    box(430, y1, 170, 'size=medium', 'true .060 → stamp .060', 'rgba(0,131,0,0.12)', P.green);
+
+    // row 2: what LWW keeps
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what LWW keeps', 20, y2 + 4);
+    box(170, y2, 160, 'compare stamps', '.100 vs .060', 'rgba(74,58,167,0.12)', P.violet);
+    arrow(332, 428, y2);
+    box(430, y2, 150, 'keep size=large', '', 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ the correction is lost', 430, y2 + 40);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the newer write lost because its clock was honest', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('stamps illustrative; drift math exact (100 ppm × 1,000s = 100ms)', w - 14, h - 8);
+});
+
+// c3: sawtooth drift of server A vs flat server B over an hour
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Between Syncs, a 100 ppm Clock Drifts 100ms Ahead', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var maxMin = 60, maxMs = 120;
+    function xOf(m) { return ox + m / maxMin * pw; }
+    function yOf(ms) { return baseY - ms / maxMs * ph; }
+
+    // gridlines y at 40/80/120
+    for (var g = 40; g <= 120; g += 40) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g + 'ms', ox - 6, yOf(g) + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var m = 0; m <= 60; m += 10) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(m), xOf(m), baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('minutes since first sync', ox + pw / 2, baseY + 32);
+
+    // sync markers
+    var syncs = [16.7, 33.3, 50];
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    for (var si = 0; si < 3; si++) {
+        ctx.beginPath(); ctx.moveTo(xOf(syncs[si]), baseY - ph); ctx.lineTo(xOf(syncs[si]), baseY); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('NTP sync', xOf(16.7), baseY - ph - 6);
+
+    // 100ms guide
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(100)); ctx.lineTo(ox + pw, yOf(100)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('100ms', ox + pw + 4, yOf(100) + 4);
+
+    // server A sawtooth
+    var pts = [[0, 0], [16.7, 100], [16.7, 0], [33.3, 100], [33.3, 0], [50, 100], [50, 0], [60, 60]];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+        var px = xOf(pts[i][0]), py = yOf(pts[i][1]);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('server A (100 ppm fast)', xOf(2), yOf(58));
+
+    // server B flat line at 0
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(0), yOf(0)); ctx.lineTo(xOf(60), yOf(0)); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('server B (accurate)', xOf(55), yOf(0) - 8);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('just before each sync, A and B disagree by 100ms', xOf(30), yOf(112));
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('drift rate illustrative; 100 ppm × 1,000s = 100ms exact', w - 14, h - 8);
+});
+
+// c4: timing a 60ms request — wall clock vs monotonic clock
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Timing a 60ms Request: Wall Clock vs Monotonic Clock', w / 2, 24);
+
+    var bh = 40;
+
+    function box(x, y, bwid, label, fill, edge) {
+        ctx.fillStyle = fill;
+        rbox(ctx, x, y - bh / 2, bwid, bh, 8); ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 1.5;
+        rbox(ctx, x, y - bh / 2, bwid, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bwid / 2, y + 4);
+    }
+
+    function arrow(x1, x2, y, note) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x2, y); ctx.lineTo(x2 - 8, y - 5); ctx.lineTo(x2 - 8, y + 5);
+        ctx.closePath(); ctx.fillStyle = P.mute; ctx.fill();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(note, (x1 + x2) / 2, y - 12);
+    }
+
+    // row 1: wall clock
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('wall clock', 20, y1 + 4);
+    box(150, y1, 170, 'start: 12:00:00.130', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(322, 408, y1, 'NTP steps clock −100ms');
+    box(410, y1, 160, 'end: 12:00:00.090', 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('duration −40ms ✗', 585, y1 + 4);
+
+    // row 2: monotonic
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('monotonic', 20, y2 + 4);
+    box(150, y2, 170, 'start: 5000.000s', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(322, 408, y2, 'never steps');
+    box(410, y2, 160, 'end: 5000.060s', 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('duration 60ms ✓', 585, y2 + 4);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the request took 60ms either way — only one clock knows it', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('clock readings illustrative', w - 14, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

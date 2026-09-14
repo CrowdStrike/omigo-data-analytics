@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ephemeral Port Exhaustion</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Ephemeral Port Exhaustion</h1>
+<p class="subtitle">Every outbound connection borrows a local port number, and a closed one stays reserved for a minute — open a new connection per request and you run out of numbers around 470 requests per second</p>
+
+<div class="card-section">
+    <h2>A New Phone Line for Every Payment</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">TIME_WAIT</span><span class="tag green">outbound connections</span></div>
+                <ul>
+                    <li><b>The service</b> — a checkout service calls a payment API over TCP for every order it processes</li>
+                    <li><b>The habit</b> — the code opens a fresh connection per request: connect, send, read reply, close</li>
+                    <li><b>The port</b> — each outbound connection borrows one local ephemeral port from a fixed range</li>
+                    <li><b>The range</b> — Linux defaults to 32768–60999, which is 28,232 usable port numbers in total</li>
+                    <li><b>The lingering</b> — a closed connection sits in TIME_WAIT for ~60s, still holding its port</li>
+                </ul>
+                <p class="example">One payment call does its work in 100ms, then its port stays unusable for 60 more seconds — busy for 0.1s, reserved for 60.1s.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An ephemeral port is a slot the kernel lends to each outbound connection; TIME_WAIT means the slot is returned a full minute after the connection closes, not when it closes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Hand-Math: 500 Orders/s Against 28,232 Ports</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>Demand</b> — at 500 orders/s, each minute the service opens 500 &times; 60 = 30,000 connections</li>
+                    <li><b>Supply</b> — every one of those holds a port ~60s, so ~30,000 ports must be held at once</li>
+                    <li><b>The shelf</b> — the range only has 28,232 ports, so demand exceeds supply by ~1,800 slots</li>
+                    <li><b>Time to empty</b> — 28,232 ports &divide; 500 new/s &asymp; 56 seconds from cold start to a full range</li>
+                    <li><b>The ceiling</b> — the sustainable rate is 28,232 &divide; 60s &asymp; 470 new connections/s, no matter the CPU</li>
+                </ul>
+                <p class="example">The checkout service boots at 500 orders/s; TIME_WAIT sockets climb by 500 every second and hit the 28,232-port wall about 56 seconds later.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Connection-per-request has a hard arithmetic ceiling — ports &divide; TIME_WAIT seconds, about 28,232 &divide; 60 &asymp; 470 new connections per second on default Linux settings.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Error That Only Shows Up at Peak</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">symptoms</span></div>
+                <ul>
+                    <li><b>The message</b> — connect() starts failing with "cannot assign requested address" (EADDRNOTAVAIL)</li>
+                    <li><b>The misdirection</b> — the payment API is healthy; the failure is local, before a packet is sent</li>
+                    <li><b>Load-dependent</b> — 300 orders/s all day is fine; the flash sale crossing ~470/s falls over</li>
+                    <li><b>Self-healing</b> — traffic dips, TIME_WAIT entries expire, errors vanish — until the next peak</li>
+                    <li><b>Where it bites</b> — API clients, DB connections, proxies, health checkers: anything dialing out fast</li>
+                </ul>
+                <p class="example">During a flash sale the checkout service climbs past 470 orders/s at 12:02; payment calls start failing at 12:03 and recover on their own once traffic falls back at 12:08.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Intermittent "cannot assign requested address" errors that track traffic peaks and clear themselves are the signature of ephemeral port exhaustion — the remote service is innocent.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tuning the Kernel Only Moves the Wall</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">connection pooling</span></div>
+                <ul>
+                    <li><b>The band-aid</b> — widening the range to 1024–65535 gives 64,512 ports: a ~1,075/s ceiling, not none</li>
+                    <li><b>More knobs</b> — tcp_tw_reuse and shorter FIN timeouts shave TIME_WAIT but keep the same arithmetic</li>
+                    <li><b>The real fix</b> — a keep-alive pool reuses connections, so requests stop consuming fresh ports</li>
+                    <li><b>The math flip</b> — 50 pooled connections at ~10 requests/s each carry 500 orders/s on 50 ports</li>
+                    <li><b>The mistake</b> — treating a resource-leak bug as a kernel-tuning problem and re-hitting it at 2&times; load</li>
+                </ul>
+                <p class="example">After widening the port range, the checkout service survives 500 orders/s — then next quarter's 1,100/s peak hits the new 1,075/s wall; a 50-connection pool would have used 50 ports at either load.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Fixing port exhaustion with sysctls. Tuning raises the connections-per-second ceiling from ~470 to ~1,075; pooling and keep-alive remove the per-request port cost entirely.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: the life of one connect-per-request call — 0.1s of work, 60s of TIME_WAIT
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Request's Port: Busy 0.1s, Reserved 60.1s", w / 2, 24);
+
+    // baseline 0s to 60s
+    var axY = 200, ax0 = 60, ax1 = 660;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax0, axY); ctx.lineTo(ax1, axY); ctx.stroke();
+    var ticks = ['0s', '15s', '30s', '45s', '60s'];
+    for (var i = 0; i <= 4; i++) {
+        var tx = ax0 + i / 4 * (ax1 - ax0);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, axY - 4); ctx.lineTo(tx, axY + 4); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i], tx, axY + 18);
+    }
+
+    // the bar: green work sliver + long orange TIME_WAIT band
+    var barY = 140, barH = 44;
+    ctx.fillStyle = P.green;
+    ctx.fillRect(60, barY, 8, barH);
+    ctx.fillStyle = 'rgba(217,89,38,0.30)';
+    ctx.fillRect(68, barY, 592, barH);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(68, barY, 592, barH);
+
+    // segment labels
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('connect + pay: 0.1s', 64, 120);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('TIME_WAIT: port still held for 60s', 364, barY + 26);
+
+    // port tag
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rrectPath(ctx, 60, 76, 124, 20, 6); ctx.fill();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('local port 45182', 68, 90);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(62, 97); ctx.lineTo(62, 137); ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the port does 0.1s of work and then sits idle 600× longer', w / 2, 240);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('durations illustrative; 60s is the classic TIME_WAIT default', w - 12, h - 8);
+});
+
+// c2: TIME_WAIT socket count ramping into the 28,232-port ceiling at 500/s
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('500 Orders/s Fills All 28,232 Ports in ~56 Seconds', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180;
+    function px(t) { return ox + t / 90 * pw; }
+    function py(v) { return baseY - v / 30000 * ph; }
+
+    // gridlines + y labels
+    var grid = [[10000, '10k'], [20000, '20k'], [30000, '30k']];
+    for (var i = 0; i < 3; i++) {
+        var gy = py(grid[i][0]);
+        if (grid[i][0] < 30000) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i][1], ox - 8, gy + 4);
+    }
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 90; t += 15) ctx.fillText(t + 's', px(t), baseY + 18);
+
+    // ceiling line at 28,232
+    var cy = py(28232);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, cy); ctx.lineTo(ox + pw, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('port range exhausted: 28,232', ox + 5, cy - 8);
+
+    // impact marker at 56s
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(56), cy); ctx.lineTo(px(56), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('56s', px(56), 260);
+
+    // TIME_WAIT line
+    var secs = [0, 10, 20, 30, 40, 50, 56, 70, 90];
+    var socks = [0, 5000, 10000, 15000, 20000, 25000, 28232, 28232, 28232];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        i === 0 ? ctx.moveTo(px(secs[i]), py(socks[i])) : ctx.lineTo(px(secs[i]), py(socks[i]));
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every new connect now fails', px(70), 68);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative; assumes 60s TIME_WAIT and one port per request', w - 12, h - 8);
+});
+
+// c3: flash-sale timeline — failures only while orders/s exceeds the ~470 ceiling
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Flash Sale: Errors Appear Only Above ~470 Connections/s', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180;
+    function px(m) { return ox + m / 10 * pw; }
+    function py(v) { return baseY - v / 800 * ph; }
+
+    // over-ceiling shading (minute 2 to 8)
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(px(2), baseY - ph, px(8) - px(2), ph);
+
+    // gridlines + y labels
+    var grid = [200, 400, 600];
+    for (var i = 0; i < 3; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i]), ox - 8, gy + 4);
+    }
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var clock = ['12:00', '12:02', '12:04', '12:06', '12:08', '12:10'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 6; i++) ctx.fillText(clock[i], px(i * 2), baseY + 18);
+
+    // ceiling line at 470
+    var cy = py(470);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, cy); ctx.lineTo(ox + pw, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('port ceiling ≈ 470/s', ox + pw - 4, cy - 6);
+
+    // order-rate line
+    var mins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var orders = [300, 380, 480, 620, 700, 680, 640, 540, 430, 350, 310];
+    var fails = [0, 0, 10, 150, 230, 210, 170, 70, 0, 0, 0];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        i === 0 ? ctx.moveTo(px(mins[i]), py(orders[i])) : ctx.lineTo(px(mins[i]), py(orders[i]));
+    }
+    ctx.stroke();
+
+    // failure line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        i === 0 ? ctx.moveTo(px(mins[i]), py(fails[i])) : ctx.lineTo(px(mins[i]), py(fails[i]));
+    }
+    ctx.stroke();
+
+    // legend
+    ctx.fillStyle = P.blue; ctx.fillRect(85, 72, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('orders/s', 102, 82);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(85, 90, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('failed connects/s', 102, 100);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("'cannot assign requested address'", px(4.5), 75);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative', w - 12, h - 8);
+});
+
+// c4: ports held at 500 orders/s — connection-per-request vs a keep-alive pool
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Ports Held at 500 Orders/s: Pooling Beats Tuning', w / 2, 24);
+
+    var bx = 230, bh = 26;
+    var rows = [
+        { y: 80, lab: 'new conn/request, default range', wpx: 394, color: '#e74c3c' },
+        { y: 140, lab: 'new conn/request, widened range', wpx: 394, color: P.orange },
+        { y: 200, lab: 'keep-alive pool of 50', wpx: 6, color: P.green }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 17);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(bx, r.y, r.wpx, bh);
+    }
+    // end labels
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('30,000 needed > 28,232 — fails', bx + 394, 74);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('30,000 of 64,512 — survives, for now', bx + 394, 134);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('50 ports — no ceiling from TIME_WAIT', bx + 6 + 8, 217);
+
+    // default-range limit marker (28,232 on the 32,000-port scale)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(601, 70); ctx.lineTo(601, 232); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('default limit 28,232', 601, 64);
+
+    // widened limit lies off-scale to the right
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('widened limit 64,512 →', 668, 180);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('reuse connections and the port math disappears', w / 2, 260);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pool sizing illustrative: 50 connections × ~10 req/s each', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

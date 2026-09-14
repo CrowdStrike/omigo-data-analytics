@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concurrent Writes &amp; Conflict Resolution</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Concurrent Writes &amp; Conflict Resolution</h1>
+<p class="subtitle">When two copies of the same record are edited at the same time with no way to coordinate, the system must decide whose write survives — and every strategy has a cost</p>
+
+<div class="card-section">
+    <h2>Two Devices, One Contact, No Signal</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">offline edits</span><span class="tag orange">version vectors</span></div>
+                <ul>
+                    <li><b>The contact</b> — Maya's phone number lives on both your phone and your laptop, kept in sync</li>
+                    <li><b>The gap</b> — at 2:00pm both devices go offline (a flight); each keeps its own local copy</li>
+                    <li><b>Edit one</b> — at 2:01pm the phone changes the number to 555-0142; its version vector becomes {P:1, L:0}</li>
+                    <li><b>Edit two</b> — at 2:04pm the laptop changes it to 555-0177; its version vector becomes {P:0, L:1}</li>
+                    <li><b>The sync</b> — at 2:10pm both reconnect; neither vector contains the other, so neither edit "came after"</li>
+                    <li><b>The verdict</b> — the writes are concurrent: no order exists, and the system must resolve a conflict</li>
+                </ul>
+                <p class="example">At sync time the server compares {P:1, L:0} against {P:0, L:1} — each side has one edit the other never saw, so this is a genuine conflict, not a late arrival.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A conflict is not two writes close in time — it is two writes where neither one saw the other. Version vectors detect exactly this: if neither vector dominates, the writes are concurrent.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Ways to Resolve the Same Conflict</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">LWW</span><span class="tag green">siblings</span><span class="tag green">merge</span></div>
+                <ul>
+                    <li><b>Last-write-wins</b> — compare timestamps: 2:04 beats 2:01, keep 555-0177, silently delete 555-0142</li>
+                    <li><b>The cost</b> — the phone's write vanishes with no error, no log entry, no way to notice it existed</li>
+                    <li><b>Keep both siblings</b> — store [555-0142, 555-0177] side by side and hand the pair to the application</li>
+                    <li><b>The cost</b> — the app must show "two numbers found — which is right?" and let the user pick</li>
+                    <li><b>Merge</b> — a single phone field can't merge, but the contact's tags set can: {work} ∪ {gym} = {work, gym}</li>
+                    <li><b>The rule</b> — merge only works when the type has a natural combine step (sets union, counters add)</li>
+                </ul>
+                <p class="example">The same 2:01-vs-2:04 conflict yields three different databases: LWW keeps one value, siblings keeps two values, and the tags set merges into one value containing both edits.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> There is no free resolution: LWW is simple but lossy, siblings are lossless but push work to the app, and merge is automatic but only for data types built to combine.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Shopping Carts, Shared Docs, and CRDTs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">shopping carts</span><span class="tag orange">CRDTs</span></div>
+                <ul>
+                    <li><b>Carts</b> — replica A of a cart holds {book, mug}, replica B holds {book, lamp} after a network split</li>
+                    <li><b>LWW cart</b> — picking one whole replica keeps 2 items and silently drops the mug (or the lamp)</li>
+                    <li><b>Set-union cart</b> — merging as a set keeps all 3 items; losing a customer's added item costs real money</li>
+                    <li><b>Shared docs</b> — two people typing in one paragraph is thousands of tiny concurrent writes per hour</li>
+                    <li><b>CRDT direction</b> — data types (sets, counters, lists) designed so any merge order converges to the same value</li>
+                    <li><b>The trade</b> — CRDTs make merge automatic, but deletes get tricky (removing an item needs a tombstone)</li>
+                </ul>
+                <p class="example">After the split heals, the union cart shows book, mug, and lamp (3 items); the LWW cart shows 2 items and the customer never learns the mug is gone.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Systems that must accept writes on both sides of a network split — carts, docs, offline apps — either merge by type (the CRDT route) or surface siblings; picking a winner throws away a customer's action.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Last-Write-Wins Loses Data by Design</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">clock skew</span><span class="tag orange">LWW</span></div>
+                <ul>
+                    <li><b>The comfort</b> — LWW sounds harmless ("the newest edit wins") so it becomes the unexamined default</li>
+                    <li><b>The truth</b> — on every concurrent conflict LWW deletes one acknowledged write; that is its definition</li>
+                    <li><b>Clock skew</b> — "last" is judged by device clocks, and device clocks disagree by seconds to minutes</li>
+                    <li><b>The swap</b> — the phone's clock runs 4 minutes fast: its 2:01pm edit gets stamped 2:05pm</li>
+                    <li><b>Wrong winner</b> — the laptop's genuinely later 2:04pm edit (stamped 2:04) loses to the older phone edit</li>
+                    <li><b>The tell</b> — users report "my change disappeared" and no error or log entry exists anywhere</li>
+                </ul>
+                <p class="example">True order: phone edits at 2:01, laptop edits at 2:04 — but the fast phone clock stamps 2:05, so LWW keeps the older number and silently discards the newer one.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating LWW as a safe default. It is a policy of deliberate data loss, and with skewed clocks it doesn't even lose the <em>older</em> write — it loses whichever write got the unluckier timestamp.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function arrowTo(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 10 * Math.cos(ang - 0.4), y2 - 10 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 10 * Math.cos(ang + 0.4), y2 - 10 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two-lane timeline — offline window, one edit per lane with its version vector,
+// sync point where the vectors collide
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('2:01 and 2:04 — Neither Edit Saw the Other', w / 2, 24);
+
+    function xOf(m) { return 60 + m * 50; } // minutes after 2:00
+
+    // offline window band 2:00 to 2:10
+    ctx.fillStyle = 'rgba(229,233,239,0.6)';
+    ctx.fillRect(xOf(0), 50, xOf(10) - xOf(0), 200);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('offline', (xOf(0) + xOf(10)) / 2, 60);
+
+    // baseline and ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 260); ctx.lineTo(660, 260); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [[0, '2:00'], [4, '2:04'], [8, '2:08'], [12, '2:12']].forEach(function(t) {
+        ctx.fillText(t[1], xOf(t[0]), 278);
+    });
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('phone', 20, 114);
+    ctx.fillText('laptop', 20, 194);
+
+    // phone edit box centered (110, 110)
+    roundRect(ctx, 110 - 75, 110 - 20, 150, 40, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('555-0142', 110, 106);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui';
+    ctx.fillText('{P:1, L:0}', 110, 121);
+
+    // laptop edit box centered (260, 190)
+    roundRect(ctx, 260 - 75, 190 - 20, 150, 40, 8);
+    ctx.fillStyle = 'rgba(25,158,112,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('555-0177', 260, 186);
+    ctx.fillStyle = P.aqua; ctx.font = '11px system-ui';
+    ctx.fillText('{P:0, L:1}', 260, 201);
+
+    // sync point: vertical dashed line at x=560 (2:10)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(560, 50); ctx.lineTo(560, 260); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // arrows from both boxes converging on the diamond at (560, 150)
+    arrowTo(ctx, 185, 115, 548, 145, P.blue, 3);
+    arrowTo(ctx, 335, 185, 548, 155, P.aqua, 3);
+
+    // diamond at (560, 150)
+    ctx.fillStyle = P.ink;
+    ctx.beginPath();
+    ctx.moveTo(560, 138); ctx.lineTo(572, 150); ctx.lineTo(560, 162); ctx.lineTo(548, 150);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('conflict: neither', 580, 142);
+    ctx.fillText('vector dominates', 580, 158);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('concurrent ≠ simultaneous — it means neither saw the other', 100, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times and vectors illustrative', 700, 294);
+});
+
+// c2: same two concurrent inputs, three strategies, three surviving outputs
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Conflict, Three Outcomes', w / 2, 24);
+
+    var rows = [90, 170, 250];
+    var rowLabs = ['last-write-wins', 'keep siblings', 'merge (tags set)'];
+
+    function inBox(cx, cy, label, color, fill) {
+        roundRect(ctx, cx - 70, cy - 17, 140, 34, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+    }
+
+    for (var r = 0; r < 3; r++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabs[r], 20, rows[r] + 4);
+    }
+
+    // inputs — rows 1 and 2: phone numbers; row 3: tags
+    inBox(170 + 70, rows[0] - 14, '555-0142 @2:01', P.blue, 'rgba(42,120,214,0.15)');
+    inBox(330 + 70, rows[0] + 14, '555-0177 @2:04', P.aqua, 'rgba(25,158,112,0.15)');
+    inBox(170 + 70, rows[1] - 14, '555-0142 @2:01', P.blue, 'rgba(42,120,214,0.15)');
+    inBox(330 + 70, rows[1] + 14, '555-0177 @2:04', P.aqua, 'rgba(25,158,112,0.15)');
+    inBox(170 + 70, rows[2] - 14, '+work @2:01', P.blue, 'rgba(42,120,214,0.15)');
+    inBox(330 + 70, rows[2] + 14, '+gym @2:04', P.aqua, 'rgba(25,158,112,0.15)');
+
+    // Row 1 output: aqua box "555-0177", dropped input struck in red
+    arrowTo(ctx, 310, rows[0] - 10, 470, rows[0] - 2, P.mute, 3);
+    inBox(540 + 30, rows[0], '555-0177', P.aqua, 'rgba(25,158,112,0.15)');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ 555-0142 deleted silently', 240, rows[0] + 26);
+
+    // Row 2 output: yellow box with sub-label
+    arrowTo(ctx, 470, rows[1] + 10, 490, rows[1] + 2, P.mute, 3);
+    roundRect(ctx, 495, rows[1] - 17, 165, 34, 8);
+    ctx.fillStyle = 'rgba(201,133,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('[0142, 0177] → ask app', 577, rows[1] + 4);
+    ctx.fillStyle = P.yellow; ctx.font = '11px system-ui';
+    ctx.fillText('2 siblings stored', 577, rows[1] + 30);
+
+    // Row 3 output: green box
+    arrowTo(ctx, 470, rows[2] + 10, 490, rows[2] + 2, P.mute, 3);
+    roundRect(ctx, 495, rows[2] - 17, 165, 34, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('{work, gym}', 545, rows[2] + 4);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ both edits kept', 620, rows[2] + 4);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('only the mergeable type keeps both writes with zero questions asked', w / 2, 288);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('values illustrative', 700, 270);
+});
+
+// c3: horizontal bars — cart size per replica before sync and per strategy after
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Split Cart: Union Keeps 3 Items, LWW Keeps 2', w / 2, 24);
+
+    var x0 = 230, unit = 130, barH = 26;
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, 45); ctx.lineTo(x0, 245); ctx.stroke();
+
+    function bar(cy, rowLabel, items, fill, line) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabel, 20, cy + 4);
+        for (var i = 0; i < items.length; i++) {
+            var x = x0 + i * unit;
+            ctx.fillStyle = fill;
+            ctx.fillRect(x + 1, cy - barH / 2, unit - 2, barH);
+            ctx.strokeStyle = line; ctx.lineWidth = 1;
+            ctx.strokeRect(x + 1, cy - barH / 2, unit - 2, barH);
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(items[i], x + unit / 2, cy + 4);
+        }
+    }
+
+    bar(70, 'replica A (before)', ['book', 'mug'], 'rgba(42,120,214,0.30)', P.blue);
+    bar(115, 'replica B (before)', ['book', 'lamp'], 'rgba(25,158,112,0.28)', P.aqua);
+    bar(180, 'LWW result', ['book', 'lamp'], 'rgba(217,89,38,0.25)', P.orange);
+    bar(225, 'set-union result', ['book', 'mug', 'lamp'], 'rgba(0,131,0,0.22)', P.green);
+
+    // LWW dashed red empty segment for the lost mug
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.strokeRect(x0 + 2 * unit + 1, 180 - barH / 2, unit - 2, barH);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mug lost', x0 + 2 * unit + unit / 2, 184);
+
+    // union checkmark at bar end
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ 3 items', x0 + 3 * unit + 10, 229);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('a dropped cart item is a silent lost sale', 280, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cart contents illustrative', 700, 292);
+});
+
+// c4: two-lane timeline at TRUE time with stamped times, LWW crowning the wrong winner
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A 4-Minute-Fast Clock Makes the Older Edit Win', w / 2, 24);
+
+    function xOf(m) { return 60 + m * 75; } // minutes after 2:00, true time
+
+    // baseline and ticks every 2 minutes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 250); ctx.lineTo(660, 250); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [[0, '2:00'], [2, '2:02'], [4, '2:04'], [6, '2:06'], [8, '2:08']].forEach(function(t) {
+        ctx.fillText(t[1], xOf(t[0]), 268);
+    });
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('phone (clock +4 min)', 20, 42);
+    ctx.fillText('laptop (clock correct)', 20, 155);
+
+    // skew bracket at y=70 from x=135 to x=435
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(135, 78); ctx.lineTo(135, 70); ctx.lineTo(435, 70); ctx.lineTo(435, 78);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+4 min skew shifts the stamp past 2:04', 285, 64);
+
+    // phone edit box centered (135, 105), true 2:01
+    roundRect(ctx, 135 - 85, 105 - 20, 170, 40, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('edit @ true 2:01', 135, 101);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('stamped 2:05', 135, 118);
+
+    // laptop edit box centered (360, 185), true 2:04
+    roundRect(ctx, 360 - 85, 185 - 20, 170, 40, 8);
+    ctx.fillStyle = 'rgba(25,158,112,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('edit @ true 2:04', 360, 181);
+    ctx.fillStyle = P.aqua; ctx.font = '12px system-ui';
+    ctx.fillText('stamped 2:04', 360, 198);
+
+    // LWW verdict label and red arrow down to the phone box
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('LWW compares stamps: 2:05 > 2:04', 520, 60);
+    arrowTo(ctx, 420, 68, 228, 98, '#e74c3c', 3);
+
+    // loser label under the laptop box
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ newer laptop edit deleted', 360, 222);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("with skewed clocks, 'last' write isn't even the last one", 200, 244);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times and skew illustrative', 700, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

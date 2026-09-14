@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The ActorSystem</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The ActorSystem</h1>
+<p class="subtitle">One heavyweight object owns the threads, the scheduler, and the config — so the thousands of actors inside it can stay featherweight</p>
+
+<div class="card-section">
+    <h2>One Engine Room for the Whole Order App</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">one per app</span><span class="tag orange">heavyweight host</span></div>
+                <ul>
+                    <li><b>The app</b> — a coffee-ordering backend handles every online order for a chain of shops</li>
+                    <li><b>The actors</b> — each live order is one tiny actor: a mailbox, a bit of state, some behavior</li>
+                    <li><b>The host</b> — all of them live inside a single ActorSystem created when the app boots</li>
+                    <li><b>What it owns</b> — the actor factory, the dispatcher thread pools, the timer scheduler, the config</li>
+                    <li><b>The split</b> — the system is deliberately heavy so every actor inside it can be nearly free</li>
+                </ul>
+                <p class="example">At the lunch rush the one ActorSystem hosts 40,000 live order actors, all sharing its 16 dispatcher threads.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The ActorSystem is the one heavyweight object in the design — it pays for threads and config once, and rents them out to thousands of featherweight actors.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>30 MB of Actors vs 100 GB of Threads</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">memory math</span></div>
+                <ul>
+                    <li><b>An actor's cost</b> — a mailbox plus a little state is roughly 300 bytes of heap</li>
+                    <li><b>A thread's cost</b> — an OS thread reserves about 1 MB just for its call stack</li>
+                    <li><b>Hand-check actors</b> — 100,000 actors &times; 300 bytes = 30,000,000 bytes = 30 MB</li>
+                    <li><b>Hand-check threads</b> — 100,000 threads &times; 1 MB = 100,000 MB = 100 GB</li>
+                    <li><b>The ratio</b> — the actor version is about 3,300&times; smaller; it fits in any laptop's spare RAM</li>
+                    <li><b>The dispatcher</b> — those 100,000 actors run fine on the system's 16 shared threads</li>
+                </ul>
+                <p class="example">The lunch-rush order book at 100,000 actors costs 30 MB — the same headcount as raw threads would demand 100 GB, more than six 16 GB laptops.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One-actor-per-order only works because actors are ~300 bytes; the ActorSystem's shared thread pool is what lets 100,000 of them run on 16 threads.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Create It Once, Kill It Once</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">lifecycle</span><span class="tag orange">rule of thumb</span></div>
+                <ul>
+                    <li><b>At startup</b> — the app builds exactly one ActorSystem in <code>main</code> and hands it to everything else</li>
+                    <li><b>Shared everywhere</b> — every module that needs an actor asks this one system to spawn it</li>
+                    <li><b>The owner</b> — the system's lifecycle owns every actor, timer, and thread created through it</li>
+                    <li><b>At shutdown</b> — one <code>terminate()</code> call stops the actors, cancels timers, and releases threads</li>
+                    <li><b>The payoff</b> — no orphaned thread pools, no leaked timers, one clean exit point for the JVM</li>
+                </ul>
+                <p class="example">At deploy time one <code>system.terminate()</code> stops all 40,000 order actors, cancels 500 pending timers, and frees the 16 threads — nothing is left behind.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because the one system owns everything it created, startup is one constructor call and shutdown is one terminate call — the whole app's concurrency has a single on/off switch.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Classic Misuse: a New ActorSystem Per Request</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">heavyweight</span></div>
+                <ul>
+                    <li><b>The mistake</b> — code spawns a fresh ActorSystem inside a request handler "to run one actor"</li>
+                    <li><b>What that buys</b> — every request now pays for new thread pools, a scheduler, and a config load</li>
+                    <li><b>The cost</b> — each system holds ~20 threads; 500 un-terminated systems is ~10,016 live threads</li>
+                    <li><b>The symptom</b> — memory and thread counts climb per request until the process falls over</li>
+                    <li><b>The fix</b> — create one system at startup, share it, and spawn per-request actors inside it</li>
+                </ul>
+                <p class="example">After 500 orders the per-request version holds ~10,016 threads and is dying; the shared-system version still sits at its original 16.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the ActorSystem like the actors it hosts. Actors are cheap and disposable; the system is the heavyweight — build it once, share it, terminate it once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), hl = 7;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one ActorSystem box holding machinery on the left, a field of actor dots on the right
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One ActorSystem, Thousands of Featherweight Actors', w / 2, 24);
+
+    // outer system box
+    ctx.fillStyle = 'rgba(26,82,118,0.05)';
+    roundRect(ctx, 40, 55, 640, 210, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ActorSystem — created once at startup', 52, 75);
+
+    // machinery column
+    var machY = [95, 150, 205];
+    var machLabs = ['config (loaded once)', 'scheduler (timers)', 'dispatcher — 16 threads'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        roundRect(ctx, 60, machY[i], 180, 40, 6);
+        ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(machLabs[i], 150, machY[i] + (i === 2 ? 15 : 25));
+    }
+    // 16 thread dots inside the dispatcher box, two rows of 8
+    for (var r = 0; r < 2; r++) {
+        for (var c = 0; c < 8; c++) {
+            ctx.fillStyle = P.blue;
+            ctx.beginPath();
+            ctx.arc(80 + c * 20, 227 + r * 11, 4, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+    }
+
+    // actor field: 8 rows x 15 columns of dots
+    var cycle = [P.blue, P.aqua, P.violet];
+    for (var row = 0; row < 8; row++) {
+        for (var col = 0; col < 15; col++) {
+            var idx = row * 15 + col;
+            ctx.fillStyle = cycle[idx % 3];
+            ctx.beginPath();
+            ctx.arc(310 + col * 24, 95 + row * 22, 5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('…40,000 order actors (120 drawn)', 478, 262);
+
+    // arrow from dispatcher to actor field
+    arrow(ctx, 244, 222, 296, 200, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('threads are shared, never owned', 60, 288);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('actors borrow the system\'s threads — none has its own', 330, 285);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('actor and thread counts illustrative', w - 14, 46);
+});
+
+// c2: memory for 100,000 concurrent orders — actors vs a 16 GB laptop vs threads
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Memory for 100,000 Concurrent Orders: Actors vs Threads', w / 2, 24);
+
+    var baseX = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 55); ctx.lineTo(baseX, 240); ctx.stroke();
+
+    var rows = [
+        { y: 85, lab: '100,000 actors × 300 B = 30 MB', width: 60, fill: P.green, edge: P.green, val: '30 MB', valColor: P.green, bold: false },
+        { y: 150, lab: 'one 16 GB laptop (yardstick)', width: 240, fill: 'rgba(42,120,214,0.30)', edge: P.blue, val: '16 GB', valColor: P.blue, bold: false },
+        { y: 215, lab: '100,000 threads × 1 MB = 100 GB', width: 420, fill: '#e74c3c', edge: '#e74c3c', val: '100 GB — 6× a whole laptop', valColor: '#e74c3c', bold: true }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y - 18);
+        ctx.fillStyle = r.fill;
+        roundRect(ctx, baseX, r.y - 11, r.width, 22, 3);
+        ctx.fill();
+        ctx.strokeStyle = r.edge; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = r.valColor; ctx.font = (r.bold ? 'bold ' : '') + '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.val, baseX + r.width + 8, r.y + 4);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3,300× smaller — actors fit where threads cannot', 330, 110);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('300 B/actor and 1 MB/thread are typical figures, illustrative; bar widths schematic, not to scale', w - 14, h - 10);
+});
+
+// c3: one terminate() call cascading through four shutdown stages
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One terminate() Call Shuts Down the Whole System', w / 2, 24);
+
+    // trigger box (shifted left of the spec's x=30 so it clears the first cascade box)
+    var trigX = 10, trigW = 110, boxY = 125, boxH = 50;
+    ctx.fillStyle = 'rgba(74,58,167,0.15)';
+    roundRect(ctx, trigX, boxY, trigW, boxH, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('system.terminate()', trigX + trigW / 2, boxY + 30);
+
+    // cascade boxes (centers)
+    var centers = [190, 330, 470, 610];
+    var lines = [
+        ['stop 40,000', 'actors'],
+        ['cancel 500', 'timers'],
+        ['shut dispatchers', '(16 threads)'],
+        ['JVM exits', 'clean']
+    ];
+    var subs = ['mailboxes drained', 'no stray wakeups', 'pools released', 'no leaks'];
+    for (var i = 0; i < 4; i++) {
+        var bx = centers[i] - 60;
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        roundRect(ctx, bx, boxY, 120, boxH, 8);
+        ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lines[i][0], centers[i], boxY + 21);
+        ctx.fillText(lines[i][1], centers[i], boxY + 38);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(subs[i], centers[i], 200);
+    }
+
+    // arrows connecting the five boxes at y=150
+    arrow(ctx, trigX + trigW, 150, 128, 150, P.green, 3);
+    for (var i = 0; i < 3; i++) {
+        arrow(ctx, centers[i] + 60, 150, centers[i + 1] - 62, 150, P.green, 3);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('everything the system created, the system destroys', w / 2, 245);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('actor and timer counts illustrative', w - 14, h - 10);
+});
+
+// c4: live threads as orders arrive — per-request systems vs one shared system
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Live Threads as Orders Arrive: New System Per Request vs One Shared System', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    function xOf(orders) { return ox + orders / 500 * pw; }
+    function yOf(threads) { return baseY - threads / 10000 * ph; }
+
+    // gridlines at 2,500 / 5,000 / 7,500
+    var grids = [2500, 5000, 7500];
+    var gridLabs = ['2.5k', '5k', '7.5k'];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gridLabs[i], ox - 8, yOf(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var o = 0; o <= 500; o += 100) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(o), xOf(o), baseY + 18);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders handled', ox + pw / 2, baseY + 36);
+
+    var orders = [0, 100, 200, 300, 400, 500];
+    var perReq = [16, 2016, 4016, 6016, 8016, 10016];
+    var shared = [16, 16, 16, 16, 16, 16];
+
+    // per-request line (red, climbing)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < orders.length; i++) {
+        var x = xOf(orders[i]), y = yOf(perReq[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // shared line (green, flat at 16)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < orders.length; i++) {
+        var x = xOf(orders[i]), y = yOf(shared[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('new ActorSystem each order', xOf(300), yOf(6016) - 12);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('one shared ActorSystem — 16 threads', xOf(300), 235);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('10,016 threads — the process is about to die', xOf(430), 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('20 threads per system, illustrative', w - 14, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akka Streams &amp; Backpressure</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Akka Streams &amp; Backpressure</h1>
+<p class="subtitle">In Akka Streams the slow end sends demand upstream — a consumer that can only handle 1,000 items a second makes the producer emit exactly 1,000 a second, instead of drowning in a queue</p>
+
+<div class="card-section">
+    <h2>The Pipeline That Asks Before It Is Fed</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">reactive streams</span><span class="tag orange">Akka</span></div>
+                <ul>
+                    <li><b>The pipeline</b> — app servers pour log lines into a pipeline that parses them and writes to a database</li>
+                    <li><b>The mismatch</b> — the servers can emit 5,000 lines/s at peak; the database writes only 1,000 rows/s</li>
+                    <li><b>The pieces</b> — a <code>Source</code> produces the lines, a <code>Flow</code> parses them, a <code>Sink</code> writes them out</li>
+                    <li><b>The twist</b> — data flows left to right, but permission to send flows right to left as <code>request(n)</code></li>
+                    <li><b>The name</b> — this upstream flow of demand is backpressure: nothing is emitted until it is asked for</li>
+                </ul>
+                <p class="example">The database sink signals "send me 16"; the source, capable of 5,000/s, emits exactly 16 lines and then waits for the next request.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Backpressure is a protocol, not a buffer — demand signals travel upstream stage by stage, so the slowest stage sets the pace for the whole pipeline.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Demand Tokens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">demand tokens</span></div>
+                <ul>
+                    <li><b>The request</b> — the sink's internal buffer holds 16 elements, so it asks upstream for 16 at a time</li>
+                    <li><b>The burst</b> — the fast source fills those 16 slots almost instantly, then stops: demand is spent</li>
+                    <li><b>The drain</b> — at 1,000 writes/s the database clears 16 rows in 16 ms, then requests 16 more</li>
+                    <li><b>Hand-check</b> — 16 ms per cycle means 62.5 cycles/s; 62.5 &times; 16 = 1,000 lines/s emitted, exactly the sink's speed</li>
+                    <li><b>The cap</b> — the source never emits its 5,000/s; unspent demand of zero is a hard stop, not a hint</li>
+                </ul>
+                <p class="example">Over 80 ms the buffer saw-tooths five times — fill to 16, drain to 0 in 16 ms, refill — moving 80 lines, which is the 1,000/s pace.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Demand is counted in elements, not vague pressure — the source may emit at most as many elements as downstream has requested, so throughput equals the sink's rate by arithmetic.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What an Unbounded Mailbox Does Instead</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">mailbox overflow</span></div>
+                <ul>
+                    <li><b>The actor way</b> — a plain actor's mailbox accepts every message immediately; senders never wait</li>
+                    <li><b>The arithmetic</b> — 5,000 lines/s in, 1,000/s out: the mailbox grows by 4,000 messages every second</li>
+                    <li><b>One minute</b> — after 60 s the mailbox holds 240,000 unprocessed log lines and is still growing</li>
+                    <li><b>The end state</b> — memory fills, garbage collection thrashes, and the process dies at peak traffic</li>
+                    <li><b>The stream way</b> — no stage's buffer in the backpressured pipeline exceeds 16, however long the peak lasts</li>
+                </ul>
+                <p class="example">At roughly 1 KB per log line, 60 seconds of peak traffic parks about 234 MB of unread messages in the mailbox — an hour would be ~14 GB.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An unbounded mailbox turns a speed mismatch into a memory leak; backpressure turns the same mismatch into a slower producer, which is the only stable outcome.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Bigger Buffer Is Not Backpressure</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">buffering</span></div>
+                <ul>
+                    <li><b>The reflex</b> — the pipeline stalls under load, so someone adds a huge buffer stage "to absorb the peak"</li>
+                    <li><b>The arithmetic</b> — with a 4,000/s surplus, a 1,000-slot buffer fills in 0.25 s; 100,000 slots last 25 s</li>
+                    <li><b>Even huge fails</b> — a 10-million-slot buffer buys about 42 minutes, then overflows just the same</li>
+                    <li><b>The real fix</b> — let demand reach the true source: throttle the producers, or drop/fail deliberately</li>
+                    <li><b>The mistake</b> — treating backpressure as a nuisance to buffer away instead of the signal to slow down</li>
+                </ul>
+                <p class="example">The team quadruples the buffer before a traffic spike; the crash arrives 75 seconds later than last time, with four times as many log lines lost.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Buffers only move the overflow later and make it bigger. If the surplus rate is positive, every finite buffer fills — the choice is slow down, shed load, or crash, and backpressure is how you pick on purpose.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.45), y2 - 8 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.45), y2 - 8 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: pipeline stages with data downstream and demand upstream
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Data Flows Downstream, Demand Flows Upstream', w / 2, 24);
+
+    // stage boxes at y=115, 44 tall
+    function stage(x, wd, line1, line2, fill, stroke) {
+        rrectPath(ctx, x, 115, wd, 44, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        if (line2) {
+            ctx.fillText(line1, x + wd / 2, 133);
+            ctx.fillText(line2, x + wd / 2, 150);
+        } else {
+            ctx.fillText(line1, x + wd / 2, 141);
+        }
+    }
+    stage(60, 160, 'Source — log lines', '(up to 5,000/s)', 'rgba(42,120,214,0.15)', P.blue);
+    stage(290, 150, 'Flow — parse + enrich', null, 'rgba(74,58,167,0.12)', P.violet);
+    stage(510, 160, 'Sink — DB write', '(1,000/s)', 'rgba(0,131,0,0.12)', P.green);
+
+    // data arrows (solid blue, left to right at y=130)
+    arrowLine(ctx, 222, 130, 286, 130, P.blue, 3);
+    arrowLine(ctx, 442, 130, 506, 130, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('log lines', 254, 120);
+    ctx.fillText('log lines', 474, 120);
+
+    // demand arrows (dashed green, right to left at y=185)
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(560, 185); ctx.lineTo(392, 185); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(340, 185); ctx.lineTo(148, 185); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.moveTo(388, 185); ctx.lineTo(400, 179); ctx.lineTo(400, 191); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(144, 185); ctx.lineTo(156, 179); ctx.lineTo(156, 191); ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('request(16)', 476, 202);
+    ctx.fillText('request(16)', 244, 202);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the source may not send until asked — the sink sets the pace', w / 2, 235);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative', w - 12, 293);
+});
+
+// c2: sawtooth of the sink buffer, fill to 16, drain in 16 ms
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Demand Cycle: Fill to 16, Drain in 16 ms, Ask Again', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 20;
+    function xOf(ms) { return ox + ms / 80 * pw; }
+    function yOf(e) { return baseY - e / yMax * ph; }
+
+    // gridlines at 4/8/12/16
+    var grids = [4, 8, 12, 16];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+    }
+
+    // axes + x ticks every 16 ms
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var ticks = [0, 16, 32, 48, 64, 80];
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i] + ' ms', xOf(ticks[i]), baseY + 18);
+    }
+
+    // cap line at 16
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(16)); ctx.lineTo(ox + pw, yOf(16)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('demand cap = 16', ox + pw, yOf(16) - 8);
+
+    // sawtooth line
+    var pts = [[0, 0], [0.5, 16], [16, 0], [16.5, 16], [32, 0], [32.5, 16],
+               [48, 0], [48.5, 16], [64, 0], [64.5, 16], [80, 0]];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+        var x = xOf(pts[i][0]), y = yOf(pts[i][1]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // request markers at each refill instant
+    var reqs = [0, 16, 32, 48, 64];
+    for (var i = 0; i < reqs.length; i++) {
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(xOf(reqs[i]), baseY, 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('request(16)', xOf(0) + 10, baseY - 12);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('5 cycles × 16 lines in 80 ms = 1,000 lines/s', xOf(48), 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('buffer size 16 real Akka default, timings illustrative', w - 12, 293);
+});
+
+// c3: unbounded mailbox climbs to 240,000 while stream buffer stays at 16
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('60 Seconds at Peak: Mailbox 240,000 Deep, Stream Buffer Still 16', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180, yMax = 250000;
+    function xOf(t) { return ox + t / 60 * pw; }
+    function yOf(q) { return baseY - q / yMax * ph; }
+
+    // gridlines
+    var grids = [62500, 125000, 187500];
+    var gridLabs = ['62.5k', '125k', '187.5k'];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gridLabs[i], ox - 8, yOf(grids[i]) + 4);
+    }
+
+    // axes + x ticks every 15 s
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var t = 0; t <= 60; t += 15) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' s', xOf(t), baseY + 18);
+    }
+
+    var secs = [0, 15, 30, 45, 60];
+    var mailbox = [0, 60000, 120000, 180000, 240000];
+    var stream = [16, 16, 16, 16, 16];
+
+    // mailbox line (red)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(mailbox[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // stream line (green, flat on the baseline at this scale)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(stream[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('unbounded mailbox (+4,000/s)', xOf(30), 135);
+    ctx.fillStyle = P.green;
+    ctx.fillText('backpressured stream — capped at 16 (flat on this scale)', xOf(22), 233);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the mailbox never says no — until the process dies', xOf(45) - 60, 95);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative; 5,000/s in, 1,000/s out', w - 12, 293);
+});
+
+// c4: time to overflow for growing buffers vs backpressure
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Time to Overflow at +4,000/s Surplus: Every Finite Buffer Loses', w / 2, 24);
+
+    var bx = 250;
+    var rows = [
+        { y: 75,  l1: 'buffer 1,000',      l2: 'overflows in 0.25 s',  wd: 30,
+          fill: 'rgba(231,76,60,0.25)', stroke: '#e74c3c', time: '0.25 s' },
+        { y: 125, l1: 'buffer 100,000',    l2: 'overflows in 25 s',    wd: 130,
+          fill: 'rgba(231,76,60,0.25)', stroke: '#e74c3c', time: '25 s' },
+        { y: 175, l1: 'buffer 10,000,000', l2: 'overflows in ~42 min', wd: 260,
+          fill: 'rgba(217,89,38,0.25)', stroke: P.orange, time: '~42 min' },
+        { y: 225, l1: 'backpressure',      l2: 'never overflows',      wd: 420,
+          fill: 'rgba(0,131,0,0.25)', stroke: P.green, time: null }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 245); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.l1, 20, r.y - 3);
+        ctx.fillText(r.l2, 20, r.y + 13);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y - 8, r.wd, 16);
+        ctx.strokeStyle = r.stroke; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y - 8, r.wd, 16);
+        if (r.time) {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(r.time, bx + r.wd + 8, r.y + 4);
+        } else {
+            ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText('∞ — producer slowed to 1,000/s', bx + r.wd - 8, r.y + 4);
+        }
+    }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a buffer delays the overflow; only upstream demand prevents it', w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('overflow times exact for a 4,000/s surplus; bar widths schematic', w - 12, 293);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

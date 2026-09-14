@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Out of Memory &amp; the OOM Killer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Out of Memory &amp; the OOM Killer</h1>
+<p class="subtitle">Linux promises programs more memory than it has — when the bill comes due, the kernel picks one process and kills it, and it is rarely the guilty one</p>
+
+<div class="card-section">
+    <h2>The Database That Died at 3am</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">overcommit</span><span class="tag red">SIGKILL</span></div>
+                <ul>
+                    <li><b>The host</b> — a 16 GB server with no swap runs a 9.2 GB database and a small log-shipper sidecar</li>
+                    <li><b>The promise</b> — Linux overcommits: <code>malloc</code> hands out address space freely and almost never fails</li>
+                    <li><b>The bill</b> — memory is only really claimed when a page is first written, long after the malloc</li>
+                    <li><b>The leak</b> — the log-shipper leaks, growing from 0.5 GB at 22:00 to 4.2 GB by 03:12</li>
+                    <li><b>The death</b> — with the last free page gone, the kernel SIGKILLs a process — the 9.2 GB database</li>
+                </ul>
+                <p class="example">At 03:12 total demand hits the full 16 GB; the database, which never grew a byte all night, is killed without warning while the leaky shipper keeps running.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because of overcommit, a full machine does not show up as a failed <code>malloc</code> — it shows up as the OOM killer terminating some process with an unblockable SIGKILL.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>How the Kernel Picks Its Victim</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">oom_score</span></div>
+                <ul>
+                    <li><b>The rule</b> — each process gets an <code>oom_score</code> roughly proportional to its share of total memory</li>
+                    <li><b>The scale</b> — score &asymp; resident memory &divide; machine memory &times; 1000, so 9.2 of 16 GB scores about 575</li>
+                    <li><b>Hand-check</b> — shipper 4.2 GB &rarr; 262; page-cache helper 1.1 GB &rarr; 69; sshd 0.05 GB &rarr; 3</li>
+                    <li><b>The pick</b> — highest score dies: 575 beats 262, so the innocent database is the "best" victim</li>
+                    <li><b>The dial</b> — <code>oom_score_adj</code> (&minus;1000 to +1000) is added: database at &minus;500 scores 75, shipper now wins</li>
+                </ul>
+                <p class="example">Scores at 03:12 are database 575, shipper 262, cache helper 69, sshd 3 — the kernel kills the 575; with <code>oom_score_adj=-500</code> on the database, the 262 shipper dies instead.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The OOM killer optimizes for freeing the most memory with one kill, not for finding the leak — biggest wins unless you tilt the scores with <code>oom_score_adj</code>.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Container Limits Change Who Dies</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">cgroups</span><span class="tag orange">containers</span></div>
+                <ul>
+                    <li><b>Two walls</b> — a container's cgroup memory limit is a private wall; host RAM is the shared wall</li>
+                    <li><b>Cgroup OOM</b> — a container that hits its own limit gets an OOM kill chosen from inside it only</li>
+                    <li><b>The fix</b> — cap the shipper's container at 1 GB: its leak dies at 1 GB, the database never notices</li>
+                    <li><b>No cap</b> — an uncapped shipper leaks into shared RAM until the host-level OOM killer picks globally</li>
+                    <li><b>The habit</b> — memory limits on every sidecar turn "host roulette" into a contained, named failure</li>
+                </ul>
+                <p class="example">With <code>memory.max = 1 GB</code> on the shipper's cgroup, the leak is killed at 23:30 inside its own container — the 9.2 GB database runs untouched through the night.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A cgroup limit converts a machine-wide lottery into a local, predictable kill: the process that exceeds its own budget is the one that dies.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Log Names the Victim, Not the Culprit</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">kernel log</span></div>
+                <ul>
+                    <li><b>The line</b> — <code>dmesg</code> shows: "Out of memory: Killed process 4172 (database) anon-rss:9646080kB"</li>
+                    <li><b>The trap</b> — reading that line as a verdict: "the database used 9.2 GB, so the database is the bug"</li>
+                    <li><b>The table</b> — just above the kill line, the kernel dumps every process's RSS at the moment of death</li>
+                    <li><b>The tell</b> — in that table the shipper sits at 4.2 GB — a sidecar that should never pass 0.5 GB</li>
+                    <li><b>The habit</b> — after a 3am kill, diff the table against normal sizes; the outlier growth is the culprit</li>
+                </ul>
+                <p class="example">The 03:12 log kills PID 4172 (database, 9,646,080 kB RSS), but the table above shows the shipper at 4,404,000 kB — eight times its healthy size, and the real leak.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Restarting or "right-sizing" the killed process and closing the ticket. The kill line names the biggest payer, not the leaker — the process table above it holds the actual evidence.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: host memory 22:00 -> 03:12 — database flat, shipper leaking, total into the wall
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Process Leaks All Night — a Different One Dies at 3am', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(hr) { return ox + hr / 5.2 * pw; }
+    function py(gb) { return baseY - gb / 16 * ph; }
+
+    // gridlines
+    var grid = [4, 8, 12];
+    for (var i = 0; i < 3; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i] + ' GB', ox - 6, gy + 4);
+    }
+
+    // 16 GB ceiling
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, py(16)); ctx.lineTo(ox + pw, py(16)); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('16 GB physical, no swap', ox + 4, py(16) - 7);
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var tickH = [0, 2, 4, 5.2], tickL = ['22:00', '00:00', '02:00', '03:12'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 4; i++) ctx.fillText(tickL[i], px(tickH[i]), baseY + 18);
+
+    var hrs = [0, 1, 2, 3, 4, 5, 5.2];
+    var dbGB = [9.2, 9.2, 9.2, 9.2, 9.2, 9.2, 9.2];
+    var totGB = [12.3, 13.0, 13.7, 14.4, 15.1, 15.8, 16.0];
+    var shipGB = [0.5, 1.2, 1.9, 2.6, 3.3, 4.0, 4.2];
+
+    function line(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < hrs.length; i++) {
+            i === 0 ? ctx.moveTo(px(hrs[i]), py(vals[i])) : ctx.lineTo(px(hrs[i]), py(vals[i]));
+        }
+        ctx.stroke();
+    }
+    line(dbGB, P.blue);
+    line(totGB, P.orange);
+    line(shipGB, P.magenta);
+
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('database 9.2 GB (flat)', px(1) + 20, py(9.2) - 9);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('total demand', px(3.5), 97);
+    ctx.fillStyle = P.magenta;
+    ctx.fillText('log-shipper leaking', px(2.5), 198);
+
+    // kill marker at 03:12
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(5.2), py(16)); ctx.lineTo(px(5.2), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('03:12 — OOM killer fires, database dies', px(5.2) - 2, 56);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; other + kernel ≈ 2.6 GB constant', w - 12, h - 8);
+});
+
+// c2: oom_score bars — default pick vs after oom_score_adj = -500 on the database
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('oom_score Decides: Default Pick vs After oom_score_adj = −500', w / 2, 24);
+
+    // panel headers
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink;
+    ctx.fillText('default', 200, 55);
+    ctx.fillText('database adj −500', 520, 55);
+
+    var rowYs = [90, 135, 180, 225], bh = 16;
+    var rowLabs = ['database 9.2 GB', 'log-shipper 4.2 GB', 'cache helper 1.1 GB', 'sshd 0.05 GB'];
+    // 200px = 1000 score
+    var leftBars = [
+        { w: 115, kill: true, lab: '575 — killed' },
+        { w: 52, kill: false, lab: '262' },
+        { w: 14, kill: false, lab: '69' },
+        { w: 2, kill: false, lab: '3' }
+    ];
+    var rightBars = [
+        { w: 15, kill: false, lab: '575 − 500 = 75' },
+        { w: 52, kill: true, lab: '262 — killed' },
+        { w: 14, kill: false, lab: '69' },
+        { w: 2, kill: false, lab: '3' }
+    ];
+
+    // panel axis lines
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(150, 78); ctx.lineTo(150, 248); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(470, 78); ctx.lineTo(470, 248); ctx.stroke();
+
+    function panel(x0, bars) {
+        for (var i = 0; i < 4; i++) {
+            var y = rowYs[i], b = bars[i];
+            ctx.fillStyle = b.kill ? '#e74c3c' : 'rgba(42,120,214,0.30)';
+            ctx.fillRect(x0, y, b.w, bh);
+            ctx.font = b.kill ? 'bold 11px system-ui' : '11px system-ui';
+            ctx.fillStyle = b.kill ? '#e74c3c' : '#444';
+            ctx.textAlign = 'left';
+            ctx.fillText(b.lab, x0 + b.w + 6, y + 12);
+        }
+    }
+    // row labels
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    for (var i = 0; i < 4; i++) ctx.fillText(rowLabs[i], 20, rowYs[i] + 13);
+
+    panel(150, leftBars);
+    panel(470, rightBars);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same leak, different victim — the adj dial moves the target', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('score ≈ RSS/16 GB × 1000, illustrative', w - 12, h - 8);
+});
+
+// c3: host OOM vs cgroup OOM flow — where the wall is decides who dies
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Host OOM vs cgroup OOM: Where the Wall Is Decides Who Dies', w / 2, 24);
+
+    var boxH = 40;
+    function flowBox(x, cy, bw, text, fill, border) {
+        rrectPath(ctx, x, cy - boxH / 2, bw, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + bw / 2, cy + 4);
+    }
+
+    var magentaFill = 'rgba(213,81,129,0.12)', orangeFill = 'rgba(217,89,38,0.12)';
+    var redFill = 'rgba(231,76,60,0.12)', greenFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: no limit
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no limit', 20, y1 + 4);
+    flowBox(150, y1, 160, 'shipper leaks to 4.2 GB', magentaFill, P.magenta);
+    flowBox(360, y1, 160, 'host RAM exhausted', orangeFill, P.orange);
+    flowBox(555, y1, 160, 'host OOM kills database', redFill, '#e74c3c');
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 312, y1, 356, y1);
+    drawArrow(ctx, 522, y1, 551, y1);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ wrong process', 635, y1 + 36);
+
+    // row 2: memory.max = 1 GB
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('memory.max = 1 GB', 20, y2 + 4);
+    flowBox(150, y2, 170, 'shipper leaks to 1 GB cap', magentaFill, P.magenta);
+    flowBox(360, y2, 170, 'cgroup OOM kills shipper', greenFill, P.green);
+    flowBox(555, y2, 160, 'database unaffected', greenFill, P.green);
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 322, y2, 356, y2);
+    drawArrow(ctx, 532, y2, 551, y2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 635, y2 + 36);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the limit doesn't stop the leak — it names who pays for it", w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('flow schematic, sizes illustrative', w - 12, h - 8);
+});
+
+// c4: annotated dmesg mock — victim on the kill line, culprit in the process table
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Reading the 3am dmesg: Victim on the Last Line, Culprit in the Table', w / 2, 24);
+
+    // log block
+    rrectPath(ctx, 40, 55, 640, 165, 6);
+    ctx.fillStyle = '#f8f9fa'; ctx.fill();
+    ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1; ctx.stroke();
+
+    var lines = [
+        '[Tue 03:12:07] kernel: log-shipper invoked oom-killer: gfp_mask=0x140cca, order=0',
+        '[Tue 03:12:07] kernel: Tasks state (memory values in pages):',
+        '[Tue 03:12:07] kernel:  pid 3981 (log-shipper)  rss 1101000   oom_score_adj 0',
+        '[Tue 03:12:07] kernel:  pid 4172 (database)     rss 2411520   oom_score_adj 0',
+        '[Tue 03:12:07] kernel:  pid 2214 (cache-helper) rss  288000   oom_score_adj 0',
+        '[Tue 03:12:07] kernel: Out of memory: Killed process 4172 (database)',
+        '[Tue 03:12:07] kernel:  anon-rss:9646080kB, total-vm:12582912kB'
+    ];
+    var lh = 22, y0 = 80;
+
+    // highlight bands (behind text): culprit row (index 2) and kill line (index 5)
+    ctx.fillStyle = 'rgba(217,89,38,0.15)';
+    ctx.fillRect(44, y0 + 2 * lh - 15, 632, 21);
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(44, y0 + 5 * lh - 15, 632, 21);
+
+    ctx.fillStyle = P.text; ctx.font = '12px Menlo, monospace'; ctx.textAlign = 'left';
+    for (var i = 0; i < lines.length; i++) ctx.fillText(lines[i], 56, y0 + i * lh);
+
+    // culprit callout
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4.2 GB in a sidecar — the leak', 520, 104);
+    ctx.strokeStyle = P.orange; ctx.fillStyle = P.orange; ctx.lineWidth = 2;
+    drawArrow(ctx, 545, 108, 505, 119);
+
+    // victim callout
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the victim, not the bug', 520, 215);
+    ctx.strokeStyle = '#e74c3c'; ctx.fillStyle = '#e74c3c'; ctx.lineWidth = 2;
+    drawArrow(ctx, 545, 205, 505, 195);
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rss is in 4 kB pages: 1,101,000 pages ≈ 4.2 GB', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('log text illustrative, format abridged', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

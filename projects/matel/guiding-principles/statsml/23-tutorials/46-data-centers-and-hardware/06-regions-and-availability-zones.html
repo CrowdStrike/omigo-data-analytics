@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regions &amp; Availability Zones</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Regions &amp; Availability Zones</h1>
+<p class="subtitle">Clouds arrange data centers so a fire, a flood, or a bad deploy each destroys a pre-agreed slice and nothing more &mdash; geography as blast-radius engineering</p>
+
+<div class="card-section">
+    <h2>One Flood Shouldn't Stop Checkout</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">blast radius</span><span class="tag orange">geography</span></div>
+                <ul>
+                    <li><b>The service</b> — an online store's checkout runs in a cloud region that contains three availability zones</li>
+                    <li><b>The AZ</b> — each zone is one or more data centers with its own power feed, cooling, and network</li>
+                    <li><b>The spacing</b> — zones sit miles apart: close enough for ~1 ms links, far enough that one flood hits one</li>
+                    <li><b>The region</b> — a region is that cluster of zones; a second region sits thousands of miles away at ~35 ms</li>
+                    <li><b>The design</b> — geography is chosen so a defined failure takes out a defined slice, never everything</li>
+                </ul>
+                <p class="example">A transformer fire blacks out zone A at noon; zones B and C, on different power grids ten miles away, keep checkout running.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An availability zone is an independent-infrastructure failure domain; a region groups a few of them close enough for fast links but far enough apart to fail separately.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Spreading Checkout Across Three Zones</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">replication</span></div>
+                <ul>
+                    <li><b>The layout</b> — three copies of checkout, one per zone, behind a load balancer splitting traffic evenly</li>
+                    <li><b>The write</b> — an order commits once the primary in zone A and one replica in B or C both acknowledge</li>
+                    <li><b>The math</b> — local write 1 ms + inter-AZ round trip 2 ms &asymp; 3 ms per order; customers never notice</li>
+                    <li><b>Cross-region</b> — the same synchronous ack to eu-west costs 35 ms each way: ~71 ms per order, too slow</li>
+                    <li><b>The rule</b> — replicate synchronously inside a region, asynchronously (seconds behind) across regions</li>
+                </ul>
+                <p class="example">An order placed at 12:00:00.000 is durable in two zones by .003; the eu-west copy catches up about a second later.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Physics draws the boundary — single-digit-ms links inside a region permit synchronous replication; a ~70 ms round trip between regions forbids it, so cross-region copies are always slightly stale.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Every Failure Gets a Fence</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">containment</span></div>
+                <ul>
+                    <li><b>Blast radius</b> — before anything fails, you decide the largest thing each failure is allowed to break</li>
+                    <li><b>Bad deploy</b> — roll to one zone first; a crashing build takes out a third of capacity, not all of it</li>
+                    <li><b>Zone outage</b> — flood, fire, or grid loss kills one AZ; the other two absorb its traffic</li>
+                    <li><b>Region outage</b> — rare but real; the async eu-west copy is promoted, losing the last few seconds</li>
+                    <li><b>The ladder</b> — each rung caps the damage: one host, one zone, one region — never the whole system</li>
+                </ul>
+                <p class="example">A bad config pushed zone-by-zone crashes zone A at 12:00; the rollout halts automatically and zones B and C never receive it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The hierarchy exists so every failure mode has a pre-drawn containment line — you know before the incident how much of the fleet it may take with it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Zones Are Not Automatic Safety</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">headroom</span></div>
+                <ul>
+                    <li><b>The headroom trap</b> — two survivors must absorb the dead zone's traffic; too busy and they can't</li>
+                    <li><b>The math</b> — 300 servers at 60% busy = 180 servers of work; lose a zone, 200 remain: 90% busy</li>
+                    <li><b>The stampede</b> — every tenant fails over to the same surviving zones at once, and capacity runs out</li>
+                    <li><b>Control plane</b> — if the tool that moves traffic lives in the dead zone, the failover never starts</li>
+                    <li><b>Multi-region</b> — active-active across regions is a cost and complexity step-change: justify it, don't default</li>
+                </ul>
+                <p class="example">Run the same fleet at 75% busy and losing a zone leaves 225 servers of work on 200 servers — 112%, and the survivors cascade.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Counting zones instead of headroom and dependencies — three AZs only contain a blast if the survivors have spare capacity and the failover machinery lives outside the blast.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: one region, three AZs, and a distant second region
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Region = Three Independent Failure Domains, One Millisecond Apart', w / 2, 24);
+
+    // region A box
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    rrPath(ctx, 30, 55, 400, 210, 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('region us-east', 44, 73);
+
+    // AZ boxes
+    var azX = [55, 180, 305];
+    var azNames = ['AZ-a', 'AZ-b', 'AZ-c'];
+    for (var i = 0; i < 3; i++) {
+        rrPath(ctx, azX[i], 110, 100, 64, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(azNames[i], azX[i] + 50, 136);
+        ctx.fillText('own power+net', azX[i] + 50, 154);
+    }
+
+    // inter-AZ links along y=195
+    var cA = 105, cB = 230, cC = 355;
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cA, 174); ctx.lineTo(cA, 195); ctx.moveTo(cB, 174); ctx.lineTo(cB, 195); ctx.moveTo(cC, 174); ctx.lineTo(cC, 195); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cA, 195); ctx.lineTo(cB, 195); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cB, 195); ctx.lineTo(cC, 195); ctx.stroke();
+    // arc a-c
+    ctx.beginPath();
+    ctx.moveTo(cA, 195);
+    ctx.quadraticCurveTo(cB, 240, cC, 195);
+    ctx.stroke();
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('~1 ms', (cA + cB) / 2, 190);
+    ctx.fillText('~1 ms', (cB + cC) / 2, 190);
+    ctx.fillText('~1 ms', cB, 234);
+
+    // region B box
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    rrPath(ctx, 530, 85, 160, 150, 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('region eu-west', 542, 103);
+    var bX = [545, 615];
+    for (var i = 0; i < 2; i++) {
+        rrPath(ctx, bX[i], 130, 60, 44, 6);
+        ctx.fillStyle = 'rgba(107,114,128,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    // cross-region link
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(430, 160); ctx.lineTo(530, 160); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('~35 ms — 4,500 mi', 480, 148);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('far enough apart for separate floods, close enough for synchronous replication', w / 2, 282);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative of typical clouds', w - 12, h - 4);
+});
+
+// c2: where synchronous replication stops being affordable
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 250;
+    var rows = [
+        { label: 'commit in one zone — 1 ms', width: 12, color: P.blue, end: { text: '1 ms', style: '11px', color: '#444', bold: false } },
+        { label: 'sync commit across 2 AZs — 3 ms', width: 36, color: P.green, end: { text: 'the standard design', style: '12px', color: P.green, bold: true } },
+        { label: 'async copy to eu-west — ack still 3 ms', width: 36, color: P.green, end: { text: 'region copy lags ~1 s', style: '11px', color: P.mute, bold: false } },
+        { label: 'sync commit to eu-west — 71 ms', width: 430, color: '#e74c3c', end: { text: '24× slower — physics says no', style: '12px', color: '#e74c3c', bold: true } }
+    ];
+    var rowY = [70, 120, 170, 220];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where Synchronous Replication Stops Being Affordable', w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 244); ctx.stroke();
+
+    for (var i = 0; i < 4; i++) {
+        var r = rows[i], y = rowY[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, y + 12);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(bx, y, r.width, 16);
+        ctx.fillStyle = r.end.color;
+        ctx.font = (r.end.bold ? 'bold ' : '') + r.end.style + ' system-ui';
+        if (bx + r.width + 8 > 550) {
+            // long bar: label above its right end so it stays on canvas
+            ctx.textAlign = 'right';
+            ctx.fillText(r.end.text, bx + r.width, y - 6);
+            ctx.textAlign = 'left';
+        } else {
+            ctx.fillText(r.end.text, bx + r.width + 8, y + 12);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sync within a region, async across regions', 680, 258);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic, milliseconds illustrative', w - 12, h - 8);
+});
+
+// c3: blast radii — nine servers, three failure types
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rowY = [80, 150, 220];
+    var rowLabels = ['bad deploy (canary zone)', 'AZ outage', 'region outage'];
+    var deadCounts = [3, 3, 9];
+    var groupStart = [250, 362, 474];
+    var azNames = ['AZ-a', 'AZ-b', 'AZ-c'];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Blast Radii: What Each Failure Is Allowed to Take', w / 2, 24);
+
+    // AZ group captions
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    for (var g = 0; g < 3; g++) {
+        ctx.fillText(azNames[g], groupStart[g] + 45, 58);
+    }
+
+    for (var r = 0; r < 3; r++) {
+        var y = rowY[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabels[r], 20, y + 18);
+        for (var g = 0; g < 3; g++) {
+            for (var j = 0; j < 3; j++) {
+                var idx = g * 3 + j;
+                var x = groupStart[g] + j * 32;
+                var dead = idx < deadCounts[r];
+                ctx.fillStyle = dead ? 'rgba(231,76,60,0.25)' : 'rgba(42,120,214,0.25)';
+                ctx.fillRect(x, y, 26, 26);
+                ctx.strokeStyle = dead ? '#e74c3c' : P.blue; ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, 26, 26);
+                if (dead) {
+                    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+                    ctx.fillText('✗', x + 13, y + 18);
+                }
+            }
+        }
+    }
+
+    // right-side labels
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 zone = 3/9', 600, rowY[0] + 18);
+    ctx.fillText('3/9 of fleet', 600, rowY[1] + 18);
+    ctx.fillText('9/9 — fail over', 600, rowY[2] + 10);
+    ctx.fillText('to eu-west', 600, rowY[2] + 26);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each rung of the ladder caps the damage before it happens', w / 2, 278);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('9-server fleet schematic', w - 12, h - 4);
+});
+
+// c4: utilization before and after losing one of three zones
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var pxPerPct = 1.5;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Losing One of Three Zones Multiplies Load on Survivors by 1.5×', w / 2, 24);
+
+    // gridlines and ticks 0/30/60/90/120
+    for (var g = 0; g <= 120; g += 30) {
+        var gy = baseY - g * pxPerPct;
+        if (g > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // capacity ceiling at 100%
+    var ceilY = baseY - 100 * pxPerPct;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, ceilY); ctx.lineTo(ox + pw, ceilY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('capacity ceiling', ox + pw - 4, ceilY - 6);
+
+    var bars = [
+        { x: 150, pct: 60, color: P.blue, lab: '60%', sub: 'before' },
+        { x: 250, pct: 90, color: P.orange, lab: '90%', sub: 'after AZ loss' },
+        { x: 430, pct: 75, color: P.blue, lab: '75%', sub: 'before' },
+        { x: 530, pct: 112, color: '#e74c3c', lab: '112%', sub: 'after AZ loss' }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var b = bars[i], bh = b.pct * pxPerPct;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x, baseY - bh, 70, bh);
+        ctx.fillStyle = b.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.lab, b.x + 35, baseY - bh - 6);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(b.sub, b.x + 35, baseY + 14);
+    }
+
+    // group labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('run at 60% busy', 220, baseY + 30);
+    ctx.fillText('run at 75% busy', 500, baseY + 30);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('112% — the survivors cascade', 430, 55);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('arithmetic exact: demand ×1.5 when 1 of 3 zones dies; fleet sizes illustrative', w - 12, h - 4);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

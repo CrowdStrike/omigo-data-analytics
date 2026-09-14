@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eventual Consistency</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Eventual Consistency</h1>
+<p class="subtitle">Copies of the same record may answer with different values for a moment — but once writes stop, every copy converges to the same number</p>
+
+<div class="card-section">
+    <h2>One Photo, Three Different Like Counts</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">replication</span><span class="tag orange">stale reads</span></div>
+                <ul>
+                    <li><b>The photo</b> — a photo's like count is stored on three server copies, called replicas A, B, and C</li>
+                    <li><b>The reads</b> — your phone asks replica A, your laptop asks B, your tablet asks C, all at once</li>
+                    <li><b>The answers</b> — phone says 41 likes, laptop says 42, tablet says 42 — same photo, same instant</li>
+                    <li><b>The lag</b> — like #42 has reached B and C, but the update is still in flight to replica A</li>
+                    <li><b>The refresh</b> — one second later the phone also shows 42; the disagreement quietly heals itself</li>
+                </ul>
+                <p class="example">At the 3-second mark the three devices read 41, 42, 42; by the 4-second mark all three read 42.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Eventual consistency means replicas may briefly disagree after a write, but if writes stop, every replica eventually returns the same final value.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Watching a Like Ripple Through Three Replicas</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">propagation</span><span class="tag orange">convergence</span></div>
+                <ul>
+                    <li><b>The start</b> — at t=0 all three replicas hold 40 likes; two new likes are about to arrive</li>
+                    <li><b>Write #41</b> — lands on replica B at t=0s; B now reads 41 while A and C still read 40</li>
+                    <li><b>Write #42</b> — lands on B at t=1s; replication carries #41 to C at 1s and #42 to C at 2s</li>
+                    <li><b>The slow copy</b> — replica A gets #41 at t=2s and #42 only at t=4s; it lags the whole time</li>
+                    <li><b>Convergence</b> — the last write was at t=1s; by t=4s every replica reads 42 and stays there</li>
+                    <li><b>The promise</b> — "eventual" only says: stop writing and the copies will agree — no deadline given</li>
+                </ul>
+                <p class="example">Read all three replicas at t=3s and you get A=41, B=42, C=42 — the exact mismatch your three devices saw.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Convergence is defined by writes stopping, not by a clock — the guarantee is "no new writes, then agreement", never "agreement within N seconds".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Trade: Answer Fast Now, Agree Later</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">availability</span><span class="tag orange">AP systems</span></div>
+                <ul>
+                    <li><b>The choice</b> — when replicas can't all be reached, a system either waits (or errors) or answers stale</li>
+                    <li><b>AP systems</b> — availability-first stores answer from the nearest replica and reconcile afterwards</li>
+                    <li><b>The speed</b> — a nearest-replica read returns in ~12ms; waiting on a cross-region quorum costs ~180ms</li>
+                    <li><b>Tolerates it</b> — like counts, view counters, follower feeds: a briefly stale number harms nobody</li>
+                    <li><b>Does not</b> — account balances and inventory: two replicas both selling the last seat is real money</li>
+                    <li><b>Per field</b> — one app can mix both: eventual for the feed, strongly consistent for the checkout</li>
+                </ul>
+                <p class="example">A like count that reads 41 instead of 42 for three seconds costs nothing; an inventory count that does the same can sell one seat twice.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Eventual consistency is a deliberate trade — you accept briefly stale reads to keep answering fast during lag and partitions; choose it per field by asking what a stale value can break.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Eventual Is Not Soon — and the Count Can Go Backwards</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">no deadline</span><span class="tag blue">ordering</span></div>
+                <ul>
+                    <li><b>The confusion</b> — "eventual" reads as "in a second or two"; the contract names no time at all</li>
+                    <li><b>The tail</b> — lag is usually milliseconds, but a partition or backlog can stretch it to minutes</li>
+                    <li><b>No ordering</b> — plain eventual consistency doesn't promise your reads see values in write order</li>
+                    <li><b>Backwards</b> — refreshing can bounce you to a laggier replica, so the count drops from 42 to 40</li>
+                    <li><b>Your own like</b> — you tap like, refresh, and it's gone: read-your-writes is a separate guarantee</li>
+                    <li><b>The fixes</b> — session guarantees (sticky replica, monotonic reads) are add-ons, not the default</li>
+                </ul>
+                <p class="example">Six refreshes over four seconds return 42, 40, 42, 41, 42, 42 as reads bounce between replicas B, A, C, A, B, A — each answer honest for its replica.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating "eventual" as "soon and in order". The bare guarantee is convergence only — no deadline, no monotonic reads, no read-your-writes; those need extra session or ordering guarantees.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: grouped bars — like count per replica at two read moments
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Photo, Same Question: 41 or 42 Likes?', w / 2, 24);
+
+    var ox = 60, baseY = 245, ph = 180;
+    var yMin = 38, yMax = 43;
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * ph; }
+
+    // gridlines and y ticks at 39..43
+    ctx.font = '12px system-ui';
+    for (var v = 39; v <= 43; v++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + 600, yOf(v)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(v), ox - 6, yOf(v) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 600, baseY); ctx.stroke();
+
+    // note under y-axis
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('y starts at 38 to make the 1-like gap visible', ox, baseY + 34);
+
+    var groups = [
+        { cx: 210, label: 'read at 3s', vals: [41, 42, 42] },
+        { cx: 510, label: 'read at 4s', vals: [42, 42, 42] }
+    ];
+    var barColors = [P.blue, P.green, P.aqua];
+    var repLabs = ['A', 'B', 'C'];
+    var bw = 52, gap = 14;
+
+    for (var g = 0; g < 2; g++) {
+        var grp = groups[g];
+        var totalW = 3 * bw + 2 * gap;
+        var startX = grp.cx - totalW / 2;
+        for (var i = 0; i < 3; i++) {
+            var x = startX + i * (bw + gap);
+            var y = yOf(grp.vals[i]);
+            ctx.fillStyle = barColors[i];
+            ctx.fillRect(x, y, bw, baseY - y);
+            ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(String(grp.vals[i]), x + bw / 2, y - 6);
+            ctx.fillStyle = '#fff'; ctx.font = '11px system-ui';
+            ctx.fillText(repLabs[i], x + bw / 2, baseY - 6);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(grp.label, grp.cx, baseY + 18);
+    }
+
+    // red annotation arrowed to the 41 bar (group 1, replica A)
+    var aX = groups[0].cx - (3 * bw + 2 * gap) / 2 + bw / 2;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(aX - 40, 70); ctx.lineTo(aX - 6, yOf(41) - 22); ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(aX - 4, yOf(41) - 18);
+    ctx.lineTo(aX - 15, yOf(41) - 24);
+    ctx.lineTo(aX - 8, yOf(41) - 32);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("replica A hasn't heard about like #42 yet", aX - 60, 62);
+
+    // green annotation above the second group
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one second later, all three agree', groups[1].cx, 62);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('like counts illustrative', 700, 292);
+});
+
+// c2: step lines — value stored on each replica over 5 seconds, converging to 42
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Likes Ripple Out: Every Replica Ends at 42', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var yMin = 39.5, yMax = 42.5;
+    function xOf(t) { return ox + t / 5 * pw; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * ph; }
+
+    // gridlines at 40/41/42 and y labels
+    ctx.font = '12px system-ui';
+    [40, 41, 42].forEach(function(v) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(v), ox - 6, yOf(v) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 1s
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 5; t++) {
+        ctx.fillText(t + 's', xOf(t), baseY + 18);
+    }
+
+    // last-write marker at t=1s
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xOf(1), baseY - ph); ctx.lineTo(xOf(1), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('last write', xOf(1), baseY - ph - 6);
+
+    var secs = [0, 1, 2, 3, 4, 5];
+    var series = [
+        { vals: [41, 42, 42, 42, 42, 42], color: P.green, lab: 'B', off: -14 },
+        { vals: [40, 41, 42, 42, 42, 42], color: P.aqua, lab: 'C', off: 0 },
+        { vals: [40, 40, 41, 41, 42, 42], color: P.blue, lab: 'A', off: 14 }
+    ];
+
+    // small vertical offsets so overlapping steps stay visible
+    var drawOff = { B: -3, C: 0, A: 3 };
+
+    series.forEach(function(sr) {
+        var dy = drawOff[sr.lab];
+        ctx.strokeStyle = sr.color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < secs.length; i++) {
+            var x = xOf(secs[i]), y = yOf(sr.vals[i]) + dy;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                // step: horizontal to new x at previous y, then vertical
+                ctx.lineTo(x, yOf(sr.vals[i - 1]) + dy);
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.lineTo(xOf(5), yOf(sr.vals[5]) + dy);
+        ctx.stroke();
+        ctx.fillStyle = sr.color; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(sr.lab, xOf(5) + 6, yOf(sr.vals[5]) + dy + 4);
+    });
+
+    // write markers on B at (0,41) and (1,42)
+    ctx.fillStyle = P.yellow;
+    ctx.beginPath(); ctx.arc(xOf(0), yOf(41) - 3, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(xOf(1), yOf(42) - 3, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('like #41 lands', xOf(0) + 10, yOf(41) - 12);
+    ctx.fillText('like #42 lands', xOf(1) + 10, yOf(42) + 22);
+
+    // annotation near t=4s
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('writes stopped at 1s — all agree by 4s', xOf(2.4), 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('replication delays illustrative', 700, 292);
+});
+
+// c3: two panels — latency bars (left) and staleness checklist (right)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What You Buy, and What You Risk', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(380, 55); ctx.lineTo(380, 250); ctx.stroke();
+
+    // left panel: latency bars
+    var bx = 150, maxW = 190;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('nearest replica', 40, 106);
+    ctx.fillText('(eventual)', 40, 122);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, 110 - 13, 13, 26);
+    ctx.font = '12px system-ui';
+    ctx.fillText('12 ms', bx + 13 + 8, 114);
+
+    ctx.fillStyle = '#444';
+    ctx.fillText('cross-region quorum', 40, 166);
+    ctx.fillText('(strong)', 40, 182);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(bx, 170 - 13, 190, 26);
+    ctx.fillText('180 ms', bx + 190 + 8, 174);
+
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('read latency, illustrative', 40, 215);
+
+    // right panel: checklist
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('can this field be stale for seconds?', 410, 65);
+
+    var items = [
+        { y: 95, mark: '✓', color: P.green, label: 'like counts' },
+        { y: 135, mark: '✓', color: P.green, label: 'news feeds' },
+        { y: 175, mark: '✗', color: '#e74c3c', label: 'account balances' },
+        { y: 215, mark: '✗', color: '#e74c3c', label: 'inventory counts' }
+    ];
+    items.forEach(function(it) {
+        ctx.fillStyle = it.color; ctx.font = 'bold 14px system-ui';
+        ctx.fillText(it.mark, 410, it.y);
+        ctx.fillStyle = P.text; ctx.font = '13px system-ui';
+        ctx.fillText(it.label, 435, it.y);
+    });
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('pick consistency per field, not per app', w / 2, 272);
+});
+
+// c4: read sequence — six refreshes bouncing between replicas, count goes backwards
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Six Refreshes, One User: the Count Goes 42 → 40', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var yMin = 39, yMax = 43;
+    function xOf(t) { return ox + t / 5 * pw; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * ph; }
+
+    // gridlines at 40/41/42 and y labels
+    ctx.font = '12px system-ui';
+    [40, 41, 42].forEach(function(v) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(v), ox - 6, yOf(v) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 1s
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 5; t++) {
+        ctx.fillText(t + 's', xOf(t), baseY + 18);
+    }
+
+    var times = [1, 1.5, 2, 2.5, 3, 4.5];
+    var vals = [42, 40, 42, 41, 42, 42];
+    var reps = ['B', 'A', 'C', 'A', 'B', 'A'];
+    // backwards reads (drop from previous): indices 1 (40) and 3 (41)
+    var backwards = [false, true, false, true, false, false];
+
+    // dashed connector line
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < times.length; i++) {
+        var x = xOf(times[i]), y = yOf(vals[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // dots and replica labels
+    for (var i = 0; i < times.length; i++) {
+        var x = xOf(times[i]), y = yOf(vals[i]);
+        ctx.fillStyle = backwards[i] ? '#e74c3c' : P.blue;
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(reps[i], x, y + 22);
+    }
+
+    // red annotation arrowed to the 40 dot at t=1.5s
+    var dx = xOf(1.5), dy = yOf(40);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(dx + 42, 98); ctx.lineTo(dx + 8, dy - 12); ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(dx + 5, dy - 8);
+    ctx.lineTo(dx + 5, dy - 22);
+    ctx.lineTo(dx + 17, dy - 14);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('refresh dropped the count by 2 — no monotonic-reads guarantee', dx + 46, 92);
+
+    // green annotation near t=4.5s
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('converged: every replica now says 42', xOf(4.5) + 30, yOf(42) - 16);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('read timings illustrative; each answer is correct for its replica', 700, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

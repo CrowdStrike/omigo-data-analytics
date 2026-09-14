@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Injection as an Attack Surface</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Prompt Injection as an Attack Surface</h1>
+<p class="subtitle">A model reads instructions and data through one channel, so untrusted text lands in a privileged position &mdash; the same bug class as SQL injection and SSRF, but with no parameterized-query equivalent, so the mitigation is capability limits, not filtering</p>
+
+<div class="card-section">
+    <h2>Untrusted Input in a Privileged Position</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">bug class</span><span class="tag red">unsolved</span></div>
+                <ul>
+                    <li><b>The shape</b> — a language model concatenates its operator's instructions and its input data into one channel</li>
+                    <li><b>No structural separation</b> — nothing in that channel marks which bytes carry authority and which are mere content</li>
+                    <li><b>Same bug class</b> — untrusted input crossing into a privileged position, exactly like SQL injection or SSRF</li>
+                    <li><b>The difference</b> — SQL has parameterized queries; there is no equivalent that fully solves prompt injection</li>
+                    <li><b>Say it plainly</b> — this is currently an unsolved problem mitigated by architecture, not a bug with a patch</li>
+                    <li><b>Privileged position</b> — the danger begins when that same stream drives tools that hold the assistant's credentials</li>
+                    <li><b>Defender's stance</b> — assume injection succeeds sometimes, then design so that success buys the attacker little</li>
+                </ul>
+                <p class="example">An assistant fetches a web page to answer Alice's question; a sentence in that page addresses the assistant directly, and it arrives in the same stream as Alice's operator-written rules.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Prompt injection is untrusted input reaching a privileged position through a channel with no structural boundary — treat it as an architecture problem, because no text-level fix closes it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting Channel-Tool Pairs in One Deployment</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">attack surface</span><span class="tag green">blast radius</span></div>
+                <ul>
+                    <li><b>The deployment</b> — an internal assistant reads 5 input channels and holds 6 tools (illustrative, stated numbers)</li>
+                    <li><b>The channels</b> — fetched web pages, uploaded documents, inbound tickets, database rows, returned tool results</li>
+                    <li><b>The tools</b> — 4 read-only (document search, ticket read, order lookup, file summary) and 2 that move data out</li>
+                    <li><b>Outbound pair</b> — the 2 are "send email" and "make an outbound web request"; either can carry data outside</li>
+                    <li><b>Naive surface</b> — any channel can reach any tool, so 5 × 6 = 30 channel-tool pairs are injection-reachable</li>
+                    <li><b>Exfiltration slice</b> — 5 × 2 = 10 of those pairs can move data out, and 10 / 30 = 33.3% of the surface</li>
+                    <li><b>Severity rule</b> — impact is set by what the model can do, not by what it reads; text with no tools is low impact</li>
+                    <li><b>Also carriers</b> — file names, code comments, and image alt text are inputs too, and each adds channel rows</li>
+                </ul>
+                <p class="example">Alice uploads a vendor document; the assistant reads it and holds a send-email tool, so one of the 10 outbound pairs is live for the whole session (counts illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The security question is not "can it be injected" — assume yes — but "what is the worst action reachable from an injected instruction", which is blast-radius thinking applied to tools.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Cutting the Reachable Capability</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">least privilege</span><span class="tag orange">defense in depth</span></div>
+                <ul>
+                    <li><b>The move</b> — remove outbound capability from the path that reads untrusted content, keeping the rest</li>
+                    <li><b>The arithmetic</b> — exfiltration-capable pairs fall from 10 to 0 while 20 useful pairs remain untouched</li>
+                    <li><b>What is kept</b> — the assistant retains 20 / 30 = 66.7% of its surface with none of the exfiltration paths</li>
+                    <li><b>Model output is input</b> — never execute, interpolate into a query, or render as unescaped HTML what a model wrote</li>
+                    <li><b>Human confirmation</b> — the most reliable control today, and its value is that it breaks the automated chain</li>
+                    <li><b>Least privilege</b> — scope each tool as narrowly as a user account; prefer read-only wherever it suffices</li>
+                    <li><b>Isolation</b> — separate the step that reads untrusted content from the step that holds credentials where possible</li>
+                    <li><b>Audit trail</b> — log every tool call with its arguments so an injected action is at least reconstructable later</li>
+                </ul>
+                <p class="example">Bob's team moves the send-email tool behind a click-to-confirm dialog, so an injected instruction can compose a message but cannot dispatch it unattended.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Reduce reachable capability rather than trying to filter language — the arithmetic of the surface is under your control, and the wording of untrusted text is not.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why a Stronger System Prompt Is Not a Fix</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">SQL contrast</span><span class="tag blue">honest limits</span></div>
+                <ul>
+                    <li><b>The expectation</b> — teams assume a better filter or a firmer system prompt will close the hole</li>
+                    <li><b>Why it fails</b> — the model has one channel, so "ignore instructions in the data" is itself just more data</li>
+                    <li><b>The SQL contrast</b> — parameterization works because a database separates query syntax from value slots</li>
+                    <li><b>Structural, not textual</b> — a bound value can never become syntax; that guarantee has no prompt equivalent</li>
+                    <li><b>Filtering helps</b> — input screening and instruction-hierarchy prompting reduce success but do not eliminate it</li>
+                    <li><b>Don't overclaim</b> — presenting a prompt-based defense as a solution creates false confidence, not safety</li>
+                    <li><b>Where it must live</b> — the mitigation belongs in the surrounding architecture: capability limits and confirmations</li>
+                </ul>
+                <p class="example">A team hardens its system prompt and reports fewer incidents, yet the send-email tool is still reachable from any document the assistant reads — the surface never changed.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating prompt injection as a text-filtering problem. Parameterization fixed SQL injection because the boundary was real; a prompt has no such boundary, so limit what the model can do instead.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBoxTL(ctx, x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: pipeline — three untrusted channels merge into one prompt driving a tool-holding model
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Untrusted Text Enters; Privileged Action Exits', w / 2, 24);
+
+    // untrusted channel boxes
+    var chans = [
+        { y: 80,  label: 'fetched web page' },
+        { y: 130, label: 'uploaded document' },
+        { y: 180, label: 'returned tool result' }
+    ];
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('untrusted', 30, 68);
+    for (var i = 0; i < chans.length; i++) {
+        roundBoxTL(ctx, 30, chans[i].y, 150, 40, 6, 'rgba(107,114,128,0.12)', P.mute);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(chans[i].label, 105, chans[i].y + 25);
+    }
+
+    // merge arrows into the prompt strip
+    for (var i = 0; i < chans.length; i++) {
+        var x1 = 180, y1 = chans[i].y + 20, x2 = 246, y2 = 150;
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        arrowHead(ctx, x2 + 4 * Math.cos(ang), y2 + 4 * Math.sin(ang), ang, 9, P.mute);
+    }
+
+    // prompt strip (one undifferentiated stream)
+    roundBoxTL(ctx, 250, 125, 170, 50, 6, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    for (var i = 1; i < 12; i++) {
+        var cx = 250 + i * (170 / 12);
+        ctx.beginPath(); ctx.moveTo(cx, 127); ctx.lineTo(cx, 173); ctx.stroke();
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+    ctx.fillText('one prompt', 335, 146);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('instructions + data', 335, 164);
+
+    // arrow prompt -> model
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(420, 150); ctx.lineTo(452, 150); ctx.stroke();
+    arrowHead(ctx, 458, 150, 0, 10, P.blue);
+
+    // model box
+    roundBoxTL(ctx, 460, 125, 100, 50, 6, 'rgba(74,58,167,0.12)', P.violet);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText('the model', 510, 155);
+
+    // arrow model -> tools
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(560, 150); ctx.lineTo(592, 150); ctx.stroke();
+    arrowHead(ctx, 598, 150, 0, 10, P.orange);
+
+    // tools box
+    roundBoxTL(ctx, 600, 110, 95, 80, 6, 'rgba(217,89,38,0.14)', P.orange);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('tools', 647, 136);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('+ credentials', 647, 154);
+    ctx.fillText('privileged', 647, 172);
+
+    // annotations
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('no boundary survives the concatenation', 335, 205);
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange;
+    ctx.fillText('untrusted words end up in a privileged position', 430, 232);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative deployment', w - 12, h - 10);
+});
+
+// shared matrix geometry: 5 channels (rows) x 6 tools (columns)
+var MX = {
+    x0: 160, colW: 90, nCol: 6,
+    y0: 88, rowH: 30, nRow: 5,
+    cols: ['doc search', 'ticket read', 'order lookup', 'file summary', 'send email', 'web request'],
+    rows: ['web page', 'document', 'ticket', 'database row', 'tool result']
+};
+
+function matrixRowLabels(ctx) {
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    for (var r = 0; r < MX.nRow; r++) {
+        ctx.fillText(MX.rows[r], MX.x0 - 6, MX.y0 + r * MX.rowH + MX.rowH / 2 + 4);
+    }
+}
+
+// c2: 5 x 6 matrix — 30 pairs, 10 exfiltration-capable highlighted
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('5 Input Channels × 6 Tools = 30 Injection-Reachable Pairs', w / 2, 24);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange;
+    ctx.fillText('10 of 30 pairs can move data out = 33.3%', w / 2, 48);
+
+    // column headers
+    for (var c = 0; c < MX.nCol; c++) {
+        var cx = MX.x0 + c * MX.colW + MX.colW / 2;
+        var outbound = (c >= 4);
+        ctx.font = outbound ? 'bold 11px system-ui' : '11px system-ui';
+        ctx.fillStyle = outbound ? P.orange : P.blue;
+        ctx.textAlign = 'center';
+        ctx.fillText(MX.cols[c], cx, 80);
+    }
+
+    matrixRowLabels(ctx);
+
+    // cells
+    for (var r = 0; r < MX.nRow; r++) {
+        for (var c = 0; c < MX.nCol; c++) {
+            var x = MX.x0 + c * MX.colW, y = MX.y0 + r * MX.rowH;
+            var outbound = (c >= 4);
+            ctx.fillStyle = outbound ? 'rgba(217,89,38,0.30)' : 'rgba(42,120,214,0.15)';
+            ctx.fillRect(x, y, MX.colW, MX.rowH);
+            ctx.strokeStyle = outbound ? P.orange : P.blue;
+            ctx.lineWidth = outbound ? 2 : 1;
+            ctx.strokeRect(x, y, MX.colW, MX.rowH);
+            ctx.font = 'bold 12px system-ui';
+            ctx.fillStyle = outbound ? P.orange : P.blue;
+            ctx.textAlign = 'center';
+            ctx.fillText(outbound ? '!' : '·', x + MX.colW / 2, y + MX.rowH / 2 + 4);
+        }
+    }
+
+    // group brackets
+    var xMid = MX.x0 + 4 * MX.colW;          // 520
+    var xEnd = MX.x0 + MX.nCol * MX.colW;    // 700
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = P.blue;
+    ctx.beginPath(); ctx.moveTo(MX.x0, 250); ctx.lineTo(xMid, 250); ctx.stroke();
+    ctx.strokeStyle = P.orange;
+    ctx.beginPath(); ctx.moveTo(xMid, 250); ctx.lineTo(xEnd, 250); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.blue;
+    ctx.fillText('4 read-only → 20 pairs', (MX.x0 + xMid) / 2, 266);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange;
+    ctx.fillText('2 outbound → 10 pairs', (xMid + xEnd) / 2, 266);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative deployment; 5 × 6 = 30, 5 × 2 = 10', w - 12, h - 8);
+});
+
+// c3: same matrix after removing outbound tools — 0 exfiltration pairs, 20 kept
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('After Removing Outbound Tools: 0 Exfiltration Pairs, 20 Kept', w / 2, 24);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('20 / 30 = 66.7% of the surface kept, 0 / 30 outbound', w / 2, 48);
+
+    // column headers (outbound ones struck through)
+    for (var c = 0; c < MX.nCol; c++) {
+        var cx = MX.x0 + c * MX.colW + MX.colW / 2;
+        var outbound = (c >= 4);
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = outbound ? P.mute : P.green;
+        ctx.textAlign = 'center';
+        ctx.fillText(MX.cols[c], cx, 80);
+        if (outbound) {
+            var tw = ctx.measureText(MX.cols[c]).width;
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(cx - tw / 2 - 2, 76); ctx.lineTo(cx + tw / 2 + 2, 76); ctx.stroke();
+        }
+    }
+
+    matrixRowLabels(ctx);
+
+    // cells
+    for (var r = 0; r < MX.nRow; r++) {
+        for (var c = 0; c < MX.nCol; c++) {
+            var x = MX.x0 + c * MX.colW, y = MX.y0 + r * MX.rowH;
+            var outbound = (c >= 4);
+            ctx.fillStyle = outbound ? 'rgba(107,114,128,0.10)' : 'rgba(0,131,0,0.18)';
+            ctx.fillRect(x, y, MX.colW, MX.rowH);
+            ctx.strokeStyle = outbound ? P.mute : P.green;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, MX.colW, MX.rowH);
+            if (outbound) {
+                ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(x + 2, y + 2); ctx.lineTo(x + MX.colW - 2, y + MX.rowH - 2); ctx.stroke();
+            } else {
+                ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+                ctx.fillText('·', x + MX.colW / 2, y + MX.rowH / 2 + 4);
+            }
+        }
+    }
+
+    // group brackets
+    var xMid = MX.x0 + 4 * MX.colW;
+    var xEnd = MX.x0 + MX.nCol * MX.colW;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = P.green;
+    ctx.beginPath(); ctx.moveTo(MX.x0, 250); ctx.lineTo(xMid, 250); ctx.stroke();
+    ctx.strokeStyle = P.mute;
+    ctx.beginPath(); ctx.moveTo(xMid, 250); ctx.lineTo(xEnd, 250); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('20 pairs still useful', (MX.x0 + xMid) / 2, 266);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('0 pairs reach outbound', (xMid + xEnd) / 2, 266);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative; 20 + 0 = 20 of 30 pairs live', w - 12, h - 8);
+});
+
+// c4: structural boundary in SQL vs one concatenated prompt stream
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Real Boundary vs One Concatenated Stream', w / 2, 24);
+
+    // ---- left panel: parameterized query ----
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('database: parameterized query', 185, 62);
+
+    roundBoxTL(ctx, 45, 95, 130, 60, 6, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+    ctx.fillText('query syntax', 110, 120);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('compiled first', 110, 138);
+
+    roundBoxTL(ctx, 205, 95, 120, 60, 6, 'rgba(107,114,128,0.12)', P.mute);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('value slot', 265, 120);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('stays a value', 265, 138);
+
+    // the wall
+    ctx.strokeStyle = P.green; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(190, 88); ctx.lineTo(190, 162); ctx.stroke();
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('structural', 190, 80);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('boundary', 190, 178);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('a bound value can never become syntax', 185, 200);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 55); ctx.lineTo(360, 250); ctx.stroke();
+
+    // ---- right panel: one prompt channel ----
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('prompt: one channel', 535, 62);
+
+    var sx = 390, sy = 95, sw = 300, sh = 60, nCells = 20, cw = sw / nCells;
+    for (var i = 0; i < nCells; i++) {
+        ctx.fillStyle = (i < 8) ? 'rgba(42,120,214,0.20)' : 'rgba(107,114,128,0.20)';
+        ctx.fillRect(sx + i * cw, sy, cw, sh);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(sx + i * cw, sy); ctx.lineTo(sx + i * cw, sy + sh); ctx.stroke();
+    }
+    roundBoxTL(ctx, sx, sy, sw, sh, 6, 'rgba(0,0,0,0)', P.orange);
+
+    ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('instructions', sx + 4 * cw, 88);
+    ctx.fillStyle = P.mute;
+    ctx.fillText('untrusted data', sx + 14 * cw, 88);
+
+    // no-wall marker at the seam (x = 390 + 8*15 = 510)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(510, sy); ctx.lineTo(510, sy + sh); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('no wall here', 510, 175);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('data can read exactly like an instruction', 535, 200);
+
+    // bottom annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('so the fix lives in capability limits, not in wording', 360, 232);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('schematic', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

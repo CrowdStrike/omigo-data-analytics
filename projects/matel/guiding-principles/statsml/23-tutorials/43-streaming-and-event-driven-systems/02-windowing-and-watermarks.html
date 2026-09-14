@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Windowing &amp; Watermarks</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Windowing &amp; Watermarks</h1>
+<p class="subtitle">A stream never ends, so you can never "count all the orders" — windows cut the stream into finite buckets, and watermarks decide when a bucket is safe to close</p>
+
+<div class="card-section">
+    <h2>Counting Orders on a Stream That Never Ends</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">windows</span><span class="tag orange">streaming</span></div>
+                <ul>
+                    <li><b>The shop</b> — a pizza shop's app emits one event per order, forever; there is no last row</li>
+                    <li><b>The question</b> — "how many orders per 5 minutes?" needs finite buckets carved from the stream</li>
+                    <li><b>Tumbling</b> — back-to-back 5-minute buckets: 12:00–12:05, 12:05–12:10; each order lands in exactly one</li>
+                    <li><b>Sliding</b> — a 5-minute bucket that advances every 1 minute; one order can land in five buckets</li>
+                    <li><b>Session</b> — no fixed size: a bucket per customer that closes after a 3-minute gap in their activity</li>
+                </ul>
+                <p class="example">An order placed 12:03 falls in tumbling window 12:00–12:05, in five sliding windows from 11:59–12:04 through 12:03–12:08, and in whatever session its customer is in.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A window turns an infinite stream into finite groups you can aggregate — tumbling windows partition time, sliding windows overlap it, session windows follow gaps in the data itself.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Placed at 12:04, Arrived at 12:07</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">event time</span><span class="tag orange">watermark</span></div>
+                <ul>
+                    <li><b>Two clocks</b> — event time is when the order was placed; processing time is when the engine receives it</li>
+                    <li><b>The lag</b> — order D is placed 12:04 in a dead zone and only reaches the engine at 12:07</li>
+                    <li><b>The rule</b> — watermark = latest event time seen minus 2 minutes: "I've probably seen everything up to T"</li>
+                    <li><b>The trigger</b> — window 12:00–12:05 fires when the watermark passes 12:05, not when the wall clock does</li>
+                    <li><b>The moment</b> — order F (placed 12:07) arrives at 12:08, pushing the watermark to 12:05: the window fires</li>
+                    <li><b>The count</b> — it fires with 4 orders (A, B, C, D) — late D made it in because the watermark waited</li>
+                </ul>
+                <p class="example">Ten orders arrive as (placed → arrived): A 12:01→12:01, B 12:02→12:02, C 12:03→12:03, D 12:04→12:07, E 12:06→12:06, F 12:07→12:08, G 12:04→12:10, H 12:09→12:09, I 12:11→12:11, J 12:04→12:14.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The watermark is the engine's moving claim "no event older than T is still coming"; a window closes when the watermark passes its end, which lets slightly-late events like D be counted correctly.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Clock You Pick Changes the Answer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag green">where it's used</span></div>
+                <ul>
+                    <li><b>Same data, two answers</b> — bucketing the same ten orders by arrival clock vs placed clock disagrees in every window</li>
+                    <li><b>Processing time</b> — 12:00–12:05 gets 3 orders, 12:05–12:10 gets 4, 12:10–12:15 gets 3: late orders drift right</li>
+                    <li><b>Event time</b> — the true placed counts are 6, 3, 1: the busy first window was hiding behind the lag</li>
+                    <li><b>The stakes</b> — dashboards, billing, and fraud counts keyed to "when it happened" need event time</li>
+                    <li><b>The cost</b> — event time forces you to wait (watermarks); processing time is instant but rewrites history</li>
+                </ul>
+                <p class="example">A demand-forecast model trained on processing-time counts learns a phantom 12:10–12:15 rush of 3 orders when the true count then was 1 — the other 2 were placed 12:04.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Processing time answers "when did my server hear about it"; event time answers "when did it happen" — pick by the question, and accept the watermark wait as the price of event time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Watermark Is a Bet, Not a Guarantee</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">allowed lateness</span></div>
+                <ul>
+                    <li><b>The bet</b> — "nothing older than T is coming" is a heuristic; order G (placed 12:04) arrives at 12:10, behind it</li>
+                    <li><b>Allowed lateness</b> — keep the closed window's state 3 extra minutes; G lands inside and re-fires the count as 5</li>
+                    <li><b>The cliff</b> — once the watermark passes 12:05 + 3 min of lateness, the window's state is deleted for good</li>
+                    <li><b>Truly late</b> — order J (placed 12:04) arrives 12:14: no window exists; it is dropped or diverted to a side output</li>
+                    <li><b>The mistake</b> — treating the first fired count (4) as final and the watermark as a completeness guarantee</li>
+                    <li><b>The trade</b> — longer lateness catches more stragglers but holds state and delays "final" answers</li>
+                </ul>
+                <p class="example">Window 12:00–12:05 truly had 6 orders; it fires at 4, updates to 5 when G lands in the lateness grace, and J is dropped — the final count is 5, and only the side output knows about J.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing a fired window is finished. Downstream consumers must either tolerate updated results during allowed lateness or accept that events behind the watermark silently vanish.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: tumbling / sliding / session tracks over the same order events
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Orders, Three Ways to Cut the Stream', w / 2, 24);
+
+    function px(min) { return 70 + min * 40; } // 12:00-12:15 -> 70-670
+
+    // vertical gridlines + tick labels
+    var ticks = [0, 5, 10, 15];
+    var tickLabs = ['12:00', '12:05', '12:10', '12:15'];
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px(ticks[i]), 48); ctx.lineTo(px(ticks[i]), 265); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], px(ticks[i]), 280);
+    }
+
+    // track 1: tumbling — three adjacent windows 0-5, 5-10, 10-15
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('tumbling', 8, 79);
+    var tumbles = [[0, 5], [5, 10], [10, 15]];
+    for (var i = 0; i < tumbles.length; i++) {
+        rrectPath(ctx, px(tumbles[i][0]), 55, (tumbles[i][1] - tumbles[i][0]) * 40, 40, 6);
+        ctx.fillStyle = 'rgba(42,120,214,0.18)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // track 2: sliding — every other 1-min-slide window, starting 0,2,4,6,8
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('sliding', 8, 154);
+    var starts = [0, 2, 4, 6, 8];
+    for (var i = 0; i < starts.length; i++) {
+        rrectPath(ctx, px(starts[i]), 125 + i * 8, 5 * 40, 18, 6);
+        ctx.fillStyle = 'rgba(25,158,112,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // track 3: session — clusters minutes 1-4 and 7-13
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('session', 8, 229);
+    var sessions = [[1, 4], [7, 13]];
+    for (var i = 0; i < sessions.length; i++) {
+        rrectPath(ctx, px(sessions[i][0]), 205, (sessions[i][1] - sessions[i][0]) * 40, 40, 6);
+        ctx.fillStyle = 'rgba(201,133,0,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.yellow; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3-min gap', px(5.5), 228);
+
+    // event dots on every track midline
+    var events = [1, 2, 3, 4, 7, 8, 9, 11, 12, 13];
+    var mids = [75, 150, 225];
+    ctx.fillStyle = P.text;
+    for (var t = 0; t < mids.length; t++) {
+        for (var i = 0; i < events.length; i++) {
+            ctx.beginPath(); ctx.arc(px(events[i]), mids[t], 4, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one order, five sliding windows (every other shown)', 712, 118);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order times illustrative', w - 12, h - 8);
+});
+
+// c2: placed (event time) vs arrived (processing time) with watermark staircase
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Clocks per Order: Placed (y) vs Arrived (x)', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 185;
+    function px(m) { return ox + m / 15 * pw; }
+    function py(m) { return baseY - m / 15 * ph; }
+
+    // gridlines + tick labels on both axes
+    var ticks = [0, 5, 10, 15];
+    var tickLabs = ['12:00', '12:05', '12:10', '12:15'];
+    for (var i = 0; i < ticks.length; i++) {
+        if (ticks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(px(ticks[i]), baseY - ph); ctx.lineTo(px(ticks[i]), baseY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(ox, py(ticks[i])); ctx.lineTo(ox + pw, py(ticks[i])); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], px(ticks[i]), baseY + 18);
+        ctx.textAlign = 'right';
+        ctx.fillText(tickLabs[i], ox - 8, py(ticks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // axis labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('arrival (processing time)', 300, 281);
+    ctx.save();
+    ctx.translate(16, baseY - ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('placed (event time)', 0, 0);
+    ctx.restore();
+
+    // on-time diagonal (event time = arrival time)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(px(0), py(0)); ctx.lineTo(px(15), py(15)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.save();
+    ctx.translate(px(4.5), py(4.5) - 8);
+    ctx.rotate(Math.atan2(-ph, pw));
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('on time', 0, 0);
+    ctx.restore();
+
+    // window-close marker at event time 12:05 from arrival 12:08 rightward
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(8), py(5)); ctx.lineTo(ox + pw, py(5)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('watermark passes 12:05 at arrival 12:08 — window fires (count 4)', ox + pw - 2, py(5) - 7);
+
+    // watermark staircase: max placed so far minus 2 minutes
+    var wm = [[1, -1], [2, 0], [3, 1], [6, 4], [8, 5], [9, 7], [11, 9], [14, 12]];
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ox, baseY - ph, pw, ph); ctx.clip();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(px(wm[0][0]), py(wm[0][1]));
+    for (var i = 1; i < wm.length; i++) {
+        ctx.lineTo(px(wm[i][0]), py(wm[i - 1][1]));
+        ctx.lineTo(px(wm[i][0]), py(wm[i][1]));
+    }
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('watermark = max placed − 2 min', px(11.3), py(9) - 8);
+
+    // order dots: [arrival, placed]; late ones labeled D, G, J
+    var pts = [[1, 1], [2, 2], [3, 3], [7, 4], [6, 6], [8, 7], [10, 4], [9, 9], [11, 11], [14, 4]];
+    var late = { 3: 'D', 6: 'G', 9: 'J' };
+    for (var i = 0; i < pts.length; i++) {
+        var isLate = late.hasOwnProperty(String(i));
+        ctx.fillStyle = isLate ? P.orange : P.blue;
+        ctx.beginPath(); ctx.arc(px(pts[i][0]), py(pts[i][1]), 5, 0, Math.PI * 2); ctx.fill();
+        if (isLate) {
+            ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(late[String(i)], px(pts[i][0]) + 8, py(pts[i][1]) + 4);
+        }
+    }
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times illustrative; watermark delay fixed at 2 min', w - 12, h - 8);
+});
+
+// c3: same ten orders bucketed by processing time vs event time
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Ten Orders, Two Clocks, Different Histories', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 560, ph = 180;
+    function py(v) { return baseY - v / 6 * ph; }
+
+    // gridlines + y labels
+    var grid = [2, 4, 6];
+    for (var i = 0; i < grid.length; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var centers = [180, 370, 560];
+    var groupLabs = ['12:00–12:05', '12:05–12:10', '12:10–12:15'];
+    var procCounts = [3, 4, 3];
+    var eventCounts = [6, 3, 1];
+    var bw = 52;
+
+    for (var g = 0; g < 3; g++) {
+        var cx = centers[g];
+        // processing-time bar (left of center)
+        var xP = cx - bw - 6, topP = py(procCounts[g]);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(xP, topP, bw, baseY - topP);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(xP, topP, bw, baseY - topP);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(procCounts[g]), xP + bw / 2, topP - 7);
+        // event-time bar (right of center)
+        var xE = cx + 6, topE = py(eventCounts[g]);
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(xE, topE, bw, baseY - topE);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(xE, topE, bw, baseY - topE);
+        ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(eventCounts[g]), xE + bw / 2, topE - 7);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(groupLabs[g], cx, baseY + 18);
+    }
+
+    // legend (top right)
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fillRect(430, 34, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(430, 34, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('by arrival (processing time)', 448, 44);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)'; ctx.fillRect(430, 52, 12, 12);
+    ctx.strokeStyle = P.green; ctx.strokeRect(430, 52, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('by placed (event time)', 448, 62);
+
+    // annotation above the first group
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('half the 12:00–12:05 orders arrived late', 78, 44);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same 10 illustrative orders as above; totals match (10 = 10)', w - 12, h - 8);
+});
+
+// c4: lifecycle of window 12:00-12:05 — open, fire, late update, state deleted, drop
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Window\'s Life: Fire at 4, Update to 5, Drop the Rest', w / 2, 24);
+
+    function px(min) { return 60 + min * 40; } // arrival 12:00-12:15 -> 60-660
+    var axisY = 170;
+
+    // phase bands (behind the axis)
+    var bands = [
+        { a: 0, b: 8, fill: 'rgba(42,120,214,0.18)', border: P.blue, bw: 2, lines: ['window open'] },
+        { a: 8, b: 11, fill: 'rgba(201,133,0,0.18)', border: P.yellow, bw: 2, lines: ['allowed lateness', '(3 min)'] },
+        { a: 11, b: 15, fill: 'rgba(107,114,128,0.12)', border: P.mute, bw: 1, lines: ['state deleted'] }
+    ];
+    for (var i = 0; i < bands.length; i++) {
+        var b = bands[i];
+        rrectPath(ctx, px(b.a), 90, (b.b - b.a) * 40, 60, 6);
+        ctx.fillStyle = b.fill; ctx.fill();
+        ctx.strokeStyle = b.border; ctx.lineWidth = b.bw; ctx.stroke();
+        ctx.fillStyle = b.border; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        var midX = px((b.a + b.b) / 2);
+        if (b.lines.length === 1) ctx.fillText(b.lines[0], midX, 124);
+        else {
+            ctx.fillText(b.lines[0], midX, 116);
+            ctx.fillText(b.lines[1], midX, 132);
+        }
+    }
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px(0), axisY); ctx.lineTo(px(15), axisY); ctx.stroke();
+
+    // tick labels
+    var ticks = [0, 5, 8, 10, 14, 15];
+    var tickLabs = ['12:00', '12:05', '12:08', '12:10', '12:14', '12:15'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) ctx.fillText(tickLabs[i], px(ticks[i]), axisY + 18);
+
+    // fire marker at minute 8
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px(8), 78); ctx.lineTo(px(8), axisY); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('watermark passes 12:05 — fires count = 4', px(8), 70);
+
+    // late update marker: G at minute 10
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(px(10), axisY, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('G arrives — count updates to 5', px(10), 205);
+
+    // drop marker: J at minute 14
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(px(14), axisY, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', px(14), 160);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('J arrives — window gone, dropped', 705, 225);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('true count was 6; the stream never promised you\'d see it', px(2), 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('watermark delay 2 min, allowed lateness 3 min — both illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

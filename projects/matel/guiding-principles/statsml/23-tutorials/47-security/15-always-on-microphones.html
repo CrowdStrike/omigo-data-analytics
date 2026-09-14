@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Always-On Microphones</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Always-On Microphones</h1>
+<p class="subtitle">A wake word means the microphone never stops listening &mdash; what gets kept, sent, and reviewed is a separate question from what gets answered</p>
+
+<div class="card-section">
+    <h2>The Speaker on the Kitchen Counter</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">wake word buffer</span><span class="tag green">on-device</span></div>
+                <ul>
+                    <li><b>The counter</b> — Alice's voice-controlled speaker sits by the kettle and replies only after "hey, assistant"</li>
+                    <li><b>Always processing</b> — to catch those two words it must push audio through a detector every second of the day</li>
+                    <li><b>The rolling buffer</b> — only a few seconds of audio exist on the device at once, each second overwriting the last</li>
+                    <li><b>The local test</b> — a small model on the chip scores that buffer for the wake word, with no network involved</li>
+                    <li><b>Then it leaves</b> — on a match, the clip from just before the phrase through the request is sent onward</li>
+                    <li><b>Wake word, defined</b> — a fixed phrase a device detects locally to decide when to start sending audio somewhere</li>
+                    <li><b>Two questions</b> — "is it listening?" and "what is kept?" have different answers and very different risks</li>
+                </ul>
+                <p class="example">Bob says "hey, assistant, timer for ten minutes"; the buffer holds a few seconds, the match fires, and only that clip travels.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Continuous listening is a design requirement of any wake word — it is not evidence that everything is recorded, and the buffer is overwritten in place unless a match fires.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting a Day of Captures</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">base rate</span></div>
+                <ul>
+                    <li><b>Setup</b> — Alice's household says the wake word 20 times a day; the room produces 2,000 other utterances</li>
+                    <li><b>False-accept rate</b> — assume 0.5% of those non-wake utterances sound close enough to trip the detector</li>
+                    <li><b>Hand-check</b> — 2,000 × 0.005 = 10 false triggers a day, each capturing whatever was being said next</li>
+                    <li><b>Confusion matrix</b> — 20 true accepts, 0 missed, 10 false accepts, 1,990 correctly ignored, 2,020 in total</li>
+                    <li><b>Precision</b> — 20 ÷ (20 + 10) = 66.7%, so roughly 1 in 3 captured clips was never meant for the device</li>
+                    <li><b>Assumption</b> — every genuine wake word is detected (recall 100%), which flatters the device, not the risk</li>
+                    <li><b>Over a year</b> — 10 × 365 = 3,650 unintended clips, alongside 20 × 365 = 7,300 intended ones</li>
+                    <li><b>Same shape as a screening test</b> — 99.5% specificity still yields mostly false positives when hits are rare</li>
+                </ul>
+                <p class="example">Only 0.99% of what the room says is the wake word (20 of 2,020), which is exactly why a 0.5% error on the other 2,000 dominates the captures (all figures illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Treat the wake word as a binary classifier — with a rare positive class, even a very low false-accept rate makes a third of all captures unintended.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What Survives After the Clip Is Sent</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">retention</span><span class="tag green">hardware mute</span></div>
+                <ul>
+                    <li><b>The buffer is the good part</b> — audio that never matches is overwritten in place and never leaves the room</li>
+                    <li><b>Once sent, it persists</b> — a matched clip can be stored, transcribed, and held under a retention policy</li>
+                    <li><b>Human review</b> — samples of clips are listened to by people to grade and improve the detector's accuracy</li>
+                    <li><b>Transcripts are data</b> — stored text answers subpoenas, discovery, and breaches like any other database table</li>
+                    <li><b>False accepts compound</b> — 3,650 unintended clips a year is 3,650 chances for a private sentence to be kept</li>
+                    <li><b>Software toggle</b> — a "stop listening" setting asks the software to stand down; a bug or update can undo it</li>
+                    <li><b>Hardware mute</b> — a switch that physically cuts the microphone circuit is a stronger control than any setting</li>
+                    <li><b>Where you meet it</b> — reviewing a voice product's data flow, or answering "what audio do we actually hold?"</li>
+                </ul>
+                <p class="example">Ask for the deletion path before the capture path — the kitchen's real risk lives in what was retained, not in what the buffer momentarily heard.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The privacy question is retention, not attention — what is kept, transcribed, and reviewed after a match, and for how long.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Listening Is Not the Same as Sending</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">honest framing</span></div>
+                <ul>
+                    <li><b>Two claims</b> — "it is always listening" is true by design; "it is always recording and sending" is a different claim</li>
+                    <li><b>Why conflating hurts</b> — the overstated version is easy to refute, and the refutation buries the real exposure</li>
+                    <li><b>Real exposure one</b> — false-accept captures: 10 clips a day that nobody in the kitchen addressed to the device</li>
+                    <li><b>Real exposure two</b> — retention of the clips that were legitimately sent, plus every transcript derived from them</li>
+                    <li><b>Not the exposure</b> — a permanent secret upload of the room; that is not how wake-word detection is built</li>
+                    <li><b>How to check</b> — read the documented data flow and retention terms, and test what the mute switch physically cuts</li>
+                    <li><b>Ask for numbers</b> — false-accept rates are rarely published, so treat any figure you compute as illustrative</li>
+                </ul>
+                <p class="example">Alice's 24 hours: the detector runs the whole time, 20 clips leave on purpose, and 10 leave by accident (illustrative).</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Arguing over whether the device "records everything" — measure the false-accept rate and the retention window instead, because those are the quantities that carry the risk.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBoxTL(ctx, x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: pipeline — mic -> rolling buffer -> local wake test; match crosses the device boundary
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where Audio Does and Does Not Leave the Kitchen', w / 2, 24);
+
+    // microphone
+    roundBoxTL(ctx, 40, 110, 100, 58, 8, 'rgba(25,158,112,0.15)', P.aqua);
+    ctx.textAlign = 'center';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('microphone', 90, 136);
+    ctx.font = '11px system-ui';
+    ctx.fillText('always on', 90, 154);
+
+    // rolling buffer
+    roundBoxTL(ctx, 156, 110, 134, 58, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('rolling buffer', 223, 136);
+    ctx.font = '11px system-ui';
+    ctx.fillText('a few seconds', 223, 154);
+
+    // wake word test
+    roundBoxTL(ctx, 306, 108, 104, 62, 8, 'rgba(74,58,167,0.15)', P.violet);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('wake word', 358, 134);
+    ctx.fillText('match?', 358, 152);
+
+    // chain arrows
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(140, 139); ctx.lineTo(152, 139); ctx.stroke();
+    arrowHead(ctx, 156, 139, 0, 10, P.mute);
+    ctx.beginPath(); ctx.moveTo(290, 139); ctx.lineTo(302, 139); ctx.stroke();
+    arrowHead(ctx, 306, 139, 0, 10, P.mute);
+
+    // device boundary
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(430, 46); ctx.lineTo(430, 250); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('device boundary', 430, 40);
+
+    // right-hand destinations
+    var dests = [
+        { y: 56,  fill: 'rgba(217,89,38,0.15)',  border: P.orange,  label: 'clip sent to the assistant' },
+        { y: 124, fill: 'rgba(213,81,129,0.15)', border: P.magenta, label: 'transcript stored' },
+        { y: 192, fill: 'rgba(201,133,0,0.18)',  border: P.yellow,  label: 'sample reviewed by people' }
+    ];
+    for (var i = 0; i < dests.length; i++) {
+        roundBoxTL(ctx, 456, dests[i].y, 226, 50, 8, dests[i].fill, dests[i].border);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(dests[i].label, 569, dests[i].y + 30);
+    }
+
+    // match arrow across the boundary
+    var ang = Math.atan2(84 - 130, 452 - 410);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(410, 130); ctx.lineTo(452, 84); ctx.stroke();
+    arrowHead(ctx, 456, 80, ang, 10, P.green);
+    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('yes', 432, 118);
+
+    // vertical arrows down the destination chain
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    var vs = [[106, 120], [174, 188]];
+    for (var j = 0; j < vs.length; j++) {
+        ctx.beginPath(); ctx.moveTo(569, vs[j][0]); ctx.lineTo(569, vs[j][1]); ctx.stroke();
+        arrowHead(ctx, 569, vs[j][1] + 4, Math.PI / 2, 9, P.mute);
+    }
+
+    // no-match return path back into the buffer
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(358, 170); ctx.lineTo(358, 205); ctx.lineTo(223, 205); ctx.lineTo(223, 172);
+    ctx.stroke();
+    arrowHead(ctx, 223, 168, -Math.PI / 2, 9, P.green);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('no match → buffer overwritten', 290, 224);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'left';
+    ctx.fillText('listening is continuous; crossing the boundary is not', 40, 272);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('buffer length illustrative', w - 12, h - 8);
+});
+
+// c2: confusion matrix for one day of utterances; precision computed at render time
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var TP = 20, FN = 0, FP = 10, TN = 1990;
+    var captured = TP + FP;              // 30
+    var notCaptured = FN + TN;           // 1990
+    var precision = 100 * TP / captured; // 66.666...
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Day of Utterances: ' + captured + ' Captures, Only ' + TP + ' Intended', w / 2, 24);
+
+    var gx = 180, gy = 80, cw = 170, ch = 64;
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('what the device did', 350, 50);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('captured', gx + cw / 2, 72);
+    ctx.fillText('not captured', gx + cw + cw / 2, 72);
+
+    var cells = [
+        { col: 0, row: 0, val: '20',    sub: 'true accept',       fill: 'rgba(0,131,0,0.18)',     border: P.green },
+        { col: 1, row: 0, val: '0',     sub: 'missed wake word',  fill: 'rgba(107,114,128,0.10)', border: P.mute },
+        { col: 0, row: 1, val: '10',    sub: 'false accept',      fill: 'rgba(217,89,38,0.20)',   border: P.orange },
+        { col: 1, row: 1, val: '1,990', sub: 'correctly ignored', fill: 'rgba(42,120,214,0.12)',  border: P.blue }
+    ];
+    for (var i = 0; i < cells.length; i++) {
+        var c = cells[i];
+        var x = gx + c.col * cw, y = gy + c.row * ch;
+        ctx.fillStyle = c.fill; ctx.fillRect(x, y, cw, ch);
+        ctx.strokeStyle = c.border; ctx.lineWidth = 2; ctx.strokeRect(x, y, cw, ch);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 17px system-ui'; ctx.fillStyle = c.border;
+        ctx.fillText(c.val, x + cw / 2, y + 28);
+        ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+        ctx.fillText(c.sub, x + cw / 2, y + 48);
+    }
+
+    // row labels
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'right';
+    ctx.fillText('wake word said', 172, 116);
+    ctx.fillText('no wake word', 172, 180);
+
+    // row totals
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('= ' + (TP + FN) + ' wake', 530, 116);
+    ctx.fillText('= ' + (FP + TN).toLocaleString('en-US') + ' other', 530, 180);
+
+    // column totals
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText(captured + ' captured', gx + cw / 2, 228);
+    ctx.fillText(notCaptured.toLocaleString('en-US') + ' not captured', gx + cw + cw / 2, 228);
+
+    // annotation computed from the counts
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('precision = ' + TP + '/' + captured + ' = ' + precision.toFixed(1) +
+                 '% — 1 in ' + (captured / FP).toFixed(0) + ' captures unintended', 350, 258);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 12, h - 8);
+});
+
+// c3: a year of captures splitting intended vs unintended, feeding retention destinations
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var intended = 7300, unintended = 3650;
+    var total = intended + unintended;   // 10950
+    var barW = 600, barX = 60, barY = 88, barH = 46;
+    var wIntended = barW * intended / total;     // 400
+    var wUnintended = barW * unintended / total; // 200
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Year of Captures: ' + total.toLocaleString('en-US') + ' Clips, ' +
+                 unintended.toLocaleString('en-US') + ' Never Meant for the Device', w / 2, 24);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('20 intended + 10 false accepts per day × 365 days', 60, 76);
+
+    // stacked bar
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(barX, barY, wIntended, barH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(barX, barY, wIntended, barH);
+    ctx.fillStyle = 'rgba(217,89,38,0.30)';
+    ctx.fillRect(barX + wIntended, barY, wUnintended, barH);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(barX + wIntended, barY, wUnintended, barH);
+
+    ctx.textAlign = 'center'; ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = P.ink;
+    ctx.fillText(intended.toLocaleString('en-US') + ' intended', barX + wIntended / 2, barY + 29);
+    ctx.fillStyle = P.orange;
+    ctx.fillText(unintended.toLocaleString('en-US') + ' unintended', barX + wIntended + wUnintended / 2, barY + 29);
+
+    // destinations
+    var reviewed = Math.round(total * 0.01); // 110
+    var boxes = [
+        { x: 60,  fill: 'rgba(213,81,129,0.13)', border: P.magenta, l1: 'stored as transcripts',     l2: 'kept per retention policy' },
+        { x: 265, fill: 'rgba(201,133,0,0.16)',  border: P.yellow,  l1: 'sampled for human review',  l2: '≈' + reviewed + ' clips at a 1% sample' },
+        { x: 470, fill: 'rgba(74,58,167,0.13)',  border: P.violet,  l1: 'legal requests & breaches', l2: 'same as any stored data' }
+    ];
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        roundBoxTL(ctx, b.x, 170, 190, 58, 8, b.fill, b.border);
+        ctx.textAlign = 'center';
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+        ctx.fillText(b.l1, b.x + 95, 194);
+        ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+        ctx.fillText(b.l2, b.x + 95, 212);
+        // arrow from bar down to the box
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(b.x + 95, 134); ctx.lineTo(b.x + 95, 164); ctx.stroke();
+        arrowHead(ctx, b.x + 95, 168, Math.PI / 2, 9, P.mute);
+    }
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('a hardware mute cuts the mic; a software toggle only asks', 60, 262);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('counts and sample rate illustrative', w - 12, h - 8);
+});
+
+// c4: one-day timeline — continuous local listening, 20 intended sends, 10 false accepts
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var intendedHours = [7.1, 7.4, 7.8, 8.2, 8.6, 12.1, 12.5, 13.0, 17.2, 17.6,
+                         18.0, 18.3, 18.7, 19.1, 19.4, 19.8, 20.2, 20.6, 21.1, 21.5];
+    var falseHours = [6.9, 9.3, 11.2, 14.5, 15.8, 16.4, 19.6, 20.9, 22.3, 23.1];
+
+    function tx(t) { return 60 + (t / 24) * 620; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Day on the Counter: Listening All Day, Sending ' +
+                 (intendedHours.length + falseHours.length) + ' Slivers', w / 2, 24);
+
+    // listening band
+    ctx.fillStyle = 'rgba(107,114,128,0.12)';
+    ctx.fillRect(60, 120, 620, 34);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+    ctx.strokeRect(60, 120, 620, 34);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('detector runs locally — nothing leaves', 72, 142);
+
+    // intended ticks above the band
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    for (var i = 0; i < intendedHours.length; i++) {
+        var x1 = tx(intendedHours[i]);
+        ctx.beginPath(); ctx.moveTo(x1, 118); ctx.lineTo(x1, 98); ctx.stroke();
+    }
+    // false-accept ticks below the band
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    for (var j = 0; j < falseHours.length; j++) {
+        var x2 = tx(falseHours[j]);
+        ctx.beginPath(); ctx.moveTo(x2, 156); ctx.lineTo(x2, 176); ctx.stroke();
+    }
+
+    // legends
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = P.blue;
+    ctx.fillText(intendedHours.length + ' intended wake-word captures', 60, 90);
+    ctx.fillStyle = P.orange;
+    ctx.fillText(falseHours.length + ' false accepts — a private sentence gets sent', 60, 196);
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(60, 214); ctx.lineTo(680, 214); ctx.stroke();
+    var ticks = [[0, '12am'], [6, '6am'], [12, 'noon'], [18, '6pm'], [24, '12am']];
+    ctx.textAlign = 'center';
+    for (var k = 0; k < ticks.length; k++) {
+        var xt = tx(ticks[k][0]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(xt, 214); ctx.lineTo(xt, 220); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444';
+        ctx.fillText(ticks[k][1], xt, 232);
+    }
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'left';
+    ctx.fillText('always listening ≠ always sending — the risk is the ' + falseHours.length, 60, 262);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('timing illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

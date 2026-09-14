@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CI/CD Pipeline Compromise</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>CI/CD Pipeline Compromise</h1>
+<p class="subtitle">The build server holds more secrets than any developer, and runs whatever the config file says &mdash; including a line added last night</p>
+
+<div class="card-section">
+    <h2>One Pipeline, Three Kinds of Keys</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">build-server secrets</span><span class="tag green">defensive</span></div>
+                <ul>
+                    <li><b>The pipeline</b> — a build runs on every push: it compiles, tests, deploys, publishes, and signs the release</li>
+                    <li><b>Why it holds keys</b> — it cannot deploy without deploy credentials, publish without a publishing token, or sign without the signing key</li>
+                    <li><b>The config file</b> — what the build does is defined by a file inside the repository, so changing it is an ordinary code change</li>
+                    <li><b>The inversion</b> — the most privileged component the team runs is also the one whose instructions are easiest to edit</li>
+                    <li><b>Effective privilege</b> — anyone who can merge that file can, in effect, run code as the build with all of its credentials</li>
+                    <li><b>Secrets by design</b> — steps read secrets to work, so a step that prints or transmits one exfiltrates it, and build logs are widely readable</li>
+                    <li><b>Review asymmetry</b> — reviewers read application code line by line and skim build configuration</li>
+                    <li><b>Cache carry-over</b> — a tampered cache entry or artifact persists, so one bad build can influence later clean ones</li>
+                </ul>
+                <p class="example">Alice opens a routine pull request; the only file it touches is the pipeline config, and it clears review in two minutes (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The pipeline's effective privilege is the union of everything it can deploy to, publish to, and sign — while its access control is whatever governs a routine merge.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Union Against the Reviewers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">privilege union</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>The holdings</b> — credentials for 3 deploy environments, 2 package registries, and 1 signing key: 3 + 2 + 1 = 6 capabilities</li>
+                    <li><b>The best-placed human</b> — the most privileged individual developer holds credentials for 1 environment, so 6 / 1 = 6x</li>
+                    <li><b>Who can change it</b> — 45 engineers can merge to the repository, so 45 people can alter what the pipeline runs</li>
+                    <li><b>Who holds production</b> — only 3 engineers hold production deploy credentials directly: 45 / 3 = 15x more people with effective reach</li>
+                    <li><b>The share</b> — direct holders are 3 / 45 = 6.7% of the population that can change the build's behaviour</li>
+                    <li><b>Reach of one artifact</b> — the 2 registries feed 30 internal services, so 1 poisoned build reaches 30 services: 30 / 1</li>
+                    <li><b>Why it is supply-chain scale</b> — the fan-out, not the single break-in, turns one bad build into a fleet-wide event</li>
+                    <li><b>Assumptions</b> — one team, each capability counted once, and every merger assumed able to touch the config file</li>
+                </ul>
+                <p class="example">Alice's team restricts production deploys to 3 people, yet 45 people can edit the file that tells the build how to deploy (counts illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 6 capabilities sit behind a routine merge that 45 people can perform — the privilege is centralized, the authority to redirect it is not.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Sealing the Untrusted Trigger, Scoping the Rest</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">defenses</span><span class="tag orange">least privilege</span></div>
+                <ul>
+                    <li><b>Split the triggers</b> — builds from an outside fork's pull request run with no secrets; only trusted branches get privileged builds</li>
+                    <li><b>Why that is sharpest</b> — otherwise an outsider's code executes in a context holding all 6 capabilities</li>
+                    <li><b>Scope per step</b> — give each job only the one environment it needs instead of exposing the full set to every job</li>
+                    <li><b>Short-lived credentials</b> — a credential issued for one build and expiring with it beats a long-lived stored secret</li>
+                    <li><b>Guard the config</b> — the pipeline file is the highest-privilege file in the repository, so require review by a designated group</li>
+                    <li><b>Ephemeral runners</b> — single-use machines, so no cache, checkout, or leftover state survives a job for the next one</li>
+                    <li><b>Pin build plugins</b> — the actions and plugins a build imports execute inside the privileged context too</li>
+                    <li><b>Log the access</b> — alert on secret reads and on any change to the pipeline definition</li>
+                </ul>
+                <p class="example">A fork's pull request is still compiled and tested — it just runs sealed, with nothing available to steal (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Keep the pipeline's own authority narrower than the union of what the team can do, and never hand secrets to a build triggered by code nobody has reviewed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Signature Names the Producer, Not Its Integrity</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">signing</span></div>
+                <ul>
+                    <li><b>The habit</b> — production servers are hardened and audited; the build system is filed under developer tooling</li>
+                    <li><b>The contradiction</b> — that tooling writes to production by design, so it sits inside the trust boundary, not beside it</li>
+                    <li><b>The signing error</b> — "our releases are signed, so they are trustworthy" confuses the producer with the producer's integrity</li>
+                    <li><b>What a signature proves</b> — this artifact came from our pipeline; it says nothing about what the pipeline was told to do</li>
+                    <li><b>The consequence</b> — a subverted pipeline emits validly signed, verifiably wrong artifacts, and every signature check passes</li>
+                    <li><b>The fan-out</b> — one such artifact travels through 2 registries into 30 consuming services before anyone looks twice</li>
+                    <li><b>The better question</b> — not "is it signed?" but "was the build that signed it doing what we intended?"</li>
+                </ul>
+                <p class="example">Every consuming service verifies the signature, every verification succeeds, and all 30 install the same wrong artifact (illustrative).</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the build system as developer tooling and a valid signature as proof of integrity. Signing attests to the producer; if the pipeline was subverted, every artifact it emits is validly signed and wrong.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBoxTL(ctx, x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, width, headSize) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    arrowHead(ctx, x2, y2, ang, headSize, color);
+}
+
+// c1: privilege-union diagram — pipeline at centre holding 6 capabilities, individuals hold 1 each
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Pipeline Holds 6 Capabilities; The Top Developer Holds 1', w / 2, 24);
+
+    // left header
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('individual developers', 30, 48);
+
+    // developer boxes
+    var devs = [
+        { y: 60,  name: 'Alice', cap: 'deploy env 1 (1)' },
+        { y: 118, name: 'Bob',   cap: 'deploy env 2 (1)' }
+    ];
+    for (var i = 0; i < devs.length; i++) {
+        roundBoxTL(ctx, 30, devs[i].y, 160, 44, 8, 'rgba(42,120,214,0.15)', P.blue);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.text;
+        ctx.fillText(devs[i].name, 110, devs[i].y + 19);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+        ctx.fillText(devs[i].cap, 110, devs[i].y + 36);
+    }
+
+    // left annotations
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta;
+    ctx.fillText('max per person: 1', 30, 198);
+    ctx.fillText('6 / 1 = 6x', 30, 218);
+
+    // centre pipeline box
+    roundBoxTL(ctx, 225, 115, 140, 70, 8, 'rgba(74,58,167,0.15)', P.violet);
+    ctx.textAlign = 'center';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('runs on every push', 295, 104);
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet;
+    ctx.fillText('the build', 295, 143);
+    ctx.fillText('pipeline', 295, 161);
+
+    // capability boxes
+    var caps = [
+        { y: 42,  label: 'deploy → environment 1',   fill: 'rgba(0,131,0,0.13)',    border: P.green },
+        { y: 76,  label: 'deploy → environment 2',   fill: 'rgba(0,131,0,0.13)',    border: P.green },
+        { y: 110, label: 'deploy → environment 3',   fill: 'rgba(0,131,0,0.13)',    border: P.green },
+        { y: 144, label: 'publish → package registry 1', fill: 'rgba(217,89,38,0.13)', border: P.orange },
+        { y: 178, label: 'publish → package registry 2', fill: 'rgba(217,89,38,0.13)', border: P.orange },
+        { y: 212, label: 'sign → release signing key',   fill: 'rgba(213,81,129,0.13)', border: P.magenta }
+    ];
+    for (var j = 0; j < caps.length; j++) {
+        arrowLine(ctx, 365, 150, 416, caps[j].y + 14, P.violet, 2, 8);
+    }
+    for (var k = 0; k < caps.length; k++) {
+        roundBoxTL(ctx, 420, caps[k].y, 270, 28, 6, caps[k].fill, caps[k].border);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(caps[k].label, 555, caps[k].y + 18);
+    }
+
+    // right annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('union = 6 privileged capabilities', 555, 262);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('capability counts illustrative', w - 12, h - 8);
+});
+
+// c2: population comparison — 45 who can change the pipeline vs 3 who hold deploy credentials
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('45 Can Change What the Build Runs; 3 Hold Deploy Credentials', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 50, barW = 90;
+
+    var yTicks = [10, 20, 30, 40, 50];
+    for (var i = 0; i < yTicks.length; i++) {
+        var gy = baseY - yTicks[i] / yMax * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), 54, gy + 4);
+    }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 210, value: 45, fill: 'rgba(213,81,129,0.30)', border: P.magenta,
+          valLab: '45 engineers', l1: 'can merge to the repo', l2: '(= can change the pipeline)' },
+        { cx: 450, value: 3,  fill: 'rgba(0,131,0,0.35)',    border: P.green,
+          valLab: '3 engineers',  l1: 'hold production deploy', l2: 'credentials directly' }
+    ];
+
+    for (var b = 0; b < bars.length; b++) {
+        var bar = bars[b];
+        var hpx = bar.value / yMax * ph;          // computed from the value, not hardcoded
+        var top = baseY - hpx;
+        ctx.fillStyle = bar.fill;
+        ctx.fillRect(bar.cx - barW / 2, top, barW, hpx);
+        ctx.strokeStyle = bar.border; ctx.lineWidth = 2;
+        ctx.strokeRect(bar.cx - barW / 2, top, barW, hpx);
+
+        ctx.font = 'bold 13px system-ui'; ctx.fillStyle = bar.border; ctx.textAlign = 'center';
+        ctx.fillText(bar.valLab, bar.cx, top - 10);
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444';
+        ctx.fillText(bar.l1, bar.cx, baseY + 18);
+        ctx.fillText(bar.l2, bar.cx, baseY + 34);
+    }
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta;
+    ctx.fillText('45 / 3 = 15x more people', 300, 80);
+    ctx.fillStyle = P.ink;
+    ctx.fillText('3 / 45 = 6.7% hold it directly', 300, 102);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('headcounts illustrative', w - 12, h - 6);
+});
+
+// c3: two-lane flow — trusted branch gets scoped secrets, fork PR gets none
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Separate the Triggers: Untrusted Builds Get No Secrets', w / 2, 24);
+
+    var lanes = [
+        {
+            labelY: 52, boxY: 60, color: P.green, fill: 'rgba(0,131,0,0.13)',
+            label: 'trusted branch — privileged build',
+            boxes: [
+                { x: 30,  w: 170, l1: 'push to a trusted',    l2: 'branch' },
+                { x: 250, w: 200, l1: 'build with scoped,',   l2: 'short-lived secrets' },
+                { x: 490, w: 200, l1: 'may deploy, publish,', l2: 'and sign' }
+            ]
+        },
+        {
+            labelY: 178, boxY: 186, color: P.blue, fill: 'rgba(42,120,214,0.13)',
+            label: 'fork pull request — sealed build',
+            boxes: [
+                { x: 30,  w: 170, l1: 'pull request from',  l2: 'an outside fork' },
+                { x: 250, w: 200, l1: 'build with NO',      l2: 'secrets attached' },
+                { x: 490, w: 200, l1: 'test results only,', l2: 'no deploy, no publish' }
+            ]
+        }
+    ];
+
+    for (var i = 0; i < lanes.length; i++) {
+        var lane = lanes[i];
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = lane.color; ctx.textAlign = 'left';
+        ctx.fillText(lane.label, 30, lane.labelY);
+
+        var midY = lane.boxY + 26;
+        arrowLine(ctx, 200, midY, 246, midY, lane.color, 2, 8);
+        arrowLine(ctx, 450, midY, 486, midY, lane.color, 2, 8);
+
+        for (var j = 0; j < lane.boxes.length; j++) {
+            var bx = lane.boxes[j];
+            roundBoxTL(ctx, bx.x, lane.boxY, bx.w, 52, 8, lane.fill, lane.color);
+            ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+            ctx.fillText(bx.l1, bx.x + bx.w / 2, lane.boxY + 22);
+            ctx.fillText(bx.l2, bx.x + bx.w / 2, lane.boxY + 39);
+        }
+    }
+
+    // divider
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(20, 150); ctx.lineTo(700, 150); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('same repository, two privilege classes', 360, 272);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative configuration', w - 12, h - 6);
+});
+
+// c4: fan-out — 1 subverted build -> 2 registries -> 30 services, all validly signed
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Subverted Build → 2 Registries → 30 Services, All Validly Signed', w / 2, 24);
+
+    // arrows first so boxes sit on top
+    arrowLine(ctx, 180, 153, 246, 102, '#e74c3c', 2, 8);
+    arrowLine(ctx, 180, 153, 246, 182, '#e74c3c', 2, 8);
+    arrowLine(ctx, 400, 102, 452, 140, P.orange, 2, 8);
+    arrowLine(ctx, 400, 182, 452, 160, P.orange, 2, 8);
+
+    // build box
+    roundBoxTL(ctx, 30, 125, 150, 56, 8, 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.textAlign = 'center';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('1 subverted build', 105, 148);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('validly signed', 105, 167);
+
+    // registries
+    var regs = [
+        { y: 80,  label: 'package registry 1' },
+        { y: 160, label: 'package registry 2' }
+    ];
+    for (var i = 0; i < regs.length; i++) {
+        roundBoxTL(ctx, 250, regs[i].y, 150, 44, 8, 'rgba(217,89,38,0.13)', P.orange);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(regs[i].label, 325, regs[i].y + 27);
+    }
+
+    // 30 service dots in a 6x5 grid
+    for (var row = 0; row < 5; row++) {
+        for (var col = 0; col < 6; col++) {
+            var dx = 470 + col * 40;
+            var dy = 70 + row * 38;
+            ctx.fillStyle = 'rgba(42,120,214,0.75)';
+            ctx.beginPath(); ctx.arc(dx, dy, 6, 0, 2 * Math.PI); ctx.fill();
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+        }
+    }
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('30 consuming services', 570, 258);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('the signature proves WHO built it —', 30, 248);
+    ctx.fillText('not whether the build did what you intended', 30, 266);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('service counts illustrative', w - 12, h - 6);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+</script>
+
+</body>
+</html>

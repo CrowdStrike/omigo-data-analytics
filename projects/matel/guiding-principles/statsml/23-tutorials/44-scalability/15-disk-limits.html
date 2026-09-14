@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disk Limits</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Disk Limits</h1>
+<p class="subtitle">A disk can stop you three different ways &mdash; full of bytes, out of I/O operations, or out of inodes &mdash; and "disk is fine" needs three different checks</p>
+
+<div class="card-section">
+    <h2>The Database With Plenty of Disk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">three limits</span><span class="tag orange">storage</span></div>
+                <ul>
+                    <li><b>The server</b> &mdash; an orders database sits on a 500 GB cloud volume; the dashboard shows 220 GB used (44%)</li>
+                    <li><b>The stall</b> &mdash; at 9am queries that took 5 ms start taking 400 ms; on-call checks disk: "44% used, disk is fine"</li>
+                    <li><b>Limit 1: bytes</b> &mdash; capacity fills with logs, temp files, old snapshots; at 100% databases crash or go read-only</li>
+                    <li><b>Limit 2: operations</b> &mdash; every volume has an IOPS ceiling; hit it and reads queue even with space free</li>
+                    <li><b>Limit 3: inodes</b> &mdash; every file costs one inode; millions of tiny files exhaust them while bytes sit free</li>
+                </ul>
+                <p class="example">The same volume that morning: bytes 44% used, IOPS demand 160% of its cap, inodes 97% used &mdash; one green light and two red ones.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> "Disk" is three separate budgets &mdash; bytes, operations per second, and inodes &mdash; and any one of them alone can take the system down.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Commands, Three Answers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">df and iostat</span></div>
+                <ul>
+                    <li><b>Check bytes</b> &mdash; <code>df -h</code> on the volume: 500 GB size, 220 GB used, 44% &mdash; capacity is genuinely fine</li>
+                    <li><b>Check operations</b> &mdash; <code>iostat -x</code> shows %util 100 and average wait 48 ms per read, up from 1.2 ms</li>
+                    <li><b>The math</b> &mdash; the 9am report queries demand 4,800 random reads/s; the volume is provisioned for 3,000 IOPS</li>
+                    <li><b>The queue</b> &mdash; 1,800 reads/s over budget pile into a queue, so every query waits behind it</li>
+                    <li><b>Check inodes</b> &mdash; <code>df -i</code>: 31.8M of 32.7M inodes used (97%) &mdash; a third, separate problem waiting</li>
+                </ul>
+                <p class="example">Same minute, three commands: <code>df -h</code> says 44%, <code>iostat -x</code> says 100% busy with 48 ms waits, <code>df -i</code> says 97% of inodes gone.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Diagnosing "is the disk okay" takes all three checks &mdash; <code>df -h</code> for bytes, <code>iostat -x</code> for IOPS and wait time, <code>df -i</code> for inodes &mdash; because each can be red while the others are green.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>How Many Operations a Disk Actually Gives</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">rule of thumb</span><span class="tag orange">hardware</span></div>
+                <ul>
+                    <li><b>Spinning disk</b> &mdash; a mechanical arm must seek per random read: roughly 100&ndash;200 random IOPS, full stop</li>
+                    <li><b>SATA SSD</b> &mdash; no moving parts: tens of thousands of random IOPS from one device</li>
+                    <li><b>NVMe SSD</b> &mdash; hundreds of thousands of IOPS; the bottleneck moves to CPU and software</li>
+                    <li><b>Cloud volume</b> &mdash; IOPS are provisioned and billed; a general-purpose volume might cap at 3,000</li>
+                    <li><b>The symptom</b> &mdash; IOPS-bound looks like high I/O wait and 100% disk util while <code>df -h</code> shows plenty free</li>
+                </ul>
+                <p class="example">The orders workload needs 4,800 random reads/s &mdash; impossible on a 150-IOPS spinning disk, easy on an SSD, and 160% of a 3,000-IOPS cloud volume.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Bytes and operations are priced and limited separately &mdash; a volume can hold your data ten times over and still be far too slow to serve it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>df Says 44%, the Kernel Says Full</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">inodes</span></div>
+                <ul>
+                    <li><b>The mistake</b> &mdash; trusting <code>df -h</code> alone: bytes are only one of the three budgets</li>
+                    <li><b>The culprit</b> &mdash; a cache job writes one 2 KB session file per request; 31 million files use only 62 GB</li>
+                    <li><b>The cost</b> &mdash; every file, however tiny, consumes one inode; the volume was built with 32.7M of them</li>
+                    <li><b>The night it hits</b> &mdash; inodes reach 32.7M used; writes fail with "No space left on device" at 44% bytes used</li>
+                    <li><b>The reveal</b> &mdash; <code>df -i</code> shows IUse% 100; the fix is deleting or packing the tiny files, not adding gigabytes</li>
+                </ul>
+                <p class="example">The volume dies with 280 GB free: 31 million 2 KB session files (62 GB of data) consumed all 32.7M inodes.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading "No space left on device" as a byte problem. When <code>df -h</code> shows free space, run <code>df -i</code> &mdash; inode exhaustion produces the exact same error, and adding storage without adding inodes fixes nothing.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: the three disk budgets on the same volume at 9am
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Volume, Three Budgets: Only One of Them Is Fine', w / 2, 24);
+
+    var bx = 200, bh = 26;
+
+    // limit line at 100% (width 400 -> x=600)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(600, 58); ctx.lineTo(600, 240); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('limit', 600, 52);
+
+    // bytes — 44%, fine
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('bytes — 220 / 500 GB', 20, 75 + 17);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, 75, 176, bh);
+    ctx.font = '12px system-ui';
+    ctx.fillText('44% — fine', bx + 176 + 8, 75 + 17);
+
+    // IOPS — 160%, saturated (bar overshoots the limit, clipped at plot edge)
+    ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('IOPS — 4,800 / 3,000', 20, 140 + 17);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(bx, 140, 500, bh); // 160% would be width 640; clipped at plot edge x=700
+    // white break marks: the bar is clipped, not to scale past the limit
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(bx + 468, 140 + bh + 3); ctx.lineTo(bx + 480, 140 - 3);
+    ctx.moveTo(bx + 478, 140 + bh + 3); ctx.lineTo(bx + 490, 140 - 3);
+    ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('160% — saturated (bar clipped)', bx + 460, 140 + 17);
+
+    // inodes — 97%, nearly out
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('inodes — 31.8M / 32.7M', 20, 205 + 17);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(bx, 205, 388, bh);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('97% — nearly out', bx + 388 + 8, 205 + 17);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 62); ctx.lineTo(bx, 240); ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the dashboard only watched the green one', 230, 254);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('numbers illustrative', w - 12, 292);
+});
+
+// c2: 9am — IOPS demand crosses the cap, latency explodes
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('9am: Demand Crosses the 3,000-IOPS Cap and Latency Explodes', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var mins = [0, 10, 20, 30, 35, 40, 50, 60];
+    var iops = [900, 1100, 1600, 2800, 3600, 4800, 4800, 4700];
+    var lat = [1.2, 1.2, 1.5, 2.5, 18, 48, 47, 45];
+    function xOf(m) { return ox + m / 60 * pw; }
+    function yIops(v) { return baseY - v / 6000 * ph; }
+    function yLat(v) { return baseY - v / 60 * ph; }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [1500, 3000, 4500].forEach(function(v) {
+        ctx.beginPath(); ctx.moveTo(ox, yIops(v)); ctx.lineTo(ox + pw, yIops(v)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 15 min
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [['8:30', 0], ['8:45', 15], ['9:00', 30], ['9:15', 45], ['9:30', 60]].forEach(function(t) {
+        ctx.fillText(t[0], xOf(t[1]), baseY + 18);
+    });
+
+    // right-hand latency scale labels
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    [0, 20, 40, 60].forEach(function(v) {
+        ctx.fillText(String(v), ox + pw + 8, yLat(v) + 4);
+    });
+
+    // cap line at 3,000 IOPS
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yIops(3000)); ctx.lineTo(ox + pw, yIops(3000)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('provisioned 3,000 IOPS', ox + 6, yIops(3000) - 8);
+
+    // cap-crossed marker at minute 33
+    ctx.strokeStyle = P.orange; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xOf(33), 54); ctx.lineTo(xOf(33), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cap crossed', xOf(33), 50);
+
+    // demand line (blue, left scale)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(mins[i]), yIops(iops[i])) : ctx.lineTo(xOf(mins[i]), yIops(iops[i]));
+    }
+    ctx.stroke();
+
+    // latency line (red, right scale)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(mins[i]), yLat(lat[i])) : ctx.lineTo(xOf(mins[i]), yLat(lat[i]));
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('48 ms waits with 280 GB free', xOf(45), 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('IOPS and latencies illustrative', w - 12, 292);
+});
+
+// c3: random-read IOPS by device type (schematic log-feel widths)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Random IOPS by Device — the Workload Needs 4,800', w / 2, 24);
+
+    var bx = 230, bh = 24;
+    var rows = [
+        { y: 65, label: 'spinning disk', color: '#e74c3c', width: 40, val: '~150', inside: false },
+        { y: 115, label: 'cloud gp volume', color: P.orange, width: 150, val: '3,000 (provisioned)', inside: false },
+        { y: 165, label: 'SATA SSD', color: P.green, width: 300, val: '~50,000', inside: false },
+        { y: 215, label: 'NVMe SSD', color: P.blue, width: 440, val: '~500,000', inside: true }
+    ];
+
+    rows.forEach(function(r) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 16);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(bx, r.y, r.width, bh);
+        ctx.font = '12px system-ui';
+        if (r.inside) {
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'right';
+            ctx.fillText(r.val, bx + r.width - 10, r.y + 16);
+        } else {
+            ctx.fillStyle = r.color; ctx.textAlign = 'left';
+            ctx.fillText(r.val, bx + r.width + 8, r.y + 16);
+        }
+    });
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 245); ctx.stroke();
+
+    // workload need marker
+    ctx.strokeStyle = P.violet; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(395, 55); ctx.lineTo(395, 245); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('workload: 4,800', 395, 50);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the cloud volume falls short — pay for IOPS or change the disk', 250, 264);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic; IOPS figures typical, illustrative', w - 12, 292);
+});
+
+// c4: df -h vs df -i at the moment of failure
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Volume, Same Moment: df -h vs df -i', w / 2, 24);
+
+    var top = 70, bottom = 250, gh = bottom - top; // 180
+    var centers = [220, 500], gw = 120;
+
+    centers.forEach(function(cx, gi) {
+        var gx = cx - gw / 2;
+        // gridlines at 25/50/75% with percent labels
+        [25, 50, 75].forEach(function(pct) {
+            var y = bottom - pct / 100 * gh;
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx + gw, y); ctx.stroke();
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(pct + '%', gx - 6, y + 4);
+        });
+        // container outline
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.strokeRect(gx, top, gw, gh);
+    });
+
+    // gauge titles
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('df -h — bytes', centers[0], 48);
+    ctx.fillText('df -i — inodes', centers[1], 48);
+
+    // left gauge: bytes 44%
+    var fillH = 0.44 * gh;
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.fillRect(centers[0] - gw / 2, bottom - fillH, gw, fillH);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('220 / 500 GB', centers[0], bottom - fillH / 2 - 4);
+    ctx.fillText('44%', centers[0], bottom - fillH / 2 + 13);
+
+    // right gauge: inodes 100%
+    ctx.fillStyle = 'rgba(231,76,60,0.30)';
+    ctx.fillRect(centers[1] - gw / 2, top, gw, gh);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('32.7M / 32.7M', centers[1], top + gh / 2 - 4);
+    ctx.fillText('100%', centers[1], top + gh / 2 + 13);
+
+    // failure tag attached to the top of the right gauge
+    var tagW = 236, tagH = 22;
+    ctx.fillStyle = '#e74c3c';
+    rr(ctx, centers[1] - tagW / 2, top - tagH / 2 - 1, tagW, tagH, 8);
+    ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('write() → No space left on device', centers[1], top + 3);
+
+    // annotation between the gauges
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('280 GB free, zero files creatable', 360, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('file counts illustrative; error string exact', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

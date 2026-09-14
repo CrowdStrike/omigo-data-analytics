@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Architecture</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>GPU Architecture</h1>
+<p class="subtitle">A CPU makes a few cores fast at anything; a GPU makes thousands of weak cores fast at one thing — doing the same operation to different data</p>
+
+<div class="card-section">
+    <h2>One Layer, a Billion Identical Multiply-Adds</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">thousands of weak cores</span><span class="tag orange">deep learning</span></div>
+                <ul>
+                    <li><b>The layer</b> — one neural-net layer multiplies two 1024&times;1024 matrices: about a billion multiply-adds</li>
+                    <li><b>All identical</b> — every single one is the same operation, <code>a*b + c</code>, just on different numbers</li>
+                    <li><b>The CPU bet</b> — 8 big cores, each loaded with big caches, branch prediction, out-of-order tricks</li>
+                    <li><b>The GPU bet</b> — the same silicon buys 10,240 tiny cores that skip every one of those tricks</li>
+                    <li><b>The catch</b> — the tiny cores are only fast when they all run the SAME instruction together</li>
+                </ul>
+                <p class="example">Split across 10,240 cores the billion multiply-adds are ~105,000 each; across 8 cores they are 134 million each.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A GPU trades per-core smartness for sheer core count — it wins only when the work is one operation repeated across huge amounts of data, which is exactly what deep learning is.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Lockstep in Warps of 32 — and the Cost of a Branch</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">SIMT</span><span class="tag red">branch divergence</span></div>
+                <ul>
+                    <li><b>The warp</b> — GPU threads run in lockstep groups of 32 called warps: one instruction, 32 data lanes</li>
+                    <li><b>Uniform code</b> — brightening 32 pixels the same way takes 8 instructions, each issued once for all 32</li>
+                    <li><b>The branch</b> — <code>if pixel &gt; 128 darken else brighten</code>: 18 threads go one way, 14 go the other</li>
+                    <li><b>Divergence</b> — the warp must run BOTH paths, masking off the idle lanes: 8 + 8 = 16 issue slots</li>
+                    <li><b>Hand-check</b> — same useful work, but the branchy version takes 16 / 8 = 2&times; as long per warp</li>
+                </ul>
+                <p class="example">The warp runs the darken path with 14 lanes parked, then the brighten path with 18 parked — every lane sits idle half the time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> SIMT means threads in a warp share one instruction stream; a divergent branch serializes the paths, so branchy code wastes the very parallelism the GPU is built from.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Feeding Ten Thousand Cores: the Memory Story</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">bandwidth</span><span class="tag orange">bottleneck</span></div>
+                <ul>
+                    <li><b>The appetite</b> — 10,240 cores each doing a multiply-add per cycle starve on ordinary RAM</li>
+                    <li><b>HBM</b> — GPUs bolt high-bandwidth memory onto the card: ~3,000 GB/s vs ~200 GB/s for CPU DDR</li>
+                    <li><b>The on-ramp</b> — CPU&harr;GPU transfers cross PCIe at ~64 GB/s, nearly 50&times; slower than the HBM</li>
+                    <li><b>The trap</b> — shipping 4 GB of inputs over PCIe costs ~63 ms, more than the 30 ms of GPU compute</li>
+                    <li><b>Latency hiding</b> — a warp waiting on memory is parked; one of ~48 resident warps runs instead</li>
+                </ul>
+                <p class="example">A model that computes in 30 ms but pulls 4 GB of features over PCIe spends 63 ms on the transfer alone — the math was never the bottleneck.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> GPUs pair with extreme-bandwidth memory and hide memory latency by oversubscribing warps; the real bottleneck is usually the slow CPU&harr;GPU link, so keep data on the card.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When the GPU Loses</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">rule of thumb</span></div>
+                <ul>
+                    <li><b>The mistake</b> — "just put it on the GPU" for code full of branches, pointers, and serial steps</li>
+                    <li><b>Pointer chasing</b> — a linked-list walk is one load after another; 10,240 cores cannot help a chain</li>
+                    <li><b>Branchy code</b> — heavy if/else splits every warp into serialized paths (the 2&times; cost compounds)</li>
+                    <li><b>The scoreboard</b> — matmul: CPU 900 ms vs GPU 30 ms; list chase: CPU 40 ms vs GPU 220 ms</li>
+                    <li><b>Rule of thumb</b> — GPUs win throughput-per-dollar on uniform parallel work; CPUs win latency and generality</li>
+                </ul>
+                <p class="example">The same GPU that beats the CPU 30&times; on the matrix multiply loses more than 5&times; to it on the linked-list walk.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the GPU as a faster CPU. It is a different machine — a throughput engine that pays for its 30&times; matmul win by losing on anything serial, branchy, or transfer-bound.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// c1: CPU die vs GPU die
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Silicon Budget: 8 Smart Cores vs 10,240 Simple Ones', w / 2, 24);
+
+    // CPU die
+    rrPath(ctx, 55, 60, 290, 185, 8);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    // 8 core blocks, 2 rows x 4 cols
+    for (var r = 0; r < 2; r++) {
+        for (var c = 0; c < 4; c++) {
+            var x = 67 + c * 70, y = 72 + r * 63;
+            ctx.fillStyle = 'rgba(42,120,214,0.25)';
+            ctx.fillRect(x, y, 62, 55);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, 62, 55);
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('core', x + 31, y + 31);
+        }
+    }
+    // cache strip
+    ctx.fillStyle = 'rgba(201,133,0,0.20)';
+    ctx.fillRect(67, 198, 266, 38);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1;
+    ctx.strokeRect(67, 198, 266, 38);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('L3 cache · branch prediction · out-of-order', 67 + 133, 198 + 23);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('CPU: 8 cores + big cache', 55 + 145, 268);
+
+    // GPU die
+    rrPath(ctx, 375, 60, 290, 185, 8);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 16; c++) {
+            var x = 385 + c * 17, y = 68 + r * 20;
+            ctx.fillStyle = 'rgba(0,131,0,0.30)';
+            ctx.fillRect(x, y, 15, 18);
+            ctx.strokeStyle = P.green; ctx.lineWidth = 0.5;
+            ctx.strokeRect(x, y, 15, 18);
+        }
+    }
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('GPU: 10,240 cores (128 shown)', 375 + 145, 268);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('block sizes schematic; core counts illustrative', w - 16, h - 8);
+});
+
+// c2: uniform warp vs divergent warp issue slots
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Branch Doubles the Warp\'s Time: 8 Slots vs 16', w / 2, 24);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('issue slots →', 180, 68);
+
+    var pitch = 32, bw = 28, bh = 36;
+
+    // row 1: uniform warp, 8 green blocks at y=85
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('uniform warp (32/32 active)', 20, 108);
+    for (var i = 0; i < 8; i++) {
+        var x = 180 + i * pitch;
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(x, 85, bw, bh);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+        ctx.strokeRect(x, 85, bw, bh);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('done in 8 slots', 444, 108);
+
+    // row 2: divergent warp, 16 blocks at y=180
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('divergent warp', 20, 203);
+    for (var i = 0; i < 16; i++) {
+        var x = 180 + i * pitch;
+        if (i < 8) {
+            ctx.fillStyle = 'rgba(42,120,214,0.35)';
+            ctx.fillRect(x, 180, bw, bh);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+            ctx.strokeRect(x, 180, bw, bh);
+        } else {
+            ctx.fillStyle = 'rgba(217,89,38,0.30)';
+            ctx.fillRect(x, 180, bw, bh);
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+            ctx.strokeRect(x, 180, bw, bh);
+        }
+    }
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('if path — 18 lanes on, 14 masked', 180, 172);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('else path — 14 on, 18 masked', 180 + 8 * pitch, 232);
+
+    // finish marker where the uniform warp already finished
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(436, 80); ctx.lineTo(436, 225); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the warp pays for both paths — 2× slower', w / 2, 262);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('18/14 split illustrative', w - 16, h - 8);
+});
+
+// c3: three bandwidths horizontal bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Roads: On-Card Memory Is Fast, the On-Ramp Is Not', w / 2, 24);
+
+    var bx = 250;
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 75); ctx.lineTo(bx, 245); ctx.stroke();
+
+    var rows = [
+        { y: 95, label: 'GPU HBM (on card) — 3,000 GB/s', fill: 'rgba(0,131,0,0.30)', edge: P.green, width: 430, val: '3,000' },
+        { y: 155, label: 'CPU DDR (main memory) — 200 GB/s', fill: 'rgba(42,120,214,0.30)', edge: P.blue, width: 285, val: '200' },
+        { y: 215, label: 'CPU↔GPU PCIe link — 64 GB/s', fill: 'rgba(217,89,38,0.35)', edge: P.orange, width: 225, val: '64' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 13);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.width, 18);
+        ctx.strokeStyle = r.edge; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y, r.width, 18);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText(r.val, bx + r.width + 6, r.y + 13);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('compute lives at 3,000; every batch arrives at 64 — keep data on the card', w / 2, 260);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bar lengths log scale; bandwidths order-of-magnitude, illustrative', w - 16, h - 8);
+});
+
+// c4: CPU vs GPU on two tasks
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same GPU, Opposite Results', w / 2, 24);
+
+    var ox = 70, baseY = 245, ow = 590, chH = 180, maxV = 1000;
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    // gridlines
+    var grids = [250, 500, 750];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + ow, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 6, yOf(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + ow, baseY); ctx.stroke();
+
+    var bw = 60;
+    function bar(cx, val, fill, edge, lab) {
+        var bh2 = val / maxV * chH;
+        ctx.fillStyle = fill;
+        ctx.fillRect(cx - bw / 2, baseY - bh2, bw, bh2);
+        ctx.strokeStyle = edge; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw / 2, baseY - bh2, bw, bh2);
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, cx, baseY - bh2 - 6);
+    }
+    // group 1: matmul
+    bar(180, 900, 'rgba(42,120,214,0.35)', P.blue, '900 ms');
+    bar(260, 30, 'rgba(0,131,0,0.30)', P.green, '30 ms');
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('matrix multiply (uniform)', 250, 265);
+    // group 2: list chase
+    bar(460, 40, 'rgba(42,120,214,0.35)', P.blue, '40 ms');
+    bar(540, 220, 'rgba(0,131,0,0.30)', P.green, '220 ms');
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('linked-list chase (serial, branchy)', 530, 265);
+
+    // verdicts
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('GPU 30× faster', 250, 60);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('GPU 5× slower', 530, 170);
+
+    // legend, top right
+    var lgx = 545, lgy = 50;
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fillRect(lgx, lgy, 11, 11);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.strokeRect(lgx, lgy, 11, 11);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('CPU (8 cores)', lgx + 16, lgy + 9);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)'; ctx.fillRect(lgx, lgy + 16, 11, 11);
+    ctx.strokeStyle = P.green; ctx.strokeRect(lgx, lgy + 16, 11, 11);
+    ctx.fillStyle = '#444';
+    ctx.fillText('GPU (10,240 cores)', lgx + 16, lgy + 25);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times illustrative', w - 16, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

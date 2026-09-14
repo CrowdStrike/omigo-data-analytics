@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serverless &amp; FaaS</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Serverless &amp; FaaS</h1>
+<p class="subtitle">You deploy a function, not a server &mdash; the platform runs it per event, scales from zero to thousands and back, and bills only for the milliseconds it actually runs</p>
+
+<div class="card-section">
+    <h2>The Thumbnail Maker With No Server</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">scale to zero</span><span class="tag orange">event-driven</span></div>
+                <ul>
+                    <li><b>The job</b> — a photo-book site needs a thumbnail made every time a user uploads a photo</li>
+                    <li><b>The deploy</b> — you upload one function, <code>make_thumbnail(event)</code>; there is no machine to rent or patch</li>
+                    <li><b>The trigger</b> — each file upload is an event; the platform runs one copy of the function per event</li>
+                    <li><b>The scaling</b> — a lunchtime burst of uploads spins up 12 parallel instances; by midnight there are 0</li>
+                    <li><b>The bill</b> — you pay per invocation and per 100ms of runtime; six idle overnight hours cost exactly $0</li>
+                    <li><b>"No servers"</b> — there are servers, of course; the patching, scaling, and capacity math moved to the provider</li>
+                </ul>
+                <p class="example">From midnight to 6am nobody uploads a photo, so zero instances exist and the meter reads zero — an always-on server would have billed those six hours anyway.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Serverless means the unit you deploy is a function and the unit you pay for is an invocation — scale-to-zero is the defining property that no always-on server can match.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The First Request After a Quiet Spell</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">cold start</span></div>
+                <ul>
+                    <li><b>The setup</b> — after 20 idle minutes the platform has torn the last instance down to save resources</li>
+                    <li><b>The cold path</b> — the next request must provision a container (250ms), start the runtime (400ms), init your code (150ms)</li>
+                    <li><b>Hand-check</b> — 250 + 400 + 150 = 800ms of setup before the 40ms handler even runs: 840ms total</li>
+                    <li><b>The warm path</b> — the instance now stays up, so the next requests skip setup and take just the 40ms</li>
+                    <li><b>The shape</b> — out of 200 morning requests, 188 finish under 150ms; the 12 that follow an idle gap take 600&ndash;1000ms</li>
+                    <li><b>The mitigation</b> — a provisioned warm pool keeps instances loaded and kills the cold tail, at extra always-on cost</li>
+                </ul>
+                <p class="example">The 7:02am request lands on a cold platform and takes 840ms — 21&times; the 40ms a warm instance takes for the identical photo.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The latency histogram of a serverless function is bimodal — a fast warm peak and a slow cold tail — because the first request after idleness pays for building the runtime that later requests reuse.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When Pay-Per-Call Beats Always-On — and When It Doesn't</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">cost crossover</span></div>
+                <ul>
+                    <li><b>Shines</b> — spiky, event-driven, embarrassingly parallel glue: thumbnails, webhook handlers, ETL triggers</li>
+                    <li><b>The prices (illustrative)</b> — $0.20 per million invocations plus $16 per million GB-seconds; a small server $36/month</li>
+                    <li><b>Per call</b> — 256MB &times; 400ms = 0.1 GB-s, so 0.1 &times; $0.000016 + $0.0000002 = $0.0000018, i.e. $1.80 per million calls</li>
+                    <li><b>The crossover</b> — $36 &divide; $1.80/M = 20 million calls/month; below that serverless wins, above it the server wins</li>
+                    <li><b>The extremes</b> — at 1M calls/month serverless costs $1.80 (20&times; cheaper); at 100M it costs $180 (5&times; dearer)</li>
+                    <li><b>Fights you</b> — long jobs (hard execution time limits), stateful services, and latency-critical paths that can't absorb cold starts</li>
+                </ul>
+                <p class="example">The thumbnail function handles 1M uploads a month for $1.80; a checkout API doing 100M calls a month would pay $180 on serverless versus $36 always-on.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Per-invocation pricing is a straight line through zero and always-on pricing is a flat line — spiky low-volume work lives left of the crossover, sustained high volume lives right of it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Function Is Not a Tiny Server</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">idempotency</span></div>
+                <ul>
+                    <li><b>The confusion</b> — writing a function that keeps counters, caches, or sessions in local memory</li>
+                    <li><b>Why it breaks</b> — every invocation may land on a different instance, and instances vanish at scale-to-zero</li>
+                    <li><b>The retry rule</b> — event sources retry on failure by design, so the same event can arrive twice</li>
+                    <li><b>The mistake</b> — a non-idempotent handler: a retried "order paid" event charges the customer's card twice</li>
+                    <li><b>The fix</b> — stateless functions, state in external stores, and an idempotency key checked before side effects</li>
+                </ul>
+                <p class="example">A queue redelivers order #4127 after a timeout; the naive function charges $59 twice, while the idempotent one sees the key already recorded and exits without acting.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a function as a small always-on server. Instances are disposable and events are at-least-once — code that isn't stateless and idempotent turns built-in retries into double side effects.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: 24-hour uploads and instances dual line
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Day of the Thumbnail Function: Instances Follow Traffic Down to Zero', w / 2, 24);
+
+    var px = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(hr) { return px + hr / 24 * pw; }
+    function yOf(v) { return baseY - v / 250 * chH; }
+
+    // gridlines
+    var gv = [62, 125, 187];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i])); ctx.lineTo(px + pw, yOf(gv[i])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < gv.length; i++) {
+        ctx.fillText(String(gv[i]), px - 6, yOf(gv[i]) + 4);
+    }
+
+    // zero band over hours 0-6, bottom 30px of plot
+    ctx.fillStyle = 'rgba(0,131,0,0.08)';
+    ctx.fillRect(xOf(0), baseY - 30, xOf(6) - xOf(0), 30);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('zero instances, zero cost', (xOf(0) + xOf(6)) / 2, baseY - 12);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+
+    // x ticks every 4 hours
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var hr = 0; hr <= 24; hr += 4) {
+        ctx.fillText(hr + 'h', xOf(hr), baseY + 18);
+    }
+
+    var hrs = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
+    var uploads = [0, 0, 0, 0, 45, 110, 240, 150, 90, 60, 20, 3, 0];
+    var instances = [0, 0, 0, 0, 3, 6, 12, 8, 5, 3, 1, 1, 0];
+
+    // uploads line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < hrs.length; i++) {
+        var cx = xOf(hrs[i]), cy = yOf(uploads[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+
+    // instances line (x20 scale)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < hrs.length; i++) {
+        var cx = xOf(hrs[i]), cy = yOf(instances[i] * 20);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('instances (×20)', px + pw - 4, yOf(0) - 24);
+
+    // annotation above peak
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('lunch burst: 12 instances appear on their own', xOf(12) + 60, yOf(240) - 12);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('traffic shape illustrative', px + pw, h - 8);
+});
+
+// c2: bimodal latency histogram
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('200 Requests, Two Peaks: the Warm Path and the Cold-Start Tail', w / 2, 24);
+
+    var px = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(ms) { return px + ms / 1000 * pw; }
+    function yOf(c) { return baseY - c / 130 * chH; }
+
+    // gridlines
+    var gv = [32, 65, 97];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i])); ctx.lineTo(px + pw, yOf(gv[i])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < gv.length; i++) {
+        ctx.fillText(String(gv[i]), px - 6, yOf(gv[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+
+    // x ticks every 200ms
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var ms = 0; ms <= 1000; ms += 200) {
+        ctx.fillText(ms + 'ms', xOf(ms), baseY + 18);
+    }
+
+    // warm bars: 0-50:120, 50-100:60, 100-150:8
+    var warm = [[0, 120], [50, 60], [100, 8]];
+    for (var i = 0; i < warm.length; i++) {
+        var bx = xOf(warm[i][0]), bh = baseY - yOf(warm[i][1]);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(bx, baseY - bh, 30, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, baseY - bh, 30, bh);
+    }
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('188 warm requests', xOf(60), yOf(120) - 8);
+
+    // cold bars: 600-700:3, 700-800:4, 800-900:3, 900-1000:2 (100ms bins = 60px)
+    var cold = [[600, 3], [700, 4], [800, 3], [900, 2]];
+    for (var i = 0; i < cold.length; i++) {
+        var bx = xOf(cold[i][0]), bh = baseY - yOf(cold[i][1]);
+        ctx.fillStyle = 'rgba(231,76,60,0.30)';
+        ctx.fillRect(bx, baseY - bh, 60, bh);
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, baseY - bh, 60, bh);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('12 cold starts', xOf(800), yOf(4) - 12);
+
+    // setup breakdown inset
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('provision 250ms', xOf(350) - 60, 110);
+    ctx.fillText('runtime 400ms', xOf(350) - 60, 126);
+    ctx.fillText('init code 150ms', xOf(350) - 60, 142);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('= 800ms before the 40ms handler', xOf(350) - 60, 162);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative, setup arithmetic exact', px + pw, h - 8);
+});
+
+// c3: cost crossover chart
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Monthly Cost: Serverless Line Crosses the $36 Server at 20M Calls', w / 2, 24);
+
+    var px = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(m) { return px + m / 100 * pw; }
+    function yOf(c) { return baseY - c / 200 * chH; }
+
+    // gridlines
+    var gv = [50, 100, 150];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i])); ctx.lineTo(px + pw, yOf(gv[i])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < gv.length; i++) {
+        ctx.fillText('$' + gv[i], px - 6, yOf(gv[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+
+    // x ticks every 20M
+    var xt = [['0', 0], ['20M', 20], ['40M', 40], ['60M', 60], ['80M', 80], ['100M', 100]];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < xt.length; i++) {
+        ctx.fillText(xt[i][0], xOf(xt[i][1]), baseY + 18);
+    }
+
+    // server flat line at $36
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, yOf(36)); ctx.lineTo(px + pw, yOf(36)); ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('always-on server $36/mo', px + 6, yOf(36) - 8);
+
+    // serverless line
+    var inv = [0, 20, 40, 60, 80, 100];
+    var cost = [0, 36, 72, 108, 144, 180];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < inv.length; i++) {
+        var cx = xOf(inv[i]), cy = yOf(cost[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+
+    // crossover marker
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(20), baseY); ctx.lineTo(xOf(20), yOf(36)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(20), yOf(36), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('crossover: 20M calls', xOf(20) + 12, yOf(36) + 22);
+
+    // region labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('serverless cheaper', xOf(8) + 40, yOf(110));
+    ctx.fillStyle = P.orange;
+    ctx.fillText('server cheaper', xOf(75), yOf(135) + 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('prices illustrative, arithmetic exact', px + pw, h - 8);
+});
+
+// c4: retried event, naive vs idempotent
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same Event Delivered Twice: Idempotency Decides What Happens', w / 2, 24);
+
+    var boxH = 40;
+
+    function box(cx, cy, bw, fill, border, lines) {
+        roundRect(ctx, cx - bw / 2, cy - boxH / 2, bw, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], cx, cy + 4);
+        } else {
+            ctx.fillText(lines[0], cx, cy - 3);
+            ctx.fillText(lines[1], cx, cy + 12);
+        }
+    }
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x2, y); ctx.lineTo(x2 - 9, y - 5); ctx.lineTo(x2 - 9, y + 5);
+        ctx.closePath(); ctx.fillStyle = P.mute; ctx.fill();
+    }
+    function retryBadge(cx, cy) {
+        var t = 'queue retries after timeout';
+        ctx.font = '11px system-ui';
+        var tw = ctx.measureText(t).width;
+        roundRect(ctx, cx - tw / 2 - 8, cy - 10, tw + 16, 18, 9);
+        ctx.fillStyle = 'rgba(74,58,167,0.10)'; ctx.fill();
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+        ctx.fillText(t, cx, cy + 3);
+    }
+
+    var bFill = 'rgba(42,120,214,0.15)', rFill = 'rgba(231,76,60,0.12)', gFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: naive
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('naive', 20, y1 + 4);
+    retryBadge(140, y1 - 38);
+    box(140, y1, 160, bFill, P.blue, ['event:', 'order #4127 ×2']);
+    arrow(140 + 80, 360 - 95, y1);
+    box(360, y1, 190, rFill, '#e74c3c', ['charge card,', 'no key check']);
+    arrow(360 + 95, 580 - 75, y1);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ charged $59 twice', 580 - 70, y1 + 4);
+
+    // row 2: idempotent
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('idempotent', 20, y2 + 4);
+    retryBadge(140, y2 - 38);
+    box(140, y2, 160, bFill, P.blue, ['event:', 'order #4127 ×2']);
+    arrow(140 + 80, 340 - 95, y2);
+    box(340, y2, 190, gFill, P.green, ['seen key 4127?', 'skip : charge']);
+    arrow(340 + 95, 580 - 75, y2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ charged $59 once', 580 - 70, y2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('retries are built into the platform — idempotency is your half of the contract', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

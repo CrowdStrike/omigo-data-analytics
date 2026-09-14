@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Replication Lag &amp; Read Guarantees</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Replication Lag &amp; Read Guarantees</h1>
+<p class="subtitle">Your comment can vanish on refresh because the copy you read from is a moment behind the original — three simple promises hide that gap</p>
+
+<div class="card-section">
+    <h2>The Comment That Vanished on Refresh</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">replication</span><span class="tag orange">lag</span></div>
+                <ul>
+                    <li><b>The post</b> — at 12:00:00 a user posts comment #341 on a recipe; the leader database stores it</li>
+                    <li><b>The copies</b> — two replicas copy every write from the leader, but each copy takes time to arrive</li>
+                    <li><b>The refresh</b> — 300 ms later the user refreshes; the read is routed to a replica for speed</li>
+                    <li><b>The gap</b> — that replica is 800 ms behind, so comment #341 has not arrived — the page shows nothing</li>
+                    <li><b>The name</b> — the delay is replication lag; a read guarantee is the promise that hides it</li>
+                </ul>
+                <p class="example">The comment reappears on the next refresh a second later — the replica caught up, but the user has already hit "post" twice.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A replica is a copy that is always slightly behind the original; replication lag is that delay, and without a read guarantee any read can land inside the gap.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Promises, One Anomaly Each</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">read-your-writes</span><span class="tag orange">monotonic reads</span></div>
+                <ul>
+                    <li><b>Read-your-writes</b> — route the writer's own reads to the leader; you always see your comment</li>
+                    <li><b>Its anomaly</b> — post at 0 ms, refresh at 300 ms, replica 800 ms behind: your comment invisible</li>
+                    <li><b>Monotonic reads</b> — pin each session to one replica; a refresh never shows less than the last</li>
+                    <li><b>Its anomaly</b> — refresh 1 hits a 100 ms-lag replica (seen), refresh 2 a 900 ms one (gone again)</li>
+                    <li><b>Consistent prefix</b> — apply writes in order everywhere; an answer never precedes its question</li>
+                    <li><b>Its anomaly</b> — a replica applies the 200 ms reply before the 0 ms question: a reply to nothing</li>
+                </ul>
+                <p class="example">With all three promises the poster sees comment #341 on every refresh, no refresh ever shows less than the one before, and the reply never appears without its question.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Each guarantee is a routing or ordering rule, not stronger hardware — read-your-writes routes the writer, monotonic reads pins the session, consistent prefix preserves write order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Who Reads From Where — and Watching the Lag</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">routing</span><span class="tag orange">monitoring</span></div>
+                <ul>
+                    <li><b>Read routing</b> — a proxy sends a user's reads to the leader for 1 s after their own write</li>
+                    <li><b>Session stickiness</b> — hashing the session id to one replica gives monotonic reads for free</li>
+                    <li><b>Lag monitoring</b> — each replica reports how far behind it is; the router drops the laggards</li>
+                    <li><b>The threshold</b> — with a 500 ms cutoff, a replica that falls 8.2 s behind stops serving reads</li>
+                    <li><b>The trade</b> — reading only from the leader is always safe but gives up the read scaling replicas exist for</li>
+                </ul>
+                <p class="example">During the 2pm batch import, lag jumps from 60 ms to 8.2 s; the router pulls that replica until it is back under the 500 ms cutoff.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Read guarantees live in the routing layer — measure each replica's lag, route by who wrote what, and only lean on replicas that are provably close.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Replica Is Not a Mirror</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">lag tail</span></div>
+                <ul>
+                    <li><b>The assumption</b> — "the replica has the same data" is only true after lag catches up, never during</li>
+                    <li><b>Usually invisible</b> — 62% of reads land behind by under 10 ms, so a quiet test system shows nothing</li>
+                    <li><b>The tail bites</b> — 2% of reads land over a second behind: thousands of vanished comments at scale</li>
+                    <li><b>Not a database bug</b> — asynchronous replication is working as designed; the guarantee is the missing piece</li>
+                    <li><b>Eventual is not soon</b> — "eventually consistent" promises no bound; under load the gap grows to minutes</li>
+                </ul>
+                <p class="example">The feature passes every test on a laptop with zero lag, then ships — and users report ghost comments within an hour.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating replication as instant because it usually is. Guarantees exist for the tail: design for the 1-in-50 read that lands in the gap, not the 49 that don't.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: two-lane timeline — leader gets the write at 0 ms, replica applies at 800 ms,
+// a refresh read at 300 ms lands in the stale window
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Comment, Two Copies: an 800 ms Window of Disagreement', w / 2, 24);
+
+    function xOf(ms) { return 80 + ms * 0.58; }
+
+    // stale window on the replica lane
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(80, 185, xOf(800) - 80, 30);
+
+    // lanes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(80, 110); ctx.lineTo(660, 110); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(80, 200); ctx.lineTo(660, 200); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('leader', 20, 114);
+    ctx.fillText('replica', 20, 204);
+
+    // time axis labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var ticks = [[0, '0 ms'], [250, '250'], [500, '500'], [750, '750'], [1000, '1000 ms']];
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.fillText(ticks[i][1], xOf(ticks[i][0]), 245);
+    }
+
+    // copy arrow (dashed) from write to apply
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(80, 110); ctx.lineTo(xOf(800), 200); ctx.stroke();
+    ctx.setLineDash([]);
+    // arrowhead
+    (function() {
+        var ang = Math.atan2(200 - 110, xOf(800) - 80);
+        var ax = xOf(800), ay = 200;
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 10 * Math.cos(ang - 0.4), ay - 10 * Math.sin(ang - 0.4));
+        ctx.lineTo(ax - 10 * Math.cos(ang + 0.4), ay - 10 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    })();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('copy in flight — lag 800 ms', (80 + xOf(800)) / 2 + 40, 158);
+
+    // write marker on leader
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(80, 110, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('comment #341 written (0 ms)', 92, 96);
+
+    // apply marker on replica
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(800), 200, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('applied (800 ms)', xOf(800), 224);
+
+    // read marker on replica at 300 ms
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xOf(300), 200, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('refresh read (300 ms) ✗ not found', xOf(300), 182);
+
+    // annotation top right
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('any read in the shaded window sees a page without the comment', 660, 55);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', 660, 290);
+});
+
+// c2: three rows — one guarantee each: anomaly (red box) and fix (green box)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Guarantees, Three Anomalies They Kill', w / 2, 24);
+
+    var rows = [85, 160, 235];
+    var rowLabs = ['read-your-writes', 'monotonic reads', 'consistent prefix'];
+
+    for (var r = 0; r < 3; r++) {
+        var y = rows[r];
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(170, y); ctx.lineTo(660, y); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabs[r], 20, y + 4);
+    }
+
+    function rbox(cx, cy, bw, kind, lines) {
+        var bh = 34;
+        ctx.beginPath();
+        var x = cx - bw / 2, y = cy - bh / 2, rr = 8;
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + bw, y, x + bw, y + bh, rr);
+        ctx.arcTo(x + bw, y + bh, x, y + bh, rr);
+        ctx.arcTo(x, y + bh, x, y, rr);
+        ctx.arcTo(x, y, x + bw, y, rr);
+        ctx.closePath();
+        ctx.fillStyle = kind === 'red' ? 'rgba(231,76,60,0.12)' : 'rgba(0,131,0,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = kind === 'red' ? '#e74c3c' : P.green;
+        ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], cx, cy + 4);
+        } else {
+            ctx.fillText(lines[0], cx, cy - 3);
+            ctx.fillText(lines[1], cx, cy + 11);
+        }
+    }
+
+    function dot(x, y, color, label) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x, y - 12);
+    }
+
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2, y); ctx.lineTo(x2 - 10, y - 5); ctx.lineTo(x2 - 10, y + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // Row 1: read-your-writes
+    dot(190, rows[0], P.blue, 'write 0 ms');
+    rbox(300 + 75, rows[0], 150, 'red', ['replica read 300 ms', '✗ missing']);
+    arrow(450, 500, rows[0]);
+    rbox(520 + 60, rows[0], 160, 'green', ['route writer to leader', '✓ seen']);
+
+    // Row 2: monotonic reads
+    dot(190, rows[1], P.green, 'refresh 1: replica A, lag 100 ms ✓');
+    rbox(350 + 75, rows[1], 150, 'red', ['refresh 2: replica B,', 'lag 900 ms ✗ gone']);
+    arrow(500, 545, rows[1]);
+    rbox(545 + 65, rows[1], 130, 'green', ['pin session to A']);
+
+    // Row 3: consistent prefix
+    dot(190, rows[2], P.blue, 'Q at 0 ms, reply at 200 ms');
+    rbox(350 + 75, rows[2], 150, 'red', ['replica applies', 'reply first ✗']);
+    arrow(500, 545, rows[2]);
+    rbox(545 + 65, rows[2], 130, 'green', ['apply in write order']);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same lag, three different symptoms — each promise removes exactly one', w / 2, 280);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('lag values illustrative', 700, 296);
+});
+
+// c3: replica lag through the day — flat, 2pm spike to 8.2 s, recovery
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Replica Lag Through the Day: the 2pm Batch Blows the Budget', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var hours = [10, 11, 12, 13, 14, 15, 16, 17, 18];
+    var lags = [45, 60, 55, 60, 8200, 2400, 480, 90, 60];
+    var heights = [10, 12, 11, 12, 170, 120, 55, 15, 12];
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    function xOf(hr) { return ox + (hr - 10) / 8 * pw; }
+
+    // x tick labels each hour
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < hours.length; i++) {
+        ctx.fillText(hours[i] + ':00', xOf(hours[i]), baseY + 18);
+    }
+
+    // cutoff line at y=189 (~500 ms)
+    ctx.strokeStyle = P.magenta; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox, 189); ctx.lineTo(ox + pw, 189); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.magenta; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('router cutoff: 500 ms', ox + 4, 183);
+
+    // line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < hours.length; i++) {
+        var x = xOf(hours[i]), y = baseY - heights[i];
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // dots: red at 14:00 and 15:00, blue otherwise
+    for (var i = 0; i < hours.length; i++) {
+        var x = xOf(hours[i]), y = baseY - heights[i];
+        ctx.fillStyle = (hours[i] === 14 || hours[i] === 15) ? '#e74c3c' : P.blue;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // value labels
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('60 ms', xOf(13), baseY - heights[3] - 10);
+    ctx.fillText('8.2 s', xOf(14) + 24, baseY - heights[4] - 6);
+    ctx.fillText('2.4 s', xOf(15) + 24, baseY - heights[5] - 6);
+    ctx.fillText('480 ms', xOf(16), baseY - heights[6] - 10);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lag 8.2 s — replica pulled from read rotation', xOf(14) + 12, 50);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('y-axis log-feel, lag values labeled; illustrative', 700, 290);
+});
+
+// c4: staleness histogram — most reads fresh, small over-1s tail
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('How Stale Is a Read? Most Are Fresh — the Tail Is the Problem', w / 2, 24);
+
+    var baseY = 245;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(680, baseY); ctx.stroke();
+
+    var centers = [130, 250, 370, 490, 610];
+    var labels = ['< 10 ms', '10–100 ms', '100 ms–1 s', '1–10 s', '> 10 s'];
+    var pcts = ['62%', '30%', '6%', '1.8%', '0.2%'];
+    var heights = [180, 87, 17, 6, 4];
+    var bw = 70;
+
+    for (var i = 0; i < 5; i++) {
+        var x = centers[i] - bw / 2, bh = heights[i], y = baseY - bh;
+        if (i < 2) {
+            ctx.fillStyle = 'rgba(42,120,214,0.35)';
+            ctx.fillRect(x, y, bw, bh);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, bw, bh);
+        } else {
+            ctx.fillStyle = i === 2 ? P.yellow : (i === 3 ? P.orange : '#e74c3c');
+            ctx.fillRect(x, y, bw, bh);
+        }
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(pcts[i], centers[i], y - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(labels[i], centers[i], baseY + 18);
+    }
+
+    // annotation over the last two bars
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2% land over 1 s behind —', 550, 90);
+    ctx.fillText('the vanished-comment zone', 550, 108);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('distribution illustrative; smallest bars drawn at a minimum height', 680, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

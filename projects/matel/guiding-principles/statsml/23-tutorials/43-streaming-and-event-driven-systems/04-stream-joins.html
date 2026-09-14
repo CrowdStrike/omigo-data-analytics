@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stream Joins</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Stream Joins</h1>
+<p class="subtitle">Joining two streams that never finish — you can't wait for "all" rows, so every join becomes a bet about how far apart matching events can be</p>
+
+<div class="card-section">
+    <h2>Joining Clicks to Ads That Never Stop Arriving</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">windowed join</span><span class="tag orange">infinite data</span></div>
+                <ul>
+                    <li><b>Two streams</b> — an ad platform emits impressions (ad shown) and clicks (ad clicked) as separate endless feeds</li>
+                    <li><b>The goal</b> — pair each click with the impression that caused it, to bill the advertiser</li>
+                    <li><b>The batch trap</b> — a database join waits for both tables to be complete; a stream is never complete</li>
+                    <li><b>The bet</b> — declare that a click belongs to an impression only if it arrives within 30 minutes of it</li>
+                    <li><b>The window</b> — the join buffers each impression for 30 minutes, matches clicks against the buffer, then lets go</li>
+                </ul>
+                <p class="example">Impression A fires at 2:00pm and its click lands at 2:17pm — matched; impression B fires at 2:05pm but its click arrives at 2:46pm, 41 minutes later — the window has closed and the pair is lost.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A stream join cannot wait for all rows, so it matches events within a time window — the window size is a bet about how far apart a real pair can be.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Ten Clicks, One Cutoff, Counted by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">match rate</span></div>
+                <ul>
+                    <li><b>The sample</b> — 10 impressions each get exactly one click; the click delays in minutes are 1, 3, 6, 9, 14, 19, 24, 28, 36, 52</li>
+                    <li><b>The rule</b> — a 30-minute window keeps a delay if delay &le; 30, drops it otherwise</li>
+                    <li><b>Hand-check</b> — delays 1 through 28 pass (8 clicks); delays 36 and 52 fail (2 clicks)</li>
+                    <li><b>The score</b> — 8 of 10 pairs match: an 80% join match rate under the 30-minute bet</li>
+                    <li><b>The lost revenue</b> — the 2 unmatched clicks are real clicks the advertiser is never billed for</li>
+                </ul>
+                <p class="example">The click that took 36 minutes missed the cutoff by 6 minutes — one slow phone on a train platform costs the join a match.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The window turns a join into a yes/no test on the time gap — with these 10 delays, a 30-minute window matches exactly 8 pairs and silently drops 2.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Kinds of Stream Join, Two Kinds of State</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">stream-table</span><span class="tag orange">buffering</span></div>
+                <ul>
+                    <li><b>Stream-stream</b> — clicks joined to impressions: both sides move, so both sides are buffered for the window</li>
+                    <li><b>Stream-table</b> — each impression enriched with the latest row of a campaign table (name, bid, advertiser)</li>
+                    <li><b>The table side</b> — the dimension table is kept as changing state; each event reads its current version, no window needed</li>
+                    <li><b>The buffer bill</b> — at 10,000 impressions per second, a 30-minute stream-stream buffer holds 18 million rows in memory</li>
+                    <li><b>Everywhere</b> — attribution, fraud pairing (login + password-reset), order-and-payment matching all run on windowed joins</li>
+                </ul>
+                <p class="example">An impression arriving at 2:14pm is stamped with the campaign's 2:10pm bid — the latest table row at that moment — while its click waits in a 30-minute buffer.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Stream-stream joins buffer both sides for the window; stream-table joins keep one side as continuously-updated state — the two patterns solve different problems and pay different memory bills.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Bigger Window Is Not a Free Fix</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">state cost</span></div>
+                <ul>
+                    <li><b>The reflex</b> — missed matches? widen the window; 30 minutes becomes 60, then 120</li>
+                    <li><b>Diminishing returns</b> — over a full day's traffic, match rate goes 55% &rarr; 68% &rarr; 80% &rarr; 88% &rarr; 93% across 5/15/30/60/120-minute windows</li>
+                    <li><b>Linear cost</b> — the buffer grows with the window: 3M, 9M, 18M, 36M, 72M rows at those same window sizes</li>
+                    <li><b>Late results</b> — a wider window also delays the answer: a 120-minute window can't confirm "no click" for 2 hours</li>
+                    <li><b>The mistake</b> — chasing the last few percent of matches with a window that quadruples memory and latency</li>
+                </ul>
+                <p class="example">Doubling the window from 30 to 60 minutes buys 8 points of match rate (80% to 88%) but doubles the buffer from 18M to 36M rows and doubles the wait for a verdict.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the window as a knob with no cost. Every extra minute of window is extra buffered state and extra delay — the window is a business decision about how long a real pair can take, not a tuning parameter to max out.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: two impression timelines, 30-min window bands, matched vs missed clicks
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The 30-Minute Bet: a Click Inside the Window Matches, Outside It Is Lost', w / 2, 24);
+
+    var originX = 60, baseY = 245, plotW = 600;
+    function xOf(min) { return originX + min / 50 * plotW; }
+    var laneA = 110, laneB = 190;
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(originX, baseY); ctx.lineTo(originX + plotW, baseY); ctx.stroke();
+    var tickLabs = ['2:00pm', '2:10pm', '2:20pm', '2:30pm', '2:40pm', '2:50pm'];
+    for (var t = 0; t <= 5; t++) {
+        var tx = xOf(t * 10);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[t], tx, baseY + 20);
+    }
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('A', 15, laneA + 4);
+    ctx.fillText('B', 15, laneB + 4);
+
+    // window bands (30px tall, centered on lane)
+    function band(startMin, endMin, laneY) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(xOf(startMin), laneY - 15, xOf(endMin) - xOf(startMin), 30);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(xOf(endMin), laneY - 22); ctx.lineTo(xOf(endMin), laneY + 22); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('window closes', xOf(endMin), laneY + 34);
+    }
+    band(0, 30, laneA);
+    band(5, 35, laneB);
+
+    // lane guide lines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(originX, laneA); ctx.lineTo(originX + plotW, laneA); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(originX, laneB); ctx.lineTo(originX + plotW, laneB); ctx.stroke();
+
+    // impression markers (blue squares)
+    function impression(min, laneY) {
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(xOf(min) - 5, laneY - 5, 10, 10);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('impression', xOf(min) + 9, laneY - 10);
+    }
+    impression(0, laneA);
+    impression(5, laneB);
+
+    // click markers
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(17), laneA, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('click +17 min ✓', xOf(17) + 10, laneA - 10);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xOf(46), laneB, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('click +41 min ✗ lost', xOf(46) - 130, laneB - 12);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same click behavior, different fate — the window decides', xOf(38) - 60, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times illustrative', w - 15, h - 10);
+});
+
+// c2: 10 click delays vs the 30-minute cutoff
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('10 Click Delays vs the 30-Minute Cutoff: 8 Matched, 2 Missed', w / 2, 24);
+
+    var originX = 60, baseY = 245, plotW = 600, plotH = 180, maxMin = 60;
+    var delays = [1, 3, 6, 9, 14, 19, 24, 28, 36, 52];
+    var barW = 40, gap = 18;
+
+    function yOf(m) { return baseY - m / maxMin * plotH; }
+
+    // gridlines
+    var grids = [15, 30, 45];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(originX, gy); ctx.lineTo(originX + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[g]), originX - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(originX, baseY - plotH);
+    ctx.lineTo(originX, baseY);
+    ctx.lineTo(originX + plotW, baseY);
+    ctx.stroke();
+
+    // bars
+    for (var i = 0; i < 10; i++) {
+        var bx = originX + 15 + i * (barW + gap);
+        var by = yOf(delays[i]);
+        var matched = delays[i] <= 30;
+        ctx.fillStyle = matched ? 'rgba(0,131,0,0.30)' : 'rgba(231,76,60,0.25)';
+        ctx.fillRect(bx, by, barW, baseY - by);
+        ctx.strokeStyle = matched ? P.green : '#e74c3c'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + barW, by); ctx.stroke();
+        ctx.fillStyle = matched ? P.green : '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(delays[i]), bx + barW / 2, by - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(String(i + 1), bx + barW / 2, baseY + 18);
+    }
+
+    // cutoff line
+    var cy = yOf(30);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(originX, cy); ctx.lineTo(originX + plotW, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('30-min window', originX + plotW - 4, cy - 8);
+
+    // annotation near bar 4
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('8 of 10 clicks land inside — 80% match rate', originX + 15 + 3 * (barW + gap), 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('delays illustrative', w - 15, h - 10);
+});
+
+// c3: stream-stream vs stream-table join patterns
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Stream-Stream Buffers Both Sides; Stream-Table Reads the Latest Row', w / 2, 24);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10,000 impressions/sec × 30 min = 18M buffered rows, illustrative', w - 15, 42);
+
+    var boxH = 36;
+
+    function flowBox(x, cy, bw, label, fill, border) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - boxH / 2, bw, boxH, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, cy + 4);
+    }
+
+    function solidArrow(x1, y1, x2, y2, color) {
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1);
+        ctx.lineTo(x2 - 8 * Math.cos(ang), y2 - 8 * Math.sin(ang)); ctx.stroke();
+        arrowHead(ctx, x2, y2, ang, 8, color);
+    }
+
+    // Row 1: stream-stream (centered y=105)
+    var y1 = 105;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stream-stream', 15, 62);
+    flowBox(110, y1 - 19, 150, 'impressions', 'rgba(42,120,214,0.15)', P.blue);
+    flowBox(110, y1 + 19, 150, 'clicks', 'rgba(0,131,0,0.12)', P.green);
+    solidArrow(260, y1 - 19, 330, y1 - 6, P.blue);
+    solidArrow(260, y1 + 19, 330, y1 + 6, P.green);
+    flowBox(330, y1, 190, '30-min window buffer (18M rows)', 'rgba(74,58,167,0.12)', P.violet);
+    solidArrow(520, y1, 560, y1, P.violet);
+    flowBox(560, y1, 150, 'matched pairs', 'rgba(26,82,118,0.10)', P.ink);
+
+    // Row 2: stream-table (centered y=225)
+    var y2 = 225;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stream-table', 15, y2 - 32);
+    flowBox(110, y2, 150, 'impressions', 'rgba(42,120,214,0.15)', P.blue);
+    solidArrow(260, y2, 330, y2, P.blue);
+    flowBox(330, y2, 190, 'campaign table (latest row)', 'rgba(25,158,112,0.12)', P.aqua);
+    solidArrow(520, y2, 560, y2, P.aqua);
+    flowBox(560, y2, 150, 'enriched events', 'rgba(26,82,118,0.10)', P.ink);
+
+    // refresh loop above the table box
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(425, y2 - boxH / 2 - 12, 10, 0.6 * Math.PI, 2.2 * Math.PI);
+    ctx.stroke();
+    arrowHead(ctx, 425 + 10 * Math.cos(2.2 * Math.PI), y2 - boxH / 2 - 12 + 10 * Math.sin(2.2 * Math.PI), 2.2 * Math.PI + Math.PI / 2, 6, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('updates replace rows', 445, y2 - boxH / 2 - 10);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the buffer is the price of joining two moving things', w / 2, 272);
+});
+
+// c4: match rate vs buffered rows across window sizes
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Match Rate Flattens While Buffer Cost Keeps Climbing', w / 2, 24);
+
+    var originX = 70, baseY = 245, plotW = 560, plotH = 180;
+    var winLabs = ['5m', '15m', '30m', '60m', '120m'];
+    var rates = [55, 68, 80, 88, 93];
+    var rows = [3, 9, 18, 36, 72];
+
+    function xOf(i) { return originX + i * plotW / 4; }
+    function yRate(r) { return baseY - r / 100 * plotH; }
+    function yRows(m) { return baseY - m / 80 * plotH; }
+
+    // gridlines (left axis, 25/50/75%)
+    var grids = [25, 50, 75];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yRate(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(originX, gy); ctx.lineTo(originX + plotW, gy); ctx.stroke();
+        ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[g] + '%', originX - 6, gy + 4);
+    }
+
+    // right axis labels (buffered rows)
+    var rGrids = [20, 40, 60, 80];
+    for (var g = 0; g < rGrids.length; g++) {
+        var gy = yRows(rGrids[g]);
+        ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rGrids[g] + 'M', originX + plotW + 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(originX, baseY - plotH);
+    ctx.lineTo(originX, baseY);
+    ctx.lineTo(originX + plotW, baseY);
+    ctx.lineTo(originX + plotW, baseY - plotH);
+    ctx.stroke();
+
+    // x tick labels
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(winLabs[i], xOf(i), baseY + 18);
+    }
+
+    // chosen-window marker at 30m
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(2), baseY - plotH); ctx.lineTo(xOf(2), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('chosen window', xOf(2), baseY - plotH - 8);
+
+    // buffer line (orange dashed)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var x = xOf(i), y = yRows(rows[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (var i = 0; i < 5; i++) {
+        var x = xOf(i), y = yRows(rows[i]);
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(rows[i] + 'M', x, y + 18);
+    }
+
+    // match-rate line (green solid)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var x = xOf(i), y = yRate(rates[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 5; i++) {
+        var x = xOf(i), y = yRate(rates[i]);
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(rates[i] + '%', x, y - 10);
+    }
+
+    // annotation near the 120m tick
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('last 13 points of match cost 4× the memory', xOf(4) - 10, 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates and row counts illustrative', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

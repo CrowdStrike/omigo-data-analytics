@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leaky Abstractions</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Leaky Abstractions</h1>
+<p class="subtitle">Every abstraction hides a messy layer beneath a clean interface &mdash; and sooner or later you end up debugging the layer below</p>
+
+<div class="card-section">
+    <h2>The Pipe That Promises Reliable Delivery</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">TCP</span><span class="tag orange">Spolsky 2002</span></div>
+                <ul>
+                    <li><b>The promise</b> &mdash; TCP hands your program a reliable byte pipe over a network that drops packets</li>
+                    <li><b>The mess below</b> &mdash; IP loses, duplicates, and reorders packets; TCP retransmits to hide all of it</li>
+                    <li><b>The leak</b> &mdash; a lost packet can't be hidden in time: your "reliable" call just stalls for 3 seconds</li>
+                    <li><b>The law</b> &mdash; Joel Spolsky's 2002 essay: all non-trivial abstractions, to some degree, are leaky</li>
+                    <li><b>The shape of a leak</b> &mdash; the hidden layer shows through as a latency cliff or a weird failure</li>
+                </ul>
+                <p class="example">Request #38 takes 3,000ms instead of 40ms &mdash; no TCP API call ever says "packet lost"; the unreliable network leaks through as a stall.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An abstraction hides a messy layer behind a clean interface. The law of leaky abstractions says the hiding is never perfect &mdash; the layer below eventually shows through, and when it does, you debug it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A 2GB CSV Becomes 10GB of RAM</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">pandas</span></div>
+                <ul>
+                    <li><b>The file</b> &mdash; a 25M-row orders CSV is 2GB on disk: 8 numeric columns plus 3 short text columns</li>
+                    <li><b>The load</b> &mdash; <code>read_csv</code> returns a tidy DataFrame; memory layout appears nowhere in the interface</li>
+                    <li><b>The numbers</b> &mdash; 8 float64 columns cost 25M &times; 8 &times; 8 bytes = 1.6GB; that part is honest</li>
+                    <li><b>The leak</b> &mdash; each text cell becomes a Python object: 3 &times; 25M &times; ~112 bytes &asymp; 8.4GB</li>
+                    <li><b>Hand-check</b> &mdash; 1.6GB numeric + 8.4GB strings = 10GB of RAM for a 2GB file, a 5&times; blow-up</li>
+                </ul>
+                <p class="example">The laptop has 8GB of RAM, so the 2GB CSV kills the kernel &mdash; and the fix (categorical dtype, 1.9GB total) lives one layer below the DataFrame.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> pandas hides memory layout right up until it can't. The 5&times; blow-up is the layer below &mdash; dtypes and per-object headers &mdash; leaking through the clean table.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>You End Up Reading the Query Plan</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag green">SQL</span><span class="tag orange">N+1</span></div>
+                <ul>
+                    <li><b>The promise</b> &mdash; SQL is declarative: you say what rows you want, never how to fetch them</li>
+                    <li><b>The leak</b> &mdash; one missing index turns a 42ms lookup into a 42,000ms scan: 1000&times; on the same query</li>
+                    <li><b>The tell</b> &mdash; the day you run <code>EXPLAIN</code>, you are officially debugging the layer below</li>
+                    <li><b>The ORM double-leak</b> &mdash; objects hide the SQL; looping over 100 orders fires 101 queries (N+1)</li>
+                    <li><b>Every stack</b> &mdash; TCP, SQL, ORMs, dataframes: each leak is the hidden layer's cost model surfacing</li>
+                </ul>
+                <p class="example">A dashboard query is instant in staging and takes 42 seconds in production &mdash; the fix is one CREATE INDEX, found by reading the plan.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Performance cliffs are the most common leak: the interface's meaning stays identical while the hidden layer's cost changes by 1000&times;.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Leaky Does Not Mean Worthless</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">two-sided lesson</span></div>
+                <ul>
+                    <li><b>The wrong lesson</b> &mdash; "abstractions leak, so write raw sockets and hand-rolled SQL" &mdash; that's worse</li>
+                    <li><b>The right lesson</b> &mdash; abstractions are how anything gets built; the layer below must be learnable</li>
+                    <li><b>What it buys</b> &mdash; an abstraction saves you time working; it does not save you time learning</li>
+                    <li><b>Seniority</b> &mdash; much of it is knowing one layer deeper than you usually need, for the day it leaks</li>
+                    <li><b>Pick learnable layers</b> &mdash; prefer tools with an inspectable underside: EXPLAIN, memory_usage()</li>
+                </ul>
+                <p class="example">Two engineers hit the same 3-second TCP stall; the one who once read about retransmission timers fixes it that afternoon.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating an abstraction as a substitute for understanding. When the leak comes &mdash; and the law says it will &mdash; the only person who can fix it is the one who learned the layer below anyway.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, dx, dy, size) {
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ux * size - uy * size * 0.5, y - uy * size + ux * size * 0.5);
+    ctx.lineTo(x - ux * size + uy * size * 0.5, y - uy * size - ux * size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: latency per request with retransmission stalls
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("A 'Reliable' Connection: the Network Leaks Through as Stalls", w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(r) { return ox + (r - 1) / 49 * pw; }
+    function yOf(ms) { return baseY - ms / 3000 * chH; }
+
+    var gl = [1000, 2000];
+    var glabs = ['1,000', '2,000'];
+    for (var i = 0; i < 2; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var r = 10; r <= 50; r += 10) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r, xOf(r), baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('request number', ox + pw / 2, baseY + 32);
+
+    var reqs = [1, 6, 10, 13, 14, 15, 20, 26, 32, 37, 38, 39, 44, 50];
+    var lats = [41, 39, 42, 40, 1200, 43, 38, 41, 40, 42, 3000, 44, 40, 39];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < reqs.length; i++) {
+        var x = xOf(reqs[i]), y = yOf(lats[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // spike markers
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xOf(14), yOf(1200), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(xOf(38), yOf(3000), 5, 0, 2 * Math.PI); ctx.fill();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('packet lost below — 3,000ms stall above', xOf(38) - 12, 55);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the promise: ~40ms, every time', xOf(24), 215);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 12, h - 8);
+});
+
+// c2: disk vs naive DataFrame vs category dtype
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 25M Rows: 2GB on Disk, 10GB in RAM', w / 2, 24);
+
+    var baseY = 250, chH = 190;
+    function yOf(gb) { return baseY - gb / 10 * chH; }
+
+    var gl = [2, 4, 6, 8];
+    for (var i = 0; i < 4; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(70, y); ctx.lineTo(650, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i] + 'GB', 64, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(70, baseY); ctx.lineTo(650, baseY); ctx.stroke();
+
+    var bw = 110;
+
+    // bar 1: CSV on disk
+    var h1 = 2.0 / 10 * chH;
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(180 - bw / 2, baseY - h1, bw, h1);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(180 - bw / 2, baseY - h1, bw, h1);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2.0GB', 180, baseY - h1 - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('CSV on disk', 180, baseY + 16);
+
+    // bar 2: naive DataFrame, stacked
+    var hNum = 1.6 / 10 * chH, hStr = 8.4 / 10 * chH;
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(380 - bw / 2, baseY - hNum, bw, hNum);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(380 - bw / 2, baseY - hNum, bw, hNum);
+    ctx.fillStyle = 'rgba(231,76,60,0.25)';
+    ctx.fillRect(380 - bw / 2, baseY - hNum - hStr, bw, hStr);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(380 - bw / 2, baseY - hNum - hStr, bw, hStr);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('float64 1.6GB', 380, baseY - hNum / 2 + 4);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('string objects 8.4GB', 380, baseY - hNum - hStr / 2 + 4);
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('10.0GB', 380, baseY - hNum - hStr - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('naive DataFrame', 380, baseY + 16);
+
+    // bar 3: category dtype
+    var h3 = 1.9 / 10 * chH;
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(580 - bw / 2, baseY - h3, bw, h3);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(580 - bw / 2, baseY - h3, bw, h3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1.9GB', 580, baseY - h3 - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('category dtype', 580, baseY + 16);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('5× blow-up — the memory layout leaks', 280, 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; float64 arithmetic exact', w - 12, h - 4);
+});
+
+// c3: SQL and ORM leaks, two bar groups
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Question, 1000× the Cost: Leaks Below SQL and ORMs', w / 2, 24);
+
+    var bx = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 265); ctx.stroke();
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one query — runtime', 20, 55);
+
+    // row 1: no index
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('no index — 42,000 ms', 20, 97);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(bx, 85, 430, 16);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('42,000 ms', bx + 430 - 6, 97);
+
+    // row 2: with index
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with index — 42 ms', 20, 137);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, 125, 10, 16);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('42 ms — 1000× faster', bx + 18, 137);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('one screen of orders — queries fired', 20, 180);
+
+    // row 3: ORM loop
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('ORM loop (N+1) — 101 queries', 20, 217);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(bx, 205, 320, 16);
+    ctx.font = '11px system-ui';
+    ctx.fillText('101', bx + 320 + 8, 217);
+
+    // row 4: one JOIN
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('one JOIN — 1 query', 20, 257);
+    ctx.fillStyle = P.blue;
+    ctx.fillRect(bx, 245, 8, 16);
+    ctx.font = '11px system-ui';
+    ctx.fillText('1', bx + 8 + 8, 257);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the fix lives one layer down', w - 20, 170);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('pixel widths schematic; counts and timings illustrative', w - 12, h - 8);
+});
+
+// c4: interface-only vs one layer deeper
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('When the Leak Comes: Interface-Only vs One Layer Deeper', w / 2, 24);
+
+    function box(x, cy, bw, lab1, lab2, col, fill) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lab2) {
+            ctx.fillText(lab1, x + bw / 2, cy - 3);
+            ctx.fillText(lab2, x + bw / 2, cy + 12);
+        } else {
+            ctx.fillText(lab1, x + bw / 2, cy + 4);
+        }
+    }
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        arrowHead(ctx, x2, y, 1, 0, 8);
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)', orangeFill = 'rgba(217,89,38,0.12)';
+    var redFill = 'rgba(231,76,60,0.12)', greenFill = 'rgba(0,131,0,0.12)';
+    var red = '#e74c3c';
+
+    // row 1: interface only
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('interface only', 20, y1 - 32);
+    box(170, y1, 150, 'clean interface', null, P.blue, blueFill);
+    arrow(320, 350, y1);
+    box(350, y1, 170, 'weird stall / 10GB RAM', null, P.orange, orangeFill);
+    arrow(520, 540, y1);
+    box(540, y1, 170, 'stuck — leak is invisible', null, red, redFill);
+    ctx.fillStyle = red; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', 625, y1 + 38);
+
+    // row 2: one layer deeper
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one layer deeper', 20, y2 - 32);
+    box(170, y2, 150, 'clean interface', null, P.blue, blueFill);
+    arrow(320, 350, y2);
+    box(350, y2, 170, 'weird stall / 10GB RAM', null, P.orange, orangeFill);
+    arrow(520, 540, y2);
+    box(540, y2, 170, 'reads the plan /', 'dtypes — fixed', P.green, greenFill);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 625, y2 + 38);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('abstractions save time working, not time learning', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

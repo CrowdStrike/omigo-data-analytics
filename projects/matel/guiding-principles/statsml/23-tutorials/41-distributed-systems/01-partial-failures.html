@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partial Failures</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Partial Failures</h1>
+<p class="subtitle">On one machine a crash stops everything, so you always know; across two machines any step can half-work — and the caller cannot tell which half</p>
+
+<div class="card-section">
+    <h2>The Payment That Timed Out</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">two machines</span><span class="tag orange">uncertainty</span></div>
+                <ul>
+                    <li><b>The request</b> — a coffee shop's card terminal sends a $4.50 charge to a payment server</li>
+                    <li><b>The wait</b> — the terminal waits 5 seconds for "approved", hears nothing, and gives up</li>
+                    <li><b>The question</b> — did the charge fail before the card was charged, or after? Nobody at the till knows</li>
+                    <li><b>One machine</b> — if the till itself crashes, everything stops together; the failure is total and obvious</li>
+                    <li><b>Two machines</b> — the terminal, the network, and the server can each fail alone while the others keep going</li>
+                    <li><b>The definition</b> — a partial failure is when some parts of a system fail while the rest keeps running</li>
+                </ul>
+                <p class="example">The barista sees "timeout" on the terminal at 8:14am and has no way to know whether the customer's card was charged $4.50 or not.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The moment a program spans two machines, failure stops being all-or-nothing — pieces fail independently, and the surviving pieces can't see which piece died.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Ways One Request Can Die</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">failure points</span><span class="tag red">same symptom</span></div>
+                <ul>
+                    <li><b>The path</b> — one charge is three steps: send the request, server charges the card, send the reply</li>
+                    <li><b>Point A: send lost</b> — the network drops the request; the server never hears; card NOT charged</li>
+                    <li><b>Point B: crash mid-work</b> — the server dies while processing; the card MAYBE charged, maybe not</li>
+                    <li><b>Point C: reply lost</b> — the server charges the card, but "approved" is dropped; card IS charged</li>
+                    <li><b>The symptom</b> — in all three cases the terminal sees exactly the same thing: 5 seconds of silence</li>
+                    <li><b>Hand-check</b> — walk the path yourself: A = not charged, B = unknown, C = charged; caller view identical</li>
+                </ul>
+                <p class="example">Order #218 times out at 5s; the true state is "not charged" (A), "unknown" (B), or "charged $4.50" (C) — and the terminal's screen looks identical in all three.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Three different truths — not charged, unknown, charged — collapse into one indistinguishable observation at the caller: a timeout.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Retries Without Double Charges</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">retries</span><span class="tag orange">idempotency</span></div>
+                <ul>
+                    <li><b>The instinct</b> — timeouts get retried; every payment terminal resends the charge after silence</li>
+                    <li><b>The trap</b> — of 100 timed-out charges (illustrative), 38 were case C: already charged, reply lost</li>
+                    <li><b>Blind retry</b> — resending all 100 charges again double-charges those 38 customers</li>
+                    <li><b>Idempotency key</b> — the terminal sends a unique id (<code>pay-218</code>) with the charge, same id on retry</li>
+                    <li><b>The dedupe</b> — the server remembers ids it has processed and answers repeats without charging again</li>
+                    <li><b>The lesson</b> — this is why distributed programming is qualitatively harder: uncertainty, not speed</li>
+                </ul>
+                <p class="example">Retrying 100 timeouts blindly creates 38 double charges; retrying the same 100 with idempotency keys creates 0, because the server recognizes pay-218 the second time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You can't eliminate the uncertainty, so you make repeats harmless — an idempotency key turns "charge the card" into "charge the card at most once for this id", making retries safe.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Timeout Is Not a "No"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">timeouts</span></div>
+                <ul>
+                    <li><b>The mistake</b> — reading a timeout as "the charge didn't happen" and acting on that guess</li>
+                    <li><b>What it really means</b> — a timeout only says "no reply within 5s"; it says nothing about the card</li>
+                    <li><b>The tally</b> — of 200 timeouts in a day (illustrative), 120 never charged but 80 actually did</li>
+                    <li><b>The fallout</b> — treat all 200 as "didn't happen" and you resend 80 charges that already landed</li>
+                    <li><b>The honest state</b> — after a timeout the only correct label is "unknown", until you ask the server</li>
+                    <li><b>The fix</b> — retry with an idempotency key, or query the server for <code>pay-218</code> before acting</li>
+                </ul>
+                <p class="example">A report that counts all 200 timeouts as failed payments is wrong about 80 of them — those customers were charged and will call about duplicates.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a timeout as a negative answer. A timeout is the absence of an answer — the real outcome is unknown, and 80 of these 200 "failures" actually succeeded.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rbox(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: one machine fails whole vs two machines fail in pieces
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Machine Fails Whole; Two Machines Fail in Pieces', w / 2, 24);
+
+    // row 1: one machine
+    var y1 = 105;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one machine', 20, y1 + 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rbox(ctx, 170, y1 - 20, 300, 40, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    rbox(ctx, 170, y1 - 20, 300, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('till + charge logic (one process)', 320, y1 - 28);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('✗ crash', 320, y1 + 5);
+    ctx.fillStyle = '#008300'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('everything stops — you know', 530, y1 + 4);
+
+    // row 2: two machines
+    var y2 = 215;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('two machines', 20, y2 + 4);
+
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    rbox(ctx, 150, y2 - 20, 130, 40, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    rbox(ctx, 150, y2 - 20, 130, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('card terminal', 215, y2 + 4);
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(290, y2); ctx.lineTo(430, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('network', 360, y2 - 10);
+
+    ctx.fillStyle = 'rgba(25,158,112,0.15)';
+    rbox(ctx, 440, y2 - 20, 150, 40, 8); ctx.fill();
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 1.5;
+    rbox(ctx, 440, y2 - 20, 150, 40, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('payment server', 515, y2 + 4);
+
+    // three failure points
+    var xs = [300, 400, 510];
+    var ticks = ['network out', 'network back', 'server'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('✗', xs[i], y2 - 26);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(ticks[i], xs[i], y2 + 38);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('three places to die, one identical silence at the terminal', w / 2, 272);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('diagram schematic', w - 14, h - 8);
+});
+
+// c2: three lanes, same pipeline, X at a different stage, identical caller view
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Different Deaths, One Identical Timeout', w / 2, 24);
+
+    var lanes = [
+        { y: 85,  label: 'A: send lost',      xMark: 275, dead: [1, 2], state: 'not charged', stateColor: P.green },
+        { y: 160, label: 'B: crash mid-work', xMark: 355, dead: [2],    state: 'unknown',     stateColor: P.yellow },
+        { y: 235, label: 'C: reply lost',     xMark: 435, dead: [],     state: 'charged',     stateColor: P.orange }
+    ];
+    var boxes = [
+        { x: 140, label: 'send',         fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { x: 300, label: 'charge $4.50', fill: 'rgba(25,158,112,0.15)', edge: P.aqua },
+        { x: 460, label: 'reply',        fill: 'rgba(74,58,167,0.12)',  edge: P.violet }
+    ];
+    var bw = 110, bh = 34;
+
+    for (var li = 0; li < 3; li++) {
+        var L = lanes[li], y = L.y;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(L.label, 20, y + 4);
+
+        // arrows between boxes
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        for (var a = 0; a < 2; a++) {
+            var x1 = boxes[a].x + bw, x2 = boxes[a + 1].x;
+            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x2, y); ctx.lineTo(x2 - 7, y - 4); ctx.lineTo(x2 - 7, y + 4);
+            ctx.closePath(); ctx.fillStyle = P.mute; ctx.fill();
+        }
+
+        // boxes
+        for (var b = 0; b < 3; b++) {
+            var dead = L.dead.indexOf(b) >= 0;
+            var B = boxes[b];
+            ctx.fillStyle = dead ? '#fff' : B.fill;
+            rbox(ctx, B.x, y - bh / 2, bw, bh, 8); ctx.fill();
+            ctx.strokeStyle = dead ? P.grid : B.edge; ctx.lineWidth = 1.5;
+            rbox(ctx, B.x, y - bh / 2, bw, bh, 8); ctx.stroke();
+            ctx.fillStyle = dead ? P.mute : P.text;
+            ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(B.label, B.x + bw / 2, y + 4);
+        }
+
+        // failure mark: lane B on the charge box, others on the arrow
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('✗', L.xMark, li === 1 ? y - bh / 2 - 4 : y - 8);
+
+        // card-state label
+        ctx.fillStyle = L.stateColor; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(L.state, 580, y - 14);
+
+        // caller label
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+        ctx.fillText('sees: timeout', 590, y + 4);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the caller's evidence is the same in all three worlds", w / 2, 278);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order #218 illustrative', w - 14, h - 8);
+});
+
+// c3: bar chart — blind retry vs idempotency key
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Retrying 100 Timeouts: Blind vs With an Idempotency Key', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180, maxV = 40;
+
+    // gridlines + labels
+    for (var g = 10; g <= 40; g += 10) {
+        var gy = baseY - g / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // blind retry bar (value 38)
+    var bw = 90;
+    var h1 = 38 / maxV * ph;
+    ctx.fillStyle = 'rgba(231,76,60,0.75)';
+    ctx.fillRect(220 - bw / 2, baseY - h1, bw, h1);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('38 double-charged', 220, baseY - h1 - 8);
+
+    // idempotency key: value 0 as a green stub
+    ctx.fillStyle = P.green;
+    ctx.fillRect(470 - bw / 2, baseY - 3, bw, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('0 double-charged', 470, baseY - 12);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('blind retry', 220, 265);
+    ctx.fillText('with idempotency key', 470, 265);
+
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('38 of 100 timeouts had actually charged (reply lost)', w - 20, 44);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same 100 retries — the key makes them harmless', 470, 110);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 14, h - 8);
+});
+
+// c4: assumption vs reality stacked bars for 200 timeouts
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('200 Timeouts: What Teams Assume vs What Actually Happened', w / 2, 24);
+
+    var bx = 230, maxW = 440, bh = 26;
+
+    // scale ticks and guides
+    var tickXs = [230, 450, 670], tickLabs = ['0', '100', '200'];
+    for (var t = 0; t < 3; t++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tickXs[t], 70); ctx.lineTo(tickXs[t], 225); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[t], tickXs[t], 240);
+    }
+
+    // row 1: the assumption
+    var y1 = 100;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the assumption', 20, y1 + bh / 2 + 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(bx, y1, maxW, bh);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, y1, maxW, bh);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all 200 not charged', bx + maxW / 2, y1 + bh / 2 + 4);
+
+    // row 2: the reality
+    var y2 = 185;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the reality', 20, y2 + bh / 2 + 4);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(bx, y2, 264, bh);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, y2, 264, bh);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('120 not charged', bx + 132, y2 + bh / 2 + 4);
+
+    ctx.fillStyle = 'rgba(217,89,38,0.55)';
+    ctx.fillRect(bx + 264, y2, 176, bh);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx + 264, y2, 176, bh);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('80 charged', bx + 264 + 88, y2 + bh / 2 + 4);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("80 'failures' were successes wearing a timeout", 420, 262);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('split illustrative', w - 14, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

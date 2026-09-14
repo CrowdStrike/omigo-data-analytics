@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cache Eviction</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Cache Eviction</h1>
+<p class="subtitle">A full cache must forget something — LRU forgets what was touched longest ago, LFU forgets what is least popular, TTL forgets what is oldest, and the choice decides your hit rate</p>
+
+<div class="card-section">
+    <h2>Four Slots, Six Products: Someone Must Go</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">eviction</span></div>
+                <ul>
+                    <li><b>The cache</b> — a product-image cache holds 4 images; the store sells 6 products, A through F</li>
+                    <li><b>The hot pair</b> — bestsellers A and B account for most image requests on a normal afternoon</li>
+                    <li><b>The full moment</b> — request 9 (product E) arrives; LRU and LFU are full: someone must go</li>
+                    <li><b>Three answers</b> — LRU evicts A (touched longest ago), LFU evicts C (used once), TTL drops B (aged out)</li>
+                    <li><b>The definition</b> — an eviction policy is the rule a full cache uses to pick which entry to drop</li>
+                </ul>
+                <p class="example">At request 9 each rule names a different victim — LRU says A, LFU says C, and TTL, with A already expired, drops B — the policy, not the data, decides.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Eviction is forced; the only choice is the rule. Each policy encodes a bet about which entry is least likely to be needed again.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Fourteen Requests, Three Traces</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hit rate</span></div>
+                <ul>
+                    <li><b>The sequence</b> — 14 requests, one per second: A B A B A B, then a scan C D E F, then A B A B</li>
+                    <li><b>LRU trace</b> — the scan pushes A and B out at requests 9–10, so requests 11–12 miss: 6 hits</li>
+                    <li><b>LFU trace</b> — A and B hold count 3 against the scan's 1, so LFU drops C then D instead: 8 hits</li>
+                    <li><b>TTL trace</b> — with a 6-second TTL, A (cached at t=1) expires by request 8 and B by 9: 6 hits</li>
+                    <li><b>Hand-check</b> — everyone misses the first 2 and the scan's 4; the traces differ only on 11–12</li>
+                </ul>
+                <p class="example">Same 14 requests, same 4 slots: LFU scores 8 hits, LRU 6, TTL 6 — LRU and TTL both miss requests 11–12, but one flushed the pair and the other expired it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The trace is fully determined once the rule is fixed: LFU ties break toward the least recently used, a TTL entry expires 6 seconds after insert with no refresh on read, and a full TTL cache with nothing expired evicts the oldest entry.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Picking a Policy: Hits vs Freshness</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">trade-off</span></div>
+                <ul>
+                    <li><b>Temporal locality</b> — LRU wins when whatever was just asked for will be asked for again soon</li>
+                    <li><b>Stable popularity</b> — LFU wins when a few items stay hot for hours, like bestseller images</li>
+                    <li><b>Slow to adapt</b> — a cooled-off bestseller keeps its high count and squats in an LFU cache</li>
+                    <li><b>Freshness</b> — TTL is the only one of the three that bounds staleness: no image served older than 6s</li>
+                    <li><b>Hybrids</b> — real caches mix them: segmented LRU, LFU with count decay, TTL layered on either</li>
+                </ul>
+                <p class="example">If the sneaker photo A is re-shot, an LFU cache can keep serving the old image as long as it stays popular; the 6-second TTL caps the damage at 6 seconds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> LRU and LFU optimize hit rate under different traffic patterns; TTL optimizes correctness by bounding staleness. Production caches usually pair a hit-rate policy with a TTL.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Scan That Flushes LRU</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">scan flush</span></div>
+                <ul>
+                    <li><b>The mistake</b> — treating LRU as the universal default because it is the easiest policy to picture</li>
+                    <li><b>One scan</b> — a single pass over 4 cold items (requests 7–10) flushed both bestsellers out of LRU</li>
+                    <li><b>The cost</b> — the two most valuable entries became misses exactly when demand for them returned</li>
+                    <li><b>Scan resistance</b> — hybrid policies demand a second touch before a newcomer can evict a hot entry</li>
+                    <li><b>The flip side</b> — LFU fails differently: a stale high count keeps a cooled-off item pinned for hours</li>
+                </ul>
+                <p class="example">The crawler that requested C, D, E, F never comes back for them, yet under LRU those four one-off images displaced A and B, the only items with a future.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing a policy that is optimal for one access pattern is good for all of them. One sequential scan turns LRU's strength — recency — into the thing that evicts your hottest data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x, y + r, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-size, -size * 0.5);
+    ctx.lineTo(-size, size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+// c1: cache state before request 9, each policy's victim highlighted
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Request 9: E Arrives at a Full Cache — Each Policy Picks a Different Victim', w / 2, 24);
+
+    var slotXs = [115, 217, 319, 421];
+    var slotW = 92, slotH = 44, slotR = 8;
+
+    var rows = [
+        {
+            y: 80, policy: 'LRU',
+            slots: [
+                { lab: 'A · last t5', victim: true },
+                { lab: 'B · last t6', victim: false },
+                { lab: 'C · last t7', victim: false },
+                { lab: 'D · last t8', victim: false }
+            ]
+        },
+        {
+            y: 150, policy: 'LFU',
+            slots: [
+                { lab: 'A ×3', victim: false },
+                { lab: 'B ×3', victim: false },
+                { lab: 'C ×1', victim: true },
+                { lab: 'D ×1', victim: false }
+            ]
+        },
+        {
+            y: 220, policy: 'TTL',
+            slots: [
+                { lab: 'B · age 7s', victim: true },
+                { lab: 'C · age 2s', victim: false },
+                { lab: 'D · age 1s', victim: false },
+                { lab: 'empty', empty: true }
+            ]
+        }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        // policy label
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.policy, 20, row.y + slotH / 2 + 5);
+
+        var victimX = null;
+        for (var i = 0; i < 4; i++) {
+            var sl = row.slots[i];
+            roundedRect(ctx, slotXs[i], row.y, slotW, slotH, slotR);
+            if (sl.empty) {
+                ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+                ctx.stroke(); ctx.setLineDash([]);
+                ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText('empty', slotXs[i] + slotW / 2, row.y + slotH / 2 + 4);
+            } else if (sl.victim) {
+                ctx.fillStyle = 'rgba(231,76,60,0.15)'; ctx.fill();
+                ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText(sl.lab, slotXs[i] + slotW / 2, row.y + slotH / 2 + 4);
+                victimX = slotXs[i] + slotW;
+                var victimSlot = i;
+            } else {
+                ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+                ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+                ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText(sl.lab, slotXs[i] + slotW / 2, row.y + slotH / 2 + 4);
+            }
+        }
+
+        // incoming E box
+        roundedRect(ctx, 560, row.y, 60, slotH, slotR);
+        ctx.fillStyle = 'rgba(0,131,0,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('E in', 590, row.y + slotH / 2 + 4);
+
+        // arrow from E box to the victim slot in this row
+        var vi = -1;
+        for (var i = 0; i < 4; i++) { if (row.slots[i].victim) vi = i; }
+        if (vi >= 0) {
+            var x1 = 560, x2 = slotXs[vi] + slotW + 4, ay = row.y + slotH / 2;
+            ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x1, ay); ctx.lineTo(x2, ay); ctx.stroke();
+            arrowHead(ctx, x2, ay, Math.PI, 8, P.green);
+        }
+    }
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('state just before request 9 of the worked trace; one request per second', 690, 292);
+});
+
+// c2: hit/miss grid, 3 policies x 14 requests
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fourteen Requests: Hit or Miss Under Each Policy', w / 2, 24);
+
+    var letters = ['A', 'B', 'A', 'B', 'A', 'B', 'C', 'D', 'E', 'F', 'A', 'B', 'A', 'B'];
+    var pitch = 40, gridX = 80, cellW = 36, cellH = 48;
+
+    // column headers
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 14; i++) {
+        ctx.fillText(letters[i], gridX + i * pitch + 19, 72);
+    }
+
+    var rows = [
+        { y: 90, lab: 'LRU', pattern: 'MMHHHHMMMMMMHH', total: '6/14', totalCol: P.text },
+        { y: 150, lab: 'LFU', pattern: 'MMHHHHMMMMHHHH', total: '8/14', totalCol: P.green },
+        { y: 210, lab: 'TTL', pattern: 'MMHHHHMMMMMMHH', total: '6/14', totalCol: P.text }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.lab, 20, row.y + cellH / 2 + 5);
+        for (var i = 0; i < 14; i++) {
+            var hit = row.pattern.charAt(i) === 'H';
+            var cx = gridX + i * pitch;
+            ctx.fillStyle = hit ? 'rgba(0,131,0,0.25)' : 'rgba(231,76,60,0.18)';
+            ctx.fillRect(cx, row.y, cellW, cellH);
+            ctx.fillStyle = hit ? P.green : '#e74c3c';
+            ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(hit ? '✓' : '✗', cx + cellW / 2, row.y + cellH / 2 + 5);
+        }
+        ctx.fillStyle = row.totalCol; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.total, 655, row.y + cellH / 2 + 5);
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the three policies differ only on requests 11–12', w / 2, 285);
+});
+
+// c3: hit counts vs staleness bounds
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Hit Count vs Staleness Bound on the 14-Request Trace', w / 2, 24);
+
+    var rows = [
+        { y: 90, lab: 'LFU', width: 320, fill: P.green, hits: '8 hits', stale: 'staleness: unbounded', staleCol: '#e74c3c' },
+        { y: 148, lab: 'LRU', width: 240, fill: P.blue, hits: '6 hits', stale: 'staleness: unbounded', staleCol: '#e74c3c' },
+        { y: 206, lab: 'TTL', width: 240, fill: P.orange, hits: '6 hits', stale: 'staleness ≤ 6 s', staleCol: P.green }
+    ];
+    var barX = 110, barH = 26;
+
+    // reference line at x=670 (14 hits)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(670, 55); ctx.lineTo(670, 245); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all 14', 670, 48);
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.lab, 20, row.y + barH / 2 + 5);
+        ctx.fillStyle = row.fill;
+        ctx.fillRect(barX, row.y, row.width, barH);
+        ctx.fillStyle = row.fill; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(row.hits, barX + row.width + 8, row.y + barH / 2 + 4);
+        ctx.fillStyle = row.staleCol; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(row.stale, 700, row.y + barH / 2 + 4);
+        ctx.textAlign = 'left';
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('LFU wins the hits; only TTL promises freshness', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hit counts exact from the trace; TTL = 6 s; traffic illustrative', 690, 292);
+});
+
+// c4: three LRU snapshots — one scan evicts both bestsellers
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('LRU Cache Snapshots: One Scan Evicts Both Bestsellers', w / 2, 24);
+
+    var slotW = 130, slotH = 32, gap = 6, startY = 90;
+
+    var blueStyle = { fill: 'rgba(42,120,214,0.15)', border: P.blue, bw: 1 };
+    var orangeStyle = { fill: 'rgba(217,89,38,0.15)', border: P.orange, bw: 1 };
+    var greenStyle = { fill: 'rgba(0,131,0,0.15)', border: P.green, bw: 2 };
+
+    var groups = [
+        {
+            x: 40, header: 'after request 6',
+            slots: [
+                { lab: 'A', style: blueStyle },
+                { lab: 'B', style: blueStyle },
+                { empty: true },
+                { empty: true }
+            ],
+            note: null
+        },
+        {
+            x: 280, header: 'after the scan (t10)',
+            slots: [
+                { lab: 'C', style: orangeStyle },
+                { lab: 'D', style: orangeStyle },
+                { lab: 'E', style: orangeStyle },
+                { lab: 'F', style: orangeStyle }
+            ],
+            note: { txt: 'A, B evicted', col: '#e74c3c' }
+        },
+        {
+            x: 520, header: 'after requests 11–12',
+            slots: [
+                { lab: 'E', style: orangeStyle },
+                { lab: 'F', style: orangeStyle },
+                { lab: 'A', style: greenStyle },
+                { lab: 'B', style: greenStyle }
+            ],
+            note: { txt: 're-fetched: 2 extra misses', col: P.green }
+        }
+    ];
+
+    for (var g = 0; g < groups.length; g++) {
+        var gr = groups[g];
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gr.header, gr.x + slotW / 2, 70);
+        for (var i = 0; i < 4; i++) {
+            var sl = gr.slots[i];
+            var y = startY + i * (slotH + gap);
+            roundedRect(ctx, gr.x, y, slotW, slotH, 6);
+            if (sl.empty) {
+                ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+                ctx.stroke(); ctx.setLineDash([]);
+                ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText('empty', gr.x + slotW / 2, y + slotH / 2 + 4);
+            } else {
+                ctx.fillStyle = sl.style.fill; ctx.fill();
+                ctx.strokeStyle = sl.style.border; ctx.lineWidth = sl.style.bw; ctx.stroke();
+                ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText(sl.lab, gr.x + slotW / 2, y + slotH / 2 + 4);
+            }
+        }
+        if (gr.note) {
+            var noteY = startY + 4 * (slotH + gap) + 12;
+            ctx.fillStyle = gr.note.col; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(gr.note.txt, gr.x + slotW / 2, noteY);
+        }
+    }
+
+    // arrows between groups
+    var midY = startY + 2 * (slotH + gap) - gap / 2;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(40 + slotW + 10, midY); ctx.lineTo(280 - 10, midY); ctx.stroke();
+    arrowHead(ctx, 280 - 10, midY, 0, 8, P.mute);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('scan C D E F', (40 + slotW + 280) / 2, midY - 10);
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(280 + slotW + 10, midY); ctx.lineTo(520 - 10, midY); ctx.stroke();
+    arrowHead(ctx, 520 - 10, midY, 0, 8, P.mute);
+    ctx.fillStyle = '#444';
+    ctx.fillText('A, B asked again', (280 + slotW + 520) / 2, midY - 10);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('four items nobody wants twice pushed out the two everyone wants', w / 2, 282);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

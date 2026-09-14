@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exponential Backoff &amp; Retry Storms</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Exponential Backoff &amp; Retry Storms</h1>
+<p class="subtitle">When a service stumbles, every client retrying at once can keep it down long after the original problem is fixed &mdash; the outage outlives its cause unless retries back off and spread out</p>
+
+<div class="card-section">
+    <h2>The Ten-Second Blip That Buried the Server</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">retry storm</span><span class="tag red">outage</span></div>
+                <ul>
+                    <li><b>The service</b> — an orders API normally handles 200 requests per second, with capacity for 500</li>
+                    <li><b>The blip</b> — a 10-second network hiccup at 12:00:00 makes every request fail</li>
+                    <li><b>The reflex</b> — every failed client retries every 2 seconds and keeps retrying until it succeeds</li>
+                    <li><b>The pile-up</b> — stuck clients accumulate at 200/s; after 10 seconds, 2,000 clients are retrying</li>
+                    <li><b>The math</b> — 2,000 clients firing every 2 seconds is 1,000 requests/s — 5&times; the normal load</li>
+                    <li><b>The burial</b> — the network heals at 12:00:10, but 1,000 req/s hits a server built for 500</li>
+                </ul>
+                <p class="example">The cause of the outage lasted 10 seconds; the retry traffic it created kept the server down for the next hour.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A retry storm is when the recovery traffic from a failure is itself large enough to prevent recovery — the outage outlives its cause.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Backing Off: 1s, 2s, 4s, 8s &mdash; Plus a Coin Flip</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">exponential backoff</span><span class="tag orange">jitter</span></div>
+                <ul>
+                    <li><b>The schedule</b> — wait 1s before retry 1, then 2s, then 4s, then 8s: each failure doubles the wait</li>
+                    <li><b>One client</b> — fails at 12:00:00, retries at 0:01, 0:03, 0:07, and 0:15 — fifteen seconds of patience</li>
+                    <li><b>Past the blip</b> — the 4th retry at 0:15 lands after the 10-second outage is over, and succeeds</li>
+                    <li><b>The flaw</b> — 2,000 clients on the same schedule still arrive as four synchronized 2,000-request walls</li>
+                    <li><b>Full jitter</b> — each client waits a random 0&ndash;8s before retry 4, smearing the wall across the window</li>
+                    <li><b>Hand-check</b> — 2,000 retries &divide; 8 seconds = 250 per second, comfortably under the 500/s capacity</li>
+                </ul>
+                <p class="example">Without jitter, second 15 delivers all 2,000 retries in one wall; with jitter the same 2,000 arrive at about 250 per second and every one succeeds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Exponential backoff spaces retries out in time; jitter spaces clients apart from each other — you need both, or the herd just charges on a slower schedule.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why One Hiccup Becomes a Cascade</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">cascading failure</span><span class="tag green">circuit breaker</span></div>
+                <ul>
+                    <li><b>Thundering herd</b> — anything waiting on one shared event (cache expiry, a restart) fires at the same instant</li>
+                    <li><b>Amplification</b> — if the browser, API, and order service each try up to 3&times;, the database sees up to 27 tries per click</li>
+                    <li><b>Retry budget</b> — cap retry traffic (e.g. at 10% of normal requests) so recovery load stays bounded</li>
+                    <li><b>Circuit breaker</b> — after repeated failures, stop calling the dependency and send one probe now and then</li>
+                    <li><b>Fail fast</b> — returning a quick error and retrying later beats hammering a service that is already struggling</li>
+                </ul>
+                <p class="example">One tap on "place order" turns into 27 database queries when three layers each independently try three times.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Retries multiply across layers, so a small slowdown deep in the stack can generate an avalanche above it — budgets and circuit breakers exist to cut the multiplication short.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Ways Retries Bite Back</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">idempotency</span></div>
+                <ul>
+                    <li><b>The double charge</b> — a payment times out after the server already charged the card; the retry charges it again</li>
+                    <li><b>Idempotency key</b> — send the same operation id with every retry so the server can answer "already done"</li>
+                    <li><b>Safe vs not</b> — reads are harmless to retry; "charge card" and "create order" are not, unless keyed</li>
+                    <li><b>Lockstep backoff</b> — backoff without jitter keeps all 2,000 clients perfectly synchronized</li>
+                    <li><b>Still a storm</b> — the waves land farther apart, but each wave is still a 2,000-request wall</li>
+                </ul>
+                <p class="example">The customer saw one "payment failed" message on screen and two $50 charges on their statement.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Adding backoff and stopping there — without jitter the herd stays a herd on a slower schedule, and without idempotency keys every retried write risks doing the work twice.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: request rate during and after the 10-second blip
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A 10-Second Blip Creates a 5× Storm That Never Lands', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(sec) { return ox + sec / 60 * pw; }
+    function yOf(rps) { return baseY - rps / 1200 * ph; }
+
+    // blip band 0-10s
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(xOf(0), baseY - ph, xOf(10) - xOf(0), ph);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('network down', xOf(0) + 4, baseY - ph + 14);
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [300, 600, 900].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 60; t += 10) {
+        ctx.fillText(t + 's', xOf(t), baseY + 16);
+    }
+    ctx.textAlign = 'right';
+    [0, 300, 600, 900, 1200].forEach(function(g) {
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    });
+
+    // heal marker at 10s
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(10), baseY - ph); ctx.lineTo(xOf(10), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('network fixed 12:00:10', xOf(10) + 6, baseY - ph + 32);
+
+    // capacity line at 500
+    ctx.strokeStyle = P.blue; ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(500)); ctx.lineTo(ox + pw, yOf(500)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('server capacity 500/s', ox + 6, yOf(500) + 16);
+
+    // traffic line
+    var secs = [0, 2, 4, 6, 8, 10, 20, 30, 40, 50, 60];
+    var rps = [200, 360, 520, 680, 840, 1000, 1000, 1000, 1000, 1000, 1000];
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(rps[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the blip is over — the storm is not', xOf(35), 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('request rates illustrative', w - 15, h - 10);
+});
+
+// c2: retry arrivals per second — four synchronized walls vs jittered trickle
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 2,000 Clients: Four Walls Without Jitter, a Trickle With It', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(sec) { return ox + sec / 16 * pw; }
+    function yOf(n) { return baseY - n / 2200 * ph; }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [500, 1000, 1500, 2000].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [0, 1, 3, 7, 15].forEach(function(t) {
+        ctx.fillText(t + 's', xOf(t), baseY + 16);
+    });
+    ctx.textAlign = 'right';
+    [500, 1000, 1500, 2000].forEach(function(g) {
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    });
+
+    // jittered stream: bars across the 7-15s retry-4 window (random 0-8s wait)
+    var jitterH = [250, 245, 260, 250, 255, 240, 250, 255];
+    var bw = pw / 16;
+    for (var t = 7; t <= 14; t++) {
+        var x = xOf(t) + 1;
+        var top = yOf(jitterH[t - 7]);
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(x, top, bw - 2, baseY - top);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x + bw - 2, top); ctx.stroke();
+    }
+
+    // no-jitter spikes at 1/3/7/15
+    [1, 3, 7, 15].forEach(function(t) {
+        var x = xOf(t) - 5;
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(x, yOf(2000), 10, baseY - yOf(2000));
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('2,000', xOf(t), yOf(2000) - 6);
+    });
+
+    // capacity line at 500
+    ctx.strokeStyle = P.blue; ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(500)); ctx.lineTo(ox + pw, yOf(500)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('capacity 500/s', ox + 6, yOf(500) - 8);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('jitter: 2,000 ÷ 8s ≈ 250/s — every retry fits', xOf(9), 80);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('spike timing exact (1s/2s/4s/8s schedule), jittered heights illustrative', w - 15, h - 10);
+});
+
+// c3: retry amplification through a four-layer stack — 1, 3, 9, 27
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('3 Tries Per Layer: One Click Becomes 27 Database Hits', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function yOf(n) { return baseY - n / 30 * ph; }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [10, 20, 30].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    [0, 10, 20, 30].forEach(function(g) {
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    });
+
+    var bars = [
+        { cx: 150, n: 1,  color: P.blue,   label: 'browser' },
+        { cx: 300, n: 3,  color: P.aqua,   label: 'API gateway' },
+        { cx: 450, n: 9,  color: P.yellow, label: 'order service' },
+        { cx: 600, n: 27, color: '#e74c3c', label: 'database' }
+    ];
+    bars.forEach(function(b) {
+        var top = yOf(b.n);
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.cx - 35, top, 70, baseY - top);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(b.n), b.cx, top - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.label, b.cx, baseY + 16);
+    });
+
+    // ×3 multiplier labels between consecutive bars, just above bar tops
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('×3', 225, yOf(3) - 14);
+    ctx.fillText('×3', 375, yOf(9) - 14);
+    ctx.fillText('×3', 525, yOf(27) - 14);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3 × 3 × 3 = 27 tries from one click', ox + 20, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('attempt counts exact for 3 tries per layer', w - 15, h - 10);
+});
+
+// c4: retrying a $50 charge without vs with an idempotency key
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Retrying a Payment: Why the Retry Must Carry a Key', w / 2, 24);
+
+    function roundRect(x, y, bw, bh, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+        ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+        ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    function box(x, y, bw, fill, border, lines) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(x, y, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundRect(x, y, bw, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, y + 25);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, y + 17);
+            ctx.fillText(lines[1], x + bw / 2, y + 32);
+        }
+    }
+
+    function arrow(x1, x2, y, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y);
+        ctx.lineTo(x2 - 10, y - 6);
+        ctx.lineTo(x2 - 10, y + 6);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    var fBlue = 'rgba(42,120,214,0.15)', fYellow = 'rgba(201,133,0,0.12)',
+        fRed = 'rgba(231,76,60,0.12)', fGreen = 'rgba(0,131,0,0.12)';
+
+    // Row 1: no key, y=95
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no key', 20, y1 + 25);
+    box(150, y1, 150, fBlue, P.blue, ['charge $50']);
+    arrow(302, 328, y1 + 20, P.mute);
+    box(330, y1, 175, fYellow, P.yellow, ['charged — reply', 'lost, timeout']);
+    arrow(507, 543, y1 + 20, P.mute);
+    box(545, y1, 160, fRed, '#e74c3c', ['retry charges again']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ $100 billed', 625, y1 + 56);
+
+    // Row 2: key=ab12, y=205
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('key=ab12', 20, y2 + 25);
+    box(150, y2, 150, fBlue, P.blue, ['charge $50,', 'key ab12']);
+    arrow(302, 328, y2 + 20, P.mute);
+    box(330, y2, 175, fYellow, P.yellow, ['charged — reply', 'lost, timeout']);
+    arrow(507, 543, y2 + 20, P.mute);
+    box(545, y2, 160, fGreen, P.green, ['retry: key seen,', 'replay receipt']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ $50 once', 625, y2 + 56);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a retry must be safe before it can be frequent', w / 2, 285);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative', w - 15, h - 12);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

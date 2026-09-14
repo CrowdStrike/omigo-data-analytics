@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retries, Timeouts, Circuit Breakers</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Retries, Timeouts, Circuit Breakers</h1>
+<p class="subtitle">The defensive trio every service-to-service call needs — a timeout so it can't hang, retries so blips don't become errors, and a circuit breaker so outages fail fast — each one fixing the previous one's failure mode</p>
+
+<div class="card-section">
+    <h2>The Call That Never Comes Back</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">timeouts</span><span class="tag orange">resource exhaustion</span></div>
+                <ul>
+                    <li><b>The call</b> — a checkout service calls a payment service on every order; it usually answers in 120ms</li>
+                    <li><b>The hang</b> — one payment instance stops answering; without a timeout the call just waits forever</li>
+                    <li><b>The pool</b> — every hung call holds one of checkout's 200 threads, and hung calls never give them back</li>
+                    <li><b>The freeze</b> — all 200 threads stuck means checkout serves no one — a slow dependency froze it</li>
+                    <li><b>The sizing</b> — the deadline comes from payment's real latency: p99 is 400ms, so timeout 800ms, not 30s</li>
+                </ul>
+                <p class="example">Hung calls arrive at just over 3 per second; within a minute all 200 checkout threads are stuck waiting on payments, and the entire checkout service stops answering anyone.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every remote call gets a deadline sized from the dependency's measured latency distribution (roughly 2&times; its p99) — a call that cannot end is a thread you never get back, and a default 30s timeout is 75&times; too long for a 400ms dependency.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Layers, Three Tries, 27&times; the Traffic</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">retry amplification</span><span class="tag green">backoff</span></div>
+                <ul>
+                    <li><b>The blip</b> — a retried call often works: a dropped packet or one bad instance clears on try two</li>
+                    <li><b>The multiplication</b> — each layer makes 3 attempts, and every attempt fans out to the layer below</li>
+                    <li><b>The arithmetic</b> — app 3 tries &times; gateway 3 &times; checkout 3 = 3 &times; 3 &times; 3 = 27 requests hit payments (exact)</li>
+                    <li><b>The storm</b> — payments was already struggling; naive immediate retries turned 1 request into 27</li>
+                    <li><b>The fix</b> — exponential backoff (wait 100ms, 200ms, 400ms) plus random jitter, and a 10% retry budget</li>
+                </ul>
+                <p class="example">One user tap becomes 27 payment attempts during a wobble — 3 tries at the app, each spawning 3 at the gateway, each spawning 3 at checkout: 3 &times; 3 &times; 3 = 27, exactly.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Retries turn transient failures into successes, but every retry is added load on a struggling dependency — space attempts with exponential backoff, add jitter so retries don't arrive in synchronized waves, and cap total retries at a budget (e.g. 10% of normal traffic).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Breaker's Three States</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">state machine</span><span class="tag orange">fallbacks</span></div>
+                <ul>
+                    <li><b>Truly down</b> — payments is dead for 30 minutes; even polite retries now just burn latency and load</li>
+                    <li><b>CLOSED</b> — the normal state: calls flow through while the breaker counts recent failures</li>
+                    <li><b>OPEN</b> — 50% of the last 20 calls failed: the breaker trips and calls fail fast, no timeout wait</li>
+                    <li><b>HALF-OPEN</b> — after a 30s cool-off, the breaker lets one probe call through to test recovery</li>
+                    <li><b>The verdict</b> — probe succeeds → back to CLOSED; probe fails → back to OPEN for another 30s</li>
+                    <li><b>The fallback</b> — while OPEN, serve cached data or a default: "order received, we'll confirm by email"</li>
+                </ul>
+                <p class="example">At 10:00:00 payments dies; by 10:00:08 the breaker has seen 10 failures in its last 20 calls and opens — for the rest of the outage checkout answers in about 1ms with a fallback instead of waiting the full 800ms timeout on every doomed call.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The circuit breaker is a state machine — closed → open → half-open — that stops paying the timeout on a dependency it already knows is down and periodically probes for recovery; the fallback is what you serve while it's open.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Remove One and Its Disaster Returns</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">composition</span><span class="tag orange">idempotency</span></div>
+                <ul>
+                    <li><b>The composition</b> — timeout bounds each attempt; retry-with-backoff handles blips; breaker handles outages</li>
+                    <li><b>No timeout</b> — a retry can never fire because attempt one never ends; the thread-freeze returns</li>
+                    <li><b>No retries</b> — every network blip becomes a user-visible error; a one-packet hiccup fails a real order</li>
+                    <li><b>No breaker</b> — in a real outage every call still waits 800ms and retries pile 27&times; load on a corpse</li>
+                    <li><b>The mistake</b> — retrying non-idempotent calls: a timed-out charge may have actually succeeded</li>
+                </ul>
+                <p class="example">A charge times out after 800ms but had already landed on the payment side; the blind retry bills the card a second time — the retry needed an idempotency key, not just backoff.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the three as alternatives. They are layers: remove timeouts and hangs freeze the service, remove retries and every blip becomes an error, remove the breaker and outages become 27&times; retry storms — and never retry a write without an idempotency key, or one purchase becomes two charges.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, ang, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 9 * Math.cos(ang - 0.4), y - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x - 9 * Math.cos(ang + 0.4), y - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw || 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), color);
+}
+
+function curveArrow(ctx, x1, y1, cx, cy, x2, y2, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw || 3;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx, cy, x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - cy, x2 - cx), color);
+}
+
+// c1: hung dependency drains the thread pool without a timeout
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var secs = [0, 10, 20, 30, 40, 50, 60];
+    var noTimeout = [12, 45, 80, 118, 152, 185, 200];
+    var withTimeout = [12, 16, 14, 18, 15, 17, 16];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Hung Dependency: No Timeout Drains the Whole Thread Pool', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 200;
+    function xOf(t) { return ox + t / 60 * pw; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    ctx.font = '12px system-ui';
+    for (var g = 50; g <= 150; g += 50) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 6, yOf(g) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 60; t += 10) ctx.fillText(String(t), xOf(t), baseY + 16);
+
+    // pool limit line
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(200)); ctx.lineTo(ox + pw, yOf(200)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('pool limit 200 — service frozen', ox + 6, yOf(200) - 8);
+
+    // no-timeout line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(noTimeout[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // with-timeout line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(withTimeout[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('800ms timeout', xOf(60) - 4, yOf(16) - 8);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hung calls never return threads', xOf(35), 95);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('thread counts illustrative; pool size 200 exact for this example', w - 20, h - 6);
+});
+
+// c2: retry amplification 1 -> 3 -> 9 -> 27
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Retry Amplification: 3 Layers × 3 Attempts = 27× at the Bottom', w / 2, 24);
+
+    var rows = [
+        { y: 70, label: 'mobile app — 1 request', bw: 16, fill: P.blue, count: '1', bold: false, cc: '#444' },
+        { y: 115, label: 'API gateway — 3 requests', bw: 48, fill: P.blue, count: '3', bold: false, cc: '#444' },
+        { y: 160, label: 'checkout — 9 requests', bw: 144, fill: P.orange, count: '9', bold: false, cc: '#444' },
+        { y: 205, label: 'payment service — 27 requests', bw: 432, fill: '#e74c3c', count: '27', bold: true, cc: '#e74c3c' }
+    ];
+    var bx = 210;
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 12);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.bw, 16);
+        ctx.fillStyle = r.cc; ctx.font = (r.bold ? 'bold ' : 'bold ') + '12px system-ui';
+        ctx.fillText(r.count, bx + r.bw + 8, r.y + 12);
+    }
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('27× exact: 3 × 3 × 3 — the bottom layer takes the storm', w / 2, 255);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('request counts exact; bar width 16px per request', w - 20, h - 6);
+});
+
+// c3: the breaker state machine
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Breaker State Machine: Closed → Open → Half-Open', w / 2, 24);
+
+    function stateBox(x, y, name, sub, border, fill) {
+        ctx.fillStyle = fill; ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundRect(ctx, x, y, 170, 50, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(name, x + 85, y + 21);
+        ctx.font = '11px system-ui';
+        ctx.fillText(sub, x + 85, y + 38);
+    }
+
+    stateBox(60, 125, 'CLOSED', 'calls flow, failures counted', P.green, 'rgba(0,131,0,0.12)');
+    stateBox(480, 60, 'OPEN', 'fail fast in ~1ms', '#e74c3c', 'rgba(231,76,60,0.12)');
+    stateBox(480, 200, 'HALF-OPEN', 'one probe allowed', P.orange, 'rgba(217,89,38,0.12)');
+
+    // CLOSED -> OPEN: red arc over the top
+    curveArrow(ctx, 150, 125, 300, 45, 478, 78, '#e74c3c', 3);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('≥50% of last 20 calls fail', 300, 60);
+
+    // OPEN -> HALF-OPEN: down the right side
+    arrow(ctx, 640, 110, 640, 198, P.mute, 3);
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('30s cool-off', 640, 148);
+    ctx.fillText('elapses', 640, 163);
+
+    // HALF-OPEN -> OPEN: dashed red short arrow up
+    curveArrow(ctx, 510, 200, 505, 155, 510, 112, '#e74c3c', 3, [4, 3]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('probe fails', 498, 160);
+
+    // HALF-OPEN -> CLOSED: green back along the bottom-left
+    curveArrow(ctx, 478, 235, 270, 262, 160, 178, P.green, 3);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('probe succeeds', 300, 232);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('while OPEN, serve the fallback — cached data or a graceful default', w / 2, 280);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('thresholds (50% of 20 calls, 30s cool-off) exact for this example', w - 12, h - 4);
+});
+
+// c4: remove one defense and its disaster comes back
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Remove One Defense and Its Disaster Comes Back', w / 2, 24);
+
+    var rows = [
+        { y: 70, label: 'remove timeout', cause: 'one slow dependency', bad: 'hung threads — service freezes' },
+        { y: 140, label: 'remove retries', cause: 'one network blip', bad: 'real order fails for the user' },
+        { y: 210, label: 'remove breaker', cause: '30-min outage', bad: '800ms waits + 27× retry load' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 25);
+        // cause box
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        roundRect(ctx, 185, r.y, 190, 40, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.cause, 280, r.y + 25);
+        // arrow
+        arrow(ctx, 375, r.y + 20, 440, r.y + 20, P.mute, 3);
+        // consequence box
+        ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+        roundRect(ctx, 440, r.y, 210, 40, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.bad, 545, r.y + 25);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each defense covers the failure mode the other two cannot', w / 2, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("27× exact from the amplification arithmetic; other figures from this page's example", w - 12, h - 4);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

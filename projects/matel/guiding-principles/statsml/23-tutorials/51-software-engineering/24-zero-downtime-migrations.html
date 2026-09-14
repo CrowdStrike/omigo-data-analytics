@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zero-Downtime Migrations</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Zero-Downtime Migrations</h1>
+<p class="subtitle">Changing a live database schema without stopping the world — expand, dual-write, backfill, contract: five boring deploys instead of one scary one</p>
+
+<div class="card-section">
+    <h2>One Database, Two Code Versions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">rolling deploys</span><span class="tag orange">schema changes</span></div>
+                <ul>
+                    <li><b>The setup</b> — an orders service on 8 servers, all reading and writing one <code>orders</code> table</li>
+                    <li><b>The rolling deploy</b> — servers update one at a time over 20 minutes; old and new code overlap</li>
+                    <li><b>The naive rename</b> — <code>ALTER TABLE orders RENAME COLUMN cust_nm TO customer_name</code> in one step</li>
+                    <li><b>The break</b> — every server still on old code fails instantly: "column cust_nm does not exist"</li>
+                    <li><b>The count</b> — 8 old servers &times; 30 writes/s at minute 0, shrinking to 0 only when the rollout ends</li>
+                </ul>
+                <p class="example">The rename lands at minute 0; over the 20-minute rollout roughly 162,000 writes fail before the last old server is replaced.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> During any deploy, old and new code run simultaneously against the same database — so every schema change must be compatible with both versions at once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Renaming a Column in Five Boring Deploys</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">expand&ndash;contract</span></div>
+                <ul>
+                    <li><b>Expand (day 1)</b> — add <code>customer_name</code> as a nullable column beside <code>cust_nm</code>; both code versions ignore it</li>
+                    <li><b>Dual-write (day 2)</b> — deploy code that writes both columns but still reads <code>cust_nm</code></li>
+                    <li><b>Backfill (days 3&ndash;4)</b> — copy 12M historical rows old&rarr;new in 2,400 batches of 5,000, pausing between</li>
+                    <li><b>Switch reads (day 5)</b> — read <code>customer_name</code>, keep writing both; rollback is flipping the read back</li>
+                    <li><b>Contract (day 8+)</b> — stop writing <code>cust_nm</code>, and on day 15 drop the column for good</li>
+                </ul>
+                <p class="example">By day 5 the app reads only customer_name, yet any surprise can still be rolled back in one deploy because cust_nm is still being written.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Each step is a separate, additive deploy that both code versions survive — and each is reversible by going back exactly one step, never by restoring a backup.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Same Shape Moves Whole Tables</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">reversible steps</span></div>
+                <ul>
+                    <li><b>Not just renames</b> — type changes, table splits, and store migrations all reuse the same five steps</li>
+                    <li><b>The bigint rescue</b> — an int primary key overflows near 2.1 billion rows; the fix is expand&ndash;contract on the id</li>
+                    <li><b>The store move</b> — migrating orders to a new database is dual-write and backfill at store scale</li>
+                    <li><b>Rollback shape</b> — at every step, undo means redeploying the previous step, never restoring a backup</li>
+                    <li><b>The habit</b> — teams that know the shape stop fearing schema changes and ship them routinely</li>
+                </ul>
+                <p class="example">The same playbook that renamed one column later moved the entire orders table to a new database — only the batch sizes changed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Expand&ndash;contract is a shape, not a rename trick — any live data migration decomposes into the same five independently deployable, reversible steps.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Unthrottled Backfill and the Zombie Dual-Write</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">table locks</span></div>
+                <ul>
+                    <li><b>The giant UPDATE</b> — one statement touching all 12M rows holds locks for ~9 minutes; every write waits</li>
+                    <li><b>The throttled version</b> — 2,400 batches of 5,000 rows with a pause between barely moves p99 (12 &rarr; ~19ms)</li>
+                    <li><b>The locking ALTER</b> — adding NOT NULL or an index can scan the whole table; know your DB's online-DDL rules</li>
+                    <li><b>The zombie dual-write</b> — teams skip contract; six months later both columns are written and drift apart</li>
+                    <li><b>The rule</b> — a migration is not done until the contract lands and the old column is actually gone</li>
+                </ul>
+                <p class="example">One <code>UPDATE orders SET customer_name = cust_nm</code> with no WHERE clause locks the table for 9 minutes — the classic self-inflicted outage.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> The backfill is the dangerous step and the contract is the forgotten one — throttle the first into small batches, and put a calendar date on the second.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: failing writes during the rolling deploy after a naive rename
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Naive Rename at Minute 0: Old Servers Fail Every Write Until the Rollout Ends', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(m) { return ox + m / 20 * pw; }
+    function yOf(v) { return baseY - v / 240 * ph; }
+
+    // gridlines at 60/120/180
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.font = '12px system-ui';
+    [60, 120, 180].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 20; m += 5) ctx.fillText(String(m), xOf(m), baseY + 16);
+    ctx.fillText('rollout minutes', ox + pw / 2, baseY + 34);
+
+    var mins = [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20];
+    var fails = [240, 210, 180, 150, 120, 90, 60, 30, 0];
+
+    // build step path points (hold each level until the next minute)
+    var pts = [];
+    for (var i = 0; i < mins.length; i++) {
+        pts.push([xOf(mins[i]), yOf(fails[i])]);
+        if (i < mins.length - 1) pts.push([xOf(mins[i + 1]), yOf(fails[i])]);
+    }
+
+    // fill under the step line
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), baseY);
+    for (var i = 0; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.lineTo(xOf(20), baseY);
+    ctx.closePath(); ctx.fill();
+
+    // step line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+        i === 0 ? ctx.moveTo(pts[i][0], pts[i][1]) : ctx.lineTo(pts[i][0], pts[i][1]);
+    }
+    ctx.stroke();
+
+    // step labels
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('8 old servers', xOf(0.3), yOf(240) - 8);
+    ctx.textAlign = 'center';
+    ctx.fillText('4', xOf(10) + 15, yOf(120) - 8);
+    ctx.fillText('0', xOf(20) - 8, yOf(0) - 8);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('≈162,000 failed writes in one rollout', xOf(9), 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('server and write counts illustrative', w - 12, h - 8);
+});
+
+// c2: expand–contract gantt timeline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Expand–Contract Timeline: Each Step Ships Alone', w / 2, 24);
+
+    var ax1 = 170, ax2 = 670, baseY = 255;
+    function xOf(day) { return ax1 + (day - 1) / 14 * (ax2 - ax1); }
+
+    // baseline + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax1, baseY); ctx.lineTo(ax2, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [1, 5, 10, 15].forEach(function(d) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(d), baseY - 4); ctx.lineTo(xOf(d), baseY + 4); ctx.stroke();
+        ctx.fillText('day ' + d, xOf(d), baseY + 18);
+    });
+
+    // day-15 drop marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(15), 58); ctx.lineTo(xOf(15), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cust_nm dropped', xOf(15) - 20, 52);
+
+    function fillFor(hex, a) {
+        var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+    }
+
+    var rows = [
+        { y: 70, label: '1 EXPAND', d1: 1, d2: 1.6, color: P.blue, note: 'add customer_name (nullable)' },
+        { y: 110, label: '2 DUAL-WRITE', d1: 2, d2: 8, color: P.aqua, note: 'write both, read old' },
+        { y: 150, label: '3 BACKFILL', d1: 3, d2: 4, color: P.orange, note: '2,400 batches × 5,000 rows' },
+        { y: 190, label: '4 SWITCH READS', d1: 5, d2: 15, color: P.green, note: 'read new, still write both' },
+        { y: 230, label: '5 CONTRACT', d1: 8, d2: 15, color: P.violet, note: 'stop old writes; drop day 15' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 12);
+        var x1 = xOf(r.d1), x2 = xOf(r.d2);
+        roundRectPath(ctx, x1, r.y, Math.max(x2 - x1, 10), 16, 4);
+        ctx.fillStyle = fillFor(r.color, 0.30); ctx.fill();
+        ctx.strokeStyle = r.color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        var nx = Math.max(x2, x1 + 10) + 8;
+        if (nx > 500) { ctx.textAlign = 'right'; nx = x1 - 8; }
+        ctx.fillText(r.note, nx, r.y + 12);
+    }
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rollback at any step = go back exactly one step', w / 2 - 60, 285);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('day spans illustrative', w - 12, 290);
+});
+
+// c3: same five steps, three migrations matrix
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Five Steps, Three Different Migrations', w / 2, 24);
+
+    var colX = [205, 310, 415, 520, 625];
+    var headers = ['EXPAND', 'DUAL-WRITE', 'BACKFILL', 'SWITCH', 'CONTRACT'];
+    var fills = ['rgba(42,120,214,0.15)', 'rgba(25,158,112,0.15)', 'rgba(217,89,38,0.15)', 'rgba(0,131,0,0.12)', 'rgba(74,58,167,0.12)'];
+    var edges = [P.blue, P.aqua, P.orange, P.green, P.violet];
+    var rowY = [105, 165, 225];
+    var rowLabels = ['rename column', 'int → bigint id', 'move to new store'];
+    var cells = [
+        ['add customer_name', 'write both cols', 'copy 12M rows', 'read new col', 'drop cust_nm'],
+        ['add id_big bigint', 'write both ids', 'copy every id', 'read id_big', 'drop old id'],
+        ['stand up new store', 'write both stores', 'copy history', 'read new store', 'retire old store']
+    ];
+
+    // headers
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    for (var c = 0; c < 5; c++) ctx.fillText(headers[c], colX[c], 58);
+
+    var cw = 96, chh = 44;
+    for (var r = 0; r < 3; r++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabels[r], 20, rowY[r] + 4);
+        for (var c = 0; c < 5; c++) {
+            var x = colX[c] - cw / 2, y = rowY[r] - chh / 2;
+            roundRectPath(ctx, x, y, cw, chh, 6);
+            ctx.fillStyle = fills[c]; ctx.fill();
+            ctx.strokeStyle = edges[c]; ctx.lineWidth = 1.5; ctx.stroke();
+            // two-line wrap
+            var words = cells[r][c].split(' ');
+            var mid = Math.ceil(words.length / 2);
+            var l1 = words.slice(0, mid).join(' '), l2 = words.slice(mid).join(' ');
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            if (l2) {
+                ctx.fillText(l1, colX[c], rowY[r] - 2);
+                ctx.fillText(l2, colX[c], rowY[r] + 12);
+            } else {
+                ctx.fillText(l1, colX[c], rowY[r] + 4);
+            }
+            // arrow to next cell
+            if (c < 4) {
+                var ax1 = colX[c] + cw / 2 + 1, ax2 = colX[c + 1] - cw / 2 - 1;
+                ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(ax1, rowY[r]); ctx.lineTo(ax2 - 5, rowY[r]); ctx.stroke();
+                ctx.fillStyle = P.mute;
+                ctx.beginPath(); ctx.moveTo(ax2, rowY[r]); ctx.lineTo(ax2 - 7, rowY[r] - 4); ctx.lineTo(ax2 - 7, rowY[r] + 4); ctx.closePath(); ctx.fill();
+            }
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('learn the shape once — reuse it for every live migration', w / 2, 278);
+});
+
+// c4: unthrottled UPDATE vs throttled batches — p99 latency
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Backfilling 12M Rows: One Giant UPDATE vs 2,400 Throttled Batches', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    function xOf(m) { return ox + m / 20 * pw; }
+    function yOf(v) { return baseY - v / 40 * ph; }
+
+    // gridlines at 10/20/30
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.font = '12px system-ui';
+    [10, 20, 30].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 20; m += 5) ctx.fillText(String(m), xOf(m), baseY + 16);
+    ctx.fillText('minutes', ox + pw / 2, baseY + 34);
+
+    // axis-break zigzag on y axis at y=75
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(ox - 5, 79); ctx.lineTo(ox + 5, 75); ctx.moveTo(ox - 5, 73); ctx.lineTo(ox + 5, 69);
+    ctx.stroke();
+
+    // backfill window markers at minutes 4 and 13
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(4), baseY - ph); ctx.lineTo(xOf(4), baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(13), baseY - ph); ctx.lineTo(xOf(13), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('backfill running (9 min)', xOf(8.5), baseY - ph + 14);
+
+    // unthrottled line: 12ms then pinned plateau at y=65 for minutes 4-13
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(12));
+    ctx.lineTo(xOf(4), yOf(12));
+    ctx.lineTo(xOf(4), 65);
+    ctx.lineTo(xOf(13), 65);
+    ctx.lineTo(xOf(13), yOf(12));
+    ctx.lineTo(xOf(20), yOf(12));
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('table locked — p99 = 30,000ms timeouts', xOf(8.5), 58);
+
+    // throttled line
+    var tm = [0, 2, 4, 6, 8, 10, 12, 13, 14, 16, 18, 20];
+    var tv = [12, 12, 18, 19, 18, 19, 18, 18, 12, 12, 12, 12];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < tm.length; i++) {
+        var x = xOf(tm[i]), y = yOf(tv[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('throttled batches: 12 → ~19ms, nobody notices', xOf(16) - 90, 150);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative; lock plateau drawn off-scale', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

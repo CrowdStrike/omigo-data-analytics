@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMD &amp; Vectorization</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>SIMD &amp; Vectorization</h1>
+<p class="subtitle">Modern CPUs can add 8 numbers in one instruction — NumPy's array operations use this, a plain Python for-loop can't</p>
+
+<div class="card-section">
+    <h2>Adding a Million Sensor Readings</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">wide registers</span><span class="tag orange">AVX2</span></div>
+                <ul>
+                    <li><b>The job</b> — a data scientist sums 1,000,000 float32 temperature readings from a sensor log</li>
+                    <li><b>One at a time</b> — a plain loop loads one number, adds it, repeats: a million separate additions</li>
+                    <li><b>The wide register</b> — a 256-bit AVX2 register holds 8 float32 values side by side in "lanes"</li>
+                    <li><b>One instruction</b> — a single vector add (<code>vaddps</code>) adds all 8 lanes to 8 other lanes at once</li>
+                    <li><b>The name</b> — this is SIMD: Single Instruction, Multiple Data — one operation, many values</li>
+                </ul>
+                <p class="example">The CPU adds <code>[1.5, 2.0, 3.5, 4.0, 0.5, 2.5, 1.0, 3.0]</code> to <code>[0.5, 1.0, 0.5, 1.0, 1.5, 0.5, 2.0, 1.0]</code> in one instruction, producing all 8 sums together.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> SIMD packs several values into one wide register and applies one instruction to every lane simultaneously — the work per instruction goes up 8&times; (or 16&times; with 512-bit registers).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Instructions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">lane math</span></div>
+                <ul>
+                    <li><b>Scalar loop</b> — summing 1,000,000 readings one at a time takes 1,000,000 add instructions</li>
+                    <li><b>AVX2, 8 lanes</b> — 1,000,000 &divide; 8 = 125,000 vector adds sweep the whole array</li>
+                    <li><b>AVX-512, 16 lanes</b> — 512 bits &divide; 32 bits = 16 float32 lanes, so 1,000,000 &divide; 16 = 62,500 adds</li>
+                    <li><b>Hand-check</b> — 125,000 &times; 8 = 1,000,000: every reading is still added exactly once</li>
+                    <li><b>The finish</b> — the 8 (or 16) running lane totals are folded into one number with a few final adds</li>
+                </ul>
+                <p class="example">The same million-element sum costs 1,000,000 scalar adds, 125,000 AVX2 vector adds, or 62,500 AVX-512 vector adds — exactly 8&times; and 16&times; fewer instructions.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The instruction count divides exactly by the lane count — this is arithmetic, not a benchmark: wider registers mean proportionally fewer instructions for the same array.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why <code>a + b</code> Beats the For-Loop</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">NumPy</span><span class="tag orange">interpreter tax</span></div>
+                <ul>
+                    <li><b>The Python loop</b> — each iteration is interpreted: unbox the float, dispatch <code>+</code>, box the result</li>
+                    <li><b>No lanes possible</b> — the interpreter handles one dynamically-typed object at a time, never 8</li>
+                    <li><b>NumPy's inside</b> — <code>a + b</code> runs a compiled C loop over a contiguous float32 buffer</li>
+                    <li><b>Two wins at once</b> — the C loop skips the interpreter AND compiles to SIMD vector instructions</li>
+                    <li><b>The habit</b> — express work as whole-array operations (<code>a + b</code>, <code>a.sum()</code>, <code>a[a &gt; 0]</code>), not element loops</li>
+                </ul>
+                <p class="example">Summing the million readings: a Python for-loop takes 95 ms, Python's built-in <code>sum()</code> 45 ms, and NumPy's <code>a.sum()</code> 1.2 ms — roughly 79&times; faster than the loop.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> NumPy's speed is the interpreter tax removed plus SIMD applied — that combination is why whole-array operations beat element-by-element Python by 10–100&times;.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not Every Loop Can Vectorize</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">auto-vectorization</span></div>
+                <ul>
+                    <li><b>Three requirements</b> — contiguous memory, one uniform element type, no per-element data-dependent branch</li>
+                    <li><b>Compilers help</b> — C compilers auto-vectorize simple loops that meet all three, silently</li>
+                    <li><b>Where it fails</b> — pointer-chasing (linked lists), mixed types, or <code>if reading &gt; limit: rare_fix()</code> per element</li>
+                    <li><b>The trap</b> — <code>np.vectorize</code> and list comprehensions only hide the loop; the work is still scalar Python</li>
+                    <li><b>The fix</b> — replace per-element branches with masks: <code>np.where(a &gt; limit, fix, a)</code> keeps lanes full</li>
+                </ul>
+                <p class="example">A "vectorized" <code>np.vectorize(f)(a)</code> on the million readings still calls the Python function a million times — same speed as the loop it replaced.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing that removing the visible <code>for</code> keyword is vectorization. SIMD needs contiguous, uniform, branch-free data — an API that loops in Python underneath gains nothing.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, size) {
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - size * Math.cos(ang - 0.4), y2 - size * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - size * Math.cos(ang + 0.4), y2 - size * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: 256-bit register lane diagram — a lanes + b lanes = result lanes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var aVals = ['1.5', '2.0', '3.5', '4.0', '0.5', '2.5', '1.0', '3.0'];
+    var bVals = ['0.5', '1.0', '0.5', '1.0', '1.5', '0.5', '2.0', '1.0'];
+    var rVals = ['2.0', '3.0', '4.0', '5.0', '2.0', '3.0', '3.0', '4.0'];
+    var boxW = 70, boxH = 34, gap = 5, x0 = 100;
+    var rowYs = [70, 130, 210];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Instruction, Eight Additions: Inside a 256-bit AVX2 Register', w / 2, 24);
+
+    function row(y, vals, fill, stroke, bold) {
+        for (var i = 0; i < 8; i++) {
+            var x = x0 + i * (boxW + gap);
+            ctx.fillStyle = fill;
+            roundRect(ctx, x, y, boxW, boxH, 6);
+            ctx.fill();
+            ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+            roundRect(ctx, x, y, boxW, boxH, 6);
+            ctx.stroke();
+            ctx.fillStyle = P.text;
+            ctx.font = (bold ? 'bold ' : '') + '12px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(vals[i], x + boxW / 2, y + 22);
+        }
+    }
+    row(rowYs[0], aVals, 'rgba(42,120,214,0.15)', P.blue, false);
+    row(rowYs[1], bVals, 'rgba(217,89,38,0.12)', P.orange, false);
+    row(rowYs[2], rVals, 'rgba(0,131,0,0.12)', P.green, true);
+
+    // row labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('a lanes', 15, rowYs[0] + boxH / 2 + 4);
+    ctx.fillText('b lanes', 15, rowYs[1] + boxH / 2 + 4);
+    ctx.fillText('a + b', 15, rowYs[2] + boxH / 2 + 4);
+
+    // add marker between rows a and b
+    ctx.fillStyle = P.ink; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+', 57, 122);
+
+    // arrow from middle of row b down to result row
+    ctx.strokeStyle = P.green; ctx.fillStyle = P.green; ctx.lineWidth = 3;
+    arrow(ctx, 397, rowYs[1] + boxH + 4, 397, rowYs[2] - 6, 8);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one vaddps instruction', 412, 190);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('8 float32 lanes × 32 bits = 256 bits — lane math exact', w / 2, 280);
+});
+
+// c2: add instructions needed — scalar vs AVX2 vs AVX-512
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ax = 190, barH = 26;
+    var rows = [
+        { y: 75, lab1: 'scalar', lab2: '1 value per add', fill: 'rgba(42,120,214,0.30)', stroke: P.blue, bw: 480, end: '1,000,000' },
+        { y: 140, lab1: 'AVX2', lab2: '8 lanes', fill: 'rgba(0,131,0,0.30)', stroke: P.green, bw: 60, end: '125,000' },
+        { y: 205, lab1: 'AVX-512', lab2: '16 lanes', fill: 'rgba(25,158,112,0.30)', stroke: P.aqua, bw: 30, end: '62,500' }
+    ];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Summing 1,000,000 float32s: Add Instructions Needed', w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, 55); ctx.lineTo(ax, 245); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab1, 180, r.y + 8);
+        ctx.fillText(r.lab2, 180, r.y + 23);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(ax, r.y, r.bw, barH);
+        ctx.strokeStyle = r.stroke; ctx.lineWidth = 1.5;
+        ctx.strokeRect(ax, r.y, r.bw, barH);
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.end, ax + r.bw + 8, r.y + barH / 2 + 4);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('8 lanes → exactly 8× fewer instructions', 300, 160);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('instruction counts exact — array length ÷ lane count', w - 12, h - 10);
+});
+
+// c3: wall-clock time — Python loop vs sum() vs NumPy
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ax = 190, barH = 26;
+    var rows = [
+        { y: 75, lab: 'Python for-loop', fill: 'rgba(231,76,60,0.30)', stroke: '#e74c3c', bw: 480, end: '95 ms' },
+        { y: 140, lab: 'built-in sum()', fill: 'rgba(217,89,38,0.25)', stroke: P.orange, bw: 227, end: '45 ms' },
+        { y: 205, lab: 'NumPy a.sum()', fill: 'rgba(0,131,0,0.30)', stroke: P.green, bw: 6, end: '1.2 ms' }
+    ];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Sum, Three Ways: 95 ms vs 45 ms vs 1.2 ms', w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, 55); ctx.lineTo(ax, 245); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, 180, r.y + barH / 2 + 4);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(ax, r.y, r.bw, barH);
+        ctx.strokeStyle = r.stroke; ctx.lineWidth = 1.5;
+        ctx.strokeRect(ax, r.y, r.bw, barH);
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.end, ax + r.bw + 8, r.y + barH / 2 + 4);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('~79× faster — no interpreter, plus SIMD', 280, 225);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative — speedups of 10–100× are typical, varying by machine', w - 12, h - 10);
+});
+
+// c4: compiler's checklist — SIMD path vs scalar fallback
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var boxW = 200, boxH = 46;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Compiler's Checklist: SIMD Path vs Scalar Fallback", w / 2, 24);
+
+    // checklist strip
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('requirements: contiguous memory · uniform type · no data-dependent branching', w / 2, 55);
+
+    function box(x, cy, fill, stroke, lines) {
+        roundRect(ctx, x, cy - boxH / 2, boxW, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+        roundRect(ctx, x, cy - boxH / 2, boxW, boxH, 8);
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + boxW / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + boxW / 2, cy - 3);
+            ctx.fillText(lines[1], x + boxW / 2, cy + 13);
+        }
+    }
+
+    // row 1: clean loop
+    var y1 = 105;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('clean loop', 15, y1 + 4);
+    box(115, y1, 'rgba(42,120,214,0.15)', P.blue, ['contiguous float32,', 'no branches']);
+    ctx.strokeStyle = P.green; ctx.fillStyle = P.green; ctx.lineWidth = 3;
+    arrow(ctx, 320, y1, 365, y1, 8);
+    box(370, y1, 'rgba(0,131,0,0.12)', P.green, ['auto-vectorized:', '8 lanes/add']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ SIMD', 610, y1 + 4);
+
+    // row 2: branchy loop
+    var y2 = 215;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('branchy loop', 15, y2 + 4);
+    box(115, y2, 'rgba(42,120,214,0.15)', P.blue, ['if x > limit', 'per element']);
+    ctx.strokeStyle = '#e74c3c'; ctx.fillStyle = '#e74c3c'; ctx.lineWidth = 3;
+    arrow(ctx, 320, y2, 365, y2, 8);
+    box(370, y2, 'rgba(231,76,60,0.12)', '#e74c3c', ['scalar fallback:', '1 value/add']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ no lanes', 610, y2 + 4);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('masks (np.where) turn branches back into lane-friendly math', w / 2, 275);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

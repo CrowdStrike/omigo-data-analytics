@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Load Testing &amp; Capacity Planning</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Load Testing &amp; Capacity Planning</h1>
+<p class="subtitle">Ramp realistic traffic against a production-like copy until latency hockey-sticks — the knee is your real ceiling, and load testing tells you which resource sets it</p>
+
+<div class="card-section">
+    <h2>Ramping Traffic at the Checkout Service</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">the knee</span><span class="tag orange">test types</span></div>
+                <ul>
+                    <li><b>The service</b> — a checkout API must survive a holiday sale forecast to peak at 3,000 orders/s</li>
+                    <li><b>The ramp</b> — a load tool steps traffic 100 → 1,200 req/s at one production-like instance</li>
+                    <li><b>The knee</b> — up to ~800 req/s throughput tracks offered load; past it, it flattens near 820</li>
+                    <li><b>The hockey stick</b> — p95 latency holds 80–140ms below the knee, then jumps 260 → 520 → 2,300ms</li>
+                    <li><b>The spike test</b> — jump instantly to peak load to see whether the service recovers or falls over</li>
+                    <li><b>The soak test</b> — hold a steady load for hours to catch slow leaks (memory, file handles)</li>
+                </ul>
+                <p class="example">At 700 req/s the checkout answers in 140ms; at 900 req/s it serves only 815/s and p95 latency hits 520ms.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The knee — where throughput stops growing and latency hockey-sticks — is the system's real ceiling; finding that one number before users do is what a load test is for.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Which Resource Runs Out First</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">lowest ceiling</span></div>
+                <ul>
+                    <li><b>The guess</b> — the team bet CPU would max out first; the dashboards said otherwise</li>
+                    <li><b>The readings</b> — at the 800 req/s knee: CPU 55%, memory 40%, disk I/O 30%, network 20%</li>
+                    <li><b>The culprit</b> — the database connection pool: all 100 connections busy, requests queue behind it</li>
+                    <li><b>One lowest ceiling</b> — one resource typically runs out first at a given load mix, and it sets the knee</li>
+                    <li><b>Raise and repeat</b> — with a 200-connection pool the knee moves to ~1,150 req/s, where CPU at 90% takes over</li>
+                </ul>
+                <p class="example">Doubling the pool to 200 connections lifts the knee from 800 to ~1,150 req/s — then CPU becomes the next lowest ceiling.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A load test doesn't just measure the ceiling's height — it names the resource that sets it, and that resource is rarely the one you guessed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From One Instance's Ceiling to a Fleet Size</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">capacity planning</span><span class="tag orange">rule of thumb</span></div>
+                <ul>
+                    <li><b>The forecast</b> — marketing predicts the holiday sale peaks at 3,000 orders/s</li>
+                    <li><b>The headroom rule</b> — plan capacity for 2× the forecast peak: 6,000 req/s</li>
+                    <li><b>The utilization cap</b> — run each instance at ≤70% of its measured 800 ceiling: 560 req/s per instance</li>
+                    <li><b>The fleet size</b> — 6,000 / 560 = 10.7, so 11 instances, giving 6,160 req/s of safe capacity</li>
+                    <li><b>Why the cap</b> — near the ceiling, queueing makes latency fragile; the last 30% is not usable headroom</li>
+                </ul>
+                <p class="example">11 instances × 560 req/s = 6,160 req/s — double the forecast peak, with every instance under 70% busy.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Capacity planning is arithmetic on three numbers — measured per-instance ceiling, forecast peak, and a headroom rule — and the load test is what supplies the first one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Traffic That's Too Polite to Break Anything</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">realistic traffic</span></div>
+                <ul>
+                    <li><b>Too uniform</b> — perfectly even synthetic arrivals never queue the way real bursty traffic does</li>
+                    <li><b>No think time</b> — real shoppers browse and pause, holding sessions open; back-to-back requests hide that concurrency</li>
+                    <li><b>Cache-friendly keys</b> — replaying the same 50 product IDs gives ~97% cache hits; a real sale spreads across thousands</li>
+                    <li><b>The false ceiling</b> — the polite test shows a knee near 2,200 req/s; realistic traffic knees at 800</li>
+                    <li><b>Production-like or nothing</b> — a half-size database or a pre-warmed empty cache invalidates the measured ceiling</li>
+                </ul>
+                <p class="example">The team nearly sized the fleet off a 2,200 req/s ceiling — realistic keys cut it to 800, a 2.75× overestimate.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Trusting a ceiling measured with polite traffic — uniform arrivals, no think time, hot cached keys. The test must mismodel nothing that the knee depends on, or the first real spike finds the true ceiling for you.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: ramp — throughput flattens, latency hockey-sticks
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Ramp Finds the Knee: Throughput Flattens, Latency Hockey-Sticks', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(v) { return ox + v / 1200 * pw; }          // offered load 0-1200
+    function pyT(v) { return baseY - v / 1200 * ph; }      // throughput 0-1200
+    function pyL(v) { return baseY - v / 2400 * ph; }      // latency 0-2400
+
+    // gridlines at throughput 300/600/900
+    var gl = [300, 600, 900];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, pyT(gl[i])); ctx.lineTo(ox + pw, pyT(gl[i])); ctx.stroke();
+        ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gl[i]), ox - 6, pyT(gl[i]) + 4);
+        // right axis latency labels at same heights (600/1200/1800 ms)
+        ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+        ctx.fillText(String(gl[i] * 2), 675, pyT(gl[i]) + 4);
+    }
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('req/s', ox + 4, baseY - ph + 2);
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'right';
+    ctx.fillText('p95 ms', 712, baseY - ph + 2);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 300
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var v = 0; v <= 1200; v += 300) {
+        ctx.fillText(String(v), px(v), baseY + 18);
+    }
+
+    var offered = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200];
+    var served = [100, 200, 300, 400, 500, 600, 700, 790, 815, 820, 818, 815];
+    var p95 = [80, 80, 82, 85, 90, 105, 140, 260, 520, 900, 1500, 2300];
+
+    // knee marker at 800
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px(800), baseY - ph); ctx.lineTo(px(800), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the knee ≈ 800 req/s', px(800), baseY - ph - 4);
+
+    // throughput line (blue)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < offered.length; i++) {
+        var x = px(offered[i]), y = pyT(served[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('throughput', px(1000), pyT(820) + 20);
+
+    // latency line (red)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < offered.length; i++) {
+        var x = px(offered[i]), y = pyL(p95[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('p95 latency', px(1150) - 6, pyL(1500));
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('past the knee, more load', px(950), 80);
+    ctx.fillText('buys latency, not throughput', px(950), 97);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('single instance, numbers illustrative', 690, 292);
+});
+
+// c2: utilization at the knee — one resource at 100%
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Utilization at the Knee (800 req/s): One Resource at 100%', w / 2, 24);
+
+    var baseX = 230, barH = 16;
+
+    // dashed guides at 50% (x=450) and 100% (x=670)
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(450, 52); ctx.lineTo(450, 248); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(670, 52); ctx.lineTo(670, 248); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('50%', 450, 260);
+    ctx.fillText('100%', 670, 260);
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 52); ctx.lineTo(baseX, 248); ctx.stroke();
+
+    var rows = [
+        { y: 62, lab: 'CPU', width: 242, fill: 'rgba(42,120,214,0.30)', end: '55%', endCol: '#444', endBold: false },
+        { y: 103, lab: 'memory', width: 176, fill: 'rgba(42,120,214,0.30)', end: '40%', endCol: '#444', endBold: false },
+        { y: 144, lab: 'disk I/O', width: 132, fill: 'rgba(42,120,214,0.30)', end: '30%', endCol: '#444', endBold: false },
+        { y: 185, lab: 'network', width: 88, fill: 'rgba(42,120,214,0.30)', end: '20%', endCol: '#444', endBold: false },
+        { y: 226, lab: 'DB connections (100 of 100)', width: 440, fill: '#e74c3c', end: '100% — the ceiling', endCol: '#e74c3c', endBold: true }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.lab, 20, row.y + barH / 2 + 4);
+        ctx.fillStyle = row.fill;
+        ctx.fillRect(baseX, row.y, row.width, barH);
+        ctx.fillStyle = row.endCol;
+        ctx.font = (row.endBold ? 'bold ' : '') + '12px system-ui';
+        if (row.endBold) {
+            ctx.textAlign = 'right';
+            ctx.fillText(row.end, baseX + row.width, row.y - 5);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(row.end, baseX + row.width + 8, row.y + barH / 2 + 4);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the guess was CPU — the ceiling was the 100-connection pool', w / 2, 275);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('readings illustrative', 690, 293);
+});
+
+// c3: sizing the fleet — forecast, 2x target, 11 instances @ 560
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Sizing the Fleet: 11 = ceil(6,000 / 560)', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function py(v) { return baseY - v / 7000 * ph; }
+
+    // gridlines at 2000/4000/6000
+    var gl = [2000, 4000, 6000];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, py(gl[i])); ctx.lineTo(ox + pw, py(gl[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i].toLocaleString('en-US'), ox - 6, py(gl[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // target line at 6000
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, py(6000)); ctx.lineTo(ox + pw, py(6000)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('headroom target', ox + 4, py(6000) - 6);
+
+    var bw = 120;
+
+    // bar 1: forecast peak 3,000
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(170 - bw / 2, py(3000), bw, baseY - py(3000));
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(170 - bw / 2, py(3000)); ctx.lineTo(170 + bw / 2, py(3000)); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3,000', 170, py(3000) - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('forecast peak', 170, baseY + 18);
+
+    // bar 2: plan for 2x peak 6,000
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(370 - bw / 2, py(6000), bw, baseY - py(6000));
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(370 - bw / 2, py(6000)); ctx.lineTo(370 + bw / 2, py(6000)); ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('6,000', 370, py(6000) - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('plan for 2× peak', 370, baseY + 18);
+
+    // bar 3: 11 instances @ 560 = 6,160, drawn as 11 stacked segments with 1px white gaps
+    for (var i = 0; i < 11; i++) {
+        var segBottom = py(i * 560);
+        var segTop = py((i + 1) * 560);
+        ctx.fillStyle = 'rgba(0,131,0,0.25)';
+        ctx.fillRect(570 - bw / 2, segTop + 0.5, bw, segBottom - segTop - 1);
+    }
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(570 - bw / 2, py(6160)); ctx.lineTo(570 + bw / 2, py(6160)); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('6,160', 570, py(6160) - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('11 instances @ 560', 570, baseY + 18);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('560 = 70% of the measured 800 ceiling', 430, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('forecast illustrative, arithmetic exact', 690, 292);
+});
+
+// c4: polite test vs realistic traffic — false ceiling
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Polite Test vs Real Traffic: a 2,200 Knee That Is Really 800', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(v) { return ox + v / 2400 * pw; }
+    function py(v) { return baseY - v / 1000 * ph; }
+
+    // gridlines at 250/500/750
+    var gl = [250, 500, 750];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, py(gl[i])); ctx.lineTo(ox + pw, py(gl[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i] + 'ms', ox - 6, py(gl[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 600
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var v = 0; v <= 2400; v += 600) {
+        ctx.fillText(v.toLocaleString('en-US'), px(v), baseY + 18);
+    }
+
+    // knee markers
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px(800), baseY - ph + 40); ctx.lineTo(px(800), baseY); ctx.stroke();
+    ctx.strokeStyle = P.mute;
+    ctx.beginPath(); ctx.moveTo(px(2200), baseY - ph + 40); ctx.lineTo(px(2200), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('real knee: 800', px(800), baseY - ph + 32);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('false knee: 2,200', px(2200) - 20, baseY - ph + 32);
+
+    // polite-test line (blue)
+    var pOff = [200, 400, 600, 800, 1000, 1400, 1800, 2200, 2400];
+    var pLat = [60, 62, 65, 70, 78, 95, 130, 300, 900];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < pOff.length; i++) {
+        var x = px(pOff[i]), y = py(pLat[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same 50 hot keys', px(1500), py(95) - 12);
+
+    // realistic line (red)
+    var rOff = [200, 400, 600, 800, 1000, 1200];
+    var rLat = [75, 85, 120, 260, 700, 980];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < rOff.length; i++) {
+        var x = px(rOff[i]), y = py(rLat[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('realistic keys + bursts', px(650), py(190) - 12);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('97% cache hits made the ceiling look 2.75× higher', px(1200), 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('curves illustrative', 690, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

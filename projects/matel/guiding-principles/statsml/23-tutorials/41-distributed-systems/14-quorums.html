@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quorums</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Quorums</h1>
+<p class="subtitle">Replicate a value on 5 servers, write to 3, read from 3 — because 3 + 3 &gt; 5, every read group overlaps every write group and touches at least one up-to-date copy</p>
+
+<div class="card-section">
+    <h2>Any Two Committees of Three Share a Member</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">overlap</span><span class="tag orange">R + W &gt; N</span></div>
+                <ul>
+                    <li><b>The setup</b> — one value is replicated on N = 5 servers named A, B, C, D, E</li>
+                    <li><b>The write rule</b> — a write counts as done once W = 3 of the 5 servers have stored it</li>
+                    <li><b>The read rule</b> — a read asks R = 3 servers and keeps the answer with the highest version number</li>
+                    <li><b>The overlap</b> — any 3 servers and any other 3 servers out of 5 must share at least one: 3 + 3 &gt; 5</li>
+                    <li><b>The guarantee</b> — with R + W &gt; N, every read set touches at least one server holding the newest write</li>
+                </ul>
+                <p class="example">Two committees of 3 drawn from the same 5 people always share a member — that shared member is how the read hears the news.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> If R + W &gt; N, the read set and the write set are too big to miss each other — every read overlaps every write on at least one server.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Write to A, B, C — Then Read C, D, E</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">versions</span><span class="tag red">broken config</span></div>
+                <ul>
+                    <li><b>The write</b> — version 2 lands on A, B, C (W = 3); D and E still hold the old version 1</li>
+                    <li><b>The read</b> — a read asks C, D, E (R = 3): D and E answer v1, but C answers v2</li>
+                    <li><b>Version wins</b> — the reader keeps the highest version it saw, so it returns C's v2 — correct</li>
+                    <li><b>The broken config</b> — R = 2, W = 3 gives 2 + 3 = 5, not &gt; 5, so overlap is no longer forced</li>
+                    <li><b>The miss</b> — the 2-server read {D, E} shares nothing with {A, B, C}: it sees v1 twice — stale</li>
+                    <li><b>No warning</b> — the stale read looks perfectly healthy; both servers agree on the wrong answer</li>
+                </ul>
+                <p class="example">The read {C, D, E} sees versions 2, 1, 1 and returns v2; the read {D, E} sees 1, 1 and confidently returns stale data.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Version numbers pick the newest copy inside the read set — but only R + W &gt; N guarantees the newest copy is in the set at all.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Majority, Grid, and Sloppy Quorums</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">quorum flavors</span><span class="tag green">grids &amp; trees</span><span class="tag orange">sloppy quorum</span></div>
+                <ul>
+                    <li><b>Majority quorum</b> — ⌊N/2⌋ + 1 servers (3 of 5): the default in consensus systems like Raft</li>
+                    <li><b>Grid quorum</b> — arrange 9 servers 3×3; a quorum is one row plus one column: 5 of 9 worst case</li>
+                    <li><b>Why grids work</b> — any row-plus-column crosses any other, so overlap holds; at 7×7 it is 13 of 49</li>
+                    <li><b>Tree quorum</b> — arrange servers in a tree; overlapping root-to-leaf paths shrink quorums further</li>
+                    <li><b>Sloppy quorum</b> — Dynamo-style: in a partition, ANY W reachable servers accept the write, even stand-ins</li>
+                    <li><b>Hinted handoff</b> — a stand-in stores the write plus a hint and hands it to the home server later</li>
+                </ul>
+                <p class="example">You may hear "soft quorum" — the standard term is sloppy quorum: any W reachable servers take the write, home or not.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A quorum is any family of groups where every two must intersect — majorities are the simplest such family, not the only one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Overlap Is Not Consistency</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">availability trade</span></div>
+                <ul>
+                    <li><b>What overlap buys</b> — R + W &gt; N guarantees a read touches the newest copy — nothing more</li>
+                    <li><b>Not consistency</b> — two clients writing at once still conflict; overlap neither orders nor merges them</li>
+                    <li><b>Version ties</b> — concurrent writes can carry clashing versions; something must resolve the conflict</li>
+                    <li><b>Sloppy suspends it</b> — writes on stand-ins may share no server with reads of the home set</li>
+                    <li><b>Emergency math</b> — during a partition R + W &gt; N no longer applies; that is the price of availability</li>
+                </ul>
+                <p class="example">During a partition, a write lands on stand-in F while a read asks home servers C, D, E — the counts still say 3 + 3 &gt; 5, but the sets never meet.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading "R + W &gt; N" as "the system is consistent." It only guarantees the read touches the newest copy — conflicts remain, and a sloppy quorum trades even that away during a partition.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// shared server-row geometry for c1 and c2
+var Q = { names: ['A', 'B', 'C', 'D', 'E'], xs: [130, 245, 360, 475, 590], y: 170, r: 24 };
+
+function drawServer(ctx, x, y, r, name, stroke, txt) {
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillStyle = txt; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(name, x, y + 5);
+}
+
+function arrowHead(ctx, x, y, angle, color) {
+    var a = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - a * Math.cos(angle - 0.45), y - a * Math.sin(angle - 0.45));
+    ctx.lineTo(x - a * Math.cos(angle + 0.45), y - a * Math.sin(angle + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: write set {A,B,C} and read set {C,D,E} overlap on C
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Five Servers: the Write Set and Read Set Must Overlap', w / 2, 24);
+
+    // overlap highlight behind C
+    ctx.fillStyle = 'rgba(217,89,38,0.15)';
+    ctx.beginPath(); ctx.arc(Q.xs[2], Q.y, 34, 0, 2 * Math.PI); ctx.fill();
+
+    // write ring around A, B, C
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(245, Q.y, 160, 46, 0, 0, 2 * Math.PI); ctx.stroke();
+    // read ring around C, D, E
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(475, Q.y, 160, 46, 0, 0, 2 * Math.PI); ctx.stroke();
+
+    for (var i = 0; i < 5; i++) {
+        drawServer(ctx, Q.xs[i], Q.y, Q.r, Q.names[i], P.ink, P.ink);
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue;  ctx.fillText('write set, W = 3', 170, 105);
+    ctx.fillStyle = P.green; ctx.fillText('read set, R = 3', 550, 105);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('shared server', Q.xs[2], 238);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 + 3 > 5 — the two sets must share a server', 360, 266);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('N = 5 servers, any W = 3 and R = 3 overlap', w - 12, h - 10);
+});
+
+// c2: versions after the write, good read vs the broken R=2 read
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Broken Config: R = 2, W = 3 Can Miss the Write', w / 2, 24);
+
+    // write ring around A, B, C
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(245, Q.y, 160, 46, 0, 0, 2 * Math.PI); ctx.stroke();
+    // broken read ring around D, E only
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.ellipse(532, Q.y, 105, 44, 0, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // servers: A,B,C hold v2 (blue), D,E hold v1 (mute)
+    var vers = ['v2', 'v2', 'v2', 'v1', 'v1'];
+    for (var i = 0; i < 5; i++) {
+        var fresh = i < 3;
+        drawServer(ctx, Q.xs[i], Q.y, Q.r, Q.names[i], fresh ? P.blue : P.mute, fresh ? P.blue : P.mute);
+        ctx.fillStyle = fresh ? P.blue : P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(vers[i], Q.xs[i], 232);
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue;   ctx.fillText('write landed on A, B, C', 190, 105);
+    ctx.fillStyle = P.orange; ctx.fillText('read asks only D, E', 560, 105);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2 + 3 = 5, not > 5 — the read sees v1 twice and returns stale data', 360, 266);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('a read of {C, D, E} would have caught v2 on C', w - 12, h - 10);
+});
+
+// c3: 3x3 grid quorum — one row plus one column, crossing marked
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Grid Quorum: One Row Plus One Column of 3 × 3', w / 2, 24);
+
+    var x0 = 105, y0 = 70, cw = 64, ch = 50, gap = 10;
+    var rowPick = 1, colPick = 2; // middle row, right column
+    for (var r = 0; r < 3; r++) {
+        for (var c = 0; c < 3; c++) {
+            var x = x0 + c * (cw + gap), y = y0 + r * (ch + gap);
+            var inRow = (r === rowPick), inCol = (c === colPick);
+            if (inRow && inCol) {
+                ctx.fillStyle = 'rgba(217,89,38,0.30)';
+            } else if (inRow) {
+                ctx.fillStyle = 'rgba(42,120,214,0.25)';
+            } else if (inCol) {
+                ctx.fillStyle = 'rgba(0,131,0,0.18)';
+            } else {
+                ctx.fillStyle = '#f4f6f9';
+            }
+            ctx.fillRect(x, y, cw, ch);
+            ctx.strokeStyle = (inRow && inCol) ? P.orange : (inRow ? P.blue : (inCol ? P.green : P.mute));
+            ctx.lineWidth = (inRow || inCol) ? 2 : 1;
+            ctx.strokeRect(x, y, cw, ch);
+            ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('S' + (r * 3 + c + 1), x + cw / 2, y + ch / 2 + 4);
+        }
+    }
+    // crossing marker
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crossing', x0 + colPick * (cw + gap) + cw / 2, y0 + 3 * (ch + gap) + 12);
+    // row / column labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row', x0 - 10, y0 + rowPick * (ch + gap) + ch / 2 + 4);
+    ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('column', x0 + colPick * (cw + gap) + cw / 2, y0 - 10);
+
+    // right-side math
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('quorum = one row + one column', 400, 95);
+    ctx.fillStyle = '#444'; ctx.font = '13px system-ui';
+    ctx.fillText('3 + 3 − 1 crossing = 5 of 9 servers', 400, 120);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('any two row+column picks', 400, 160);
+    ctx.fillText('always cross somewhere', 400, 178);
+    ctx.fillStyle = P.violet; ctx.font = '13px system-ui';
+    ctx.fillText('at 7×7: a quorum is 13 of 49 —', 400, 215);
+    ctx.fillText('far below the 25 a majority needs', 400, 233);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('crossings replace raw size as the overlap guarantee', w - 12, h - 10);
+});
+
+// c4: sloppy quorum during a partition, with hinted handoff
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Sloppy Quorum: Any W Reachable Servers Take the Write', w / 2, 24);
+
+    var y = 150, r = 22;
+    var homes = [{ n: 'A', x: 80 }, { n: 'B', x: 165 }, { n: 'C', x: 250 }];
+    var reach = [{ n: 'D', x: 400 }, { n: 'E', x: 485 }];
+    var standX = 585;
+
+    // partition line
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([7, 5]);
+    ctx.beginPath(); ctx.moveTo(322, 70); ctx.lineTo(322, 215); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('partition', 322, 230);
+
+    // unreachable home servers
+    for (var i = 0; i < homes.length; i++) {
+        drawServer(ctx, homes[i].x, y, r, homes[i].n, P.mute, P.mute);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('home servers — unreachable', 165, 196);
+
+    // reachable servers D, E
+    for (var i = 0; i < reach.length; i++) {
+        drawServer(ctx, reach[i].x, y, r, reach[i].n, P.blue, P.blue);
+    }
+    // stand-in F (dashed border)
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(standX, y, r, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.arc(standX, y, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('F', standX, y + 5);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('stand-in', standX, 196);
+
+    // client writing v3 to D, E, F
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    ctx.fillRect(432, 48, 122, 26);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(432, 48, 122, 26);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('client: write v3', 493, 65);
+    var targets = [400, 485, 585];
+    for (var i = 0; i < targets.length; i++) {
+        var tx = targets[i];
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(493, 76); ctx.lineTo(tx, y - r - 4); ctx.stroke();
+        var ang = Math.atan2(y - r - 4 - 76, tx - 493);
+        arrowHead(ctx, tx, y - r - 4, ang, P.green);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('W = 3 reachable: D, E, F', 493, 122);
+
+    // hinted handoff curve F -> A (below the row)
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(standX, y + r + 4);
+    ctx.quadraticCurveTo(332, 285, 80, y + r + 6);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 80, y + r + 6, -Math.PI / 2 - 0.5, P.aqua);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hinted handoff — F returns the write after the partition heals', 340, 252);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('availability kept —', 150, 60);
+    ctx.fillText('overlap guarantee suspended', 150, 76);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the standard term is sloppy quorum, not soft quorum', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

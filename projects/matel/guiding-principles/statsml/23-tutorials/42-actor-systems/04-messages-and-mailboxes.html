@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Messages &amp; Mailboxes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Messages &amp; Mailboxes</h1>
+<p class="subtitle">An actor reads immutable messages from its mailbox one at a time — so its private state never needs a lock</p>
+
+<div class="card-section">
+    <h2>The Inventory Actor's Inbox</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">immutable messages</span><span class="tag orange">no locks</span></div>
+                <ul>
+                    <li><b>The actor</b> — one inventory actor owns the stock count for a warehouse item; nobody else can touch it</li>
+                    <li><b>The messages</b> — the website sends <code>Reserve 30</code>, the loading dock sends <code>AddStock 40</code>; both are frozen values</li>
+                    <li><b>The mailbox</b> — every incoming message lands in the actor's queue in arrival order and waits its turn</li>
+                    <li><b>One at a time</b> — the actor pops a message, updates its count, and only then pops the next one</li>
+                    <li><b>No lock needed</b> — since exactly one message runs at a time, the counter can never be read mid-update</li>
+                </ul>
+                <p class="example">Ten checkout servers all send <code>Reserve</code> messages at once — the mailbox lines them up, and the actor handles them like a single cashier serving a queue.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An actor is a mailbox plus private state: immutable messages queue up, get processed strictly one at a time, and the state needs no lock because only the actor ever touches it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Five Messages, One Counter, Zero Races</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">mailbox order</span></div>
+                <ul>
+                    <li><b>Start</b> — the actor's private stock count begins at 100 units</li>
+                    <li><b>M1 AddStock 40</b> — the dock's delivery lands first: 100 + 40 = 140</li>
+                    <li><b>M2 Reserve 30</b> — a checkout reserves 30: 140 &minus; 30 = 110</li>
+                    <li><b>M3 Reserve 60</b> — another checkout takes 60: 110 &minus; 60 = 50</li>
+                    <li><b>M4 AddStock 25</b> — a returns bin adds 25 back: 50 + 25 = 75</li>
+                    <li><b>M5 Reserve 75</b> — the last order takes 75: 75 &minus; 75 = 0, never negative, nothing lost</li>
+                </ul>
+                <p class="example">On a shared counter, two threads both reading 110 before writing could lose a reservation — in the mailbox, M2 fully finishes before M3 ever starts, so that interleaving cannot exist.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because messages are applied strictly in mailbox order, every read sees the previous write — the lost-update race that corrupts a shared counter is impossible by construction.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Scaling With Actors Instead of Locks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">backpressure</span><span class="tag orange">bounded mailbox</span></div>
+                <ul>
+                    <li><b>Many actors</b> — throughput comes from thousands of item actors running in parallel, not from clever locks</li>
+                    <li><b>No contention</b> — each actor serializes only its own messages; different items never wait on each other</li>
+                    <li><b>The gauge</b> — mailbox depth is the built-in health signal: a growing queue means the actor can't keep up</li>
+                    <li><b>The response</b> — a deep mailbox says shard the actor, slow the senders, or add consumers downstream</li>
+                    <li><b>Bounded mailboxes</b> — a cap (say 300) drops overflow to dead letters rather than exhaust memory</li>
+                </ul>
+                <p class="example">An item goes viral and its actor receives 500 reserves per second while processing 400 — the mailbox grows by 100 per second, and that number is the alarm.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Actor systems trade lock tuning for queue watching — mailbox depth is the backpressure signal, and a bounded mailbox turns overload into visible dropped messages instead of a memory crash.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Ways to Break the Guarantee</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">mutable message</span><span class="tag blue">ordering</span></div>
+                <ul>
+                    <li><b>The smuggle</b> — putting a mutable object inside a message hands two actors a live shared reference</li>
+                    <li><b>Back to locks</b> — sender and receiver now both mutate the same object: the exact race actors removed</li>
+                    <li><b>The fix</b> — send a frozen copy or plain values; the message must be a fact, not a pointer to one</li>
+                    <li><b>The ordering trap</b> — only messages from one sender to one receiver keep their order, pairwise</li>
+                    <li><b>No global clock</b> — messages from two different senders can arrive at the actor in either order</li>
+                </ul>
+                <p class="example">A sender posts a mutable order list in a message, then appends to it — the inventory actor reads the list mid-append, and the "no shared state" guarantee is quietly gone.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the mailbox as a magic shield. It only protects state that stays private and messages that stay immutable — and it never promises any ordering across different senders.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.45), y2 - 8 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.45), y2 - 8 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: three senders -> one mailbox queue -> one actor
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Many Senders, One Mailbox, One Message at a Time', w / 2, 24);
+
+    // senders: three rounded boxes 130x36 at x=30, tops y = 80/145/210
+    var senders = ['website: Reserve 30', 'dock: AddStock 40', 'app: Reserve 60'];
+    var sy = [80, 145, 210];
+    for (var i = 0; i < 3; i++) {
+        var cy = sy[i] + 18;
+        arrowLine(ctx, 160, cy, 214, 155, P.mute, 2);
+        rrectPath(ctx, 30, sy[i], 130, 36, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(senders[i], 95, cy + 4);
+    }
+
+    // mailbox outer rect x=220..430, y=130, height 50
+    rrectPath(ctx, 220, 130, 210, 50, 8);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mailbox', 325, 122);
+
+    // three slots 60x34 at x = 230/295/360, arrival order left-to-right
+    var slotX = [230, 295, 360];
+    var slotLabs = [['AddStock', '40'], ['Reserve', '30'], ['Reserve', '60']];
+    for (var i = 0; i < 3; i++) {
+        rrectPath(ctx, slotX[i], 138, 60, 34, 6);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(slotLabs[i][0], slotX[i] + 30, 152);
+        ctx.fillText(slotLabs[i][1], slotX[i] + 30, 166);
+    }
+
+    // actor box x=540, y=115, 150x80
+    rrectPath(ctx, 540, 115, 150, 80, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('inventory actor', 615, 145);
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui';
+    ctx.fillText('stock = 100', 615, 170);
+
+    // single arrow from the front mailbox slot into the actor
+    arrowLine(ctx, 430, 155, 536, 155, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('next', 483, 146);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one message in flight — the counter never needs a lock', w / 2, 265);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('message contents illustrative', w - 12, 293);
+});
+
+// c2: step chart of the stock count through five messages
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Stock Count After Each Message, in Mailbox Order', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 150;
+    var steps = [0, 1, 2, 3, 4, 5];
+    var counts = [100, 140, 110, 50, 75, 0];
+    var xLabs = ['start', 'M1', 'M2', 'M3', 'M4', 'M5'];
+    var deltas = ['', '+40', '−30', '−60', '+25', '−75'];
+    var deltaColors = ['', P.green, P.orange, P.orange, P.green, P.orange];
+
+    function xOf(st) { return ox + st / 5 * pw; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines at 50/100/150
+    var grids = [50, 100, 150];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, yOf(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x labels + delta labels
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(xLabs[i], xOf(i), baseY + 18);
+        if (deltas[i]) {
+            ctx.fillStyle = deltaColors[i]; ctx.font = '11px system-ui';
+            ctx.fillText(deltas[i], xOf(i), baseY + 33);
+        }
+    }
+
+    // step line: horizontal then vertical
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(counts[0]));
+    for (var i = 1; i < 6; i++) {
+        ctx.lineTo(xOf(i), yOf(counts[i - 1]));
+        ctx.lineTo(xOf(i), yOf(counts[i]));
+    }
+    ctx.stroke();
+
+    // dots + value labels
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(counts[i]), 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(counts[i]), xOf(i), yOf(counts[i]) - 10);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each step sees the previous result — no lost updates', xOf(3), 75);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('quantities illustrative', w - 12, 294);
+});
+
+// c3: mailbox depth over time, unbounded vs bounded at 300
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Mailbox Depth Is the Backpressure Gauge (500 in/s vs 400 out/s)', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 500;
+    var secs = [0, 1, 2, 3, 4, 5];
+    var unbounded = [0, 100, 200, 300, 400, 500];
+    var bounded = [0, 100, 200, 300, 300, 300];
+
+    function xOf(t) { return ox + t / 5 * pw; }
+    function yOf(d) { return baseY - d / yMax * ph; }
+
+    // gridlines at 100/200/300/400
+    var grids = [100, 200, 300, 400];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, yOf(grids[i]) + 4);
+    }
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var t = 0; t <= 5; t++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + 's', xOf(t), baseY + 18);
+    }
+
+    // cap marker at 300
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(300)); ctx.lineTo(ox + pw, yOf(300)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('bounded mailbox cap = 300', ox + 6, yOf(300) - 6);
+
+    // unbounded line (orange)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = xOf(secs[i]), y = yOf(unbounded[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // bounded line (green)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = xOf(secs[i]), y = yOf(bounded[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('unbounded: grows without limit', xOf(4) - 60, yOf(460));
+    ctx.fillStyle = P.green;
+    ctx.fillText('bounded: overflow dropped', xOf(4.2), yOf(265));
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('a growing mailbox, not a profiler, tells you the actor is overloaded', xOf(1.5) - 120, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates and depths illustrative', w - 12, 294);
+});
+
+// c4: mutable reference in a message vs frozen copy
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Mutable Object in a Message Reintroduces Shared State', w / 2, 24);
+
+    function box(cx, cy, label, fill, stroke) {
+        rrectPath(ctx, cx - 85, cy - 20, 170, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+    }
+
+    // row 1: mutable ref
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('mutable ref', 20, 99);
+    box(150, 95, 'msg: pointer to list', 'rgba(42,120,214,0.15)', P.blue);
+    arrowLine(ctx, 235, 95, 302, 95, P.mute, 3);
+    box(390, 95, 'both actors mutate it', 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ race is back', 580, 99);
+
+    // row 2: frozen copy
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('frozen copy', 20, 209);
+    box(150, 205, 'msg: {item, qty=30}', 'rgba(42,120,214,0.15)', P.blue);
+    arrowLine(ctx, 235, 205, 302, 205, P.mute, 3);
+    box(390, 205, 'receiver owns its copy', 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ no sharing', 580, 209);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('pairwise order only: sender→receiver holds, cross-sender order does not', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

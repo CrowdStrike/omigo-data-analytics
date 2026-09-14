@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZooKeeper &amp; Coordination Services</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>ZooKeeper &amp; Coordination Services</h1>
+<p class="subtitle">Distributed systems outsource their hardest problems — who is leader, who is alive, what is the config — to one small store that never disagrees with itself</p>
+
+<div class="card-section">
+    <h2>Five Workers, One Leader, Zero Arguments</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">consistent kernel</span><span class="tag orange">ZooKeeper</span></div>
+                <ul>
+                    <li><b>The fleet</b> — five payment workers process a shared queue; exactly one must be the leader</li>
+                    <li><b>The trap</b> — workers voting among themselves during a network hiccup can elect two leaders</li>
+                    <li><b>The outsource</b> — instead, all five talk to a coordination service: a tiny replicated store</li>
+                    <li><b>The tree</b> — the store holds znodes, a file-system-like tree: <code>/config</code>, <code>/workers</code>, <code>/election</code></li>
+                    <li><b>The kernel</b> — the service solves consensus once, internally; clients just read and write znodes</li>
+                </ul>
+                <p class="example">Each worker creates a znode under <code>/election</code>; the service hands out strictly ordered names, and whoever holds the lowest number is the leader — no worker-to-worker voting at all.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A coordination service is a small, strongly-consistent znode store that distributed systems delegate leader election, membership, locks, and config to — so only one system in the stack has to get consensus right.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Election, Node by Node</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">ephemeral nodes</span><span class="tag orange">watches</span></div>
+                <ul>
+                    <li><b>Join</b> — each worker creates an ephemeral sequential znode; the service appends a counter: A gets 1, B gets 2, ... E gets 5</li>
+                    <li><b>Decide</b> — every worker lists <code>/election</code>; A holds the lowest number (1), so A is leader</li>
+                    <li><b>Watch</b> — B sets a watch on A's znode (its predecessor); C watches B, D watches C, E watches D</li>
+                    <li><b>Crash</b> — at t=40s worker A dies; its session stops heartbeating, and at the 10s session timeout its znode is deleted</li>
+                    <li><b>Fail over</b> — at t=50s the deletion fires B's watch; B re-lists, sees 2 is now lowest, and takes over as leader</li>
+                </ul>
+                <p class="example">A leads from t=0 to t=40s; the fleet is leaderless for the 10-second session timeout; B leads from t=50s on — no message ever passed between workers directly.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Ephemeral znodes tie liveness to a session — a dead worker's node disappears on its own — and watches turn that deletion into a push notification, so failover needs no polling.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Systems Outsource This</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">quorum</span></div>
+                <ul>
+                    <li><b>Quorum writes</b> — a 5-server ensemble commits a write once 3 of 5 servers ack it, so a majority always knows the truth</li>
+                    <li><b>Fault budget</b> — a 3-server ensemble survives 1 dead server, 5 survives 2, 7 survives 3 — always a minority</li>
+                    <li><b>No split brain</b> — two halves of a partitioned ensemble can't both reach a majority, so at most one side serves writes</li>
+                    <li><b>Who uses it</b> — Kafka (older versions), HBase, and Hadoop HDFS HA all delegated election and metadata to ZooKeeper</li>
+                    <li><b>The division of labor</b> — the big system stays fast and loose; the tiny ensemble stays small and strict</li>
+                </ul>
+                <p class="example">With 5 ensemble servers, a write to <code>/election</code> commits when 3 servers ack — even if 2 machines are down, leadership decisions keep flowing.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Consensus is expensive, so you run it on a tiny 3-to-7-node ensemble holding kilobytes of critical state — and let the thousand-node system read the answers instead of solving the problem itself.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Herd Effect</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">watches</span></div>
+                <ul>
+                    <li><b>The naive setup</b> — all five workers set their watch on the leader's znode instead of their predecessor's</li>
+                    <li><b>The stampede</b> — the leader dies, one deletion fires four watches, and four workers re-list <code>/election</code> at once</li>
+                    <li><b>At scale</b> — with 1,000 clients that's 999 simultaneous wake-ups and re-reads hammering the ensemble</li>
+                    <li><b>The recipe</b> — ZooKeeper's documented election recipe: watch only the znode one number below yours</li>
+                    <li><b>The result</b> — one deletion wakes exactly one client; failover cost stays flat as the fleet grows</li>
+                </ul>
+                <p class="example">Watch-the-leader wakes 4 workers for one crash in our fleet of five; watch-your-predecessor wakes exactly 1 — worker B, the next in line — and nobody else notices.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Pointing every client's watch at the same hot znode. A watch fires once per event per watcher, so N watchers means an N-client stampede — the chain-of-predecessors recipe exists precisely to avoid it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: znode tree with the /election branch expanded
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Znode Tree: One Small Store Everyone Trusts', w / 2, 24);
+
+    // root box "/"
+    rrectPath(ctx, 30, 133, 60, 34, 8);
+    ctx.fillStyle = 'rgba(26,82,118,0.12)'; ctx.fill();
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('/', 60, 155);
+
+    // branch boxes
+    var branches = [
+        { lab: '/config', y: 55 },
+        { lab: '/workers', y: 133 },
+        { lab: '/election', y: 211 }
+    ];
+    for (var i = 0; i < branches.length; i++) {
+        var b = branches[i], cy = b.y + 17;
+        // elbow line from root right edge to branch left edge
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(90, 150);
+        ctx.lineTo(120, 150);
+        ctx.lineTo(120, cy);
+        ctx.lineTo(150, cy);
+        ctx.stroke();
+        rrectPath(ctx, 150, b.y, 130, 34, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.lab, 215, cy + 4);
+    }
+
+    // election children: sequential ephemeral znodes
+    var kids = [
+        { lab: 'n_0000000001 (A)', y: 60 },
+        { lab: 'n_0000000002 (B)', y: 105 },
+        { lab: 'n_0000000003 (C)', y: 150 },
+        { lab: 'n_0000000004 (D)', y: 195 },
+        { lab: 'n_0000000005 (E)', y: 240 }
+    ];
+    for (var i = 0; i < kids.length; i++) {
+        var k = kids[i], cy = k.y + 13;
+        // elbow from /election right edge
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(280, 228);
+        ctx.lineTo(310, 228);
+        ctx.lineTo(310, cy);
+        ctx.lineTo(340, cy);
+        ctx.stroke();
+        rrectPath(ctx, 340, k.y, 155, 26, 6);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        if (i === 0) { // leader marker
+            ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.stroke();
+        }
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(k.lab, 417, cy + 4);
+    }
+
+    // leader label
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lowest number = leader', 520, 73);
+
+    // ephemeral note
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ephemeral: vanishes if its', 520, 160);
+    ctx.fillText("owner's session dies", 520, 175);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('clients read and write this tree — the service keeps every copy in agreement', w / 2, 288);
+});
+
+// c2: leadership timeline — A dies at 40s, B leads at 50s
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Failover by Ephemeral Node: A Dies at 40s, B Leads at 50s', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(t) { return ox + t / 90 * pw; }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 15s
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 90; t += 15) ctx.fillText(t + 's', px(t), baseY + 18);
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('A', 30, 114);
+    ctx.fillText('B', 30, 184);
+
+    // session-timeout gap band across both lanes, t=40 to t=50
+    ctx.fillStyle = 'rgba(107,114,128,0.20)';
+    ctx.fillRect(px(40), 90, px(50) - px(40), 110);
+
+    // znode-deletion marker at t=50
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(50), 50); ctx.lineTo(px(50), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // A's leadership bar: t=0 to t=40, lane A (centered y=110)
+    ctx.fillStyle = P.green;
+    ctx.fillRect(px(0), 103, px(40) - px(0), 14);
+
+    // crash marker at t=40
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', px(40), 98);
+    ctx.font = '12px system-ui';
+    ctx.fillText('A crashes', px(40), 82);
+
+    // B's leadership bar: t=50 to t=90, lane B (centered y=180)
+    ctx.fillStyle = P.green;
+    ctx.fillRect(px(50), 173, px(90) - px(50), 14);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('B is leader', px(65), 165);
+
+    // gap label
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('10s session timeout — leaderless', px(45), 60);
+
+    // deletion label at the top of the marker
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("znode n_...01 deleted, B's watch fires", 470, 45);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("failover time ≈ the session timeout, not a human's pager", 65, 280);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; 10s is a typical session timeout', w - 12, h - 8);
+});
+
+// c3: quorum math for ensembles of 3, 5, 7
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Quorum Math: Majority Commits, Minority Can Fail', w / 2, 24);
+
+    var bx = 180, scale = 60; // 60px per server
+    var groups = [
+        { y: 75, lab: 'ensemble of 3', servers: 3, quorum: 2, lose: 1 },
+        { y: 145, lab: 'ensemble of 5', servers: 5, quorum: 3, lose: 2 },
+        { y: 215, lab: 'ensemble of 7', servers: 7, quorum: 4, lose: 3 }
+    ];
+    var barH = 12, gap = 4;
+
+    for (var g = 0; g < groups.length; g++) {
+        var gr = groups[g];
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(gr.lab, 20, gr.y + 26);
+
+        var bars = [
+            { v: gr.servers, lab: 'servers: ' + gr.servers, fill: 'rgba(42,120,214,0.30)' },
+            { v: gr.quorum, lab: 'quorum: ' + gr.quorum, fill: P.green },
+            { v: gr.lose, lab: 'can lose: ' + gr.lose, fill: P.orange }
+        ];
+        for (var i = 0; i < bars.length; i++) {
+            var by = gr.y + i * (barH + gap);
+            var bw = bars[i].v * scale;
+            ctx.fillStyle = bars[i].fill;
+            ctx.fillRect(bx, by, bw, barH);
+            ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(bars[i].lab, bx + bw + 8, by + 10);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("two partitions can't both hold a majority — split brain is arithmetic-proof", w - 12, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('quorum = floor(n/2)+1, exact', w - 12, h - 8);
+});
+
+// c4: herd of watches vs chain of watches
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Crash: Herd of Watches vs Chain of Watches', w / 2, 24);
+
+    var workerXs = [300, 400, 500, 600];
+    var workerLabs = ['B', 'C', 'D', 'E'];
+
+    function crashBox(x, cy) {
+        rrectPath(ctx, x, cy - 15, 70, 30, 6);
+        ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fill();
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('A ✗', x + 35, cy + 4);
+    }
+
+    function workerBox(x, cy, lab) {
+        rrectPath(ctx, x, cy - 15, 55, 30, 6);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, x + 27, cy + 4);
+    }
+
+    // ---- row 1: all watch leader ----
+    var y1 = 100;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('all watch leader', 20, y1 + 4);
+    crashBox(140, y1);
+    for (var i = 0; i < 4; i++) workerBox(workerXs[i], y1, workerLabs[i]);
+
+    // four red watch arrows from A to B, C, D, E
+    ctx.strokeStyle = '#e74c3c'; ctx.fillStyle = '#e74c3c'; ctx.lineWidth = 2;
+    drawArrow(ctx, 212, y1, 296, y1);
+    var overRoutes = [
+        { sx: 165, topY: 74, tx: 427 },   // to C
+        { sx: 180, topY: 68, tx: 527 },   // to D
+        { sx: 195, topY: 62, tx: 627 }    // to E
+    ];
+    for (var i = 0; i < overRoutes.length; i++) {
+        var r = overRoutes[i];
+        ctx.beginPath();
+        ctx.moveTo(r.sx, y1 - 15);
+        ctx.lineTo(r.sx, r.topY);
+        ctx.lineTo(r.tx, r.topY);
+        ctx.stroke();
+        drawArrow(ctx, r.tx, r.topY, r.tx, y1 - 17);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 watches fire at once', 330, 52);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(20, 155); ctx.lineTo(700, 155); ctx.stroke();
+
+    // ---- row 2: watch predecessor ----
+    var y2 = 215;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('watch predecessor', 20, y2 + 4);
+    crashBox(140, y2);
+    for (var i = 0; i < 4; i++) workerBox(workerXs[i], y2, workerLabs[i]);
+
+    // green arrow only from A to B
+    ctx.strokeStyle = P.green; ctx.fillStyle = P.green; ctx.lineWidth = 2;
+    drawArrow(ctx, 212, y2, 296, y2);
+    // thin chain arrows: C watches B, D watches C, E watches D (pointing left)
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 1.5;
+    drawArrow(ctx, 400, y2, 359, y2);
+    drawArrow(ctx, 500, y2, 459, y2);
+    drawArrow(ctx, 600, y2, 559, y2);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('only B wakes — becomes leader', 330, 175);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('wake-ups per crash: N−1 in the herd, exactly 1 in the chain', w / 2, 285);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

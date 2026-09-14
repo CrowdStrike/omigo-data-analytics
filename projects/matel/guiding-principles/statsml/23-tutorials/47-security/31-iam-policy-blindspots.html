@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IAM Policy Blindspots</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+.tag.magenta { background: rgba(213,81,129,0.15); color: #d55181; }
+li b { color: #1a5276; }
+
+.footnote {
+    font-size: 0.82rem;
+    color: #6b7280;
+    border-top: 1px solid #e0e0e0;
+    padding-top: 16px;
+}
+</style>
+</head>
+<body>
+
+<h1>IAM Policy Blindspots</h1>
+<p class="subtitle">Allows, denies, wildcards, and trust policies compose into an answer nobody wrote down &mdash; and role-assumption chains reach further than the policy reads</p>
+
+<div class="card-section">
+    <h2>One Account, Four Documents, One Answer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">allow vs deny</span><span class="tag green">evaluated not read</span></div>
+                <ul>
+                    <li><b>The account</b> — an analytics service account should read one folder of one storage container, nothing else</li>
+                    <li><b>Four authors</b> — an identity policy, a resource policy, an inherited organization policy, and a trust policy</li>
+                    <li><b>Default deny</b> — with no document mentioning the account at all, the answer is no access</li>
+                    <li><b>Allow anywhere</b> — a single explicit allow in any one of those documents is enough to grant the action</li>
+                    <li><b>Deny wins</b> — one explicit deny anywhere overrides every allow, so a visible allow can be dead</li>
+                    <li><b>Conditions</b> — a grant may be live only from an internal network or on a tagged resource, so context decides</li>
+                    <li><b>Evaluated, not read</b> — access is a function of several documents; no single one of them holds the answer</li>
+                </ul>
+                <p class="example">The identity policy plainly says allow read on &lt;container&gt;/&lt;folder&gt;/*, yet an organization-level deny on that container makes the effective answer no access (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Effective access is computed by evaluating every attached document together — default deny, any allow grants, any deny overrides — so reading one policy never answers "what can this account do?"
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting What the Wildcard Granted</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">wildcards</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>The container</b> — 5,000 objects spread across 12 folders sit inside the one storage container</li>
+                    <li><b>The need</b> — the account legitimately reads a single folder holding 400 of those objects</li>
+                    <li><b>The shortcut</b> — the policy names the resource &lt;container&gt;/* instead of &lt;container&gt;/&lt;folder&gt;/*</li>
+                    <li><b>The over-grant</b> — that wildcard grants all 5,000 objects: 5,000 / 400 = 12.5x more than needed</li>
+                    <li><b>The needed share</b> — the legitimate scope is 400 / 5,000 = 8% of what the document actually granted</li>
+                    <li><b>Same length</b> — the wildcard policy is not one character longer than the narrow one would be</li>
+                    <li><b>The fix</b> — list resources explicitly; where a wildcard is unavoidable, pair it with a condition</li>
+                </ul>
+                <p class="example">Widening one path segment from &lt;container&gt;/&lt;folder&gt;/* to &lt;container&gt;/* moves the granted set from 400 objects to 5,000 (illustrative figures).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A short policy is not a narrow policy — wildcards grow the granted set without growing the document, so breadth is invisible in the text a reviewer is reading.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Who May Become This Role</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">assume-role chains</span><span class="tag magenta">trust policy</span><span class="tag green">where it's used</span></div>
+                <ul>
+                    <li><b>A separate question</b> — the trust policy decides who may assume the role, not what the role may do</li>
+                    <li><b>Narrow but open</b> — a tightly scoped role that almost anyone may assume is not a tightly scoped grant</li>
+                    <li><b>The graph</b> — 8 roles, with edges A→B, A→C, B→D, C→D, D→E, E→F, plus a separate G→H</li>
+                    <li><b>Direct reach</b> — A's own trust and permission documents show exactly 2 edges out of A: to B and C</li>
+                    <li><b>Transitive reach</b> — walking those edges, A reaches B, C, D, E, F: 5 roles, and 5 / 2 = 2.5x the 2 read</li>
+                    <li><b>Self-escalation</b> — a permission to attach policies or pass a role is a permission to grant more access</li>
+                    <li><b>Enumerate, don't read</b> — treat assume-role as a graph problem and compute reachability, not grants</li>
+                    <li><b>Audit both sides</b> — review who may assume each role as carefully as what each role may do</li>
+                </ul>
+                <p class="example">No document mentions A and F together, yet A → C → D → E → F is four hops of individually reasonable trust (illustrative graph).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Assume-role chains compose transitively, so a role's real blast radius is its reachable set in the trust graph — 5 roles here — not the 2 named in its own documents.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Reading One Policy Is Not Reviewing the Access</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">review practice</span><span class="tag green">defensive</span></div>
+                <ul>
+                    <li><b>The confusion</b> — a reviewer reads the identity policy and believes the access has now been reviewed</li>
+                    <li><b>One term of five</b> — identity, resource, inherited deny, conditions and trust are all terms: 1 / 5 = 20%</li>
+                    <li><b>Wrong signal</b> — a short policy feels safe because it is short, and wildcard breadth never shows up</li>
+                    <li><b>Inverted length</b> — the one-line wildcard grants 5,000 objects; the longer explicit list grants 400</li>
+                    <li><b>Use the simulator</b> — an effective-access analyzer composes what a human cannot hold in their head</li>
+                    <li><b>Deny high</b> — put organization-level denies on what must never happen, since deny-wins makes it stick</li>
+                    <li><b>Watch grant powers</b> — alert specifically on attaching policies and on passing roles to services</li>
+                </ul>
+                <p class="example">A reviewer approves a four-line identity policy, unaware that a resource policy widens it and that three teams may assume the role.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Approving the identity policy and calling the access reviewed. It is one term in an expression — ask the evaluator, list the reachable roles, and check who may assume the role before signing off.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<p class="footnote">Policy fields (effect / action / resource), paths such as &lt;container&gt;/&lt;folder&gt;/*, and single-letter role names are generic placeholders written for illustration &mdash; they are not any real provider's schema, service, or action names, and no credential-like strings appear on this page.</p>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBoxTL(ctx, x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: evaluation pipeline — four documents feed one evaluator, deny path highlighted
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Documents, One Evaluator, One Effective Answer', w / 2, 24);
+
+    var inputs = [
+        { y: 52,  fill: 'rgba(42,120,214,0.15)', border: P.blue,   l1: 'identity policy',     l2: 'allow read <container>/*',   deny: false },
+        { y: 104, fill: 'rgba(25,158,112,0.15)', border: P.aqua,   l1: 'resource policy',     l2: 'allow read (analytics)',     deny: false },
+        { y: 156, fill: 'rgba(217,89,38,0.18)',  border: P.orange, l1: 'organization policy', l2: 'DENY read on <container>',   deny: true  },
+        { y: 208, fill: 'rgba(201,133,0,0.15)',  border: P.yellow, l1: 'condition on the allow', l2: 'only from internal network', deny: false }
+    ];
+
+    for (var i = 0; i < inputs.length; i++) {
+        var b = inputs[i];
+        roundBoxTL(ctx, 30, b.y, 200, 42, 8, b.fill, b.border);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = b.border;
+        ctx.fillText(b.l1, 130, b.y + 18);
+        ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+        ctx.fillText(b.l2, 130, b.y + 34);
+    }
+
+    // arrows into the evaluator
+    for (var i = 0; i < inputs.length; i++) {
+        var b = inputs[i];
+        var x1 = 230, y1 = b.y + 21, x2 = 282, y2 = 151;
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.strokeStyle = b.deny ? P.orange : P.mute;
+        ctx.lineWidth = b.deny ? 3 : 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        arrowHead(ctx, x2, y2, ang, 8, b.deny ? P.orange : P.mute);
+    }
+
+    // evaluator
+    roundBoxTL(ctx, 286, 100, 132, 102, 8, 'rgba(74,58,167,0.12)', P.violet);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.violet;
+    ctx.fillText('evaluate', 352, 124);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('default: no access', 352, 146);
+    ctx.fillText('any allow → grant', 352, 164);
+    ctx.fillText('any deny → override', 352, 182);
+
+    // decision arrow + box
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(418, 151); ctx.lineTo(490, 151); ctx.stroke();
+    arrowHead(ctx, 496, 151, 0, 9, P.orange);
+    roundBoxTL(ctx, 500, 126, 180, 50, 8, 'rgba(217,89,38,0.18)', P.orange);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange;
+    ctx.fillText('effective: NO ACCESS', 590, 148);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('for this action, today', 590, 165);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('the allow in the identity policy is dead', 30, 268);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('generic pseudo-policy fields; illustrative', w - 12, h - 10);
+});
+
+// c2: wildcard breadth — 400 needed vs 5,000 granted on one scale
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Folder Needed (400) vs One Wildcard Granted (5,000)', w / 2, 24);
+
+    var ox = 200, plotW = 440, maxV = 5000, baseY = 222;
+
+    // gridline at the 2,500 tick
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(420, 88); ctx.lineTo(420, baseY); ctx.stroke();
+
+    var rows = [
+        { y: 96,  val: 400,  wpx: 35,  fill: 'rgba(0,131,0,0.35)',   border: P.green,  label: 'needs: 1 folder',        valLab: '400 objects',   valX: 243, inside: false },
+        { y: 158, val: 5000, wpx: 440, fill: 'rgba(217,89,38,0.35)', border: P.orange, label: 'granted: <container>/*', valLab: '5,000 objects', valX: 500, inside: true }
+    ];
+    var barH = 34;
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(ox, r.y, r.wpx, barH);
+        ctx.strokeStyle = r.border; ctx.lineWidth = 2;
+        ctx.strokeRect(ox, r.y, r.wpx, barH);
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(r.label, 190, r.y + barH / 2 + 4);
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = r.inside ? '#7a3208' : r.border;
+        ctx.textAlign = 'left';
+        ctx.fillText(r.valLab, r.valX, r.y + barH / 2 + 5);
+    }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    var ticks = [0, 2500, 5000];
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = ox + ticks[i] / maxV * plotW;
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(ticks[i].toLocaleString('en-US'), tx, baseY + 20);
+    }
+    ctx.fillStyle = '#444';
+    ctx.fillText('objects in the container', ox + plotW / 2, baseY + 40);
+
+    // annotations
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink;
+    ctx.fillText('both policies are one line long', 200, 44);
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange;
+    ctx.fillText('5,000 / 400 = 12.5x over-grant', 200, 68);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('needed share = 400 / 5,000 = 8%', 200, 86);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('object counts illustrative', w - 12, h - 8);
+});
+
+// c3: role graph — direct edges from A vs the transitively reachable set
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("A's Own Documents Show 2 Roles; A Can Reach 5", w / 2, 24);
+
+    var R = 22;
+    var nodes = {
+        A: { x: 70,  y: 155, fill: 'rgba(74,58,167,0.18)',  border: P.violet, cap: 'start' },
+        B: { x: 180, y: 100, fill: 'rgba(213,81,129,0.18)', border: P.magenta, cap: '' },
+        C: { x: 180, y: 210, fill: 'rgba(213,81,129,0.18)', border: P.magenta, cap: '' },
+        D: { x: 300, y: 155, fill: 'rgba(213,81,129,0.18)', border: P.magenta, cap: '' },
+        E: { x: 410, y: 155, fill: 'rgba(213,81,129,0.18)', border: P.magenta, cap: '' },
+        F: { x: 520, y: 155, fill: 'rgba(213,81,129,0.18)', border: P.magenta, cap: 'reached in 4 hops' },
+        G: { x: 630, y: 105, fill: 'rgba(107,114,128,0.12)', border: P.mute,  cap: '' },
+        H: { x: 630, y: 215, fill: 'rgba(107,114,128,0.12)', border: P.mute,  cap: '' }
+    };
+    // exactly the seven edges whose closure from A is {B,C,D,E,F}
+    var edges = [
+        { a: 'A', b: 'B', color: P.blue,    lw: 3 },
+        { a: 'A', b: 'C', color: P.blue,    lw: 3 },
+        { a: 'B', b: 'D', color: P.magenta, lw: 2.5 },
+        { a: 'C', b: 'D', color: P.magenta, lw: 2.5 },
+        { a: 'D', b: 'E', color: P.magenta, lw: 2.5 },
+        { a: 'E', b: 'F', color: P.magenta, lw: 2.5 },
+        { a: 'G', b: 'H', color: P.mute,    lw: 2 }
+    ];
+
+    for (var i = 0; i < edges.length; i++) {
+        var e = edges[i];
+        var n1 = nodes[e.a], n2 = nodes[e.b];
+        var ang = Math.atan2(n2.y - n1.y, n2.x - n1.x);
+        var x1 = n1.x + (R + 2) * Math.cos(ang), y1 = n1.y + (R + 2) * Math.sin(ang);
+        var x2 = n2.x - (R + 6) * Math.cos(ang), y2 = n2.y - (R + 6) * Math.sin(ang);
+        ctx.strokeStyle = e.color; ctx.lineWidth = e.lw;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        arrowHead(ctx, x2, y2, ang, 9, e.color);
+    }
+
+    var keys = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    for (var i = 0; i < keys.length; i++) {
+        var k = keys[i], n = nodes[k];
+        ctx.beginPath(); ctx.arc(n.x, n.y, R, 0, 2 * Math.PI);
+        ctx.fillStyle = n.fill; ctx.fill();
+        ctx.strokeStyle = n.border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.font = 'bold 15px system-ui'; ctx.fillStyle = n.border; ctx.textAlign = 'center';
+        ctx.fillText(k, n.x, n.y + 5);
+        if (n.cap) {
+            ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+            ctx.fillText(n.cap, n.x, n.y + 34 + 4);
+        }
+    }
+
+    // island label
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('not reachable', 630, 165);
+
+    // annotations
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.blue;
+    ctx.fillText('direct edges from A: 2 (B, C)', 250, 48);
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta;
+    ctx.fillText('reachable from A: 5 — B, C, D, E, F', 250, 68);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.violet;
+    ctx.fillText('5 / 2 = 2.5x what A’s documents show', 250, 88);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('role graph illustrative', w - 12, h - 10);
+});
+
+// c4: five terms, one reviewed; and the inverted length signal
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Term Reviewed, Five Terms Decide', w / 2, 24);
+
+    var tiles = [
+        { x: 40,  label: 'identity policy', reviewed: true  },
+        { x: 170, label: 'resource policy', reviewed: false },
+        { x: 300, label: 'inherited deny',  reviewed: false },
+        { x: 430, label: 'conditions',      reviewed: false },
+        { x: 560, label: 'trust policy',    reviewed: false }
+    ];
+    var ty = 52, tw = 120, th = 46;
+    for (var i = 0; i < tiles.length; i++) {
+        var t = tiles[i];
+        if (t.reviewed) {
+            roundBoxTL(ctx, t.x, ty, tw, th, 8, 'rgba(42,120,214,0.18)', P.blue);
+        } else {
+            ctx.setLineDash([5, 4]);
+            roundBoxTL(ctx, t.x, ty, tw, th, 8, 'rgba(107,114,128,0.08)', P.mute);
+            ctx.setLineDash([]);
+        }
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = t.reviewed ? P.blue : P.mute;
+        ctx.fillText(t.label, t.x + tw / 2, ty + 20);
+        ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+        ctx.fillText(t.reviewed ? 'reviewed' : 'not reviewed', t.x + tw / 2, ty + 36);
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('1 of 5 terms reviewed = 20% of the expression', 360, 126);
+
+    // bottom panel: inverted length signal
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink;
+    ctx.fillText('document length points the wrong way', 260, 158);
+
+    var bars = [
+        { y: 178, wpx: 360, fill: 'rgba(217,89,38,0.35)', border: P.orange, label: 'one-line wildcard',   valLab: '5,000 objects', valX: 628 },
+        { y: 228, wpx: 29,  fill: 'rgba(0,131,0,0.35)',   border: P.green,  label: 'longer explicit list', valLab: '400 objects',  valX: 297 }
+    ];
+    var barH = 20, bx = 260;
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(bx, b.y, b.wpx, barH);
+        ctx.strokeStyle = b.border; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, b.y, b.wpx, barH);
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(b.label, 250, b.y + barH / 2 + 4);
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = b.border; ctx.textAlign = 'left';
+        ctx.fillText(b.valLab, b.valX, b.y + barH / 2 + 4);
+    }
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('object counts illustrative', w - 12, h - 8);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

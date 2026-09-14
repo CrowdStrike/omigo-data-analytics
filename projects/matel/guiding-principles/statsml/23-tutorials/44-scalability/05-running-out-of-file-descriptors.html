@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Running Out of File Descriptors</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code, .key-point code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Running Out of File Descriptors</h1>
+<p class="subtitle">Every open file, socket, and pipe costs one descriptor from a per-process budget — and the classic default budget is only 1,024</p>
+
+<div class="card-section">
+    <h2>One Leaked Socket per Failed Request</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">the 1,024 default</span><span class="tag red">EMFILE</span></div>
+                <ul>
+                    <li><b>The service</b> — an order-lookup API holds ~280 descriptors at 10am: client sockets, log files, a DB pool</li>
+                    <li><b>The bug</b> — when a database call times out, the handler returns a 500 but never closes the DB socket</li>
+                    <li><b>The leak</b> — each failed request strands one socket; a database slowdown makes ~250 failures per hour</li>
+                    <li><b>The ceiling</b> — the process's soft limit is the classic default: 1,024 open descriptors (<code>ulimit -n</code>)</li>
+                    <li><b>The crash</b> — three hours into the slowdown the table is full and every new <code>accept()</code> fails with EMFILE</li>
+                </ul>
+                <p class="example">The database slowdown starts at 10am; at 1pm the service is still running but cannot accept a single new connection — the log fills with "too many open files".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A file descriptor is the process's handle to any open file, socket, or pipe. The kernel gives each process a fixed budget of them, and a leak spends that budget one request at a time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Descriptor Budget by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">budget arithmetic</span></div>
+                <ul>
+                    <li><b>The budget</b> — soft limit 1,024; the healthy process uses 279: 3 std streams + 2 logs + 1 listener + 20 DB pool + 253 client sockets</li>
+                    <li><b>The leak rate</b> — ~250 stranded sockets per hour once the database starts timing out</li>
+                    <li><b>Hand-check at +2h</b> — 279 + 500 leaked = 779 open, leaving only 245 descriptors of headroom</li>
+                    <li><b>Hand-check at +3h</b> — 279 + 745 leaked = 1,024: the table is full; every <code>open()</code> and <code>accept()</code> now fails</li>
+                    <li><b>Nothing frees itself</b> — the stranded sockets sit in CLOSE_WAIT until the process closes them or dies</li>
+                </ul>
+                <p class="example">Two hours into the slowdown the process holds 779 descriptors — 500 of them are dead sockets that one missing close() call left behind.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Exhaustion is plain arithmetic: baseline usage plus leak rate times hours. With a 1,024 budget, 279 in normal use, and 250 leaks per hour, the service has almost exactly three hours to live.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Soft Limits, Hard Limits, and lsof</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">ulimit</span><span class="tag orange">lsof</span></div>
+                <ul>
+                    <li><b>Soft limit</b> — the cap actually enforced on the process; <code>ulimit -n</code> prints it; 1,024 is the classic default</li>
+                    <li><b>Hard limit</b> — the ceiling on the soft limit; a process may raise soft up to hard, only root raises hard</li>
+                    <li><b>Raising it</b> — <code>ulimit -n 65536</code> in the shell, <code>LimitNOFILE=65536</code> in a systemd unit; busy servers set tens of thousands</li>
+                    <li><b>Finding the leak</b> — <code>lsof -p &lt;pid&gt;</code> lists every open descriptor; group the lines by type and TCP state</li>
+                    <li><b>The tell</b> — hundreds of sockets stuck in CLOSE_WAIT means the peer hung up and your code never called close()</li>
+                </ul>
+                <p class="example">Two hours into the slowdown, <code>lsof -p 4117</code> prints 779 lines — 500 of them are CLOSE_WAIT sockets all pointing at the database's port, naming the leaky code path.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Raising the limit is the mitigation and lsof is the diagnosis — a leak will fill 65,536 descriptors just as surely as 1,024, only later.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Error Shows Up Far From the Leak</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">debugging</span></div>
+                <ul>
+                    <li><b>The distance</b> — the leak lives in the DB-timeout handler; the error surfaces in <code>accept()</code> and even log rotation</li>
+                    <li><b>Whoever's next</b> — EMFILE hits whatever code needs the <em>next</em> descriptor, not the code hoarding 745 of them</li>
+                    <li><b>Shared symptom</b> — at the ceiling, TLS handshakes, DNS lookups, and opening a config file all fail the same way</li>
+                    <li><b>The wrong fix</b> — raising the limit to 65,536 without closing the leak moves the same crash out ~11 days (261 hours at 250/hour)</li>
+                    <li><b>The habit</b> — close descriptors on every path: error branches, timeouts, early returns (or use with/defer/try-with-resources)</li>
+                </ul>
+                <p class="example">The on-call engineer restarts the "broken" web layer at 1pm; it runs clean for three hours and dies again — the real fix was one close() in the timeout branch.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Debugging where EMFILE is thrown. The error names the victim, not the culprit — count who is actually holding the descriptors with lsof before touching the code that failed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: open-descriptor count climbing into the 1,024 ceiling over four hours
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Socket per Failed Request: 279 to 1,024 in Three Hours', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(hr) { return ox + hr / 4 * pw; }
+    function py(v) { return baseY - v / 1100 * ph; }
+
+    // gridlines + y labels
+    var grid = [250, 500, 750, 1000];
+    for (var i = 0; i < 4; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grid[i].toLocaleString('en-US'), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var tickLabs = ['9am', '10am', '11am', '12pm', '1pm'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i <= 4; i++) ctx.fillText(tickLabs[i], px(i), baseY + 18);
+
+    // soft-limit line
+    var limY = py(1024);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, limY); ctx.lineTo(ox + pw, limY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('soft limit 1,024', ox + 4, limY - 7);
+
+    // slowdown marker at hour 1
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(1), 65); ctx.lineTo(px(1), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('DB slowdown begins', px(1), 58);
+
+    // descriptor line
+    var hrs = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4];
+    var fds = [279, 281, 280, 405, 529, 654, 779, 904, 1024];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < hrs.length; i++) {
+        i === 0 ? ctx.moveTo(px(hrs[i]), py(fds[i])) : ctx.lineTo(px(hrs[i]), py(fds[i]));
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('EMFILE: every new accept() fails', 470, 93);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('descriptor counts illustrative', w - 12, h - 8);
+});
+
+// c2: the 1,024-descriptor budget as stacked bars at three moments
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The 1,024 Budget Filling Up: Leaked Sockets Eat the Headroom', w / 2, 24);
+
+    // legend
+    var legend = [
+        { x: 230, sw: 'rgba(74,58,167,0.35)', stroke: null, t: 'fixed (26)' },
+        { x: 320, sw: 'rgba(42,120,214,0.30)', stroke: null, t: 'live clients (253)' },
+        { x: 452, sw: 'rgba(231,76,60,0.35)', stroke: null, t: 'leaked' },
+        { x: 524, sw: null, stroke: P.grid, t: 'free' }
+    ];
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    for (var i = 0; i < legend.length; i++) {
+        if (legend[i].sw) { ctx.fillStyle = legend[i].sw; ctx.fillRect(legend[i].x, 38, 12, 12); }
+        else { ctx.strokeStyle = legend[i].stroke; ctx.lineWidth = 1; ctx.strokeRect(legend[i].x, 38, 12, 12); }
+        ctx.fillStyle = '#444';
+        ctx.fillText(legend[i].t, legend[i].x + 16, 48);
+    }
+
+    var bx = 230, bh = 26;
+    var rowYs = [80, 150, 220];
+    var rowLabs = ['healthy (10am)', '+2 hours (779 open)', '+3 hours (1,024 — full)'];
+    var fixedW = 11, liveW = 109;
+    var leakW = [0, 215, 320];
+    var freeW = [320, 105, 0];
+
+    for (var r = 0; r < 3; r++) {
+        var y = rowYs[r], x = bx;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabs[r], 20, y + 17);
+        // fixed use
+        ctx.fillStyle = 'rgba(74,58,167,0.35)';
+        ctx.fillRect(x, y, fixedW, bh); x += fixedW;
+        // live clients
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(x, y, liveW, bh); x += liveW;
+        // leaked CLOSE_WAIT
+        if (leakW[r] > 0) {
+            ctx.fillStyle = 'rgba(231,76,60,0.35)';
+            ctx.fillRect(x, y, leakW[r], bh); x += leakW[r];
+        }
+        // free headroom
+        if (freeW[r] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, freeW[r], bh);
+        }
+    }
+
+    // limit marker at 1,024
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(670, 68); ctx.lineTo(670, 250); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1,024', 670, 62);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('745 leaked — nothing left to accept with', 668, 268);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('segment sizes illustrative', w - 12, h - 8);
+});
+
+// c3: lsof breakdown at +2 hours — CLOSE_WAIT towers over everything
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('lsof -p 4117 at +2 Hours: 500 Sockets Stuck in CLOSE_WAIT', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function py(v) { return baseY - v / 550 * ph; }
+
+    // gridlines + labels
+    var grid = [125, 250, 375, 500];
+    for (var i = 0; i < 4; i++) {
+        var gy = py(grid[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grid[i]), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 140, lab: 'files & pipes', count: 26, fill: 'rgba(74,58,167,0.35)', dashed: false },
+        { cx: 280, lab: 'sockets ESTABLISHED', count: 253, fill: 'rgba(42,120,214,0.30)', dashed: false },
+        { cx: 420, lab: 'sockets CLOSE_WAIT', count: 500, fill: 'rgba(231,76,60,0.35)', dashed: false },
+        { cx: 560, lab: 'free headroom', count: 245, fill: null, dashed: true }
+    ];
+    var bw = 90;
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i], top = py(b.count);
+        if (b.fill) {
+            ctx.fillStyle = b.fill;
+            ctx.fillRect(b.cx - bw / 2, top, bw, baseY - top);
+        } else {
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+            ctx.strokeRect(b.cx - bw / 2, top, bw, baseY - top);
+            ctx.setLineDash([]);
+        }
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(b.count), b.cx, top - 7);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab, b.cx, baseY + 18);
+    }
+
+    // annotation above the CLOSE_WAIT bar
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the smoking gun: half-closed sockets never closed', 420, 56);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; total open = 779 of 1,024', w - 12, h - 8);
+});
+
+// c4: flow diagram — the leak (10am-1pm) vs where the error appears (1pm)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Leak and the Error Are Three Hours and Three Modules Apart', w / 2, 24);
+
+    var boxW = 150, boxH = 40;
+
+    function flowBox(x, cy, lines, fill, border) {
+        rrectPath(ctx, x, cy - boxH / 2, boxW, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) ctx.fillText(lines[0], x + boxW / 2, cy + 4);
+        else {
+            ctx.fillText(lines[0], x + boxW / 2, cy - 3);
+            ctx.fillText(lines[1], x + boxW / 2, cy + 11);
+        }
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)', orangeFill = 'rgba(217,89,38,0.12)';
+    var redFill = 'rgba(231,76,60,0.12)', grayFill = 'rgba(107,114,128,0.12)';
+
+    // row 1: the bug
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the bug (10am–1pm)', 20, y1 + 4);
+    flowBox(170, y1, ['DB call times out'], blueFill, P.blue);
+    flowBox(370, y1, ['handler skips close()'], orangeFill, P.orange);
+    flowBox(560, y1, ['+1 CLOSE_WAIT', 'each time'], redFill, '#e74c3c');
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 322, y1, 366, y1);
+    drawArrow(ctx, 522, y1, 556, y1);
+
+    // row 2: the crash
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the crash (1pm)', 20, y2 + 4);
+    flowBox(170, y2, ['table full: 1,024 open'], redFill, '#e74c3c');
+    flowBox(370, y2, ['accept() → EMFILE'], redFill, '#e74c3c');
+    flowBox(560, y2, ['on-call blames', 'the web layer'], grayFill, P.mute);
+    ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 3;
+    drawArrow(ctx, 322, y2, 366, y2);
+    drawArrow(ctx, 522, y2, 556, y2);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ wrong module', 635, y2 + 36);
+
+    // connector from row-1 rightmost box down to row-2 leftmost box
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(635, y1 + boxH / 2);
+    ctx.lineTo(635, 152);
+    ctx.lineTo(245, 152);
+    ctx.lineTo(245, y2 - boxH / 2 - 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute;
+    ctx.beginPath();
+    ctx.moveTo(245, y2 - boxH / 2);
+    ctx.lineTo(241, y2 - boxH / 2 - 7);
+    ctx.lineTo(249, y2 - boxH / 2 - 7);
+    ctx.closePath(); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 hours later', 440, 146);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('EMFILE names the victim, not the culprit', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

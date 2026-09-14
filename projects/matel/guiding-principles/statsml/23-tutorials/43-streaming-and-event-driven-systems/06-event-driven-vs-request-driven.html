@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event-Driven vs Request-Driven</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Event-Driven vs Request-Driven</h1>
+<p class="subtitle">Two ways for services to talk: call someone and wait for the answer, or announce what happened and let whoever cares react later</p>
+
+<div class="card-section">
+    <h2>One Order, Two Ways to Wire It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">integration styles</span></div>
+                <ul>
+                    <li><b>The order</b> — a bookstore checkout at noon must trigger a confirmation email, an inventory update, and analytics</li>
+                    <li><b>Request-driven</b> — the order service calls email, then inventory, then analytics, and waits for each reply</li>
+                    <li><b>Event-driven</b> — the order service publishes one "order-placed" event and answers the shopper right away</li>
+                    <li><b>The reactors</b> — email, inventory, and analytics each subscribe to the event and process it on their own clock</li>
+                    <li><b>The trade</b> — calling gives an immediate answer and tight coupling; publishing gives independence but no reply</li>
+                </ul>
+                <p class="example">The same order flows both ways: three direct calls the shopper waits through, or one publish that three subscribers pick up within a second.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Request-driven means "call and wait for the answer"; event-driven means "announce what happened and let interested services react when they can."
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Timing the Checkout by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">latency</span></div>
+                <ul>
+                    <li><b>Own work</b> — the order service itself needs 50ms to validate the cart and write the order row</li>
+                    <li><b>Request path</b> — then it waits: email 120ms + inventory 80ms + analytics 200ms = 400ms of calls</li>
+                    <li><b>Hand-check</b> — 50 + 120 + 80 + 200 = 450ms before the shopper sees "order confirmed"</li>
+                    <li><b>Event path</b> — 50ms of own work + 10ms to publish = the shopper sees the confirmation at 60ms</li>
+                    <li><b>Later, elsewhere</b> — subscribers finish at 140ms (inventory), 180ms (email), and 260ms (analytics)</li>
+                </ul>
+                <p class="example">Same order, same three downstream jobs: the shopper waits 450ms in the request version and 60ms in the event version — 7.5&times; faster, because the waiting moved off the checkout path.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Events don't make the work faster — email still takes 120ms — they move the work off the caller's clock, so the shopper's wait shrinks from 450ms to 60ms.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When the Flash Sale Hits</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">buffering</span><span class="tag orange">failure</span></div>
+                <ul>
+                    <li><b>The spike</b> — a flash sale pushes checkouts from 50/sec to 500/sec for two minutes</li>
+                    <li><b>The slow link</b> — the analytics service tops out at 200 events/sec no matter what arrives</li>
+                    <li><b>Request cascade</b> — with direct calls, analytics timeouts fail whole checkouts: 300/sec are lost at peak</li>
+                    <li><b>Event buffer</b> — with a queue, all 500/sec are accepted; the backlog peaks at 36,000 events, then drains</li>
+                    <li><b>The cost</b> — the analytics dashboard runs up to ~3 minutes behind reality until the queue empties</li>
+                </ul>
+                <p class="example">Over the 2-minute spike, request-driven loses 300/sec &times; 120s = 36,000 checkouts outright; event-driven completes every one and drains its 36,000-event backlog in 4 minutes at 150/sec net.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A queue turns a traffic spike into a backlog instead of a failure — the price is eventual consistency: downstream views lag until the backlog clears.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not a Religion: Most Systems Use Both</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">hybrid</span></div>
+                <ul>
+                    <li><b>The mistake</b> — converting everything to events, including the calls that need an answer right now</li>
+                    <li><b>Needs an answer</b> — payment authorization stays request-driven: the shopper is waiting to know if the card worked</li>
+                    <li><b>Can react later</b> — email, analytics, and loyalty points fit events: nobody is standing there waiting on them</li>
+                    <li><b>Fire-and-forget trap</b> — a published event is not a processed event; a consumer can be down or hours behind</li>
+                    <li><b>Tracing tax</b> — one request is one call stack; one event fans out into logs across many separate services</li>
+                </ul>
+                <p class="example">The bookstore charges the card with a direct call (answer in 300ms, checkout blocks on it), then publishes "order-placed" for everything downstream — one checkout, both styles.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating event-driven as strictly better. If the caller cannot continue without the result — a payment, a stock reservation before promising delivery — a request is the honest design; events fit the reactions that follow.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function lineArrow(ctx, x1, y1, x2, y2, color, width, dashed) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    if (dashed) ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2 - 8 * Math.cos(ang), y2 - 8 * Math.sin(ang));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x2, y2, ang, 8, color);
+}
+
+// c1: call chain vs publish fan-out
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same Order: Call-and-Wait vs Publish-and-React', w / 2, 24);
+
+    var boxH = 34;
+
+    function flowBox(x, cy, bw, label, fill, border) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - boxH / 2, bw, boxH, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, cy + 4);
+    }
+
+    // Row 1: request-driven (centered y=100)
+    var y1 = 100;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('request-driven', 20, 58);
+    flowBox(110, y1, 130, 'Order service', 'rgba(42,120,214,0.15)', P.blue);
+    var chain = [
+        { x: 290, label: 'Email' },
+        { x: 430, label: 'Inventory' },
+        { x: 570, label: 'Analytics' }
+    ];
+    var prevRight = 240;
+    for (var i = 0; i < chain.length; i++) {
+        lineArrow(ctx, prevRight, y1, chain[i].x, y1, P.blue, 3, false);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('call + wait', (prevRight + chain[i].x) / 2, y1 - 8);
+        flowBox(chain[i].x, y1, 110, chain[i].label, 'rgba(42,120,214,0.15)', P.blue);
+        prevRight = chain[i].x + 110;
+    }
+    // dashed return arrows under the boxes back toward the order box
+    for (var i = 0; i < chain.length; i++) {
+        var fromX = chain[i].x + 55;
+        lineArrow(ctx, fromX, y1 + boxH / 2 + 4, 180, y1 + boxH / 2 + 22, P.mute, 1, true);
+    }
+
+    // Row 2: event-driven (centered y=215)
+    var y2 = 215;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('event-driven', 20, y2 - 32);
+    flowBox(110, y2, 130, 'Order service', 'rgba(42,120,214,0.15)', P.blue);
+    lineArrow(ctx, 240, y2, 290, y2, P.green, 3, false);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('publish', 265, y2 - 8);
+    flowBox(290, y2, 150, 'order-placed event', 'rgba(74,58,167,0.12)', P.violet);
+    var subs = [
+        { y: 175, label: 'Email' },
+        { y: 215, label: 'Inventory' },
+        { y: 255, label: 'Analytics' }
+    ];
+    for (var i = 0; i < subs.length; i++) {
+        lineArrow(ctx, 440, y2, 490, subs[i].y, P.green, 2, false);
+        flowBox(490, subs[i].y, 110, subs[i].label, 'rgba(42,120,214,0.15)', P.blue);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('react later', 606, subs[i].y + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('publisher never waits — and never learns who listened', w - 15, 140);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('schematic — one order, two wirings', w - 15, h - 8);
+});
+
+// c2: Gantt of one checkout — 450ms vs 60ms
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Checkout on the Clock: 450ms vs 60ms to Confirmation', w / 2, 24);
+
+    var originX = 90, plotW = 590, baseY = 255;
+    function xOf(ms) { return originX + ms / 900 * plotW; }
+
+    // gridlines + ticks at 0/300/600/900
+    var ticks = [0, 300, 600, 900];
+    for (var t = 0; t < ticks.length; t++) {
+        var tx = xOf(ticks[t]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, 45); ctx.lineTo(tx, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[t] + 'ms', tx, baseY + 16);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(originX, baseY); ctx.lineTo(originX + plotW, baseY); ctx.stroke();
+
+    function seg(fromMs, toMs, cy, tall, color, alpha) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.fillRect(xOf(fromMs), cy - tall / 2, xOf(toMs) - xOf(fromMs), tall);
+        ctx.globalAlpha = 1;
+    }
+
+    // Lane 1: request (centered y=95)
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('request', 15, y1 + 4);
+    seg(0, 50, y1, 20, P.blue, 1);
+    seg(50, 170, y1, 20, P.magenta, 1);
+    seg(170, 250, y1, 20, P.aqua, 1);
+    seg(250, 450, y1, 20, P.orange, 1);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue; ctx.fillText('order', xOf(25), y1 - 15);
+    ctx.fillStyle = P.magenta; ctx.fillText('email', xOf(110), y1 - 15);
+    ctx.fillStyle = P.aqua; ctx.fillText('inventory', xOf(210), y1 - 15);
+    ctx.fillStyle = P.orange; ctx.fillText('analytics', xOf(350), y1 - 15);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(450), y1 - 14); ctx.lineTo(xOf(450), y1 + 14); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('confirmed at 450ms', xOf(450) + 8, y1 + 4);
+
+    // Lane 2: event (centered y=175)
+    var y2 = 175;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('event', 15, y2 + 4);
+    seg(0, 50, y2, 20, P.blue, 1);
+    seg(50, 60, y2, 20, P.violet, 1);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(60), y2 - 14); ctx.lineTo(xOf(60), y2 + 14); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('confirmed at 60ms', xOf(60) + 8, y2 + 4);
+
+    // async bars
+    seg(60, 140, 210, 14, P.aqua, 0.6);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('done at 140ms', xOf(140) + 6, 214);
+    seg(60, 180, 228, 14, P.magenta, 0.6);
+    ctx.fillText('180ms', xOf(180) + 6, 232);
+    seg(60, 260, 246, 14, P.orange, 0.6);
+    ctx.fillText('260ms', xOf(260) + 6, 250);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same work, off the shopper’s clock', 300, 150);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('durations illustrative', w - 15, h - 8);
+});
+
+// c3: flash sale — incoming rate vs analytics capacity, buffered gap shaded
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Flash Sale: the Queue Absorbs What Direct Calls Would Drop', w / 2, 24);
+
+    var originX = 70, baseY = 245, plotW = 590, plotH = 180, maxR = 500;
+    function xOf(m) { return originX + m / 8 * plotW; }
+    function yOf(r) { return baseY - r / maxR * plotH; }
+
+    // gridlines
+    var grids = [100, 200, 300, 400];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(originX, gy); ctx.lineTo(originX + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[g]), originX - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(originX, baseY - plotH);
+    ctx.lineTo(originX, baseY);
+    ctx.lineTo(originX + plotW, baseY);
+    ctx.stroke();
+
+    // x ticks every 2 min
+    for (var t = 0; t <= 8; t += 2) {
+        var tx = xOf(t);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' min', tx, baseY + 20);
+    }
+
+    // buffered area between incoming (500) and capacity (200) from min 1 to 3
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(xOf(1), yOf(500), xOf(3) - xOf(1), yOf(200) - yOf(500));
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('queued: 36,000 events', xOf(2), yOf(350) + 4);
+
+    // capacity line at 200/sec
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(originX, yOf(200)); ctx.lineTo(originX + plotW, yOf(200)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('analytics capacity 200/sec', originX + 4, yOf(200) - 8);
+
+    // incoming step line
+    var stepM = [0, 1, 1, 3, 3, 8];
+    var stepR = [50, 50, 500, 500, 50, 50];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < stepM.length; i++) {
+        var x = xOf(stepM[i]), y = yOf(stepR[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('incoming checkouts', xOf(3.2), yOf(50) - 10);
+
+    // drain marker at minute 7
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(xOf(7), baseY - plotH); ctx.lineTo(xOf(7), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.aqua; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('backlog empty', xOf(7), baseY - plotH - 8);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('request-driven: this shaded area is 36,000 failed checkouts', xOf(2) - 60, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative; area = 300/sec × 120s', w - 15, h - 10);
+});
+
+// c4: decision flow — is the caller waiting on the result?
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Question Decides: Is the Caller Waiting on the Result?', w / 2, 24);
+
+    var boxH = 36;
+
+    function flowBox(x, cy, bw, label, fill, border, textColor, bold) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - boxH / 2, bw, boxH, 8); ctx.fill();
+        if (border) { ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke(); }
+        ctx.fillStyle = textColor || P.text;
+        ctx.font = (bold ? 'bold ' : '') + '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, cy + 4);
+    }
+
+    // root box (centered x=360, y=80)
+    flowBox(360 - 120, 80, 240, 'is the shopper waiting on the result?', 'rgba(26,82,118,0.9)', null, '#fff', true);
+
+    // yes branch to request box at x=150, y=170
+    lineArrow(ctx, 300, 98, 245, 152, P.blue, 3, false);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('yes', 262, 128);
+    flowBox(150, 170, 190, 'request: charge the card', 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('blocks 300ms — answer required', 245, 170 + boxH / 2 + 16);
+
+    // no branch to publish box at x=430, y=170
+    lineArrow(ctx, 420, 98, 510, 152, P.green, 3, false);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no', 472, 128);
+    flowBox(430, 170, 160, 'publish: order-placed', 'rgba(74,58,167,0.12)', P.violet);
+
+    // fan-out to subscribers at x=610
+    var subs = [
+        { y: 145, label: 'Email' },
+        { y: 185, label: 'Analytics' },
+        { y: 225, label: 'Loyalty' }
+    ];
+    for (var i = 0; i < subs.length; i++) {
+        lineArrow(ctx, 590, 170, 610, subs[i].y, P.green, 2, false);
+        flowBox(610, subs[i].y, 100, subs[i].label, 'rgba(0,131,0,0.10)', P.green);
+    }
+
+    // warning note
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fire-and-forget ≠ done: consumers can be down or behind', 20, 270);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('real systems mix both — request for answers, events for reactions', w / 2, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

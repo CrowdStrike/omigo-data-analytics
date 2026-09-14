@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Provenance &amp; Artifact Signing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+.footnote { font-size: 0.8rem; color: #6b7280; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Build Provenance &amp; Artifact Signing</h1>
+<p class="subtitle">An SBOM lists what is inside a release; provenance says which build produced it &mdash; and that is the part an attacker has to forge</p>
+
+<div class="card-section">
+    <h2>Three Questions About One Downloaded Release</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">what vs which build</span><span class="tag green">verifiable claims</span></div>
+                <ul>
+                    <li><b>The artifact</b> — Alice's team publishes one release file; Bob downloads it and has to decide whether to run it</li>
+                    <li><b>Integrity</b> — a hash answers "are these the same bytes the publisher produced?" and catches corruption in transit</li>
+                    <li><b>Its limit</b> — a hash says nothing about who produced the bytes, and an attacker who replaces file and hash together passes</li>
+                    <li><b>Authenticity</b> — a signature answers "was this signed by a key belonging to the publisher?" and catches an impostor</li>
+                    <li><b>Its limit</b> — a signature is a statement about a key holder, never about the process that key holder actually ran</li>
+                    <li><b>Provenance</b> — a signed attestation from the build platform names the source commit, the builder, and the build's inputs</li>
+                    <li><b>The difference</b> — signing proves WHO; provenance proves HOW, so provenance can be compared against expectations</li>
+                    <li><b>The forgery target</b> — an attacker inside the pipeline gets valid signatures for free; a truthful build description is the hard part</li>
+                </ul>
+                <p class="example">Bob verifies the hash, verifies the signature, and still cannot tell whether the file was built from Alice's reviewed branch or on somebody's laptop.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A hash, a signature, and provenance answer three different questions — the bytes, the key holder, and the process — and only the third is a claim a policy can check.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting What Each Control Actually Catches</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">coverage matrix</span><span class="tag green">honest accounting</span></div>
+                <ul>
+                    <li><b>Five scenarios</b> — (a) bytes altered in transit, (b) an impostor publishes as Alice's team, (c) her signing key is stolen</li>
+                    <li><b>The hard two</b> — (d) the pipeline is subverted and builds bad code from the real repository, (e) a malicious commit is merged</li>
+                    <li><b>Hash</b> — detects (a) only: 1 of 5 = 20%, because every other scenario produces bytes the publisher really did emit</li>
+                    <li><b>Signature</b> — detects (a) and (b): 2 of 5 = 40%; the impostor lacks a key, but the real pipeline signs faithfully</li>
+                    <li><b>Provenance with policy</b> — detects (a), (b), (c): 3 of 5 = 60%, since a stolen key cannot name the expected builder and branch</li>
+                    <li><b>Not (d)</b> — a subverted build platform can emit valid provenance for its own malicious build, so the metadata agrees</li>
+                    <li><b>Not (e)</b> — the process was followed exactly and the source itself was malicious, which is a code-review problem</li>
+                    <li><b>Assumptions</b> — one artifact, one policy checking repository plus branch plus builder, each scenario counted once</li>
+                </ul>
+                <p class="example">Provenance moves coverage from 2 of 5 to 3 of 5 — a real gain, with 2 scenarios that no metadata check will ever see (illustrative scenario set).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 20% → 40% → 60% across hash, signature, and provenance — provenance raises the floor and closes no ceiling, because no metadata control validates intent.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Rejecting a Correctly Signed Artifact</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">verify at install</span><span class="tag orange">rule of thumb</span></div>
+                <ul>
+                    <li><b>The policy</b> — Bob requires the attestation to name an expected source repository, an expected builder, and a protected branch</li>
+                    <li><b>The rejection</b> — an artifact built from a fork branch fails that policy despite carrying a perfectly valid signature</li>
+                    <li><b>Platform-generated</b> — the attestation must come from the build platform, not from the build's own steps, or the build can lie about itself</li>
+                    <li><b>Verify at consumption</b> — the check belongs where the artifact is installed and must fail closed; unverified metadata is decoration</li>
+                    <li><b>Short-lived signing</b> — credentials issued to the build's workload identity and expiring with it remove the long-lived stolen-key problem</li>
+                    <li><b>Public log</b> — recording signatures in a public transparency log makes a surprise release discoverable by anyone watching</li>
+                    <li><b>Maturity ladder</b> — scripted build, then a hosted platform that generates provenance, then a hardened platform the build cannot forge</li>
+                    <li><b>Strongest check</b> — a reproducible build lets a third party rebuild the source and confirm the bytes without trusting the builder at all</li>
+                </ul>
+                <p class="example">The signature verifies, the policy sees a fork branch where a protected branch was required, and the install stops (illustrative policy).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Provenance becomes a control only when the consumer enforces it at install time and rejects mismatches — the check, not the metadata, is the defense.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"It Is Signed, So It Is Safe"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">SBOM vs provenance</span></div>
+                <ul>
+                    <li><b>The collapse</b> — "it is signed" gets treated as one answer to all three questions when it answers authenticity alone</li>
+                    <li><b>What it proves</b> — a key holder asserted this artifact; nothing about the source, the builder, or what the build did</li>
+                    <li><b>Why it feels sufficient</b> — the verification succeeds, so the check looks complete, but success only means the key matched</li>
+                    <li><b>The SBOM confusion</b> — an SBOM is often requested as though it were a security control when it is an inventory of contents</li>
+                    <li><b>What an SBOM is for</b> — answering "am I affected?" on the day a vulnerability in some component is newly published</li>
+                    <li><b>What it cannot do</b> — a malicious build can ship an identical component list, so the inventory looks entirely unchanged</li>
+                    <li><b>Complements</b> — contents versus origin: the SBOM says what is inside, provenance says which build produced it</li>
+                    <li><b>Better question</b> — not "is it signed?" but "does its attestation match the build we expected to have run?"</li>
+                </ul>
+                <p class="example">A malicious build of the same release ships the same component list, so the SBOM diff is empty while the provenance mismatch is obvious.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a valid signature as proof of safety, and an SBOM as a detection control. The signature answers who; the SBOM answers what is inside; only provenance answers which build produced these bytes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<p class="footnote">Attestation field values shown on this page are descriptive placeholders, not real identifiers, hashes, or keys, so that security scanners do not flag the page.</p>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var ALARM = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBoxTL(ctx, x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width, headSize) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    arrowHead(ctx, x2, y2, ang, headSize, color);
+}
+
+// c1: three-rung ladder — integrity, authenticity, provenance, each with its limitation
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Questions, Three Different Answers', w / 2, 24);
+
+    var rungs = [
+        { y: 200, fill: 'rgba(42,120,214,0.13)', border: P.blue,
+          head: '1. Integrity — same bytes?', sub: 'answered by a hash',
+          lim1: 'says nothing about who', lim2: 'produced the bytes' },
+        { y: 130, fill: 'rgba(201,133,0,0.13)', border: P.yellow,
+          head: '2. Authenticity — whose key?', sub: 'answered by a signature',
+          lim1: 'says nothing about what', lim2: 'the build actually did' },
+        { y: 60,  fill: 'rgba(0,131,0,0.13)', border: P.green,
+          head: '3. Provenance — which build?', sub: 'signed attestation from the platform',
+          lim1: 'checkable against policy —', lim2: 'still no claim about intent' }
+    ];
+
+    for (var i = 0; i < rungs.length; i++) {
+        var r = rungs[i];
+        roundBoxTL(ctx, 45, r.y, 270, 50, 8, r.fill, r.border);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 13px system-ui'; ctx.fillStyle = r.border;
+        ctx.fillText(r.head, 180, r.y + 24);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+        ctx.fillText(r.sub, 180, r.y + 42);
+
+        ctx.textAlign = 'left';
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+        ctx.fillText(r.lim1, 335, r.y + 18);
+        ctx.fillText(r.lim2, 335, r.y + 36);
+    }
+
+    // upward arrows between rungs
+    arrow(ctx, 180, 198, 180, 184, P.mute, 2, 8);
+    arrow(ctx, 180, 128, 180, 114, P.mute, 2, 8);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'left';
+    ctx.fillText('each rung adds a claim the rung below cannot make', 45, 278);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('three distinct questions', w - 12, h - 8);
+});
+
+// c2: coverage matrix — 3 controls x 5 scenarios, row totals computed from the matrix
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // rows: hash, signature, provenance + policy ; cols: scenarios (a)..(e)
+    var matrix = [
+        [1, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0],
+        [1, 1, 1, 0, 0]
+    ];
+    var rowLabels = ['hash / checksum', 'signature', 'provenance + policy'];
+    var rowColors = [P.blue, P.yellow, P.green];
+    var cols = ['(a)', '(b)', '(c)', '(d)', '(e)'];
+
+    var x0 = 175, cellW = 75, y0 = 90, cellH = 48;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Detection Coverage: 1 of 5, 2 of 5, 3 of 5", w / 2, 24);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('attack scenario', x0 + cellW * 5 / 2, 58);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink;
+    for (var c = 0; c < cols.length; c++) {
+        ctx.fillText(cols[c], x0 + c * cellW + cellW / 2, 82);
+    }
+
+    for (var r = 0; r < matrix.length; r++) {
+        var ry = y0 + r * cellH;
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'right';
+        ctx.fillText(rowLabels[r], 168, ry + cellH / 2 + 4);
+
+        var sum = 0;
+        for (var c2 = 0; c2 < matrix[r].length; c2++) {
+            var cx = x0 + c2 * cellW;
+            var hit = matrix[r][c2] === 1;
+            if (hit) { sum += 1; }
+            ctx.fillStyle = hit ? 'rgba(0,131,0,0.18)' : 'rgba(229,233,239,0.55)';
+            ctx.fillRect(cx, ry, cellW, cellH);
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.strokeRect(cx, ry, cellW, cellH);
+            ctx.textAlign = 'center';
+            if (hit) {
+                ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.green;
+                ctx.fillText('✓', cx + cellW / 2, ry + cellH / 2 + 6);
+            } else {
+                ctx.font = '14px system-ui'; ctx.fillStyle = P.mute;
+                ctx.fillText('—', cx + cellW / 2, ry + cellH / 2 + 5);
+            }
+        }
+
+        var pct = Math.round(sum / 5 * 100);
+        ctx.font = 'bold 13px system-ui'; ctx.fillStyle = rowColors[r]; ctx.textAlign = 'left';
+        ctx.fillText(sum + ' / 5 = ' + pct + '%', 562, ry + cellH / 2 + 4);
+    }
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.magenta; ctx.textAlign = 'left';
+    ctx.fillText('(d) and (e) survive all three — no metadata control validates intent', 175, 262);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative scenario set', w - 12, h - 8);
+});
+
+// c3: policy verification flow — valid signature, rejected on an unexpected branch
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Valid Signature, Rejected by Policy', w / 2, 24);
+
+    // artifact box
+    roundBoxTL(ctx, 25, 105, 175, 76, 8, 'rgba(42,120,214,0.13)', P.blue);
+    ctx.textAlign = 'center';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('release artifact', 112, 130);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('signature: valid', 112, 150);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('attestation attached', 112, 170);
+
+    // check boxes
+    roundBoxTL(ctx, 250, 52, 255, 46, 8, 'rgba(0,131,0,0.13)', P.green);
+    ctx.textAlign = 'left';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('source repository = expected', 262, 80);
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('✓', 493, 82);
+
+    roundBoxTL(ctx, 250, 112, 255, 46, 8, 'rgba(0,131,0,0.13)', P.green);
+    ctx.textAlign = 'left';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('builder identity = expected', 262, 140);
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('✓', 493, 142);
+
+    roundBoxTL(ctx, 250, 172, 255, 56, 8, 'rgba(231,76,60,0.12)', ALARM);
+    ctx.textAlign = 'left';
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('branch = a fork branch', 262, 194);
+    ctx.fillStyle = P.mute;
+    ctx.fillText('expected: a protected branch', 262, 212);
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = ALARM;
+    ctx.fillText('✗', 493, 208);
+
+    // reject box
+    roundBoxTL(ctx, 540, 126, 155, 64, 8, 'rgba(231,76,60,0.12)', ALARM);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = ALARM;
+    ctx.fillText('REJECTED', 617, 152);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('fail closed', 617, 172);
+
+    // arrows in
+    arrow(ctx, 200, 143, 246, 75, P.blue, 2, 8);
+    arrow(ctx, 200, 143, 246, 135, P.blue, 2, 8);
+    arrow(ctx, 200, 143, 246, 200, P.blue, 2, 8);
+    // arrows out
+    arrow(ctx, 509, 75, 536, 158, P.mute, 2, 8);
+    arrow(ctx, 509, 135, 536, 158, P.mute, 2, 8);
+    arrow(ctx, 509, 200, 536, 158, ALARM, 2, 8);
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = ALARM;
+    ctx.fillText('the signature was fine —', 25, 252);
+    ctx.fillText('the attestation named an unexpected branch', 25, 270);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('attestation fields are placeholders', w - 12, h - 8);
+});
+
+// c4: SBOM vs provenance — two cards, question / good for / blind to
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("SBOM Answers 'What Is Inside'; Provenance Answers 'Which Build'", w / 2, 24);
+
+    var cards = [
+        {
+            x: 30, fill: 'rgba(42,120,214,0.10)', border: P.blue,
+            header: 'SBOM — an inventory',
+            lines: [
+                { prefix: 'question:', rest: ' what components are', y: 112 },
+                { prefix: '',          rest: 'inside this release?',  y: 130 },
+                { prefix: 'good for:', rest: ' am I affected by a new', y: 158 },
+                { prefix: '',          rest: 'vulnerability disclosure?', y: 176 },
+                { prefix: 'blind to:', rest: ' a malicious build with', y: 204 },
+                { prefix: '',          rest: 'an identical component list', y: 222 }
+            ]
+        },
+        {
+            x: 380, fill: 'rgba(0,131,0,0.10)', border: P.green,
+            header: 'Provenance — an origin claim',
+            lines: [
+                { prefix: 'question:', rest: ' which build produced', y: 112 },
+                { prefix: '',          rest: 'these exact bytes?', y: 130 },
+                { prefix: 'good for:', rest: ' policy on repository,', y: 158 },
+                { prefix: '',          rest: 'branch, and builder identity', y: 176 },
+                { prefix: 'blind to:', rest: ' malicious code that was', y: 204 },
+                { prefix: '',          rest: 'reviewed and merged normally', y: 222 }
+            ]
+        }
+    ];
+
+    for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        roundBoxTL(ctx, card.x, 60, 310, 190, 8, card.fill, card.border);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px system-ui'; ctx.fillStyle = card.border;
+        ctx.fillText(card.header, card.x + 15, 84);
+
+        for (var j = 0; j < card.lines.length; j++) {
+            var ln = card.lines[j];
+            var tx = card.x + 15;
+            if (ln.prefix) {
+                ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink;
+                ctx.fillText(ln.prefix, tx, ln.y);
+                tx += ctx.measureText(ln.prefix).width;
+            }
+            ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+            ctx.fillText(ln.rest, tx, ln.y);
+        }
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta; ctx.textAlign = 'center';
+    ctx.fillText('complements, not substitutes: contents vs origin', 360, 276);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cache Breakdown</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Cache Breakdown</h1>
+<p class="subtitle">A cache absorbing 95% of reads leaves the database seeing only 5% — so a small hit-rate dip, an expiring hot key, or a cold restart can multiply backend load overnight</p>
+
+<div class="card-section">
+    <h2>The Database Behind the Shield</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">load shield</span><span class="tag orange">caching</span></div>
+                <ul>
+                    <li><b>The setup</b> — a product-page cache sits in front of a database; the site serves 10,000 reads/s</li>
+                    <li><b>The shield</b> — 95% of reads are answered from cache; the database sees only the 500/s that miss</li>
+                    <li><b>The sizing trap</b> — the database is provisioned for 500 reads/s, not the 10,000 the site takes</li>
+                    <li><b>The dependence</b> — the site's real capacity lives in the cache; the database alone cannot carry it</li>
+                    <li><b>The definition</b> — a cache failure mode is anything that lets the hidden 9,500/s reach the database</li>
+                </ul>
+                <p class="example">At 2pm the site serves 10,000 product-page reads/s; 9,500 come straight from cache and the database quietly handles 500.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A 95% hit rate means the database sees 5% of traffic — the cache is not just a speed-up, it is a load shield the database can no longer live without.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Drop 5 Points of Hit Rate, Double the Database Load</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">exact arithmetic</span></div>
+                <ul>
+                    <li><b>The miss rate</b> — database load is set by misses, not hits: DB reads/s = traffic &times; (1 &minus; hit rate)</li>
+                    <li><b>At 95%</b> — misses are 5% of 10,000/s, so the database serves 500 reads/s</li>
+                    <li><b>At 90%</b> — misses are 10% of 10,000/s, so the database serves 1,000 reads/s — exactly double</li>
+                    <li><b>Hand-check</b> — 10,000 &times; 0.05 = 500 and 10,000 &times; 0.10 = 1,000; the doubling is plain arithmetic</li>
+                    <li><b>The cliff</b> — 80% hit rate is 4&times; the baseline database load; 50% is 10&times;; small dips compound fast</li>
+                </ul>
+                <p class="example">A dashboard shows the hit rate slipping 95% &rarr; 90% and everyone shrugs — the database just watched its load double from 500 to 1,000 reads/s.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Backend load scales with the miss rate, so 95%&rarr;90% is not a 5% change — it doubles the database's work. This multiplication is exact; only the 10,000/s traffic figure is illustrative.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Hot Key Expires and the Herd Arrives</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag red">stampede</span><span class="tag green">mitigations</span></div>
+                <ul>
+                    <li><b>The hot key</b> — one bestseller's page is read 800 times/s, all served from a single cached entry</li>
+                    <li><b>The expiry</b> — its 60s TTL lapses; the rebuild query takes 50ms, so ~40 requests miss together</li>
+                    <li><b>The stampede</b> — all 40 run the same expensive query at once; the database slows, so more pile on</li>
+                    <li><b>Coalescing</b> — a lock lets one request rebuild the entry while the other 39 wait for its answer</li>
+                    <li><b>Staggered TTLs, early refresh</b> — TTL jitter and refresh-before-expiry stop synchronized misses</li>
+                </ul>
+                <p class="example">The bestseller's cache entry expires at 2:03pm; without a lock, the database receives 40 identical rebuild queries within 50ms (800/s &times; 0.05s).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Expiry synchronizes misses — every concurrent reader of a hot key misses at the same instant. Request coalescing turns 40 identical rebuilds into 1 query plus 39 waiters.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Restarting the Cache Is a Stampede You Scheduled</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cold cache</span></div>
+                <ul>
+                    <li><b>The restart</b> — a deploy flushes the cache node; every entry is gone, so the hit rate is briefly 0%</li>
+                    <li><b>The math</b> — at 0% hit rate the database sees all 10,000 reads/s — 20&times; its steady 500/s</li>
+                    <li><b>The warm-up</b> — entries refill one miss at a time; load falls back to 500/s only over minutes</li>
+                    <li><b>The mistake</b> — sizing the database for steady state and treating a cache flush as harmless</li>
+                    <li><b>The fixes</b> — pre-warm before taking traffic, restart nodes one at a time, keep TTLs staggered</li>
+                </ul>
+                <p class="example">A 2:03pm deploy bounces the cache; the database absorbs 10,000 reads/s cold — 20&times; its normal 500/s — until the entries refill over the next few minutes.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the cache as an optimization you can bounce freely. A cold cache sends 100% of traffic to a database sized for 5% — the hot-key stampede, self-inflicted and at full width.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// c1: flow diagram — traffic splits into a wide cache stream and a thin DB stream
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('10,000 Reads/s In, Only 500 Reach the Database', w / 2, 24);
+
+    // source box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundedRect(ctx, 40, 130, 170, 44, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    roundedRect(ctx, 40, 130, 170, 44, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('clients — 10,000 reads/s', 40 + 85, 130 + 27);
+
+    // cache stream: thick band (76px tall, proportional to 9,500) from x=210 to the cache box
+    var bandTop = 102 - 38; // centered on the cache box's vertical center (y=102)
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.beginPath();
+    ctx.moveTo(210, 152 - 20);
+    ctx.lineTo(430, bandTop);
+    ctx.lineTo(430, bandTop + 76);
+    ctx.lineTo(210, 152 + 20);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('9,500/s served from memory', 320, bandTop - 8);
+
+    // cache box
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundedRect(ctx, 430, 80, 170, 44, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    roundedRect(ctx, 430, 80, 170, 44, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cache — 9,500/s (95% hit)', 430 + 85, 80 + 27);
+
+    // DB stream: thin band (4px, proportional to 500) from x=210 down to the DB box
+    ctx.fillStyle = 'rgba(217,89,38,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(210, 166);
+    ctx.lineTo(430, 228);
+    ctx.lineTo(430, 232);
+    ctx.lineTo(210, 170);
+    ctx.closePath(); ctx.fill();
+
+    // database box
+    ctx.fillStyle = 'rgba(217,89,38,0.15)';
+    roundedRect(ctx, 430, 210, 170, 44, 8); ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    roundedRect(ctx, 430, 210, 170, 44, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('database — 500/s (5% miss)', 430 + 85, 210 + 27);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the database is sized for the thin stream', 470, 274);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('split percentages exact; 10,000 reads/s illustrative', w - 16, h - 8);
+});
+
+// c2: database reads/s at five hit rates — the miss-rate multiplier
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Traffic, Falling Hit Rate: Database Load at 10,000 Reads/s', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    var yMax = 5000;
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    var yTicks = [1000, 2000, 3000, 4000];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, yOf(yTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var rates = ['99%', '95%', '90%', '80%', '50%'];
+    var loads = [100, 500, 1000, 2000, 5000];
+    var valLabs = ['100', '500', '1,000', '2,000', '5,000'];
+    var mults = ['0.2×', '1× baseline', '2×', '4×', '10×'];
+    var fills = ['rgba(0,131,0,0.35)', 'rgba(0,131,0,0.35)', 'rgba(217,89,38,0.45)', 'rgba(231,76,60,0.45)', 'rgba(231,76,60,0.45)'];
+    var edges = [P.green, P.green, P.orange, '#e74c3c', '#e74c3c'];
+    var barW = 72, spacing = 110;
+
+    for (var i = 0; i < 5; i++) {
+        var bx = 110 + i * spacing;
+        var top = yOf(loads[i]);
+        ctx.fillStyle = fills[i];
+        ctx.fillRect(bx, top, barW, baseY - top);
+        // solid top edge
+        ctx.strokeStyle = edges[i]; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(bx, top); ctx.lineTo(bx + barW, top); ctx.stroke();
+        // value label
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLabs[i], bx + barW / 2, top - 8);
+        // multiplier label
+        ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(mults[i], bx + barW / 2, top - 24);
+        // hit-rate label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(rates[i], bx + barW / 2, baseY + 16);
+    }
+
+    // annotation with arrow from the 95% bar to the 90% bar
+    var x95 = 110 + 1 * spacing + barW / 2, x90 = 110 + 2 * spacing + barW / 2;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x95 + 10, 108); ctx.lineTo(x90 - 10, 108); ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(x90 - 4, 108);
+    ctx.lineTo(x90 - 12, 103);
+    ctx.lineTo(x90 - 12, 113);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('5 points of hit rate = 2× database load', (x95 + x90) / 2 - 60, 90);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bar heights exact arithmetic; 10,000 reads/s illustrative', w - 16, h - 8);
+});
+
+// c3: hot-key expiry at t=3s — stampede vs request coalescing
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Hot Key Expires at t=3s: Stampede vs Request Coalescing', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    var yMax = 2500;
+    function xOf(t) { return ox + t / 10 * pw; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    var yTicks = [500, 1000, 1500, 2000];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, yOf(yTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 2s
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 10; t += 2) {
+        ctx.fillText(t + 's', xOf(t), baseY + 16);
+    }
+
+    // expiry marker at t=3
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(3), baseY - ph); ctx.lineTo(xOf(3), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('TTL lapses', xOf(3) + 6, baseY - ph + 12);
+
+    var secs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var stampede = [500, 502, 498, 1300, 2200, 1500, 850, 600, 520, 505, 500];
+    var coalesced = [500, 502, 498, 501, 500, 503, 499, 501, 500, 502, 500];
+
+    // stampede line (red)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(stampede[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // coalescing line (green)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(coalesced[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // annotations
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('40 identical queries, then the pile-on', xOf(4.5) + 12, 70);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('coalesced: 1 rebuild, 39 waiters', xOf(8) - 120, 210);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('stampede curve illustrative; 40 = 800/s × 50ms exact', w - 16, h - 8);
+});
+
+// c4: cold cache after a flush — 20× spike decaying back to steady state
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Cold Cache at t=0: 20× Load Until the Entries Refill', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    var yMax = 10000;
+    function xOf(m) { return ox + m / 8 * pw; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    var yTicks = [2500, 5000, 7500];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, yOf(yTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 2 min
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 8; m += 2) {
+        ctx.fillText(m + ' min', xOf(m), baseY + 16);
+    }
+
+    // steady-state reference at 500 reads/s
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(500)); ctx.lineTo(ox + pw, yOf(500)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('steady state — 500/s (95% hit)', ox + pw, yOf(500) - 8);
+
+    var mins = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    var reads = [10000, 5800, 3200, 1700, 950, 640, 530, 505, 500];
+
+    // warm-up line (orange)
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(reads[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // peak marker
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('20× steady load — every read is a miss', xOf(0.4), 45);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('warm-up is a stampede in slow motion', xOf(5) - 60, 170);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('20× = 100%/5% miss ratio, exact; warm-up curve illustrative', w - 16, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

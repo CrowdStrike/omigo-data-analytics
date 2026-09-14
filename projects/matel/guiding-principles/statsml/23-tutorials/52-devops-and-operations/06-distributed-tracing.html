@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distributed Tracing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Distributed Tracing</h1>
+<p class="subtitle">One trace ID rides along with a request across every service it touches, so the whole journey reassembles into a timed tree — and the slow part points at itself</p>
+
+<div class="card-section">
+    <h2>One Slow Checkout, Twelve Suspects</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">trace ID</span><span class="tag orange">spans</span></div>
+                <ul>
+                    <li><b>The symptom</b> — checkout takes 900ms, but the request fans out across a gateway and five services</li>
+                    <li><b>The trace ID</b> — the gateway mints one random ID (<code>7f3a&hellip;</code>) the moment the request enters at the edge</li>
+                    <li><b>Propagation</b> — every downstream call carries the ID in a request header, so all hops stamp the same ID</li>
+                    <li><b>Spans</b> — each service records a span: a named, timed operation with a pointer to its parent span</li>
+                    <li><b>The tree</b> — a collector groups spans by trace ID and rebuilds the request as one parent-child tree</li>
+                </ul>
+                <p class="example">Payment's span says trace=7f3a, parent=checkout; the collector files it under the same tree as the gateway's span, no guessing.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A distributed trace is just spans that share one ID — each service times only its own work, and the shared ID lets one tool reassemble the full journey.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the 900ms Actually Went</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">waterfall</span></div>
+                <ul>
+                    <li><b>The waterfall</b> — spans drawn as bars on one shared time axis, indented under their parent spans</li>
+                    <li><b>The serial spine</b> — gateway 40ms, then auth 60ms: the first 100ms is plain one-after-another work</li>
+                    <li><b>The parallel pair</b> — inventory (120ms) and pricing (80ms) start together, so the row costs only 120ms</li>
+                    <li><b>The long bar</b> — payment runs 220–820ms, and inside it one database span covers 550 of the 600ms</li>
+                    <li><b>The finish</b> — an 80ms order-confirmation span closes the request at exactly 900ms</li>
+                    <li><b>The verdict</b> — one <code>UPDATE ledger</code> call is 61% of the whole checkout, found by looking, not grepping</li>
+                </ul>
+                <p class="example">40 + 60 + 120 + 600 + 80 = 900ms — and 550ms of the payment's 600 sit inside a single database span.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The waterfall answers "where did the time go" by geometry — the widest bar at the deepest indent is the culprit, visible in seconds instead of an hour of cross-referencing logs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What the Tree Shows That Logs Never Will</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">hidden structure</span></div>
+                <ul>
+                    <li><b>Serial vs parallel</b> — the tree shows inventory and pricing overlap; run serially they'd draw stairs</li>
+                    <li><b>The stairs smell</b> — a staircase of sibling spans with no data dependency is free latency to reclaim</li>
+                    <li><b>Retry storms</b> — three identical child spans under one parent, evenly spaced, is a retry loop in plain sight</li>
+                    <li><b>N+1 calls</b> — 40 tiny identical DB spans under one query span expose per-row calls that should be one batch</li>
+                    <li><b>Dependency maps</b> — aggregating parent-child span edges over real traffic draws the true service graph</li>
+                </ul>
+                <p class="example">Running inventory and pricing one after the other would push checkout from 900ms to 980ms — the stairs cost 80ms.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Logs tell you what each service did alone; only a trace shows the shape between services — overlap, repeats, and fan-out you can restructure for free latency wins.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Sampling, and the Place Traces Break</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">sampling</span></div>
+                <ul>
+                    <li><b>The cost</b> — tracing every request at 10,000 req/min is too much data, and almost all traces are boring</li>
+                    <li><b>Head sampling</b> — decide at the edge (keep 1% at random): cheap, but blind to how the request ends</li>
+                    <li><b>Tail sampling</b> — decide after the trace completes: keep the slow and errored ones, drop happy paths</li>
+                    <li><b>The irony</b> — the traces worth keeping are exactly the ones you can only recognize at the tail</li>
+                    <li><b>One standard</b> — OpenTelemetry auto-instruments common frameworks, so most spans now come for free</li>
+                    <li><b>Queue break</b> — context dies at a message queue unless the trace ID is copied into the message itself</li>
+                </ul>
+                <p class="example">Of 10,000 checkouts, 150 are slow and 50 error; 1% head sampling keeps about 2 of those 200 — tail sampling keeps all 200.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Publishing to a queue without copying the trace context into the message — the consumer starts a fresh trace, and the tree silently splits into two orphans at exactly the async hop you most needed to see.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, ww, hh, r, stroke, lw, fill) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + ww - r, y);
+    ctx.arcTo(x + ww, y, x + ww, y + r, r);
+    ctx.lineTo(x + ww, y + hh - r);
+    ctx.arcTo(x + ww, y + hh, x + ww - r, y + hh, r);
+    ctx.lineTo(x + r, y + hh);
+    ctx.arcTo(x, y + hh, x, y + hh - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+}
+
+// c1: one request, one ID across five services
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Request, One ID: trace 7f3a Rides Every Hop', w / 2, 24);
+
+    var boxFill = 'rgba(42,120,214,0.15)';
+    var boxes = {
+        gateway:   { x: 40,  y: 130, w: 110, label: 'gateway' },
+        auth:      { x: 200, y: 130, w: 90,  label: 'auth' },
+        inventory: { x: 350, y: 65,  w: 110, label: 'inventory' },
+        pricing:   { x: 350, y: 195, w: 110, label: 'pricing' },
+        payment:   { x: 520, y: 130, w: 100, label: 'payment' }
+    };
+    var bh = 40;
+    for (var k in boxes) {
+        var b = boxes[k];
+        roundRect(ctx, b.x, b.y, b.w, bh, 8, P.blue, 2, boxFill);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, b.x + b.w / 2, b.y + bh / 2 + 4);
+    }
+
+    // mint marker above gateway
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('mints trace 7f3a', 40, 118);
+
+    function arrow(x1, y1, x2, y2) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 10 * Math.cos(ang) + 4.5 * Math.sin(ang), y2 - 10 * Math.sin(ang) - 4.5 * Math.cos(ang));
+        ctx.lineTo(x2 - 10 * Math.cos(ang) - 4.5 * Math.sin(ang), y2 - 10 * Math.sin(ang) + 4.5 * Math.cos(ang));
+        ctx.closePath(); ctx.fill();
+    }
+    function idTag(mx, my) {
+        roundRect(ctx, mx - 20, my - 10, 40, 18, 8, null, 0, 'rgba(74,58,167,0.10)');
+        ctx.fillStyle = P.violet; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('7f3a', mx, my + 3);
+    }
+
+    // gateway -> auth
+    arrow(150, 150, 198, 150); idTag(174, 150);
+    // auth -> inventory (up)
+    arrow(290, 142, 348, 92); idTag(316, 108);
+    // auth -> pricing (down)
+    arrow(290, 158, 348, 208); idTag(316, 192);
+    // inventory -> payment (fan-in)
+    arrow(460, 92, 518, 142); idTag(492, 108);
+    // pricing -> payment
+    arrow(460, 208, 518, 158); idTag(492, 192);
+
+    // child hint: dashed orange arrow from payment to a database box
+    var dbx = 520, dby = 215, dbw = 100;
+    roundRect(ctx, dbx, dby, dbw, 34, 8, P.orange, 1.5, 'rgba(217,89,38,0.12)');
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('database', dbx + dbw / 2, dby + 21);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(570, 170); ctx.lineTo(570, dby - 3); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.moveTo(570, dby); ctx.lineTo(565, dby - 8); ctx.lineTo(575, dby - 8); ctx.closePath(); ctx.fill();
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same ID in every header — the tree reassembles itself', w / 2 - 80, 283);
+});
+
+// c2: 900ms checkout waterfall
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function xOf(ms) { return 170 + ms * (520 / 900); }
+    var axY = 252;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The 900ms Checkout, Decomposed Span by Span', w / 2, 24);
+
+    // gridlines + ticks
+    var ticks = [0, 300, 600, 900];
+    for (var i = 0; i < ticks.length; i++) {
+        var x = xOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 48); ctx.lineTo(x, axY); ctx.stroke();
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(170, axY); ctx.lineTo(690, axY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.fillText(ticks[i] + 'ms', xOf(ticks[i]), axY + 15);
+    }
+
+    var rows = [
+        { y: 56,  depth: 0, name: 'POST /checkout',    start: 0,   dur: 900, fill: null,      outline: P.ink, lab: '900ms total' },
+        { y: 80,  depth: 1, name: 'gateway.route',     start: 0,   dur: 40,  fill: '#2a78d6', lab: '40ms' },
+        { y: 104, depth: 1, name: 'auth.verify',       start: 40,  dur: 60,  fill: '#199e70', lab: '60ms' },
+        { y: 128, depth: 1, name: 'inventory.check',   start: 100, dur: 120, fill: '#008300', lab: '120ms' },
+        { y: 152, depth: 1, name: 'pricing.quote',     start: 100, dur: 80,  fill: '#c98500', lab: '80ms' },
+        { y: 176, depth: 1, name: 'payment.charge',    start: 220, dur: 600, fill: '#d95926', lab: '600ms' },
+        { y: 200, depth: 2, name: 'db: UPDATE ledger', start: 250, dur: 550, fill: '#e74c3c', lab: '550ms' },
+        { y: 224, depth: 1, name: 'order.confirm',     start: 820, dur: 80,  fill: '#4a3aa7', lab: '80ms' }
+    ];
+    var bh = 18;
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.name, 20 + r.depth * 12, r.y + bh / 2 + 4);
+        var x1 = xOf(r.start), ww = xOf(r.start + r.dur) - x1;
+        if (r.fill) {
+            ctx.fillStyle = r.fill;
+            ctx.fillRect(x1, r.y, ww, bh);
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+            ctx.fillText(r.lab, x1 + ww + 5, r.y + bh / 2 + 4);
+        } else {
+            ctx.strokeStyle = r.outline; ctx.lineWidth = 2;
+            ctx.strokeRect(x1, r.y, ww, bh);
+            ctx.fillStyle = P.ink; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(r.lab, x1 + ww - 6, r.y + bh / 2 + 4);
+            ctx.textAlign = 'left';
+        }
+    }
+
+    // annotation in the empty area right of the auth/inventory rows
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one DB span = 550ms — 61% of the checkout', 480, 120);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 14, h - 8);
+});
+
+// c3: serial staircase vs parallel layout of the same spans
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function xOf(ms) { return 60 + ms * 0.6; }
+    var bh = 16, axY = 262;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Spans, Two Shapes: Stairs Cost 80ms', w / 2, 24);
+
+    // baseline and ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(0), axY); ctx.lineTo(xOf(1000), axY); ctx.stroke();
+    var ticks = [{ ms: 0, lab: '0' }, { ms: 500, lab: '500ms' }, { ms: 1000, lab: '1000ms' }];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var x = xOf(ticks[i].ms);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axY); ctx.lineTo(x, axY + 4); ctx.stroke();
+        ctx.fillText(ticks[i].lab, x, axY + 16);
+    }
+
+    // panel labels
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('serial — 980ms', xOf(0), 52);
+    ctx.fillText('parallel (actual) — 900ms', xOf(0), 158);
+
+    function span(y, start, dur, fill, lab) {
+        var x1 = xOf(start), ww = xOf(start + dur) - x1;
+        ctx.fillStyle = fill;
+        ctx.fillRect(x1, y, ww, bh);
+        if (lab) {
+            ctx.fillStyle = '#fff'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(lab, x1 + ww / 2, y + 12);
+        }
+    }
+
+    // Panel A: serial staircase
+    span(60, 0, 100, '#6b7280');
+    span(78, 100, 120, '#008300');
+    span(96, 220, 80, '#c98500');
+    span(114, 300, 680, '#d95926', '600+80');
+
+    // Panel B: parallel pair
+    span(166, 0, 100, '#6b7280');
+    span(184, 100, 120, '#008300');
+    span(202, 100, 80, '#c98500');
+    span(220, 220, 680, '#d95926');
+
+    // end markers
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(980), 48); ctx.lineTo(xOf(980), axY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('980ms', xOf(980) + 4, 60);
+    ctx.strokeStyle = '#008300'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(900), 152); ctx.lineTo(xOf(900), axY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#008300'; ctx.font = '11px system-ui';
+    ctx.fillText('900ms', xOf(900) + 4, 166);
+
+    // annotation
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the overlap is free — 80ms back', w - 20, 240);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative, same spans as the trace above', w - 14, h - 4);
+});
+
+// c4: head vs tail sampling — who keeps the interesting traces
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var bx = 240, bh = 20;
+    function wOf(count) { return count * 2.2; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('10,000 Requests, 200 Worth Keeping: Head vs Tail Sampling', w / 2, 24);
+
+    // baseline + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 252); ctx.stroke();
+    var counts = [0, 100, 200];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < counts.length; i++) {
+        ctx.fillText(String(counts[i]), bx + wOf(counts[i]), 252 + 14);
+    }
+
+    // row 1: all interesting traces (outline)
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('slow or error traces in the minute', 20, 80 + bh / 2 + 4);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 80, wOf(200), bh);
+    ctx.fillStyle = P.ink; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('200 of 10,000', bx + wOf(200) - 6, 80 + bh / 2 + 4);
+    ctx.textAlign = 'left';
+
+    // row 2: head sampling keeps ~2
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('kept by head sampling (1% random)', 20, 140 + bh / 2 + 4);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(bx, 140, wOf(2), bh);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('≈2 — the culprit is probably gone', bx + wOf(2) + 8, 140 + bh / 2 + 4);
+
+    // row 3: tail sampling keeps all 200
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('kept by tail sampling (slow/error rule)', 20, 200 + bh / 2 + 4);
+    ctx.fillStyle = '#008300';
+    ctx.fillRect(bx, 200, wOf(200), bh);
+    ctx.fillStyle = '#fff'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('all 200', bx + wOf(200) - 6, 200 + bh / 2 + 4);
+    ctx.textAlign = 'left';
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('similar storage bill, opposite evidence', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10,000 req/min, counts illustrative', w - 14, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supervision Strategies</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Supervision Strategies</h1>
+<p class="subtitle">When a child actor crashes, its parent picks the fix — resume, restart, stop, or escalate — instead of the child defending itself with try/catch everywhere</p>
+
+<div class="card-section">
+    <h2>A Poisoned Refund Kills Worker 3</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">parent decides</span><span class="tag orange">actors</span></div>
+                <ul>
+                    <li><b>The pool</b> — a supervisor actor owns 8 payment workers, each buffering a few in-flight payments</li>
+                    <li><b>The crash</b> — at 10:04 a refund with a negative amount makes worker 3 throw and die</li>
+                    <li><b>The split</b> — the worker never handles its own failure; its supervisor decides what happens next</li>
+                    <li><b>Four directives</b> — resume (keep state), restart (wipe state), stop (kill for good), escalate (pass up)</li>
+                    <li><b>The default</b> — classic Akka and Erlang restart: fresh state, same mailbox (Akka Typed stops)</li>
+                </ul>
+                <p class="example">At 10:04 worker 3 dies on the bad refund; the supervisor answers with one word — restart — and a fresh worker 3 is taking messages again 40ms later.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> In an actor system, error handling lives in the parent, not in the failing code — the supervisor picks resume, restart, stop, or escalate for every child crash.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One-for-One or All-for-One</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">blast radius</span></div>
+                <ul>
+                    <li><b>The buffers</b> — the 8 workers hold [3, 2, 4, 5, 1, 4, 3, 5] in-flight payments — 27 in total</li>
+                    <li><b>One-for-one</b> — the restart directive hits worker 3 alone; its 4 buffered payments are wiped</li>
+                    <li><b>The survivors</b> — workers 1, 2, 4–8 keep running; their 23 buffered payments are untouched</li>
+                    <li><b>All-for-one</b> — the same directive hits all 8 siblings; all 27 buffered payments reset to 0</li>
+                    <li><b>Hand-check</b> — one-for-one keeps 27 &minus; 4 = 23 payments; all-for-one keeps 27 &minus; 27 = 0</li>
+                    <li><b>When all-for-one</b> — choose it when siblings share state so tightly that one clean sibling is a lie</li>
+                </ul>
+                <p class="example">The negative refund kills worker 3: one-for-one wipes 4 payments and keeps 23; all-for-one wipes all 27 so the pool restarts in one consistent state.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The strategy sets the blast radius — one-for-one restarts only the failing child; all-for-one restarts every sibling because their states depend on each other.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Let It Crash Beats Try/Catch Everywhere</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag green">let it crash</span><span class="tag orange">Erlang</span></div>
+                <ul>
+                    <li><b>The old reflex</b> — wrap every handler in try/catch, log the error, and keep the worker running</li>
+                    <li><b>The hidden cost</b> — a swallowed exception can leave a half-updated balance no log line reveals</li>
+                    <li><b>Let it crash</b> — write only the happy path; anything unexpected kills the worker on purpose</li>
+                    <li><b>The recovery</b> — supervision restarts it to a known-good empty state in about 40ms</li>
+                    <li><b>The tell</b> — in the chart, 120 correct payments/min silently becomes 84 after the swallowed throw</li>
+                    <li><b>Error kernel</b> — keep precious state high in the tree, risky work in cheap restartable leaves</li>
+                </ul>
+                <p class="example">The try/catch pool keeps running after 10:04 but quietly mis-handles 36 payments every minute; the supervised pool loses 40ms and nothing else.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> "Let it crash" trades tiny, visible restarts for the elimination of a worse failure mode — a worker that survives its own bug and keeps computing on corrupted state.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Resume Is Not a Safe Default</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">corrupted state</span></div>
+                <ul>
+                    <li><b>The temptation</b> — resume looks kind: no lost buffer, no restart, the worker just keeps going</li>
+                    <li><b>The trap</b> — the crash happened mid-update; resuming keeps a balance that is already half-written</li>
+                    <li><b>The rule</b> — resume only when the failure provably never touched state (bad input rejected up front)</li>
+                    <li><b>Restart storms</b> — a poisoned message re-crashes the fresh worker; cap restarts (10 per 60s), then stop</li>
+                    <li><b>Escalate honestly</b> — if the parent cannot pick a safe directive, pass the failure up; don't guess</li>
+                </ul>
+                <p class="example">Resuming worker 3 after its mid-update crash leaves one refund counted once in the ledger and twice in the daily total; restart would have cost only 4 buffered payments.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reaching for Resume because Restart loses state. Restart is the safe default — Resume is only correct when you can prove the failure left the worker's state untouched.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), hl = 7;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: crashed worker -> supervisor -> four possible directives
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Crash, Four Possible Answers from the Supervisor', w / 2, 24);
+
+    // crashed worker box
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    roundRect(ctx, 25, 140, 145, 44, 8);
+    ctx.fill(); ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('worker 3', 97, 158);
+    ctx.fillText('crashes at 10:04', 97, 175);
+
+    // supervisor box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 235, 140, 150, 44, 8);
+    ctx.fill(); ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('supervisor', 310, 158);
+    ctx.fillText('decides', 310, 175);
+
+    arrow(ctx, 170, 162, 231, 162, P.mute, 3);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('failure signal', 200, 150);
+
+    // four directive boxes with fan-out arrows
+    var dirs = [
+        { y: 50, edge: P.green, fill: 'rgba(0,131,0,0.12)', name: 'Resume', rest: ' — keep state, skip bad msg' },
+        { y: 115, edge: P.blue, fill: 'rgba(42,120,214,0.15)', name: 'Restart', rest: ' — wipe state, keep mailbox' },
+        { y: 180, edge: P.orange, fill: 'rgba(217,89,38,0.12)', name: 'Stop', rest: ' — remove the worker for good' },
+        { y: 245, edge: P.violet, fill: 'rgba(74,58,167,0.10)', name: 'Escalate', rest: ' — supervisor\'s parent decides' }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var d = dirs[i];
+        ctx.fillStyle = d.fill;
+        roundRect(ctx, 460, d.y, 235, 38, 8);
+        ctx.fill(); ctx.strokeStyle = d.edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(d.name, 470, d.y + 24);
+        var nameW = ctx.measureText(d.name).width;
+        ctx.font = '12px system-ui';
+        ctx.fillText(d.rest, 470 + nameW, d.y + 24);
+        arrow(ctx, 385, 162, 456, d.y + 19, P.mute, 2);
+    }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the child fails; the parent chooses', 25, 285);
+});
+
+// c2: blast radius — one-for-one vs all-for-one over 8 worker buffers
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Blast Radius: One-for-One Restarts 1 Worker, All-for-One Restarts 8', w / 2, 24);
+
+    var buffers = [3, 2, 4, 5, 1, 4, 3, 5];
+
+    // worker numbers above columns
+    for (var i = 0; i < 8; i++) {
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('w' + (i + 1), 150 + i * 70 + 28, 65);
+    }
+
+    // row labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one-for-one', 20, 101);
+    ctx.fillText('all-for-one', 20, 211);
+
+    // row 1: one-for-one — only worker 3 restarts
+    for (var i = 0; i < 8; i++) {
+        var x = 150 + i * 70;
+        var hit = (i === 2);
+        ctx.fillStyle = hit ? 'rgba(217,89,38,0.15)' : 'rgba(0,131,0,0.10)';
+        roundRect(ctx, x, 75, 56, 44, 6);
+        ctx.fill();
+        ctx.strokeStyle = hit ? P.orange : P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.textAlign = 'center';
+        if (hit) {
+            ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+            ctx.fillText('4→0', x + 28, 101);
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+            ctx.fillText(String(buffers[i]), x + 28, 101);
+        }
+    }
+
+    // row 2: all-for-one — all 8 restart
+    for (var i = 0; i < 8; i++) {
+        var x = 150 + i * 70;
+        ctx.fillStyle = 'rgba(217,89,38,0.15)';
+        roundRect(ctx, x, 185, 56, 44, 6);
+        ctx.fill();
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(buffers[i] + '→0', x + 28, 211);
+    }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one-for-one keeps 23 buffered payments; all-for-one keeps 0', w / 2, 265);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('buffer counts illustrative', w - 14, h - 10);
+});
+
+// c3: correct payments per minute — try/catch degrades silently, supervision recovers
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('After the Bad Refund: Silent Degradation vs a 40ms Restart', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(min) { return ox + min / 10 * pw; }
+    function yOf(v) { return baseY - v / 140 * ph; }
+
+    // gridlines
+    var grids = [40, 80, 120];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(grids[i])); ctx.lineTo(ox + pw, yOf(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 8, yOf(grids[i]) + 4);
+    }
+
+    // axes and time ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var tickMins = [0, 2, 4, 6, 8, 10];
+    var tickLabs = ['10:00', '10:02', '10:04', '10:06', '10:08', '10:10'];
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], xOf(tickMins[i]), baseY + 18);
+    }
+
+    // crash marker at minute 4
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(4), baseY - ph + 12); ctx.lineTo(xOf(4), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('bad refund arrives', xOf(4), baseY - ph + 6);
+
+    var mins = [0, 2, 4, 4.2, 6, 8, 10];
+    var tryCatch = [120, 120, 120, 84, 84, 84, 84];
+    var supervised = [120, 120, 120, 118, 120, 120, 120];
+
+    // try/catch line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(tryCatch[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // supervised line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(supervised[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('36 wrong payments every minute, no alarm', xOf(7), 150);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('restarted in 40ms', xOf(6), 85);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative', w - 14, h - 10);
+});
+
+// c4: resume carries the corruption forward; restart wipes and reprocesses
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Resume Keeps the Bug\'s Leftovers; Restart Throws Them Away', w / 2, 24);
+
+    function box(x, y, bw, fill, edge, l1, l2) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, bw, 44, 8);
+        ctx.fill(); ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(l1, x + bw / 2, y + 19);
+        ctx.fillText(l2, x + bw / 2, y + 36);
+    }
+
+    // row 1: resume
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('resume', 20, y1 + 26);
+    box(140, y1, 160, 'rgba(42,120,214,0.15)', P.blue, 'crash mid-update', '{ledger 1, total 2}');
+    box(420, y1, 170, 'rgba(231,76,60,0.12)', '#e74c3c', 'resume: corrupted', 'total survives');
+    arrow(ctx, 300, y1 + 22, 416, y1 + 22, P.text, 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ every later report is wrong', 505, y1 + 62);
+
+    // row 2: restart
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('restart', 20, y2 + 26);
+    box(140, y2, 160, 'rgba(42,120,214,0.15)', P.blue, 'crash mid-update', '{ledger 1, total 2}');
+    box(370, y2, 160, 'rgba(0,131,0,0.12)', P.green, 'restart: state', 'wiped to {0, 0}');
+    box(570, y2, 145, 'rgba(0,131,0,0.12)', P.green, 'replay from log:', '{ledger 1, total 1}');
+    arrow(ctx, 300, y2 + 22, 366, y2 + 22, P.text, 3);
+    arrow(ctx, 530, y2 + 22, 566, y2 + 22, P.text, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 642, y2 - 8);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('replay needs persistence — the failed message is not retried by default', 140, 193);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('restart costs 4 buffered payments; resume can cost the ledger', w / 2, 275);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

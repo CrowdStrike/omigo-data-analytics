@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Connection Exhaustion</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Database Connection Exhaustion</h1>
+<p class="subtitle">Every open database connection costs the server real memory and a worker process — so services keep a small pool of warm connections and lend them out instead of opening one per request</p>
+
+<div class="card-section">
+    <h2>The Checkout That Pays for a Handshake Every Time</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">why pool</span><span class="tag orange">Postgres</span></div>
+                <ul>
+                    <li><b>The service</b> — an orders service hits Postgres once per checkout to insert the order row</li>
+                    <li><b>The naive way</b> — open a fresh connection for every request, run the query, close it</li>
+                    <li><b>The setup tax</b> — TCP handshake 1 ms + auth 4 ms + session setup 3 ms before the 2 ms query</li>
+                    <li><b>The server side</b> — Postgres forks one backend process per connection; connect storms flood it</li>
+                    <li><b>The pool</b> — keep a few warm connections open; a request borrows one (~0.1 ms) and returns it</li>
+                </ul>
+                <p class="example">Connection-per-request spends 10 ms per checkout, 8 ms of it pure setup; a pooled checkout spends 2.1 ms — the query plus a borrow.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A connection pool exists because opening a connection is expensive on both ends — latency for the client, a whole process and its memory for the database.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Sizing the Pool with Little's Law</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">Little's Law</span></div>
+                <ul>
+                    <li><b>The law</b> — connections busy on average = queries per second &times; seconds each query holds one</li>
+                    <li><b>The numbers</b> — the orders service runs 200 queries/s and each query takes 20 ms (0.020 s)</li>
+                    <li><b>Hand-check</b> — 200 &times; 0.020 = 4 connections busy on average; that is the whole calculation</li>
+                    <li><b>The headroom</b> — bursts run ~3&times; the average, so a pool of 12–15 covers spikes comfortably</li>
+                    <li><b>The scaling</b> — the need grows linearly: double the traffic or the query time, double the pool</li>
+                </ul>
+                <p class="example">At 200 queries/s &times; 20 ms the service needs 4 busy connections on average; at 800 queries/s the same math says 16.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Pool size is not a guess — Little's Law (arrival rate &times; holding time) gives the average number of connections in use, and a modest multiple of it covers bursts.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Too Small Queues, Too Big Thrashes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it goes wrong</span><span class="tag red">saturation</span><span class="tag orange">max_connections</span></div>
+                <ul>
+                    <li><b>Too small</b> — with only 4 connections at 200 q/s the pool runs 100% busy; any burst waits in line</li>
+                    <li><b>The queue</b> — requests block at the pool, not the database; p99 latency explodes near saturation</li>
+                    <li><b>Too big</b> — hundreds of open connections mean hundreds of Postgres backend processes competing</li>
+                    <li><b>The thrash</b> — past the sweet spot, CPU switches and lock contention make every query slower</li>
+                    <li><b>The ceiling</b> — Postgres refuses logins beyond <code>max_connections</code>, which defaults to 100</li>
+                </ul>
+                <p class="example">Growing the pool from 16 to 256 drops illustrative throughput from 9,600 to 4,800 queries/s — half the work with sixteen times the connections.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Throughput rises with pool size only until the database's cores are busy; after that more connections just add queueing and contention inside the database itself.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Pool Per Instance Still Multiplies</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">autoscaling</span></div>
+                <ul>
+                    <li><b>The setup</b> — each orders-service instance carries its own pool of 20 warm connections</li>
+                    <li><b>The math</b> — 5 instances &times; 20 = 100 connections: exactly at the Postgres default, and it works</li>
+                    <li><b>The spike</b> — the autoscaler adds instances under load: 10 instances want 200, 25 want 500</li>
+                    <li><b>The failure</b> — connection 101 onward is refused; new instances crash-loop at startup</li>
+                    <li><b>The fixes</b> — shrink per-instance pools, cap instances, or share one server-side pooler</li>
+                </ul>
+                <p class="example">A pool of 20 looked tiny per instance, but at 25 autoscaled instances the fleet demands 500 connections against a limit of 100.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Sizing the pool per instance and forgetting the multiplication — total demand is pool size &times; instance count, and the autoscaler changes the instance count without asking the database.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: one request's latency — fresh connection vs pooled, stacked horizontal bars
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Checkout: 8 ms of Setup for a 2 ms Query', w / 2, 24);
+
+    var x0 = 190, pxPerMs = 50, barH = 34;
+
+    // ms axis ticks along y=255
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var msTicks = [0, 2, 4, 6, 8, 10];
+    for (var i = 0; i < msTicks.length; i++) {
+        var tx = x0 + msTicks[i] * pxPerMs;
+        ctx.fillText(msTicks[i] + ' ms', tx, 255);
+    }
+
+    function segRow(y, label, segs, totalLabel, totalColor) {
+        // baseline under the bar
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x0, y + barH + 4); ctx.lineTo(x0 + 10 * pxPerMs, y + barH + 4); ctx.stroke();
+        // row label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(label, 180, y + barH / 2 + 4);
+        // segments
+        var x = x0;
+        for (var i = 0; i < segs.length; i++) {
+            var segW = Math.max(segs[i].ms * pxPerMs, segs[i].minW || 0);
+            ctx.fillStyle = segs[i].color;
+            ctx.fillRect(x, y, segW, barH);
+            if (segs[i].label) {
+                ctx.fillStyle = '#fff'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText(segs[i].label, x + segW / 2, y + barH / 2 + 4);
+            }
+            x += segW;
+        }
+        // total
+        ctx.fillStyle = totalColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(totalLabel, x + 8, y + barH / 2 + 4);
+    }
+
+    segRow(95, 'new connection each time', [
+        { ms: 1, color: P.blue, label: 'TCP 1' },
+        { ms: 4, color: P.orange, label: 'auth 4' },
+        { ms: 3, color: P.yellow, label: 'setup 3' },
+        { ms: 2, color: P.green, label: 'query 2' }
+    ], '10 ms', '#e74c3c');
+
+    segRow(185, 'borrow from pool', [
+        { ms: 0.1, color: P.mute, minW: 6 },
+        { ms: 2, color: P.green, label: 'query 2' }
+    ], '2.1 ms', P.green);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('80% of the slow bar is setup, not the query', 420, 150);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; segment order is the real connect sequence', w - 16, h - 10);
+});
+
+// c2: connections busy vs load at fixed 20 ms query time (Little's Law line)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Little\'s Law: queries/s × query time = connections busy', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var xMax = 800, yMax = 20;
+    function xOf(q) { return ox + q / xMax * pw; }
+    function yOf(c) { return baseY - c / yMax * ph; }
+
+    // gridlines at busy 5/10/15
+    var yTicks = [5, 10, 15];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, yOf(yTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var xTicks = [0, 200, 400, 600, 800];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < xTicks.length; i++) {
+        ctx.fillText(String(xTicks[i]), xOf(xTicks[i]), baseY + 16);
+    }
+
+    var qs = [50, 100, 200, 400, 800];
+    var busy = [1, 2, 4, 8, 16];
+
+    // dashed drop lines for the worked-example point (200, 4)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(200), yOf(4)); ctx.lineTo(xOf(200), baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(200), yOf(4)); ctx.lineTo(ox, yOf(4)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < qs.length; i++) {
+        var x = xOf(qs[i]), y = yOf(busy[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < qs.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(qs[i]), yOf(busy[i]), 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(busy[i]), xOf(qs[i]), yOf(busy[i]) - 10);
+    }
+
+    // worked-example marker: green ring at (200, 4)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(xOf(200), yOf(4), 8, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('200 q/s × 20 ms = 4', xOf(200) + 14, yOf(4) + 16);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('double the traffic, double the connections', xOf(520), 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('20 ms query time held fixed; points exact from the formula', w - 16, h - 8);
+});
+
+// c3: throughput vs pool size — rises, peaks, then falls
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('More Connections Is Not More Throughput', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var pools = [2, 4, 8, 16, 32, 64, 128, 256];
+    var tput = [1900, 3800, 7400, 9600, 9800, 9100, 7200, 4800];
+    var yMax = 10000;
+    function xOf(i) { return ox + (i + 0.5) * pw / 8; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    var yTicks = [2500, 5000, 7500];
+    var yLabs = ['2.5k', '5k', '7.5k'];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 8, yOf(yTicks[i]) + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10k', ox - 8, yOf(10000) + 4);
+
+    // refusal zone: pool size 100 sits between the 64 and 128 ticks (log interpolation)
+    var xLimit = xOf(5) + (Math.log(100 / 64) / Math.log(2)) * (xOf(6) - xOf(5));
+    ctx.fillStyle = 'rgba(231,76,60,0.06)';
+    ctx.fillRect(xLimit, baseY - ph, ox + pw - xLimit, ph);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xLimit, baseY - ph); ctx.lineTo(xLimit, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('max_connections = 100 (Postgres default)', xLimit, baseY - ph - 6);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < pools.length; i++) {
+        ctx.fillText(String(pools[i]), xOf(i), baseY + 16);
+    }
+
+    // curve
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < pools.length; i++) {
+        var x = xOf(i), y = yOf(tput[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < pools.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(i), yOf(tput[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // sweet spot ring at (32, 9800)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(xOf(4), yOf(9800), 8, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sweet spot', xOf(4), yOf(9800) - 16);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('256 connections: half the throughput of 32', xOf(7) + 30, 120);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput illustrative; 128 and 256 assume max_connections raised above the 100 default', w - 16, h - 8);
+});
+
+// c4: total connections demanded as the fleet autoscales, vs the limit
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Pool of 20 × Instances: the Fleet Blows the Limit', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var scale = 0.36; // px per connection
+    function yOf(c) { return baseY - c * scale; }
+
+    // gridlines
+    var yTicks = [100, 200, 300, 400];
+    for (var i = 0; i < yTicks.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(yTicks[i])); ctx.lineTo(ox + pw, yOf(yTicks[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, yOf(yTicks[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var centers = [180, 360, 540];
+    var labels = ['5 instances', '10 instances', '25 instances'];
+    var totals = [100, 200, 500];
+    var barW = 90;
+
+    for (var i = 0; i < 3; i++) {
+        var cx = centers[i], total = totals[i];
+        var okPart = Math.min(total, 100);
+        // portion at or below the limit (blue)
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(cx - barW / 2, yOf(okPart), barW, okPart * scale);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - barW / 2, yOf(okPart), barW, okPart * scale);
+        // portion above the limit (red)
+        if (total > 100) {
+            ctx.fillStyle = 'rgba(231,76,60,0.25)';
+            ctx.fillRect(cx - barW / 2, yOf(total), barW, (total - 100) * scale);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+            ctx.strokeRect(cx - barW / 2, yOf(total), barW, (total - 100) * scale);
+        }
+        // value label
+        ctx.fillStyle = total > 100 ? '#e74c3c' : P.blue;
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(total), cx, yOf(total) - 8);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(labels[i], cx, baseY + 18);
+    }
+
+    // limit line at 100 connections
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(100)); ctx.lineTo(ox + pw, yOf(100)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('max_connections = 100 (Postgres default)', ox + 6, yOf(100) - 8);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('400 connection attempts refused', 540 - barW / 2 - 12, 90);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pool size 20 per instance; counts exact from the multiplication', w - 16, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

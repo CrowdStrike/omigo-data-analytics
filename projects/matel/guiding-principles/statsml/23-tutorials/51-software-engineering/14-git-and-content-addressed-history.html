@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git &amp; Content-Addressed History</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Git &amp; Content-Addressed History</h1>
+<p class="subtitle">Git names every file, folder, and commit by the hash of its content — so history is a chain of fingerprints that no one can quietly rewrite</p>
+
+<div class="card-section">
+    <h2>Every Object Is Named by Its Own Content</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">content addressing</span><span class="tag orange">SHA-1</span></div>
+                <ul>
+                    <li><b>The repo</b> — a coffee shop keeps <code>menu.txt</code> and <code>prices.txt</code> in git and commits a change to the menu</li>
+                    <li><b>The blob</b> — git hashes each file's bytes and stores the content under that hash (<code>f3a91c2</code> for the menu)</li>
+                    <li><b>The tree</b> — a directory is a list of names and blob hashes, itself hashed and stored (<code>c41d9a0</code>)</li>
+                    <li><b>The dedup</b> — <code>prices.txt</code> didn't change, so both commits' trees point at the same blob <code>7d05e8b</code>, stored once</li>
+                    <li><b>The tamper alarm</b> — flip one byte in a stored object and its content no longer matches its name</li>
+                    <li><b>Snapshots, not diffs</b> — every commit stores a full tree; <code>git diff</code> is computed on demand between trees</li>
+                </ul>
+                <p class="example">After editing only the menu, the new commit adds one new blob and one new tree — the unchanged <code>prices.txt</code> blob <code>7d05e8b</code> is reused, not copied.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Git is a key-value store where the key is the SHA-1 hash of the value — identical content is stored once, and any corruption is self-evident because the hash would no longer match.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Change One Old Byte, Every Hash Downstream Changes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">tamper-evident</span></div>
+                <ul>
+                    <li><b>The chain</b> — three commits: <code>a1f09b3</code> &larr; <code>b7d21c8</code> &larr; <code>c9e44f0</code>, each storing its parent's hash inside itself</li>
+                    <li><b>The edit</b> — someone rewrites one price inside the file recorded by the first commit</li>
+                    <li><b>Hand-check step 1</b> — the edited file is new content, so it hashes to a new blob and a new tree</li>
+                    <li><b>Hand-check step 2</b> — the first commit's content changed (new tree hash), so it becomes <code>d3c07a5</code></li>
+                    <li><b>The cascade</b> — the middle commit named parent <code>a1f09b3</code>; keeping the edit forces remakes <code>f18b940</code>, <code>05ce7ab</code></li>
+                    <li><b>The reveal</b> — anyone still holding tip <code>c9e44f0</code> sees instantly that <code>05ce7ab</code> is a different history</li>
+                </ul>
+                <p class="example">One edited byte in the oldest commit turns the chain a1f09b3 &rarr; b7d21c8 &rarr; c9e44f0 into d3c07a5 &rarr; f18b940 &rarr; 05ce7ab — all three names change.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A commit's ID hashes its tree, parent IDs, author, and message, so each commit transitively seals everything behind it — rewriting any old commit changes its hash and therefore every descendant's.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Branch Is a 41-Byte File Pointing Into the DAG</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">DAG</span><span class="tag orange">branching</span></div>
+                <ul>
+                    <li><b>The DAG</b> — commits form a directed acyclic graph: arrows go child-to-parent, never in a cycle</li>
+                    <li><b>The merge</b> — a merge commit is nothing special: an ordinary commit that lists two parent hashes</li>
+                    <li><b>The branch</b> — <code>main</code> is a file holding one 40-char hash plus a newline: 41 bytes, freely movable</li>
+                    <li><b>Free branching</b> — creating a branch copies nothing; it writes one tiny pointer file, so teams branch constantly</li>
+                    <li><b>Distributed</b> — every clone holds the full DAG, and shared hashes guarantee everyone's objects agree</li>
+                </ul>
+                <p class="example">The coffee shop forks a <code>feature</code> branch, adds 2 commits, and merges — the merge commit 91c4e07 records both parents 3fd82b1 and e57a90c.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because a branch is only a movable pointer into an immutable DAG, branching and merging cost almost nothing — the design decision that reshaped how everyone works.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Rebase Never Edits a Commit — It Makes New Ones</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">rebase</span><span class="tag blue">reflog</span></div>
+                <ul>
+                    <li><b>The confusion</b> — "rewriting history" sounds like editing old commits in place; git cannot do that</li>
+                    <li><b>What really happens</b> — rebase and amend manufacture brand-new commits, then move the branch pointer</li>
+                    <li><b>The originals persist</b> — the old commits stay in the object store until garbage collection runs</li>
+                    <li><b>The rescue</b> — <code>git reflog</code> records where the pointer used to be, so "lost" work is one reset away</li>
+                    <li><b>The mistake</b> — panicking after a bad rebase and re-typing work that is still sitting in the object store</li>
+                </ul>
+                <p class="example">A botched rebase moves <code>feature</code> to 4c1d88e, but reflog still shows the old tip e57a90c — <code>git reset --hard e57a90c</code> restores it untouched.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing a rebase destroyed your commits. Objects are immutable; only the pointer moved, and until gc runs the reflog can point you straight back to the originals.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width, dash) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: object graph — two commits, two trees, three blobs, one shared blob
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Snapshots, Three Object Types, One Shared Blob', w / 2, 24);
+
+    function twoLineBox(x, y, bw, bh2, border, fill, l1, l2) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, bw, bh2, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundRect(ctx, x, y, bw, bh2, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (l2) {
+            ctx.fillText(l1, x + bw / 2, y + bh2 / 2 - 4);
+            ctx.font = '11px system-ui';
+            ctx.fillText(l2, x + bw / 2, y + bh2 / 2 + 12);
+        } else {
+            ctx.fillText(l1, x + bw / 2, y + bh2 / 2 + 4);
+        }
+    }
+
+    // commits (left column, 160x52)
+    twoLineBox(30, 68, 160, 52, P.violet, 'rgba(74,58,167,0.12)', 'commit 2ec86f4', 'tree c41d9a0');
+    twoLineBox(30, 190, 160, 52, P.violet, 'rgba(74,58,167,0.12)', 'commit 8b17e5d', 'tree 6f2a3b9, parent 2ec86f4');
+
+    // trees (middle column, 140x48)
+    twoLineBox(265, 70, 140, 48, P.blue, 'rgba(42,120,214,0.15)', 'tree c41d9a0', null);
+    twoLineBox(265, 192, 140, 48, P.blue, 'rgba(42,120,214,0.15)', 'tree 6f2a3b9', null);
+
+    // blobs (right column, 170x46)
+    twoLineBox(500, 30, 170, 46, P.green, 'rgba(0,131,0,0.12)', 'blob f3a91c2', 'menu v1');
+    twoLineBox(500, 127, 170, 46, P.green, 'rgba(0,131,0,0.12)', 'blob a90dd41', 'menu v2');
+    twoLineBox(500, 224, 170, 46, P.green, 'rgba(0,131,0,0.12)', 'blob 7d05e8b', 'prices');
+
+    // arrows: commit -> tree
+    arrow(ctx, 190, 94, 261, 94, P.mute, 2);
+    arrow(ctx, 190, 216, 261, 216, P.mute, 2);
+    // tree1 -> menu v1 blob and prices blob
+    arrow(ctx, 405, 84, 496, 58, P.mute, 2);
+    arrow(ctx, 405, 100, 496, 240, P.mute, 2);
+    // tree2 -> menu v2 blob and prices blob
+    arrow(ctx, 405, 206, 496, 155, P.mute, 2);
+    arrow(ctx, 405, 220, 496, 247, P.mute, 2);
+    // parent arrow: commit2 -> commit1 (dashed violet)
+    arrow(ctx, 110, 190, 110, 124, P.violet, 2, [4, 3]);
+    ctx.fillStyle = P.violet; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('parent', 118, 160);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('prices.txt stored once — both trees point at 7d05e8b', 460, 290);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hashes shortened to 7 chars, illustrative', 20, 290);
+});
+
+// c2: before/after chain — tamper cascade renames all three commits
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Tampered Byte Re-Names the Entire Chain', w / 2, 24);
+
+    var bw = 150, bhh = 46;
+    function chainBox(x, y, border, fill, label) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, bw, bhh, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundRect(ctx, x, y, bw, bhh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, y + bhh / 2 + 4);
+    }
+
+    // row 1: original (y=78)
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('original', 20, 104);
+    var xs = [110, 320, 530];
+    var origs = ['a1f09b3', 'b7d21c8', 'c9e44f0'];
+    for (var i = 0; i < 3; i++) chainBox(xs[i], 78, P.green, 'rgba(0,131,0,0.12)', origs[i]);
+    // parent arrows pointing LEFT
+    for (var i = 1; i < 3; i++) {
+        arrow(ctx, xs[i] - 4, 101, xs[i - 1] + bw + 6, 101, P.mute, 2);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('parent', (xs[i] + xs[i - 1] + bw) / 2, 92);
+    }
+
+    // row 2: after edit (y=192)
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('after edit', 20, 218);
+    var news = ['d3c07a5', 'f18b940', '05ce7ab'];
+    for (var i = 0; i < 3; i++) chainBox(xs[i], 192, '#e74c3c', 'rgba(231,76,60,0.12)', news[i]);
+    for (var i = 1; i < 3; i++) {
+        arrow(ctx, xs[i] - 4, 215, xs[i - 1] + bw + 6, 215, P.mute, 2);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('parent', (xs[i] + xs[i - 1] + bw) / 2, 206);
+    }
+
+    // cascade arrows (dashed red, row1 -> row2)
+    for (var i = 0; i < 3; i++) {
+        arrow(ctx, xs[i] + bw / 2, 124, xs[i] + bw / 2, 188, '#e74c3c', 2, [4, 3]);
+        ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('new hash', xs[i] + bw / 2 + 8, 160);
+    }
+
+    // edit marker
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 byte changed here', 110, 258);
+    arrow(ctx, 150, 264, 150, 242, '#e74c3c', 2);
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('no descendant survives — history is tamper-evident by construction', w - 20, 155);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hashes illustrative; the cascade is exact behavior', w - 12, h - 8);
+});
+
+// c3: DAG with feature branch and two-parent merge
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The DAG: a Merge Commit Simply Has Two Parents', w / 2, 24);
+
+    var R = 22;
+    function node(x, y, border, fill, label) {
+        ctx.fillStyle = fill;
+        ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x, y + 4);
+    }
+    function edge(x1, y1, x2, y2, color) {
+        // arrow from circle edge to circle edge (child -> parent)
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        var sx = x1 + R * Math.cos(ang), sy = y1 + R * Math.sin(ang);
+        var ex = x2 - (R + 4) * Math.cos(ang), ey = y2 - (R + 4) * Math.sin(ang);
+        arrow(ctx, sx, sy, ex, ey, color, 2);
+    }
+
+    // main-line commits
+    node(90, 130, P.blue, 'rgba(42,120,214,0.15)', '0b3d5f2');
+    node(230, 130, P.blue, 'rgba(42,120,214,0.15)', '7a91cc4');
+    node(370, 130, P.blue, 'rgba(42,120,214,0.15)', '3fd82b1');
+    // merge commit
+    node(610, 130, P.violet, 'rgba(74,58,167,0.15)', '91c4e07');
+    // feature commits
+    node(440, 230, P.green, 'rgba(0,131,0,0.12)', 'b26f014');
+    node(550, 230, P.green, 'rgba(0,131,0,0.12)', 'e57a90c');
+
+    // parent arrows (child -> parent)
+    edge(230, 130, 90, 130, P.mute);
+    edge(370, 130, 230, 130, P.mute);
+    edge(440, 230, 370, 130, P.mute);
+    edge(550, 230, 440, 230, P.mute);
+    edge(610, 130, 370, 130, P.mute);
+    edge(610, 130, 550, 230, P.violet);
+
+    // branch pills
+    function pill(cx, cy, pw, fill, txtColor, label) {
+        roundRect(ctx, cx - pw / 2, cy - 12, pw, 24, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.fillStyle = txtColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+    }
+    pill(585, 55, 60, 'rgba(42,120,214,0.25)', P.ink, 'main');
+    arrow(ctx, 590, 67, 605, 104, P.mute, 2);
+    pill(530, 283, 76, 'rgba(0,131,0,0.20)', P.green, 'feature');
+    arrow(ctx, 538, 271, 548, 256, P.mute, 2);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('each branch pointer: one 41-byte file', 60, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hashes illustrative; arrows point child → parent', 20, 292);
+});
+
+// c4: rebase — new commits, moved pointer, old ones remain, reflog arrow
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rebase = New Commits + a Moved Pointer (Old Ones Remain)', w / 2, 24);
+
+    var R = 20;
+    function node(x, y, border, fill, label, dashed, txtColor) {
+        ctx.fillStyle = fill;
+        ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        if (dashed) ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = txtColor || P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x, y + 4);
+    }
+    function edge(x1, y1, x2, y2, color, dash) {
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        var sx = x1 + R * Math.cos(ang), sy = y1 + R * Math.sin(ang);
+        var ex = x2 - (R + 4) * Math.cos(ang), ey = y2 - (R + 4) * Math.sin(ang);
+        arrow(ctx, sx, sy, ex, ey, color, 2, dash);
+    }
+
+    // main line
+    node(80, 150, P.blue, 'rgba(42,120,214,0.15)', '0b3d5f2');
+    node(210, 150, P.blue, 'rgba(42,120,214,0.15)', '7a91cc4');
+    node(340, 150, P.blue, 'rgba(42,120,214,0.15)', '3fd82b1');
+    edge(210, 150, 80, 150, P.mute);
+    edge(340, 150, 210, 150, P.mute);
+
+    // old feature commits (grayed, dashed)
+    node(430, 245, P.mute, 'rgba(107,114,128,0.12)', 'b26f014', true, P.mute);
+    node(545, 245, P.mute, 'rgba(107,114,128,0.12)', 'e57a90c', true, P.mute);
+    edge(430, 245, 210, 150, P.mute, [4, 3]);
+    edge(545, 245, 430, 245, P.mute, [4, 3]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('still in the object store until gc', 490, 285);
+
+    // new rebased commits
+    node(470, 70, P.green, 'rgba(0,131,0,0.12)', '9d02a6e');
+    node(590, 70, P.green, 'rgba(0,131,0,0.12)', '4c1d88e');
+    edge(470, 70, 340, 150, P.mute);
+    edge(590, 70, 470, 70, P.mute);
+
+    // feature pill + pointer
+    roundRect(ctx, 640 - 38, 25 - 12, 76, 24, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.20)'; ctx.fill();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('feature', 640, 29);
+    arrow(ctx, 625, 37, 600, 52, P.mute, 2);
+
+    // reflog: dashed curved arrow from pill to e57a90c
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(668, 37);
+    ctx.quadraticCurveTo(700, 140, 572, 235);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange;
+    ctx.beginPath();
+    ctx.moveTo(568, 238);
+    ctx.lineTo(580, 226);
+    ctx.lineTo(584, 240);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reflog remembers', 555, 155);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('nothing was edited — two new commits were made', 80, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hashes illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

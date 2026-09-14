@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Routers</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Routers</h1>
+<p class="subtitle">A router is one actor address that quietly forwards each message to a pool of identical workers — senders talk to one name, many hands do the work</p>
+
+<div class="card-section">
+    <h2>One Address, Four Resize Workers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">one address, many workers</span><span class="tag orange">routing strategies</span></div>
+                <ul>
+                    <li><b>The service</b> — a photo site resizes every upload; one actor at <code>/user/resizer</code> accepts the jobs</li>
+                    <li><b>The bottleneck</b> — a single actor processes one message at a time, so uploads queue behind it</li>
+                    <li><b>The router</b> — <code>/user/resizer</code> becomes a router holding four identical routee workers behind it</li>
+                    <li><b>The forward</b> — each incoming job is handed to one routee; senders never learn workers exist</li>
+                    <li><b>The strategies</b> — round-robin takes turns, smallest-mailbox picks the least busy, broadcast copies to all</li>
+                    <li><b>Broadcast use</b> — one "reload watermark logo" message fans out so all four workers update at once</li>
+                </ul>
+                <p class="example">Twelve resize jobs arrive at <code>/user/resizer</code>; round-robin deals them like cards, so worker 1 gets jobs 1, 5, 9 and worker 4 gets jobs 4, 8, 12.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A router splits one actor address from one unit of work: senders keep a single stable name while the router forwards each message to one of many interchangeable routees.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Round-Robin Meets a 40 MB Panorama</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">smallest-mailbox</span></div>
+                <ul>
+                    <li><b>The jobs</b> — 12 uploads arrive one per second; each resize takes 1 second, all workers start idle</li>
+                    <li><b>The outlier</b> — job 1 is a 40 MB panorama that takes 8 seconds instead of 1</li>
+                    <li><b>Round-robin is blind</b> — jobs 5 and 9 go to worker 1 anyway and queue behind the panorama</li>
+                    <li><b>Hand-check</b> — job 5 arrives at t=5s but starts at t=9s (wait 4s); job 9 arrives at t=9s, waits 1s</li>
+                    <li><b>Smallest-mailbox looks</b> — it prefers idle workers over busy ones, so jobs 5 and 9 dodge worker 1</li>
+                    <li><b>The payoff</b> — under smallest-mailbox every one of the 12 jobs starts the second it arrives</li>
+                </ul>
+                <p class="example">With round-robin jobs 5 and 9 sit waiting 4s and 1s behind the panorama; with smallest-mailbox every wait is 0 seconds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Round-robin balances message counts, not work; when job sizes vary, a load-aware strategy like smallest-mailbox avoids queuing fast jobs behind one slow one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Same Photo, Same Worker: Consistent Hashing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">per-key ordering</span><span class="tag orange">affinity</span></div>
+                <ul>
+                    <li><b>The sequence</b> — photo 4471 gets three edits in a row: resize, then watermark, then sharpen</li>
+                    <li><b>The hazard</b> — round-robin sends the three edits to three workers; sharpen may run before resize</li>
+                    <li><b>The strategy</b> — consistent hashing routes by a key: <code>hash(photoId)</code> always picks the same routee</li>
+                    <li><b>Ordering restored</b> — all photo-4471 edits land on worker 3 and its mailbox runs them in order</li>
+                    <li><b>Affinity bonus</b> — worker 3 keeps photo 4471 decoded in memory, so edits 2 and 3 skip a reload</li>
+                    <li><b>Stable-ish</b> — a hash ring means adding a worker remaps only a slice of keys, not all of them</li>
+                </ul>
+                <p class="example">Six messages for photos 4471, 9302, and 5518 arrive interleaved; hashing sends every 4471 edit to worker 3, every 9302 edit to worker 1, and 5518 to worker 4.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Use consistent hashing when messages sharing a key must stay ordered or benefit from landing on the same worker — an actor's mailbox guarantees order only within one actor.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Pool or Group: Who Restarts a Dead Worker?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">pool vs group</span></div>
+                <ul>
+                    <li><b>Pool router</b> — creates its own routees as children, supervises them, restarts one that crashes</li>
+                    <li><b>Group router</b> — is only given the paths of actors created elsewhere; it never owns them</li>
+                    <li><b>The mistake</b> — deploying a group router and assuming it will heal or resize its worker set</li>
+                    <li><b>What happens</b> — a group keeps routing to a crashed routee's path; those jobs go to dead letters</li>
+                    <li><b>The rule</b> — want managed workers, pick a pool; routing to actors you already run, pick a group</li>
+                </ul>
+                <p class="example">Worker 3 crashes on a corrupt JPEG; the pool router restarts it and job 7 is only delayed, while a group router keeps sending every third job to a dead address.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating pool and group routers as interchangeable. Only a pool supervises its routees — a group is a mailing list of paths, and a dead path silently swallows work.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.45), y2 - 8 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.45), y2 - 8 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: three uploaders -> router -> four workers with round-robin assignments
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Address In, Four Workers Out', w / 2, 24);
+
+    // uploaders: 110x34 at x=20, y=80/135/190
+    var upLabs = ['uploader A', 'uploader B', 'uploader C'];
+    var upY = [80, 135, 190];
+    var upTarget = [110, 122, 134];
+    for (var i = 0; i < 3; i++) {
+        arrowLine(ctx, 130, upY[i] + 17, 171, upTarget[i], P.mute, 2);
+        rrectPath(ctx, 20, upY[i], 110, 34, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(upLabs[i], 75, upY[i] + 21);
+    }
+
+    // workers: 180x40 at x=470, y=48/112/176/240
+    var wkY = [48, 112, 176, 240];
+    var wkLabs = ['worker 1 — jobs 1, 5, 9', 'worker 2 — jobs 2, 6, 10',
+                  'worker 3 — jobs 3, 7, 11', 'worker 4 — jobs 4, 8, 12'];
+    for (var i = 0; i < 4; i++) {
+        arrowLine(ctx, 345, 122, 466, wkY[i] + 20, P.green, 3);
+        rrectPath(ctx, 470, wkY[i], 180, 40, 8);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(wkLabs[i], 560, wkY[i] + 24);
+    }
+
+    // router box: 170x56 centered at (260, 122)
+    rrectPath(ctx, 175, 94, 170, 56, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('/user/resizer', 260, 117);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('router (round-robin)', 260, 135);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('senders only ever see one address', 230, 245);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('job numbering illustrative', w - 12, 293);
+});
+
+// c2: wait-time bars for jobs 1-12 under round-robin
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Round-Robin Wait Times When Job 1 Takes 8 Seconds', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 620, ph = 180, yMax = 5;
+    var waits = [0, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0];
+    function cOf(i) { return ox + (i + 0.5) * (pw / 12); }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines at 1/2/3/4
+    for (var g = 1; g <= 4; g++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    }
+
+    // axes + x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var i = 0; i < 12; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(i + 1), cOf(i), baseY + 16);
+    }
+
+    // bars
+    for (var i = 0; i < 12; i++) {
+        var x = cOf(i) - 15;
+        if (waits[i] === 0) {
+            ctx.fillStyle = P.blue;
+            ctx.fillRect(x, baseY - 3, 30, 3);
+        } else if (i === 4) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(x, yOf(4), 30, baseY - yOf(4));
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('waits 4s', cOf(i), yOf(4) - 8);
+        } else if (i === 8) {
+            ctx.fillStyle = P.orange;
+            ctx.fillRect(x, yOf(1), 30, baseY - yOf(1));
+            ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('waits 1s', cOf(i), yOf(1) - 8);
+        }
+    }
+
+    // panorama marker pointing at job 1's stub
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('job 1 = 8s panorama (worker 1)', 75, 152);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(88, 158); ctx.lineTo(cOf(0), baseY - 8); ctx.stroke();
+
+    // smallest-mailbox note: dashed green line along y=0
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, baseY - 5); ctx.lineTo(ox + pw, baseY - 5); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('smallest-mailbox: every wait = 0s', 430, 215);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('arrival 1 job/s, service 1s except job 1 — illustrative', w - 12, 293);
+});
+
+// c3: consistent hashing maps every photo key to one worker
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('hash(photoId) Sends Every Edit of a Photo to One Worker', w / 2, 24);
+
+    var chips = [
+        { x: 30,  label: '4471 resize',  color: P.blue,   fill: 'rgba(42,120,214,0.15)', worker: 2 },
+        { x: 140, label: '9302 resize',  color: P.green,  fill: 'rgba(0,131,0,0.15)',    worker: 0 },
+        { x: 250, label: '4471 wmark',   color: P.blue,   fill: 'rgba(42,120,214,0.15)', worker: 2 },
+        { x: 360, label: '5518 resize',  color: P.orange, fill: 'rgba(217,89,38,0.15)',  worker: 3 },
+        { x: 470, label: '9302 wmark',   color: P.green,  fill: 'rgba(0,131,0,0.15)',    worker: 0 },
+        { x: 580, label: '4471 sharpen', color: P.blue,   fill: 'rgba(42,120,214,0.15)', worker: 2 }
+    ];
+    var seq = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
+    var wkX = [40, 210, 380, 550];
+    var wkLabs = ['worker 1', 'worker 2', 'worker 3', 'worker 4'];
+
+    // arrows first (under the boxes)
+    for (var i = 0; i < chips.length; i++) {
+        var c = chips[i];
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(c.x + 50, 92);
+        ctx.lineTo(wkX[c.worker] + 70, 208);
+        ctx.stroke();
+    }
+
+    // chips
+    for (var i = 0; i < chips.length; i++) {
+        var c = chips[i];
+        rrectPath(ctx, c.x, 62, 100, 30, 8);
+        ctx.fillStyle = c.fill; ctx.fill();
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.label, c.x + 50, 81);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(seq[i], c.x + 50, 55);
+    }
+
+    // workers
+    for (var i = 0; i < 4; i++) {
+        rrectPath(ctx, wkX[i], 210, 140, 40, 8);
+        ctx.fillStyle = 'rgba(107,114,128,0.10)'; ctx.fill();
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(wkLabs[i], wkX[i] + 70, 234);
+    }
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('resize → wmark → sharpen arrive in order', 450, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('photo ids and hash mapping illustrative', w - 12, 293);
+});
+
+// c4: pool router restarts a crashed worker, group router mails a ghost
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Worker 3 Crashes: Pool Restarts It, Group Keeps Mailing a Ghost', w / 2, 24);
+
+    function box(cx, cy, wd, label, fill, stroke) {
+        rrectPath(ctx, cx - wd / 2, cy - 20, wd, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+    }
+
+    // row 1: pool router
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('pool router', 20, 66);
+    box(130, 100, 160, 'router (parent)', 'rgba(74,58,167,0.12)', P.violet);
+    arrowLine(ctx, 210, 100, 246, 100, P.mute, 3);
+    box(330, 100, 160, 'worker 3 crashes', 'rgba(231,76,60,0.12)', '#e74c3c');
+    arrowLine(ctx, 410, 100, 456, 100, P.mute, 3);
+    box(540, 100, 160, 'restarted by router', 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ job 7 delayed, not lost', 540, 138);
+
+    // row 2: group router
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('group router', 20, 176);
+    box(130, 210, 160, 'router (paths only)', 'rgba(74,58,167,0.12)', P.violet);
+    arrowLine(ctx, 210, 210, 246, 210, P.mute, 3);
+    box(330, 210, 160, 'worker 3 crashes', 'rgba(231,76,60,0.12)', '#e74c3c');
+    arrowLine(ctx, 410, 210, 456, 210, P.mute, 3);
+    box(540, 210, 160, 'path → dead letters', 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ every 3rd job vanishes', 540, 248);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a group router never watches its routees — someone else must', w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

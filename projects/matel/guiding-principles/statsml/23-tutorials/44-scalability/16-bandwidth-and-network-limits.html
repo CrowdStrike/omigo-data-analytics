@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bandwidth &amp; Network Limits</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Bandwidth &amp; Network Limits</h1>
+<p class="subtitle">A 10 Gbit/s network card moves at most 1.25 GB per second &mdash; so a job that shuffles terabytes has a time floor set by the wire, not the CPU</p>
+
+<div class="card-section">
+    <h2>The Nightly Shuffle Hits a Wire-Speed Wall</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">NIC ceiling</span><span class="tag orange">hard floor</span></div>
+                <ul>
+                    <li><b>The job</b> &mdash; a nightly analytics job re-sorts 10 TB of order events across a 20-node cluster</li>
+                    <li><b>The split</b> &mdash; each node holds 500 GB and must ship 475 GB of it (19/20) to the other 19 nodes</li>
+                    <li><b>The wire</b> &mdash; each node has a 10 Gbit/s NIC; 10 Gbit/s &divide; 8 = 1.25 GB/s, an exact conversion</li>
+                    <li><b>The floor</b> &mdash; 475 GB &divide; 1.25 GB/s = 380 seconds; no CPU upgrade can push bytes out faster</li>
+                    <li><b>The definition</b> &mdash; a job is network-bound when the wire drains slower than the CPU produces</li>
+                </ul>
+                <p class="example">The team doubles CPU cores and the shuffle still takes 380 seconds &mdash; the NIC was already sending flat-out the whole time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every NIC is a fixed-rate pipe: 10 Gbit/s is exactly 1.25 GB/s, so shipping 475 GB per node has a hard floor of 380 seconds regardless of compute.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Racks Share a Thinner Uplink</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">oversubscription</span></div>
+                <ul>
+                    <li><b>The rack</b> &mdash; each rack holds 20 servers; 20 &times; 10 Gbit/s = 200 Gbit/s of server-facing capacity</li>
+                    <li><b>The uplink</b> &mdash; the rack's uplink to the datacenter fabric carries only 67 Gbit/s: a 3:1 ratio</li>
+                    <li><b>The share</b> &mdash; when every server sends cross-rack at once, each gets 10 &divide; 3 &asymp; 3.3 Gbit/s &asymp; 0.42 GB/s</li>
+                    <li><b>Hand-check</b> &mdash; 475 GB &divide; 0.42 GB/s &asymp; 1,140 seconds, three times the 380-second in-rack floor</li>
+                    <li><b>The rule</b> &mdash; oversubscription means in-rack traffic runs at line rate; cross-rack traffic contends</li>
+                </ul>
+                <p class="example">The nightly job lands 10 nodes in each of two racks; with each rack's other servers also sending cross-rack, its shuffle crawls at 0.42 GB/s per node and takes ~19 minutes instead of ~6.3.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Fabrics are built oversubscribed on purpose &mdash; a 3:1 rack uplink cuts each server's worst-case cross-rack bandwidth to a third, so where a job's nodes sit changes its floor by 3&times;.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Nineteen Senders, One Receiver, One Buffer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">TCP incast</span></div>
+                <ul>
+                    <li><b>The fetch</b> &mdash; a reducer node asks all 19 peers for its partition; all 19 answer in the same instant</li>
+                    <li><b>The choke</b> &mdash; 19 &times; 10 Gbit/s of replies converge on one 10 Gbit/s receiver port at the switch</li>
+                    <li><b>The buffer</b> &mdash; the switch port buffers the excess, overflows in milliseconds, and drops packets</li>
+                    <li><b>The collapse</b> &mdash; every dropped sender waits out a TCP timeout, so the port sits idle between bursts</li>
+                    <li><b>The name</b> &mdash; this many-to-one throughput collapse is called TCP incast, a classic shuffle failure</li>
+                </ul>
+                <p class="example">With 4 senders the reducer pulls ~9.3 Gbit/s; with all 19 answering at once, goodput collapses to ~1.2 Gbit/s &mdash; slower than a single sender.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Incast is not congestion from too much data overall &mdash; it is many synchronized senders overflowing one switch buffer, leaving the receiver's link mostly idle while everyone waits on timeouts.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Faster CPUs Don't Move Bytes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">data locality</span></div>
+                <ul>
+                    <li><b>The mistake</b> &mdash; the job is slow, so the team buys nodes with twice the cores; the shuffle barely moves</li>
+                    <li><b>The math</b> &mdash; the job is 6 min of compute + 19 min of cross-rack shuffle; halving compute saves 3 min</li>
+                    <li><b>Fix 1: placement</b> &mdash; schedule all 20 nodes in one rack; the shuffle drops from 19 min to 6.3 min</li>
+                    <li><b>Fix 2: less data</b> &mdash; a map-side combine shrinks 475 GB per node to 158 GB (3&times;): 6.3 min &rarr; 2.1 min</li>
+                    <li><b>The rule</b> &mdash; for network-bound jobs, move less data or move it a shorter distance; CPUs are a rounding error</li>
+                </ul>
+                <p class="example">Doubling CPUs takes the 25-minute job to 22 minutes; keeping the shuffle in-rack and combining first takes it to 8 minutes on the same hardware.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a slow distributed job as a compute problem. If the wire is the bottleneck, faster CPUs just wait faster &mdash; data locality and shuffle reduction attack the term that dominates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: one node's 475 GB — CPU could feed 5 GB/s, NIC drains at 1.25 GB/s
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Node's 475 GB: the NIC Drains at 1.25 GB/s, Full Stop", w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(sec) { return ox + sec / 400 * pw; }
+    function yOf(gb) { return baseY - gb / 475 * ph; }
+
+    // gridlines + y labels
+    ctx.font = '12px system-ui';
+    [120, 240, 360].forEach(function(v) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+    });
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    [0, 120, 240, 360, 475].forEach(function(v) { ctx.fillText(String(v), 52, yOf(v) + 4); });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 100 s
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [0, 100, 200, 300, 400].forEach(function(sec) { ctx.fillText(String(sec), xOf(sec), baseY + 18); });
+
+    // CPU feed line (5 GB/s, illustrative): 0 -> 475 GB in 95 s
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(xOf(0), yOf(0)); ctx.lineTo(xOf(95), yOf(475)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.violet; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('CPU could feed 5 GB/s', 110, 56);
+
+    // NIC line: exactly 1.25 GB/s
+    var nicS = [0, 100, 200, 300, 380];
+    var nicG = [0, 125, 250, 375, 475];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < nicS.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(nicS[i]), yOf(nicG[i])) : ctx.lineTo(xOf(nicS[i]), yOf(nicG[i]));
+    }
+    ctx.stroke();
+
+    // floor marker at 380 s
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(380), baseY); ctx.lineTo(xOf(380), yOf(475)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('380 s floor', xOf(380) + 8, 155);
+
+    // annotation above the NIC line
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('wire speed sets the finish, not the CPU', xOf(180), 135);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10 Gbit/s = 1.25 GB/s exact; workload sizes illustrative', w - 12, 292);
+});
+
+// c2: 3:1 oversubscription — rack aggregate vs one server's share
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('3:1 Oversubscription: 200 Gbit/s of NICs Behind a 67 Gbit/s Uplink', w / 2, 24);
+
+    var baseY = 245, bw = 70;
+    var bars = [
+        { cx: 140, hgt: 180, fill: 'rgba(42,120,214,0.30)', edge: P.blue, label: '20 NICs: 200', lcolor: P.blue },
+        { cx: 250, hgt: 60, fill: P.orange, edge: null, label: 'uplink: 67', lcolor: P.orange },
+        { cx: 460, hgt: 180, fill: 'rgba(0,131,0,0.30)', edge: P.green, label: 'in-rack: 10', lcolor: P.green },
+        { cx: 570, hgt: 60, fill: '#e74c3c', edge: null, label: 'cross-rack: 3.3', lcolor: '#e74c3c' }
+    ];
+
+    bars.forEach(function(b) {
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(b.cx - bw / 2, baseY - b.hgt, bw, b.hgt);
+        if (b.edge) {
+            ctx.strokeStyle = b.edge; ctx.lineWidth = 1;
+            ctx.strokeRect(b.cx - bw / 2, baseY - b.hgt, bw, b.hgt);
+        }
+        ctx.fillStyle = b.lcolor; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, b.cx, baseY - b.hgt - 8);
+    });
+
+    // shared baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(70, baseY); ctx.lineTo(650, baseY); ctx.stroke();
+
+    // panel captions
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('whole rack (Gbit/s)', 195, 264);
+    ctx.fillText('one server (Gbit/s)', 515, 264);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cross-rack floor: 380 s → 1,140 s', 700, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('3:1 ratio illustrative of common fabrics; divisions exact', w - 12, 292);
+});
+
+// c3: TCP incast — receiver goodput vs simultaneous senders
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Incast: More Senders at Once, Less Data Through', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var senders = [1, 2, 4, 8, 12, 16, 19];
+    var goodput = [9.4, 9.4, 9.3, 9.0, 4.1, 1.9, 1.2];
+    function xOf(n) { return ox + (n - 1) / 18 * pw; }
+    function yOf(v) { return baseY - v / 10 * ph; }
+
+    // gridlines + y labels
+    ctx.font = '12px system-ui';
+    [2.5, 5, 7.5].forEach(function(v) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(v)); ctx.lineTo(ox + pw, yOf(v)); ctx.stroke();
+    });
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    [0, 2.5, 5, 7.5, 10].forEach(function(v) { ctx.fillText(String(v), 52, yOf(v) + 4); });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [1, 4, 8, 12, 16, 19].forEach(function(n) { ctx.fillText(String(n), xOf(n), baseY + 18); });
+
+    // collapse marker at senders = 10
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(10), 54); ctx.lineTo(xOf(10), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('switch buffer overflows', xOf(10), 50);
+
+    // goodput line: green through senders 1-8, red from 8-19
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i <= 3; i++) {
+        i === 0 ? ctx.moveTo(xOf(senders[i]), yOf(goodput[i])) : ctx.lineTo(xOf(senders[i]), yOf(goodput[i]));
+    }
+    ctx.stroke();
+    ctx.strokeStyle = '#e74c3c'; ctx.beginPath();
+    ctx.moveTo(xOf(senders[3]), yOf(goodput[3]));
+    for (var i = 4; i < senders.length; i++) ctx.lineTo(xOf(senders[i]), yOf(goodput[i]));
+    ctx.stroke();
+
+    // dots
+    for (var i = 0; i < senders.length; i++) {
+        ctx.fillStyle = (i <= 3) ? P.green : '#e74c3c';
+        ctx.beginPath(); ctx.arc(xOf(senders[i]), yOf(goodput[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('19 senders: 1.2 Gbit/s — slower than one', xOf(14), 120);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('goodput values illustrative; collapse shape is the classic incast curve', w - 12, 292);
+});
+
+// c4: total job time under four strategies (compute + shuffle stacked)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 10 TB Job, Four Strategies: Attack the Shuffle, Not the CPU', w / 2, 24);
+
+    var bx = 230, pxPerMin = 430 / 25, bh = 22;
+    var rows = [
+        { y: 70, label: 'baseline (cross-rack)', compute: 6, shuffle: 19, total: '25 min', tcolor: P.text },
+        { y: 120, label: '2× faster CPUs', compute: 3, shuffle: 19, total: '22 min', tcolor: P.text },
+        { y: 170, label: 'same-rack placement', compute: 6, shuffle: 6.3, total: '12.3 min', tcolor: P.text },
+        { y: 220, label: 'in-rack + combine (3× less data)', compute: 6, shuffle: 2.1, total: '8.1 min', tcolor: P.green }
+    ];
+
+    // legend under title, top right
+    ctx.fillStyle = P.blue; ctx.fillRect(520, 34, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('compute', 538, 44);
+    ctx.fillStyle = 'rgba(217,89,38,0.65)'; ctx.fillRect(608, 34, 12, 12);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1; ctx.strokeRect(608, 34, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('shuffle', 626, 44);
+
+    rows.forEach(function(r) {
+        var cw = r.compute * pxPerMin, sw = r.shuffle * pxPerMin;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.label, 220, r.y + 15);
+        // compute segment
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(bx, r.y, cw, bh);
+        // shuffle segment
+        ctx.fillStyle = 'rgba(217,89,38,0.65)';
+        ctx.fillRect(bx + cw, r.y, sw, bh);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+        ctx.strokeRect(bx + cw, r.y, sw, bh);
+        // total label
+        ctx.fillStyle = r.tcolor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.total, bx + cw + sw + 8, r.y + 15);
+    });
+
+    // annotation right of the bottom row
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3× faster without touching a CPU', 445, 235);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('minutes illustrative, derived from the 380 s / 1,140 s floors above', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

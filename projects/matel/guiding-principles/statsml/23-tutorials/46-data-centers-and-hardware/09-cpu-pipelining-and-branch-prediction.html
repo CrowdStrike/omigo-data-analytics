@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPU Pipelining &amp; Branch Prediction</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>CPU Pipelining &amp; Branch Prediction</h1>
+<p class="subtitle">A CPU runs instructions like an assembly line and guesses which way every <code>if</code> will go — which is why the same loop over the same numbers runs several times faster when the array is sorted</p>
+
+<div class="card-section">
+    <h2>The Assembly Line Inside the CPU</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">pipeline</span><span class="tag orange">in-flight instructions</span></div>
+                <ul>
+                    <li><b>The line</b> — one instruction passes through stages: fetch, decode, execute, memory, write back</li>
+                    <li><b>The overlap</b> — while instruction 1 executes, instruction 2 decodes and instruction 3 is fetched</li>
+                    <li><b>The payoff</b> — once the line is full, one instruction finishes every cycle, not one every 5</li>
+                    <li><b>The depth</b> — real chips split work far finer: modern pipelines run ~15–20 stages deep</li>
+                    <li><b>The catch</b> — the line only stays full if the CPU always knows which instruction comes next</li>
+                </ul>
+                <p class="example">Five instructions through a 5-stage line take 9 cycles overlapped instead of 25 one-at-a-time — nearly 3&times; the throughput from the same hardware.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Pipelining is an assembly line for instructions — many are in flight at once, so throughput depends on keeping the line fed with the correct next instruction every cycle.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Loop That Runs 6&times; Faster on Sorted Data</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">the famous demo</span></div>
+                <ul>
+                    <li><b>The setup</b> — an array of 32,768 values in 0–255; the loop sums only the elements &gt; 128</li>
+                    <li><b>The branch</b> — <code>if (a[i] &gt; 128)</code> decides each iteration; the CPU must guess it to keep the line full</li>
+                    <li><b>Random order</b> — a random element is above 128 about half the time; the guess is a coin flip</li>
+                    <li><b>Sorted order</b> — first every element fails the test, then every element passes: one pattern change</li>
+                    <li><b>The result</b> — same array, same sum: random order 11.5s, sorted order 1.9s (illustrative timings)</li>
+                </ul>
+                <p class="example">Sorting the array first — extra work! — makes the summing loop about 6&times; faster, because the branch predictor goes from ~50% wrong to nearly always right.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The branch predictor learns from history — an all-false-then-all-true branch is trivially learnable, a 50/50 random one is unlearnable, and that alone changes the runtime severalfold.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What a Wrong Guess Costs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">why it matters</span><span class="tag red">pipeline flush</span><span class="tag orange">hot loops</span></div>
+                <ul>
+                    <li><b>The flush</b> — a wrong guess means the line is full of wrong-path work: throw it all away and refetch</li>
+                    <li><b>The bill</b> — a flush wastes roughly the pipeline depth, ~15–20 cycles; a right guess costs nothing</li>
+                    <li><b>The math</b> — with a 15-cycle penalty, a branch costs about 1 + rate &times; 15 cycles on average</li>
+                    <li><b>Hot loops</b> — a branch that runs a billion times turns each mispredict percent into real seconds</li>
+                    <li><b>The tools</b> — branchless tricks (conditional moves, arithmetic masks) trade the guess for a tiny fixed cost</li>
+                </ul>
+                <p class="example">At a 15-cycle penalty, cutting a hot loop's mispredict rate from 50% to 0% drops the average branch cost from 8.5 cycles to 1 — the whole sorted-array speedup in one formula.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Correct predictions are free and wrong ones cost ~15–20 cycles, so in hot loops the mispredict rate — not the number of branches — is what you pay for.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Is Not the Cache</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">predictability</span></div>
+                <ul>
+                    <li><b>The confusion</b> — people credit the sorted speedup to memory caching; it is the same array either way</li>
+                    <li><b>Same traffic</b> — sorted or random order, the loop touches the same 32,768 bytes sequentially</li>
+                    <li><b>The real cause</b> — sorting changed the branch outcome sequence, not where the data lives</li>
+                    <li><b>The lie in benchmarks</b> — a predictor learns loops of regular test data, then real inputs mispredict</li>
+                    <li><b>The wrong fix</b> — adding a second <code>if</code> to "help" the CPU adds another branch to guess, not fewer</li>
+                </ul>
+                <p class="example">Replacing <code>if (a[i] &gt; 128) sum += a[i]</code> with the branchless <code>sum += a[i] &amp; -(a[i] &gt; 128)</code> makes random and sorted run at the same speed — proof the branch, not the cache, was the cost.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Blaming memory whenever data order changes speed. Data order affects prediction as well as caching — if the same bytes are read either way, suspect the branch predictor first.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, size) {
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - size * Math.cos(ang - 0.4), y2 - size * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - size * Math.cos(ang + 0.4), y2 - size * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: 5 instructions through 5 stages over 9 cycles, staircase diagram
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var colX0 = 170, colW = 58;
+    var rowY = [80, 120, 160, 200, 240];
+    var stages = ['F', 'D', 'E', 'M', 'W'];
+    var stageFills = [P.blue, P.aqua, P.violet, P.yellow, P.green];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('5 Instructions, 5 Stages: Done in 9 Cycles Instead of 25', w / 2, 24);
+
+    // cycle labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var c = 0; c < 9; c++) {
+        ctx.fillText('cyc ' + (c + 1), colX0 + c * colW + colW / 2, 58);
+    }
+
+    // instruction labels and stage cells
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('I' + (i + 1), 120, rowY[i] + 21);
+        for (var st = 0; st < 5; st++) {
+            var cycle = i + st; // 0-based column index: instruction i occupies cycles i+1..i+5
+            var cellX = colX0 + cycle * colW + 2;
+            var cellY = rowY[i];
+            ctx.fillStyle = stageFills[st];
+            roundRect(ctx, cellX, cellY, 54, 32, 4);
+            ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(stages[st], cellX + 27, cellY + 20);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('from cycle 5 on,', 590, 88);
+    ctx.fillText('one finishes every cycle', 590, 106);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('classic 5-stage teaching pipeline; real chips run 15–20 stages', 120, 290);
+});
+
+// c2: random vs sorted runtime bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, plotW = 580, plotH = 180, yMax = 12, barW = 120;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Sum Elements > 128: Same Array, Sorted Runs ~6× Faster', w / 2, 24);
+
+    // gridlines at 3/6/9
+    var gv = [3, 6, 9];
+    for (var i = 0; i < gv.length; i++) {
+        var y = baseY - gv[i] / yMax * plotH;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gv[i]), ox - 8, y + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    // random bar
+    var rh = 11.5 / yMax * plotH;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(230 - barW / 2, baseY - rh, barW, rh);
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('11.5 s', 230, baseY - rh - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('random order', 230, baseY + 18);
+    ctx.fillText('~50% branches mispredicted', 230, baseY + 34);
+
+    // sorted bar
+    var sh = 1.9 / yMax * plotH;
+    ctx.fillStyle = P.green;
+    ctx.fillRect(470 - barW / 2, baseY - sh, barW, sh);
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1.9 s', 470, baseY - sh - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('sorted order', 470, baseY + 18);
+    ctx.fillText('<1% mispredicted', 470, baseY + 34);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the loop body is identical — only the guessability changed', 490, 100);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; pattern matches the classic Stack Overflow demo', w - 12, h - 10);
+});
+
+// c3: average branch cost line, cost = 1 + rate * 15
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 70, baseY = 245, plotW = 580, plotH = 180, xMax = 50, yMax = 9;
+    var rates = [0, 5, 10, 25, 50];
+    var costs = [1, 1.75, 2.5, 4.75, 8.5];
+
+    function xOf(r) { return ox + r / xMax * plotW; }
+    function yOf(c) { return baseY - c / yMax * plotH; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Average Branch Cost = 1 + Mispredict Rate × 15 Cycles', w / 2, 24);
+
+    // y gridlines at 3/6
+    var gv = [3, 6];
+    for (var i = 0; i < gv.length; i++) {
+        var y = yOf(gv[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gv[i]), ox - 8, y + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+    ctx.fillText('9', ox - 8, yOf(9) + 4);
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    // x ticks
+    var xt = [0, 10, 20, 30, 40, 50];
+    for (var i = 0; i < xt.length; i++) {
+        var x = xOf(xt[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(xt[i] + '%', x, baseY + 20);
+    }
+
+    // cost line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < rates.length; i++) {
+        var x = xOf(rates[i]), y = yOf(costs[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // dots and value labels
+    for (var i = 0; i < rates.length; i++) {
+        var x = xOf(rates[i]), y = yOf(costs[i]);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(costs[i]), x, y - 10);
+    }
+
+    // markers
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(0), yOf(1), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('sorted loop lives here', xOf(0) + 12, yOf(1) + 18);
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xOf(50), yOf(8.5), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('random loop lives here', xOf(50) - 12, yOf(8.5) + 4);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('8.5× per branch — same loop, different data order', xOf(25), 80);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('15-cycle flush penalty, illustrative of a ~15-stage pipeline', w - 12, h - 10);
+});
+
+// c4: right guess vs wrong guess flow diagram
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var boxH = 40;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Right Guess: Free. Wrong Guess: Flush and Refetch', w / 2, 24);
+
+    function box(x, y, bw, fill, stroke, lines) {
+        roundRect(ctx, x, y - boxH / 2, bw, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+        roundRect(ctx, x, y - boxH / 2, bw, boxH, 8);
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, y + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, y - 3);
+            ctx.fillText(lines[1], x + bw / 2, y + 12);
+        }
+    }
+
+    // row 1: predicted right
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('predicted right', 20, y1 + 4);
+    box(170, y1, 150, 'rgba(42,120,214,0.15)', P.blue, ['if (a[i] > 128)']);
+    ctx.strokeStyle = P.green; ctx.fillStyle = P.green; ctx.lineWidth = 3;
+    arrow(ctx, 325, y1, 395, y1, 8);
+    box(400, y1, 180, 'rgba(0,131,0,0.12)', P.green, ['guessed path', 'was correct']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ 0 cycles lost', 590, y1 + 4);
+
+    // row 2: predicted wrong
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('predicted wrong', 20, y2 + 4);
+    box(170, y2, 150, 'rgba(42,120,214,0.15)', P.blue, ['if (a[i] > 128)']);
+    ctx.strokeStyle = '#e74c3c'; ctx.fillStyle = '#e74c3c'; ctx.lineWidth = 3;
+    arrow(ctx, 325, y2, 365, y2, 8);
+    box(370, y2, 190, 'rgba(231,76,60,0.12)', '#e74c3c', ['15 wrong-path', 'instructions flushed']);
+    ctx.strokeStyle = P.orange; ctx.fillStyle = P.orange; ctx.lineWidth = 3;
+    arrow(ctx, 565, y2, 578, y2, 8);
+    box(580, y2, 110, 'rgba(217,89,38,0.12)', P.orange, ['refetch']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ ~15 cycles wasted', 590, 250);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both rows read the same memory — only the guess differs', w / 2, 280);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

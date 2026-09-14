@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consensus &amp; Paxos/Raft</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Consensus &amp; Paxos/Raft</h1>
+<p class="subtitle">How five machines agree on one answer even while any of them can crash &mdash; a value counts once a majority stores it, and majorities always overlap</p>
+
+<div class="card-section">
+    <h2>Five Copies of the Orders Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">agreement</span><span class="tag orange">fault tolerance</span></div>
+                <ul>
+                    <li><b>The setup</b> &mdash; a coffee chain keeps its orders table on 5 servers so no single crash loses data</li>
+                    <li><b>The problem</b> &mdash; a new order must land on every copy, but any server can crash mid-write</li>
+                    <li><b>The vote</b> &mdash; instead of waiting for all 5, the servers treat 3 matching copies as the truth</li>
+                    <li><b>The overlap</b> &mdash; any two groups of 3 out of 5 share a server, so two majorities can never disagree</li>
+                    <li><b>The survival</b> &mdash; with 3 of 5 alive the cluster keeps taking orders; 2 crashes are survivable</li>
+                </ul>
+                <p class="example">Order #4812 (2 lattes) arrives; servers S4 and S5 crash mid-vote, but S1, S2, and S3 all store it &mdash; 3 of 5, so the order is safe.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Consensus makes N machines act as one reliable machine: a value is decided once a majority stores it, and because any two majorities overlap, the cluster can never split into two truths.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Term 2: Electing S3, Then Committing Entry #7</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">leader election</span><span class="tag orange">majority acks</span></div>
+                <ul>
+                    <li><b>The timeout</b> &mdash; old leader S5 crashes; S3's election timer fires first, at t=0ms</li>
+                    <li><b>The term</b> &mdash; S3 bumps the term counter to 2, votes for itself, and asks the others for votes</li>
+                    <li><b>The votes</b> &mdash; S1 votes at 4ms and S2 at 6ms; with its own vote S3 has 3 of 5 and is leader</li>
+                    <li><b>The entry</b> &mdash; S3 appends entry #7 (order #4812) to its log at 20ms and sends it to all followers</li>
+                    <li><b>The acks</b> &mdash; S1 acks at 24ms, S2 at 26ms; leader + 2 acks = 3 copies, entry #7 is committed</li>
+                    <li><b>The straggler</b> &mdash; S4 acks late at 29ms and S5 never answers; neither one delays the commit</li>
+                </ul>
+                <p class="example">Entry #7 commits at 26ms with S3, S1, and S2 holding it &mdash; S4 catches up at 29ms, and dead S5 is simply ignored.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Raft splits consensus into two majority votes &mdash; one to elect a leader for the term, one per log entry to commit it. Both need only 3 of 5, so one dead server blocks neither.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Quiet Layer Under Kubernetes and Kafka</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">coordination</span><span class="tag orange">2f+1</span></div>
+                <ul>
+                    <li><b>Config stores</b> &mdash; etcd and ZooKeeper are consensus clusters; Kubernetes keeps its cluster state in etcd</li>
+                    <li><b>Controllers</b> &mdash; Kafka elects its controller through the same machinery, so brokers agree on who leads</li>
+                    <li><b>Locks and leases</b> &mdash; a distributed lock is just consensus on "who holds this lock right now"</li>
+                    <li><b>The formula</b> &mdash; tolerating f crashed servers takes 2f+1 total: 3 survive 1, 5 survive 2, 7 survive 3</li>
+                    <li><b>The cost curve</b> &mdash; each extra failure tolerated costs two more servers and a slightly bigger vote</li>
+                </ul>
+                <p class="example">A 5-node etcd cluster keeps a Kubernetes control plane running through 2 simultaneous machine failures.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Any system that must agree on one small fact &mdash; who is leader, what the config says, who holds the lock &mdash; sits on a consensus cluster sized by the 2f+1 rule.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Six Servers Are No Safer Than Five</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">even clusters</span><span class="tag blue">latency</span></div>
+                <ul>
+                    <li><b>The instinct</b> &mdash; "more servers, more safety", so someone grows the cluster from 5 to 6 nodes</li>
+                    <li><b>The math</b> &mdash; 6 nodes need a majority of 4, so 6 still tolerates only 2 crashes &mdash; same as 5</li>
+                    <li><b>The downside</b> &mdash; the 6th server adds cost and a bigger voting round for zero extra tolerance</li>
+                    <li><b>The tie risk</b> &mdash; even clusters can split 3&ndash;3 in an election, forcing timeout-and-retry rounds</li>
+                    <li><b>Not fast</b> &mdash; every commit waits a network round trip to a majority; consensus buys safety, not speed</li>
+                    <li><b>Right-sizing</b> &mdash; real clusters run 3, 5, or rarely 7 nodes; keep the fast path out of the quorum</li>
+                </ul>
+                <p class="example">A team grows etcd from 5 to 6 nodes for "extra safety" and gains nothing &mdash; the majority rises from 3 to 4, and 3 simultaneous crashes still kill both clusters.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Adding an even node to a consensus cluster. Fault tolerance only steps up at odd sizes (2f+1): 4 nodes buy what 3 do, 6 buy what 5 do &mdash; an extra machine, a bigger quorum, no extra safety.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: fan-out — one client order to five replicas, three store it, two crashed
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Order #4812: 2 Servers Crash Mid-Vote, 3 of 5 Still Decide', w / 2, 24);
+
+    // client box
+    var cx = 40, cy = 130, cw = 110, ch = 44;
+    roundRectPath(ctx, cx, cy, cw, ch, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order #4812', cx + cw / 2, cy + 18);
+    ctx.fillText('2 lattes', cx + cw / 2, cy + 34);
+
+    // server boxes
+    var sx = 330, sw = 170, sh = 34;
+    var rows = [
+        { y: 45, lab: 'S1 — stored ✓', alive: true },
+        { y: 90, lab: 'S2 — stored ✓', alive: true },
+        { y: 135, lab: 'S3 — stored ✓', alive: true },
+        { y: 180, lab: 'S4 — crashed ✗', alive: false },
+        { y: 225, lab: 'S5 — crashed ✗', alive: false }
+    ];
+
+    function arrow(x1, y1, x2, y2, color, dashed) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        if (dashed) ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        roundRectPath(ctx, sx, r.y, sw, sh, 6);
+        ctx.fillStyle = r.alive ? 'rgba(0,131,0,0.12)' : 'rgba(231,76,60,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = r.alive ? '#008300' : '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.lab, sx + sw / 2, r.y + sh / 2 + 4);
+        arrow(cx + cw, cy + ch / 2, sx, r.y + sh / 2,
+              r.alive ? P.blue : P.mute, !r.alive);
+    }
+
+    // majority bracket around alive boxes
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    roundRectPath(ctx, 320, 35, 195, 145, 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.violet; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('majority: 3 of 5', 515, 30);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3 matching copies', 540, 104);
+    ctx.fillText('= decided', 540, 120);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one order, five replicas — crash pattern illustrative', w - 12, h - 8);
+});
+
+// c2: raft timeline — votes then acks, two majority markers
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var x0 = 90, x1 = 670, tMax = 35;
+    function xOf(t) { return x0 + t / tMax * (x1 - x0); }
+    var rowY = { S1: 60, S2: 100, S3: 140, S4: 180, S5: 220 };
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Failure, Two Majorities: Leader at 6ms, Commit at 26ms', w / 2, 24);
+
+    // row guide lines and labels
+    var servers = ['S1', 'S2', 'S3', 'S4', 'S5'];
+    for (var i = 0; i < servers.length; i++) {
+        var y = rowY[servers[i]];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(servers[i], 30, y + 4);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        if (servers[i] === 'S5') ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var ticks = [0, 10, 20, 30];
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.fillText(ticks[i] + 'ms', xOf(ticks[i]), 264);
+    }
+
+    // leader marker at t=6
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(6), 40); ctx.lineTo(xOf(6), 245); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3/5 votes — S3 is leader (term 2)', xOf(6) + 6, 40);
+
+    // commit marker at t=26
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(26), 40); ctx.lineTo(xOf(26), 245); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3/5 copies — #7 committed', xOf(26) + 6, 54);
+
+    // vote dots (blue)
+    function dot(t, row, color, filled) {
+        var x = xOf(t), y = rowY[row];
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI);
+        if (filled) { ctx.fillStyle = color; ctx.fill(); }
+        else { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke(); }
+    }
+    dot(0, 'S3', P.blue, true);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('self-vote', xOf(0) + 4, rowY.S3 + 20);
+    dot(4, 'S1', P.blue, true);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('vote', xOf(4), rowY.S1 - 12);
+    dot(6, 'S2', P.blue, true);
+    ctx.fillText('vote', xOf(6), rowY.S2 - 12);
+
+    // append marker: blue square at (20, S3)
+    ctx.fillStyle = P.blue;
+    ctx.fillRect(xOf(20) - 5, rowY.S3 - 5, 10, 10);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('entry #7 sent', xOf(20), rowY.S3 + 22);
+
+    // ack dots (green)
+    dot(24, 'S1', P.green, true);
+    dot(26, 'S2', P.green, true);
+    dot(29, 'S4', P.green, false);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('late ack', xOf(29), rowY.S4 + 20);
+
+    // crashed row label
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('crashed — never answers', xOf(12), rowY.S5 - 8);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('stragglers never', xOf(31), 166);
+    ctx.fillText('delay the majority', xOf(31), 182);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('message timings illustrative', w - 12, h - 8);
+});
+
+// c3: 2f+1 icon rows — three cluster sizes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('2f+1: How Many Servers Buy How Many Failures', w / 2, 24);
+
+    var rows = [
+        { y: 75, lab: '3 nodes — tolerates 1', n: 3, dead: 1, alive: '2 alive' },
+        { y: 145, lab: '5 nodes — tolerates 2', n: 5, dead: 2, alive: '3 alive' },
+        { y: 215, lab: '7 nodes — tolerates 3', n: 7, dead: 3, alive: '4 alive' }
+    ];
+    var sq = 44, gap = 14, startX = 220;
+
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.lab, 20, row.y + sq / 2 + 4);
+        for (var i = 0; i < row.n; i++) {
+            var x = startX + i * (sq + gap);
+            var crashed = i >= row.n - row.dead;
+            roundRectPath(ctx, x, row.y, sq, sq, 6);
+            ctx.fillStyle = crashed ? 'rgba(231,76,60,0.12)' : 'rgba(0,131,0,0.15)';
+            ctx.fill();
+            ctx.strokeStyle = crashed ? '#e74c3c' : '#008300'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = crashed ? '#e74c3c' : '#008300';
+            ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(crashed ? '✗' : '✓', x + sq / 2, row.y + sq / 2 + 5);
+        }
+        ctx.fillStyle = '#008300'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.alive, startX + row.n * (sq + gap) + 4, row.y + sq / 2 + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the majority survives in every row — f can die out of 2f+1', 460, 285);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('crash counts exact for the 2f+1 rule', w - 12, 272);
+});
+
+// c4: staircase bar chart — failures tolerated by cluster size 3-7
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var baseY = 245, chH = 180;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Failures Tolerated by Cluster Size: the Staircase Rises Only at Odd Sizes', w / 2, 24);
+
+    // y gridlines at 1/2/3
+    for (var v = 1; v <= 3; v++) {
+        var y = baseY - v / 3 * chH;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, y); ctx.lineTo(660, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(v, 52, y + 4);
+    }
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var sizes = [3, 4, 5, 6, 7];
+    var tolerated = [1, 1, 2, 2, 3];
+    var centers = [130, 250, 370, 490, 610];
+    var topLabs = ['1', '1 — same as 3', '2', '2 — same as 5', '3'];
+    var quorums = ['needs 2', 'needs 3', 'needs 3', 'needs 4', 'needs 4'];
+    var bw = 70;
+
+    for (var i = 0; i < 5; i++) {
+        var odd = sizes[i] % 2 === 1;
+        var bh = tolerated[i] / 3 * chH;
+        var x = centers[i] - bw / 2;
+        var y = baseY - bh;
+        ctx.fillStyle = odd ? 'rgba(42,120,214,0.30)' : 'rgba(217,89,38,0.25)';
+        ctx.fillRect(x, y, bw, bh);
+        ctx.strokeStyle = odd ? '#2a78d6' : '#d95926'; ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, bw, bh);
+        // top label
+        ctx.fillStyle = odd ? '#2a78d6' : '#d95926';
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(topLabs[i], centers[i], y - 8);
+        // quorum label inside base
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(quorums[i], centers[i], baseY - 8);
+        // x category label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(sizes[i] + ' nodes', centers[i], baseY + 18);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('an even node = more cost, bigger quorum, zero extra safety', 200, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('tolerances exact from the 2f+1 rule; every commit still costs a round trip to a majority', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

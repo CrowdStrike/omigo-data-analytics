@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logical Logs &amp; Distributed Logs</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Logical Logs &amp; Distributed Logs</h1>
+<p class="subtitle">A distributed log is a numbered, append-only list of records that many readers walk at their own pace &mdash; the replicated ledger primitive behind Kafka-style systems, change capture, and event sourcing</p>
+
+<div class="card-section">
+    <h2>The Coffee Shop's Order Ledger</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">append-only</span><span class="tag orange">offsets</span></div>
+                <ul>
+                    <li><b>The ledger</b> — a coffee shop app appends every order to one list; nothing is ever edited or erased</li>
+                    <li><b>The number</b> — each record gets the next offset: order 107 is a flat white, order 108 an oat latte</li>
+                    <li><b>The readers</b> — a search index, a cache, and a warehouse each read the same list independently</li>
+                    <li><b>The bookmark</b> — each reader keeps a single number, its offset: how far into the list it has read</li>
+                    <li><b>No coupling</b> — the writer never waits for readers; a slow warehouse can't slow the cash register</li>
+                </ul>
+                <p class="example">At 9:14am the app appends order 108; the cache reads it instantly, the warehouse is still back at 104 — both are correct, just at different bookmarks.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A log is an append-only numbered list, and a reader's entire progress is one integer — its offset. That single primitive is what "distributed log" systems replicate across machines.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Lag Is Just Subtraction: 1042 &minus; 987 = 55</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">offset math</span></div>
+                <ul>
+                    <li><b>The head</b> — the producer has appended 1042 orders, so the log's head offset is 1042</li>
+                    <li><b>The cache</b> — its bookmark reads 1042, so lag = 1042 &minus; 1042 = 0: fully caught up</li>
+                    <li><b>The search index</b> — bookmark 1030, so lag = 1042 &minus; 1030 = 12 records behind</li>
+                    <li><b>The warehouse</b> — bookmark 987, so lag = 1042 &minus; 987 = 55; monitoring is one subtraction per reader</li>
+                    <li><b>The rewind</b> — after a bad warehouse deploy, set its bookmark back to 900 and replay 142 records</li>
+                </ul>
+                <p class="example">The warehouse fix is moving one integer from 987 back to 900 — the log still holds every record, so reprocessing is just reading forward again.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Progress, lag, and replay are all arithmetic on offsets — no per-message receipts, no acknowledgement lists to reconcile, one number per reader.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Backbone: CDC, Event Sourcing, Rebuilds</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">Kafka-style</span><span class="tag orange">replay</span></div>
+                <ul>
+                    <li><b>Kafka-style systems</b> — replicate this exact structure across machines so the ledger survives crashes</li>
+                    <li><b>Change data capture</b> — every database insert and update is appended to a log other systems tail</li>
+                    <li><b>Event sourcing</b> — the log of events is the truth; current state is just a replay of the log</li>
+                    <li><b>Rebuilds</b> — a corrupted search index is repaired by resetting its offset to 0 and replaying</li>
+                    <li><b>New consumers</b> — a fraud model added next year reads the full history without touching writers</li>
+                </ul>
+                <p class="example">When the cache box dies, nobody restores a backup — a fresh cache sets its bookmark to 0, replays the order log, and arrives at the same state.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Once the log is the source of truth, every downstream store becomes derived, disposable state — anything can be rebuilt by pointing a bookmark at offset 0.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Log Is Not a Queue</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">ordering</span></div>
+                <ul>
+                    <li><b>The queue rule</b> — a queue hands each message to one worker and deletes it once acknowledged</li>
+                    <li><b>The log rule</b> — reading deletes nothing; records leave only via a time or size retention limit</li>
+                    <li><b>Own bookmarks</b> — three log readers all see order 987; three queue workers would split the work</li>
+                    <li><b>Ordering</b> — a log guarantees order only within one partition; two partitions interleave freely</li>
+                    <li><b>The trap</b> — keying orders randomly across partitions, then wondering why updates arrive scrambled</li>
+                </ul>
+                <p class="example">Put order 31's "paid" and "refunded" events on different partitions and a reader can apply the refund before the payment ever arrives.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a log like a queue — expecting reads to remove messages and expecting one global order. Deletion is a retention policy, not a read, and order exists only per partition; key related events to the same partition.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: log strip of 8 records with three reader bookmarks below
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var offsets = [101, 102, 103, 104, 105, 106, 107, 108];
+    var orders = ['latte', 'mocha', 'drip', 'chai', 'espresso', 'cortado', 'flat white', 'oat latte'];
+    var boxW = 70, boxH = 46, gap = 6, startX = 60, topY = 80;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Append-Only Log, Three Independent Bookmarks', w / 2, 24);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('records are never edited or deleted — readers just move their own bookmark', 60, 62);
+
+    function boxCX(i) { return startX + i * (boxW + gap) + boxW / 2; }
+
+    for (var i = 0; i < 8; i++) {
+        var x = startX + i * (boxW + gap);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(x, topY, boxW, boxH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(x, topY, boxW, boxH);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(offsets[i]), boxCX(i), topY + 19);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+        ctx.fillText(orders[i], boxCX(i), topY + 37);
+    }
+
+    // append arrow entering the right end at box 108's edge
+    var endX = startX + 8 * (boxW + gap) - gap;
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(endX + 42, topY + boxH / 2); ctx.lineTo(endX + 6, topY + boxH / 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(endX + 2, topY + boxH / 2);
+    ctx.lineTo(endX + 12, topY + boxH / 2 - 6);
+    ctx.lineTo(endX + 12, topY + boxH / 2 + 6);
+    ctx.closePath();
+    ctx.fillStyle = P.green; ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('writes append here', endX + 46, topY - 8);
+
+    // bookmarks: up-arrows at a box's bottom edge with staggered labels
+    function bookmark(idx, color, label, labelY) {
+        var cx = boxCX(idx);
+        var tipY = topY + boxH + 4;
+        var tailY = labelY - 14;
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(cx, tailY); ctx.lineTo(cx, tipY + 10); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, tipY);
+        ctx.lineTo(cx - 6, tipY + 12);
+        ctx.lineTo(cx + 6, tipY + 12);
+        ctx.closePath();
+        ctx.fillStyle = color; ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, labelY);
+    }
+    bookmark(3, P.aqua, 'warehouse @ 104', 200);
+    bookmark(5, P.violet, 'search @ 106', 230);
+    bookmark(7, P.orange, 'cache @ 108', 260);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('orders and offsets illustrative', w - 15, h - 10);
+});
+
+// c2: offset number line 880-1060 with head, bookmarks, lag brackets, rewind arrow
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Head 1042, Three Bookmarks, Lag by Subtraction', w / 2, 24);
+
+    var axY = 160, ax0 = 60, ax1 = 660;
+    function xOf(off) { return ax0 + (off - 880) / (1060 - 880) * (ax1 - ax0); }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('lag = head − bookmark; replay = move the bookmark back', w - 20, 60);
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax0, axY); ctx.lineTo(ax1, axY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [900, 950, 1000, 1050].forEach(function(t) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(t), axY - 5); ctx.lineTo(xOf(t), axY + 5); ctx.stroke();
+        ctx.fillText(String(t), xOf(t), axY + 45);
+    });
+
+    // head marker at 1042
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(1042), 110); ctx.lineTo(xOf(1042), 210); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('head 1042', xOf(1042), 102);
+
+    // bookmark dots
+    function dot(off, color, label, labelY) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(xOf(off), axY, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, xOf(off), labelY);
+    }
+    dot(987, P.aqua, 'warehouse 987', 185);
+    dot(1030, P.violet, 'search 1030', 185);
+    dot(1042, P.orange, 'cache 1042', 205);
+
+    // lag brackets above the axis
+    function bracket(from, to, y, color, label) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(xOf(from), y + 6); ctx.lineTo(xOf(from), y);
+        ctx.lineTo(xOf(to), y); ctx.lineTo(xOf(to), y + 6);
+        ctx.stroke();
+        ctx.fillStyle = color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, (xOf(from) + xOf(to)) / 2, y - 6);
+    }
+    bracket(987, 1042, 120, P.aqua, 'lag 55');
+    bracket(1030, 1042, 95, P.violet, 'lag 12');
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lag 0', xOf(1042) + 10, axY - 10);
+
+    // rewind arrow: dashed magenta from 987 back to 900 below the axis
+    var ry = 235;
+    ctx.strokeStyle = P.magenta; ctx.setLineDash([6, 4]); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(987), ry); ctx.lineTo(xOf(900) + 10, ry); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(xOf(900), ry);
+    ctx.lineTo(xOf(900) + 12, ry - 6);
+    ctx.lineTo(xOf(900) + 12, ry + 6);
+    ctx.closePath();
+    ctx.fillStyle = P.magenta; ctx.fill();
+    ctx.beginPath(); ctx.arc(xOf(900), ry, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('rewind to 900 — replay 142 records', xOf(900) + 24, ry + 24);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offsets illustrative; lags exact given them', w - 15, h - 10);
+});
+
+// c3: flow diagram — producer -> replicated log -> consumers + dashed new consumer
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Log In, Any Number of Readers Out', w / 2, 24);
+
+    function roundRect(x, y, bw, bh, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+        ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+        ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    function arrow(x1, y1, x2, y2, color, width, dashed) {
+        ctx.strokeStyle = color; ctx.lineWidth = width;
+        if (dashed) ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 10 * Math.cos(ang - 0.4), y2 - 10 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 10 * Math.cos(ang + 0.4), y2 - 10 * Math.sin(ang + 0.4));
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // producer box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(30, 125, 130, 50, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    roundRect(30, 125, 130, 50, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders app', 95, 146);
+    ctx.fillText('(writer)', 95, 162);
+
+    // log strip: five 54px boxes 70px tall at x=210, y=115
+    var lx = 210, ly = 115, cellW = 54, cellH = 70;
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(lx + i * cellW, ly, cellW, cellH);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1;
+        ctx.strokeRect(lx + i * cellW, ly, cellW, cellH);
+    }
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.strokeRect(lx, ly, cellW * 5, cellH);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replicated log', lx + cellW * 2.5, ly - 8);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('…1038–1042', lx + cellW * 2.5, ly + cellH / 2 + 4);
+
+    // producer -> log
+    arrow(160, 150, lx - 4, 150, P.blue, 3, false);
+
+    // consumer boxes at x=540
+    var consumers = [
+        { y: 55,  color: P.aqua,   fill: 'rgba(25,158,112,0.12)', label: 'search index @ 1030' },
+        { y: 125, color: P.orange, fill: 'rgba(217,89,38,0.12)',  label: 'cache @ 1042' },
+        { y: 195, color: P.violet, fill: 'rgba(74,58,167,0.12)',  label: 'warehouse @ 987' }
+    ];
+    var logRight = lx + cellW * 5;
+    consumers.forEach(function(c) {
+        ctx.fillStyle = c.fill;
+        roundRect(540, c.y, 150, 38, 6); ctx.fill();
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2;
+        roundRect(540, c.y, 150, 38, 6); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.label, 615, c.y + 24);
+        arrow(logRight, 150, 536, c.y + 19, c.color, 3, false);
+    });
+
+    // new consumer: dashed green box at x=540, y=250
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    roundRect(540, 250, 150, 34, 6); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fraud model @ 0 (new)', 615, 271);
+    // dashed green arrow from log strip's LEFT edge
+    arrow(lx, ly + cellH, 536, 264, P.green, 2, true);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replays full history', 370, 250);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('add a reader without touching the writer', 30, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offsets carried over from the worked example; illustrative', w - 15, h - 10);
+});
+
+// c4: queue (read deletes, workers split) vs log (records remain, own bookmarks)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var offsets = [984, 985, 986, 987, 988];
+    var boxW = 66, boxH = 40, gap = 10, startX = 90;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Queue: Read Deletes. Log: Read Moves Your Bookmark.', w / 2, 24);
+
+    function boxCX(i) { return startX + i * (boxW + gap) + boxW / 2; }
+
+    // Row 1: queue at y=70
+    var qy = 70;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('queue', 20, 95);
+    for (var i = 0; i < 5; i++) {
+        var x = startX + i * (boxW + gap);
+        if (i < 2) {
+            // deleted boxes: dashed red border, no fill, strike-through text
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+            ctx.strokeRect(x, qy, boxW, boxH);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(String(offsets[i]), boxCX(i), qy + 25);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(boxCX(i) - 16, qy + 21); ctx.lineTo(boxCX(i) + 16, qy + 21); ctx.stroke();
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.15)';
+            ctx.fillRect(x, qy, boxW, boxH);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(x, qy, boxW, boxH);
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(String(offsets[i]), boxCX(i), qy + 25);
+        }
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('deleted after ack', (boxCX(0) + boxCX(1)) / 2, qy + boxH + 18);
+
+    // arrow from box 986 to worker box at x=560
+    var b986Right = startX + 3 * (boxW + gap) - gap;
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(b986Right + 4, qy + boxH / 2); ctx.lineTo(550, qy + boxH / 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(556, qy + boxH / 2);
+    ctx.lineTo(546, qy + boxH / 2 - 6);
+    ctx.lineTo(546, qy + boxH / 2 + 6);
+    ctx.closePath();
+    ctx.fillStyle = P.blue; ctx.fill();
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.fillRect(560, qy, 130, boxH);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(560, qy, 130, boxH);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one worker each', 625, qy + 25);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(20, 150); ctx.lineTo(700, 150); ctx.stroke();
+
+    // Row 2: log at y=190
+    var ly = 190;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('log', 20, 215);
+    for (var i = 0; i < 5; i++) {
+        var x = startX + i * (boxW + gap);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(x, ly, boxW, boxH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(x, ly, boxW, boxH);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(offsets[i]), boxCX(i), ly + 25);
+    }
+
+    // bookmark arrows pointing up at boxes, labels at y=255
+    function bookmark(idx, color, label, labelX) {
+        var cx = boxCX(idx);
+        var tipY = ly + boxH + 3;
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(cx, 244); ctx.lineTo(cx, tipY + 9); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, tipY);
+        ctx.lineTo(cx - 6, tipY + 11);
+        ctx.lineTo(cx + 6, tipY + 11);
+        ctx.closePath();
+        ctx.fillStyle = color; ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, labelX, 262);
+    }
+    bookmark(3, P.aqua, 'warehouse @ 987', boxCX(3) - 40);
+    bookmark(4, P.violet, 'search @ 988', boxCX(4));
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cache @ 988', boxCX(4) + 90, 262);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same records, three readers — nothing is deleted', w - 20, 170);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('offsets illustrative; ordering holds only within one partition', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

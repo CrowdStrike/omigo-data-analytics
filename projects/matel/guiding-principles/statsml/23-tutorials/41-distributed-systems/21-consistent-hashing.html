@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consistent Hashing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Consistent Hashing</h1>
+<p class="subtitle">Place servers and keys on the same ring and a new server steals only its neighbors' keys &mdash; hash(key) mod N reshuffles almost everything</p>
+
+<div class="card-section">
+    <h2>The Cache That Melted When Server 4 Arrived</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">caching</span><span class="tag red">mod-N trap</span></div>
+                <ul>
+                    <li><b>The cluster</b> &mdash; a web store caches 900,000 product pages across 3 cache servers</li>
+                    <li><b>The rule</b> &mdash; each key lives on server hash(key) mod 3; every lookup goes straight to it</li>
+                    <li><b>The growth</b> &mdash; traffic doubles, so ops adds a 4th server and switches to mod 4</li>
+                    <li><b>The remap</b> &mdash; 675,000 of 900,000 keys (75%) now hash to a different server: all cache misses</li>
+                    <li><b>The meltdown</b> &mdash; hit rate falls from 96% to 24% and the database absorbs the missing reads</li>
+                    <li><b>The ring</b> &mdash; consistent hashing would have moved only 225,000 keys (25%), one server's share</li>
+                </ul>
+                <p class="example">The 4th server was added to reduce load &mdash; for the next several minutes it multiplied the database's read load ~19-fold instead.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Consistent hashing maps keys and servers onto the same ring; a key belongs to the next server clockwise, so a new server claims keys only from its immediate neighborhood.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Eight Keys and Four Servers on a 100-Slot Ring</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hash ring</span></div>
+                <ul>
+                    <li><b>The ring</b> &mdash; slots 0&ndash;99 arranged in a circle; server A sits at slot 10, B at 45, C at 80</li>
+                    <li><b>The rule</b> &mdash; a key hashed to slot p walks clockwise to the first server it meets</li>
+                    <li><b>Eight keys</b> &mdash; hashes 5, 18, 30, 40, 52, 70, 85, 95 &rarr; A gets 3 keys, B gets 3, C gets 2</li>
+                    <li><b>Add D at 60</b> &mdash; D now owns slots 46&ndash;60; only the key at 52 moves, from C to D</li>
+                    <li><b>Hand-count</b> &mdash; 1 of 8 keys moved; mod-4 rehashing the same 8 hashes would move 7 of 8</li>
+                    <li><b>Virtual nodes</b> &mdash; giving each server many slots evens out how much of the ring each one owns</li>
+                </ul>
+                <p class="example">Adding D at slot 60 moves only the key at 52 (C &rarr; D); the other 7 keys keep their server and stay cached.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The only keys that move are those in the arc between the new server and its counter-clockwise neighbor &mdash; every other key is untouched.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Every System That Adds and Removes Machines</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">scaling</span><span class="tag orange">sharding</span></div>
+                <ul>
+                    <li><b>Distributed caches</b> &mdash; memcached-style clients hash keys onto a server ring so deploys keep caches warm</li>
+                    <li><b>Sharded stores</b> &mdash; Dynamo-style databases place data and nodes on a ring so nodes can join live</li>
+                    <li><b>CDNs</b> &mdash; the technique was invented (1997) to spread requests across cache fleets that change hourly</li>
+                    <li><b>Load balancers</b> &mdash; ring-hashing a user id keeps sessions sticky while backends come and go</li>
+                    <li><b>The arithmetic</b> &mdash; going from N to N+1 servers, mod-N moves N/(N+1) of keys; a ring moves 1/(N+1)</li>
+                </ul>
+                <p class="example">Growing a fleet from 10 to 11 servers remaps 90.9% of keys under mod-N but only 9.1% on a ring.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Any system where the server count changes while data must stay findable &mdash; scale-up, scale-down, or crash &mdash; needs key placement that barely depends on N.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Ways to Get Burned: Mod-N, and Too Few Virtual Nodes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">hot spots</span></div>
+                <ul>
+                    <li><b>The mod-N trap</b> &mdash; hash(key) mod N bakes the fleet size into every key's home; any scaling changes N</li>
+                    <li><b>The blast radius</b> &mdash; one added server invalidates most of the cache and the database eats the misses</li>
+                    <li><b>One slot is luck</b> &mdash; with a single ring slot each, our four servers own 30, 35, 20, and 15% of the ring</li>
+                    <li><b>Hot spot</b> &mdash; B serves more than twice D's traffic; a busy server can melt while its neighbors idle</li>
+                    <li><b>Virtual nodes</b> &mdash; giving each server 150 slots slices the ring finely: loads land at 26/25/24/25%</li>
+                    <li><b>Failure bonus</b> &mdash; a dead server's 150 small arcs scatter over all survivors, not one unlucky neighbor</li>
+                </ul>
+                <p class="example">With one slot each, B carries 35% of keys and D just 15%; with 150 virtual nodes each, every server lands within 1% of the fair 25%.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Choosing the ring over mod-N is only half the job &mdash; a ring with one slot per server trades the remap problem for a hot-spot problem. Virtual nodes are part of the design, not an optimization.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: cache hit rate through the scale-up — mod-N cliff vs ring dip
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Adding the 4th Server: Mod-N Empties the Cache, the Ring Barely Dips', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function X(t) { return ox + t / 10 * pw; }
+    function Y(p) { return baseY - p / 100 * ph; }
+
+    // gridlines at 25/50/75
+    var grids = [25, 50, 75];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, Y(grids[i])); ctx.lineTo(ox + pw, Y(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i] + '%', ox - 6, Y(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var t = 0; t <= 10; t += 2) {
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(X(t), baseY); ctx.lineTo(X(t), baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' min', X(t), baseY + 20);
+    }
+
+    var mins = [0, 2, 3, 3.2, 4, 5, 6, 8, 10];
+    var modN = [96, 96, 95, 24, 38, 52, 64, 80, 90];
+    var ring = [96, 96, 95, 72, 80, 88, 92, 95, 96];
+
+    // scale-up marker at minute 3
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(X(3), 52); ctx.lineTo(X(3), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('server 4 added', X(3), 46);
+
+    function line(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < mins.length; i++) {
+            var x = X(mins[i]), y = Y(vals[i]);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+    line(modN, P.orange);
+    line(ring, P.green);
+
+    // line end labels
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.green; ctx.fillText('ring', X(10) + 6, Y(96) + 4);
+    ctx.fillStyle = P.orange; ctx.fillText('mod-N', X(10) + 6, Y(90) + 12);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mod 4 moved 675,000 of 900,000 keys', X(5), 200);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hit rates illustrative', w - 12, h - 8);
+});
+
+// c2: hash ring — servers A/B/C, D inserted at slot 60, key 52 moves
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Adding Server D at Slot 60: One Key Moves, Seven Stay Put', w / 2, 24);
+
+    var cx = 200, cy = 168, R = 105;
+    function ang(slot) { return (-90 + 3.6 * slot) * Math.PI / 180; }
+    function pt(slot, r) { return { x: cx + r * Math.cos(ang(slot)), y: cy + r * Math.sin(ang(slot)) }; }
+
+    // ring
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.stroke();
+
+    // slot ticks at 0/25/50/75
+    var tickSlots = [0, 25, 50, 75];
+    for (var i = 0; i < 4; i++) {
+        var p1 = pt(tickSlots[i], R - 4), p2 = pt(tickSlots[i], R + 5);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        var pl = pt(tickSlots[i], R + 15);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickSlots[i], pl.x, pl.y + 4);
+    }
+
+    // claimed arc from slot 46 to slot 60
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(cx, cy, R, ang(46), ang(60)); ctx.stroke();
+
+    // keys just inside the ring
+    var keySlots = [5, 18, 30, 40, 52, 70, 85, 95];
+    for (var i = 0; i < 8; i++) {
+        var slot = keySlots[i];
+        var kp = pt(slot, R - 12);
+        var lp = pt(slot, R - 28);
+        var moved = (slot === 52);
+        ctx.fillStyle = moved ? P.magenta : P.text;
+        ctx.beginPath(); ctx.arc(kp.x, kp.y, moved ? 3.5 : 2.5, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(slot, lp.x, lp.y + 4);
+    }
+
+    // servers on the ring
+    var servers = [
+        { slot: 10, name: 'A', color: P.blue },
+        { slot: 45, name: 'B', color: P.green },
+        { slot: 80, name: 'C', color: P.violet },
+        { slot: 60, name: 'D (new)', color: P.orange }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var sv = servers[i];
+        var sp = pt(sv.slot, R);
+        ctx.fillStyle = sv.color;
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 4.5, 0, 2 * Math.PI); ctx.fill();
+        if (sv.slot === 60) {
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.arc(sp.x, sp.y, 9, 0, 2 * Math.PI); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        var lp = pt(sv.slot, R + 26);
+        ctx.fillStyle = sv.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(sv.name, lp.x, lp.y + 4);
+    }
+
+    // key 52 arrow toward D
+    var k52 = pt(52, R - 12), d = pt(60, R - 8);
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(k52.x, k52.y); ctx.lineTo(d.x, d.y); ctx.stroke();
+    var a = Math.atan2(d.y - k52.y, d.x - k52.x);
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath();
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x - 8 * Math.cos(a - 0.4), d.y - 8 * Math.sin(a - 0.4));
+    ctx.lineTo(d.x - 8 * Math.cos(a + 0.4), d.y - 8 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('52: C → D', 235, 292);
+
+    // right panel
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('before: A 3 · B 3 · C 2', 445, 110);
+    ctx.fillText('after: A 3 · B 3 · C 1 · D 1', 445, 132);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 of 8 keys moves —', 445, 180);
+    ctx.fillText('mod-4 would move 7 of 8', 445, 198);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('slot positions illustrative', w - 12, h - 8);
+});
+
+// c3: share of keys that move — mod-N vs ring, three fleet changes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Share of Keys That Move When the Fleet Changes', w / 2, 24);
+
+    var axisX = 180;
+    var rows = [
+        { y: 85, label: '3 → 4 servers', modW: 315, ringW: 105, modLab: '75%', ringLab: '25%' },
+        { y: 155, label: '10 → 11 servers', modW: 382, ringW: 38, modLab: '90.9%', ringLab: '9.1%' },
+        { y: 225, label: '10 → 9 (one dies)', modW: 378, ringW: 42, modLab: '90%', ringLab: '10%' }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(axisX, 52); ctx.lineTo(axisX, 248); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 4);
+        // mod-N bar (above)
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(axisX, r.y - 17, r.modW, 14);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText(r.modLab, axisX + r.modW + 6, r.y - 6);
+        // ring bar (below)
+        ctx.fillStyle = P.green;
+        ctx.fillRect(axisX, r.y + 3, r.ringW, 14);
+        ctx.fillStyle = '#444';
+        ctx.fillText(r.ringLab, axisX + r.ringW + 6, r.y + 14);
+    }
+
+    // legend, top right
+    ctx.fillStyle = P.orange; ctx.fillRect(508, 40, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('mod-N rehash', 526, 50);
+    ctx.fillStyle = P.green; ctx.fillRect(508, 58, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('consistent-hash ring', 526, 68);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the ring moves only what mod-N would keep', 470, 264);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('percentages are exact expected fractions', w - 12, h - 8);
+});
+
+// c4: keyspace share per server — one slot each vs 150 virtual nodes each
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Slot per Server vs 150 Virtual Nodes: Load Evens Out', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function Y(pct) { return baseY - pct / 40 * ph; }
+
+    // gridlines at 10/20/30
+    var grids = [10, 20, 30];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, Y(grids[i])); ctx.lineTo(ox + pw, Y(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i] + '%', ox - 6, Y(grids[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var centers = [150, 290, 430, 570];
+    var names = ['A', 'B', 'C', 'D'];
+    var oneSlot = [30, 35, 20, 15];
+    var vnodes = [26, 25, 24, 25];
+    var bw = 42;
+
+    for (var i = 0; i < 4; i++) {
+        var c = centers[i];
+        // one-slot bar (orange, left)
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(c - bw - 2, Y(oneSlot[i]), bw, baseY - Y(oneSlot[i]));
+        // vnode bar (green, right)
+        ctx.fillStyle = P.green;
+        ctx.fillRect(c + 2, Y(vnodes[i]), bw, baseY - Y(vnodes[i]));
+        // value labels
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(oneSlot[i] + '%', c - bw / 2 - 2, Y(oneSlot[i]) - 6);
+        ctx.fillText(vnodes[i] + '%', c + bw / 2 + 2, Y(vnodes[i]) - 6);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '13px system-ui';
+        ctx.fillText(names[i], c, baseY + 20);
+    }
+
+    // fair-share line at 25%
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, Y(25)); ctx.lineTo(ox + pw, Y(25)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(ox + 4, Y(25) - 14, 92, 16);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fair share 25%', ox + 6, Y(25) - 2);
+
+    // legend, top right
+    ctx.fillStyle = P.orange; ctx.fillRect(490, 40, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 slot each', 508, 50);
+    ctx.fillStyle = P.green; ctx.fillRect(490, 58, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('150 virtual nodes each', 508, 68);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('150 slots each: every server within 1% of fair', 300, 75);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('load shares illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

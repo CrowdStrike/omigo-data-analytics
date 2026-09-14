@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sync vs Async Replication</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Sync vs Async Replication</h1>
+<p class="subtitle">A database can say "saved" after its copy confirms (slow but safe) or say it immediately and copy later (fast but a crash can eat acknowledged writes)</p>
+
+<div class="card-section">
+    <h2>One Order, Two Ways to Say "Saved"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">durability vs latency</span><span class="tag orange">replication</span></div>
+                <ul>
+                    <li><b>The shop</b> — a web shop writes every order to a primary database with a replica across town</li>
+                    <li><b>Sync</b> — the primary tells the customer "order placed" only after the replica confirms its copy</li>
+                    <li><b>Async</b> — the primary says "order placed" the instant its own disk write lands, copies later</li>
+                    <li><b>The crash</b> — at 12:00:00 the primary's power supply dies, moments after taking orders</li>
+                    <li><b>Sync survives</b> — every acknowledged order already sits on the replica; nothing is lost</li>
+                    <li><b>Async loses</b> — orders acknowledged but not yet copied exist nowhere; the "saved" was a lie</li>
+                </ul>
+                <p class="example">Order #4712 is acknowledged at 11:59:58; under sync it is on the replica at 11:59:58, under async it may still be in transit when the primary dies at 12:00:00.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Synchronous replication makes the acknowledgment wait for the copy; asynchronous replication makes the copy wait for spare time — and a crash in that gap deletes acknowledged writes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The 20-Millisecond Price of a Guarantee</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">latency math</span></div>
+                <ul>
+                    <li><b>Local write</b> — the primary's own disk write costs 2 ms; async commits are done right there</li>
+                    <li><b>Same-city sync</b> — add one 18 ms network round trip to the replica: 2 + 18 = 20 ms per commit</li>
+                    <li><b>Cross-region sync</b> — a 120 ms round trip to a far region makes it 2 + 120 = 122 ms per commit</li>
+                    <li><b>The ratio</b> — same-city sync is 10&times; the async commit time; cross-region sync is 61&times;</li>
+                    <li><b>The loss window</b> — an async replica running 5 s behind at 40 orders/s puts 200 orders at risk</li>
+                    <li><b>Hand-check</b> — 5 s of lag &times; 40 orders/s = 200 acknowledged orders that exist only on the primary</li>
+                </ul>
+                <p class="example">Every checkout waits 20 ms under same-city sync and 2 ms under async — but a crash with 5 s of async lag erases 200 orders that customers were told went through.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The sync tax is one network round trip on every single commit; the async risk is lag &times; write rate — 5 seconds behind at 40 orders/s means 200 acknowledged orders can vanish.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>RPO, Semi-Sync, and the Cross-Region Bill</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">RPO/RTO</span><span class="tag orange">semi-sync</span></div>
+                <ul>
+                    <li><b>RPO</b> — recovery point objective: how many seconds of acknowledged data you may lose in a crash</li>
+                    <li><b>RTO</b> — recovery time objective: how long until service is back; replication mode sets the RPO</li>
+                    <li><b>Sync RPO</b> — zero: every acknowledged write is already on a replica when disaster strikes</li>
+                    <li><b>Async RPO</b> — the replication lag: 5 s behind means an RPO of 5 s, 200 orders at 40 orders/s</li>
+                    <li><b>Semi-sync</b> — wait for ONE nearby replica (20 ms), ship to far regions async: zero RPO for one failure</li>
+                    <li><b>The economics</b> — cross-region sync taxes every commit 122 ms to protect against rare region loss</li>
+                </ul>
+                <p class="example">The shop picks semi-sync: 20 ms commits with a same-city replica confirming, plus an async cross-region copy — a region fire costs seconds of data, a single machine failure costs none.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Replication mode is the RPO dial — sync buys RPO zero with every commit's latency, async buys speed with a lag-sized loss window, and semi-sync pays the cheap round trip to cover the common failure.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Failover That Quietly Ate 200 Orders</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">failover</span></div>
+                <ul>
+                    <li><b>The mistake</b> — promoting a lagging async replica to primary and calling the failover "clean"</li>
+                    <li><b>The gap</b> — the replica never received the last 5 s of writes; promotion cannot conjure them back</li>
+                    <li><b>Silent loss</b> — no error fires: the new primary simply starts from an older version of history</li>
+                    <li><b>The victims</b> — 200 customers hold confirmation emails for orders no database remembers</li>
+                    <li><b>The tell</b> — order IDs jump backwards after failover; audits find payments without orders</li>
+                    <li><b>The fix</b> — measure lag before promoting, or use semi-sync so an up-to-date replica always exists</li>
+                </ul>
+                <p class="example">The primary dies at 12:00:00 holding 400 orders from the last 10 s; the promoted replica has only 200 of them — the 200 acknowledged after 11:59:55 are gone without a single error message.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing a successful failover means no data loss. Async promotion silently rewinds history by the lag; the writes the old primary acknowledged after the replica's last sync are unrecoverable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rbox(ctx, x, y, w, h, r, fill, stroke, lw, dashed) {
+    if (dashed) ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
+    ctx.setLineDash([]);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    var ang = Math.atan2(y2 - y1, x2 - x1), ah = 8;
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - 0.45), y2 - ah * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - ah * Math.cos(ang + 0.45), y2 - ah * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: sync vs async acknowledgment paths with the crash moment
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bw = 150, bh = 40;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Where the 'Saved' Happens: Before or After the Copy", w / 2, 24);
+
+    // sync row (y = row center)
+    var cy1 = 100, top1 = cy1 - bh / 2;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('sync', 20, cy1 + 4);
+    rbox(ctx, 110, top1, bw, bh, 8, 'rgba(42,120,214,0.15)', P.blue, 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('primary writes (2 ms)', 110 + bw / 2, cy1 + 4);
+    arrow(ctx, 110 + bw + 4, cy1, 286, cy1, P.mute, 3);
+    rbox(ctx, 290, top1, bw, bh, 8, 'rgba(25,158,112,0.15)', P.aqua, 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('replica confirms (18 ms)', 290 + bw / 2, cy1 + 4);
+    arrow(ctx, 290 + bw + 4, cy1, 476, cy1, P.mute, 3);
+    rbox(ctx, 480, top1, bw, bh, 8, 'rgba(0,131,0,0.12)', P.green, 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('ack customer at 20 ms', 480 + bw / 2, cy1 + 4);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ copy exists first', 480 + bw / 2, cy1 + bh / 2 + 18);
+
+    // async row
+    var cy2 = 210, top2 = cy2 - bh / 2;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('async', 20, cy2 + 4);
+    rbox(ctx, 110, top2, bw, bh, 8, 'rgba(42,120,214,0.15)', P.blue, 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('primary writes (2 ms)', 110 + bw / 2, cy2 + 4);
+    arrow(ctx, 110 + bw + 4, cy2, 286, cy2, P.mute, 3);
+    rbox(ctx, 290, top2, bw, bh, 8, 'rgba(0,131,0,0.12)', P.green, 1.5);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('ack customer at 2 ms', 290 + bw / 2, cy2 + 4);
+    arrow(ctx, 290 + bw + 4, cy2, 476, cy2, P.mute, 3);
+    rbox(ctx, 480, top2, bw, bh, 8, 'rgba(213,81,129,0.12)', P.magenta, 1.5, true);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('replica copies... later', 480 + bw / 2, cy2 + 4);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('copy still pending', 480 + bw / 2, cy2 + bh / 2 + 18);
+
+    // crash marker spanning both rows
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(640, 62); ctx.lineTo(640, 245); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('primary dies', 640, 54);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sync: ack means copied — async: ack means promised', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c2: commit latency bars for the three setups
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Commit Latency: 2 ms Async vs 20 ms Sync vs 122 ms Cross-Region Sync', w / 2, 24);
+
+    var bx = 250, maxW = 420, maxMs = 122;
+
+    // gridlines at 30/60/90/120 ms
+    var ticks = [30, 60, 90, 120];
+    for (var i = 0; i < ticks.length; i++) {
+        var gx = bx + ticks[i] / maxMs * maxW;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gx, 48); ctx.lineTo(gx, 245); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i] + ' ms', gx, 260);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 48); ctx.lineTo(bx, 245); ctx.stroke();
+
+    var rows = [
+        { lab: 'async — local write only', wpx: 7, fill: 'rgba(0,131,0,0.30)', edge: P.green, val: '2 ms', cy: 80, inside: false },
+        { lab: 'sync — same-city replica', wpx: 69, fill: 'rgba(42,120,214,0.30)', edge: P.blue, val: '20 ms = 2 + 18', cy: 145, inside: false },
+        { lab: 'sync — cross-region replica', wpx: 420, fill: 'rgba(217,89,38,0.30)', edge: P.orange, val: '122 ms = 2 + 120', cy: 210, inside: true }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.cy + 4);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.cy - 13, r.wpx, 26);
+        ctx.strokeStyle = r.edge; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.cy - 13, r.wpx, 26);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        if (r.inside) {
+            ctx.textAlign = 'right';
+            ctx.fillText(r.val, bx + r.wpx - 10, r.cy + 4);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(r.val, bx + r.wpx + 8, r.cy + 4);
+        }
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("async's hidden price: 5 s lag × 40 orders/s = 200 orders at risk", 270, 112);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies and rates illustrative', w - 12, h - 8);
+});
+
+// c3: trade-off scatter, latency vs orders at risk
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Trade-Off: Commit Latency vs Orders at Risk', w / 2, 24);
+
+    var ox = 70, baseY = 240, pw = 580, ph = 170;
+    function xOf(ms) { return ox + ms / 130 * pw; }
+    function yOf(orders) { return baseY - orders / 250 * ph; }
+
+    // gridlines at 50/100/150/200 orders
+    var gys = [50, 100, 150, 200];
+    for (var i = 0; i < gys.length; i++) {
+        var gy = yOf(gys[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gys[i]), ox - 6, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var xticks = [0, 25, 50, 75, 100, 125];
+    for (var i = 0; i < xticks.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(xticks[i]), xOf(xticks[i]), 258);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('commit latency (ms)', ox + pw / 2, 276);
+    ctx.save();
+    ctx.translate(20, baseY - ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('orders at risk', 0, 0);
+    ctx.restore();
+
+    // corner shading: x <= 35 ms, y <= 50 orders
+    ctx.fillStyle = 'rgba(0,131,0,0.07)';
+    ctx.fillRect(ox, yOf(50), xOf(35) - ox, baseY - yOf(50));
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the corner you want', ox + 8, yOf(50) + 14);
+
+    // dots
+    function dot(ms, orders, color) {
+        var x = xOf(ms), y = yOf(orders);
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(x, y, 12, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 10, 0, 2 * Math.PI); ctx.fill();
+        return { x: x, y: y };
+    }
+    var d1 = dot(2, 200, P.magenta);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('async — 2 ms, 200 at risk', d1.x + 16, d1.y + 4);
+    var d2 = dot(20, 0, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('semi-sync — 20 ms, 0 at risk (node failure)', d2.x + 16, d2.y - 14);
+    var d3 = dot(122, 0, P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cross-region sync — 122 ms, 0 at risk', d3.x + 8, d3.y - 36);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('semi-sync: pay the 18 ms trip once, skip the 120 ms one', xOf(60), 60);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('positions from the worked example, illustrative', w - 12, h - 8);
+});
+
+// c4: last 10 seconds before the crash, primary vs lagged replica
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Crash at 12:00:00: the Replica Is Missing 200 Acknowledged Orders', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180;
+    function xOf(sec) { return ox + sec / 10 * pw; }
+    function yOf(v) { return baseY - v / 400 * ph; }
+
+    // gridlines at 100/200/300
+    var gys = [100, 200, 300];
+    for (var i = 0; i < gys.length; i++) {
+        var gy = yOf(gys[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(gys[i]), ox - 6, gy + 4);
+    }
+
+    // axes and x tick labels every 2 s
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var tlabs = ['11:59:50', '11:59:52', '11:59:54', '11:59:56', '11:59:58', '12:00:00'];
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tlabs[i], xOf(i * 2), 262);
+    }
+
+    var secs = [0, 2, 4, 6, 8, 10];
+    var primary = [0, 80, 160, 240, 320, 400];
+    var replica = [0, 0, 0, 40, 120, 200];
+
+    // loss band between the two lines from second 5 to 10
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(5), yOf(200));   // primary at s=5 (interpolated)
+    ctx.lineTo(xOf(6), yOf(240));
+    ctx.lineTo(xOf(8), yOf(320));
+    ctx.lineTo(xOf(10), yOf(400));
+    ctx.lineTo(xOf(10), yOf(200));
+    ctx.lineTo(xOf(8), yOf(120));
+    ctx.lineTo(xOf(6), yOf(40));
+    ctx.lineTo(xOf(5), yOf(0));
+    ctx.closePath(); ctx.fill();
+
+    // primary line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = xOf(secs[i]), y = yOf(primary[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // replica line
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = xOf(secs[i]), y = yOf(replica[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // line labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('primary (acknowledged)', xOf(1.2), yOf(90) - 12);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('replica (5 s behind)', xOf(3.1), yOf(0) - 10);
+
+    // loss label inside the band near second 8
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('200 acknowledged orders lost', xOf(8), yOf(220));
+
+    // crash marker at second 10
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xOf(10), 52); ctx.lineTo(xOf(10), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('primary dies, replica promoted', xOf(10) - 6, 48);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the new primary starts from the aqua line, not the blue one', xOf(3.4), 80);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order counts illustrative — 40 orders/s, 5 s lag', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

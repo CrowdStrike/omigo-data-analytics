@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Total Order Broadcast</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Total Order Broadcast</h1>
+<p class="subtitle">Deliver every message to every replica in the exact same order &mdash; a primitive so strong it is provably equivalent to consensus</p>
+
+<div class="card-section">
+    <h2>Three Bank Replicas, Two Transfers, Two Different Answers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">replication</span><span class="tag orange">ordering</span></div>
+                <ul>
+                    <li><b>The setup</b> &mdash; a bank keeps account A on three replicas; A starts at $100, B and C start at $0</li>
+                    <li><b>Two transfers</b> &mdash; T1 moves $80 from A to B; T2 moves $50 from A to C; overdrafts are rejected</li>
+                    <li><b>The race</b> &mdash; T1 and T2 arrive over the network, and each replica applies them in arrival order</li>
+                    <li><b>The split</b> &mdash; replicas 1 and 3 get T1 first (A=$20, T2 rejected); replica 2 gets T2 first (A=$50)</li>
+                    <li><b>The fix</b> &mdash; total order broadcast makes all three agree on one sequence before applying anything</li>
+                    <li><b>The result</b> &mdash; with the agreed order T1 then T2, every replica lands on A=$20, B=$80, C=$0</li>
+                </ul>
+                <p class="example">Replica 2 swears A holds $50 and paid C, while replicas 1 and 3 swear A holds $20 and paid B &mdash; the same bank, three machines, two irreconcilable histories.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Replicas diverge not because messages were lost but because they were applied in different orders &mdash; total order broadcast removes exactly that freedom.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Guarantees, One Deterministic Machine</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">state machine replication</span></div>
+                <ul>
+                    <li><b>Guarantee 1: reliable delivery</b> &mdash; if any replica delivers a message, every replica delivers it</li>
+                    <li><b>Guarantee 2: total order</b> &mdash; all replicas deliver the messages in exactly the same sequence</li>
+                    <li><b>The log</b> &mdash; the agreed sequence is a numbered log: slot 1 holds T1, slot 2 holds T2</li>
+                    <li><b>Slot 1 replay</b> &mdash; T1 moves $80: A goes 100 &rarr; 20, B goes 0 &rarr; 80, on every replica</li>
+                    <li><b>Slot 2 replay</b> &mdash; T2 asks A for $50 but A holds $20, so all three replicas reject it identically</li>
+                    <li><b>The theorem</b> &mdash; same start state + same deterministic ops + same order = same end state, always</li>
+                </ul>
+                <p class="example">Any replica that starts at A=$100, B=$0, C=$0 and replays slot 1 then slot 2 computes A=$20, B=$80, C=$0 &mdash; no coordination needed beyond the order itself.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> This is state-machine replication: once the order is fixed, replicas never compare answers &mdash; determinism guarantees they all derive the same state from the same log.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Log Inside Kafka, Raft, and Every Replicated Database</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">consensus</span><span class="tag green">replicated log</span></div>
+                <ul>
+                    <li><b>Replicated log</b> &mdash; append-only log where all nodes see the same entries in the same slots is TOB by another name</li>
+                    <li><b>Kafka partition</b> &mdash; a single partition hands every consumer the same total order, so all derive the same state</li>
+                    <li><b>Consensus per slot</b> &mdash; deciding which message occupies slot 1 is exactly one consensus decision</li>
+                    <li><b>The reduction</b> &mdash; a consensus box can build TOB (one decision per slot); TOB can solve consensus (deliver, adopt the first)</li>
+                    <li><b>Raft and ZAB</b> &mdash; Raft's log and ZooKeeper's atomic broadcast are production total order broadcast</li>
+                    <li><b>The price</b> &mdash; since TOB equals consensus, it inherits consensus's cost: no async guarantee, leader bottlenecks</li>
+                </ul>
+                <p class="example">Two consumers replaying the same Kafka partition from offset 0 build byte-identical tables &mdash; the partition's total order is doing the state-machine-replication work for them.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Total order broadcast and consensus are reducible to each other &mdash; anything that gives you an agreed log has already paid the full price of consensus, and delivers its full power.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>FIFO per Sender Is Not a Total Order</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">ordering</span></div>
+                <ul>
+                    <li><b>The confusion</b> &mdash; "TCP already delivers my messages in order" only orders one sender's own messages</li>
+                    <li><b>FIFO order</b> &mdash; teller X's messages arrive in X's send order; it says nothing about X versus Y</li>
+                    <li><b>The interleave</b> &mdash; X sends T1, Y sends T2; replica R1 sees T1 then T2, replica R2 sees T2 then T1</li>
+                    <li><b>Both legal</b> &mdash; each replica respected every per-sender FIFO rule, yet they applied different orders</li>
+                    <li><b>Causal order too</b> &mdash; causal delivery also leaves concurrent, unrelated messages free to interleave</li>
+                    <li><b>What TOB adds</b> &mdash; it forces even concurrent messages from different senders into one shared sequence</li>
+                </ul>
+                <p class="example">With per-sender FIFO alone, R1 computes A=$20 (T1 won) while R2 computes A=$50 (T2 won) &mdash; the divergence from the opening example, reproduced with zero reordering per sender.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming per-connection ordering (TCP, FIFO queues) gives replicas a shared order. The hard part of total order broadcast is ordering across senders &mdash; and that is precisely the consensus-hard part.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, width, dashed) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    if (dashed) ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two-panel grouped bars — arrival order (diverge) vs agreed order (identical)
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var baseY = 245, chH = 170, maxV = 100;
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Two Transfers, Different Orders: Account A Ends at $20 or $50', w / 2, 24);
+
+    // gridlines at 25/50/75 with left labels
+    var gvals = [25, 50, 75];
+    for (var i = 0; i < gvals.length; i++) {
+        var gy = yOf(gvals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(680, gy); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + gvals[i], 54, gy + 4);
+    }
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(680, baseY); ctx.stroke();
+
+    // panel labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each replica applies in arrival order', 200, 44);
+    ctx.fillText('total order broadcast: agreed T1 → T2', 540, 44);
+
+    var bw = 55;
+    // left bars
+    var leftX = [100, 185, 270];
+    var leftVals = [20, 50, 20];
+    var leftCols = [P.blue, P.orange, P.blue];
+    var reps = ['R1', 'R2', 'R3'];
+    for (var i = 0; i < 3; i++) {
+        var bh = leftVals[i] / maxV * chH;
+        ctx.fillStyle = leftCols[i];
+        ctx.fillRect(leftX[i], baseY - bh, bw, bh);
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + leftVals[i], leftX[i] + bw / 2, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(reps[i], leftX[i] + bw / 2, baseY + 18);
+    }
+    // right bars
+    var rightX = [440, 525, 610];
+    for (var i = 0; i < 3; i++) {
+        var bh = 20 / maxV * chH;
+        ctx.fillStyle = P.green;
+        ctx.fillRect(rightX[i], baseY - bh, bw, bh);
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$20', rightX[i] + bw / 2, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(reps[i], rightX[i] + bw / 2, baseY + 18);
+    }
+
+    // divider
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(370, 60); ctx.lineTo(370, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('R2 disagrees by $30 — replicas have diverged', 200, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('balances illustrative', w - 12, h - 8);
+});
+
+// c2: shared log feeding three identical replica replays
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Agreed Log, Three Identical Replays', w / 2, 24);
+
+    // log slots
+    var slotY = 60, slotW = 150, slotH = 34;
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('agreed log', 60, 80);
+
+    roundRectPath(ctx, 180, slotY, slotW, slotH, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('slot 1: T1  A→B $80', 180 + slotW / 2, slotY + slotH / 2 + 4);
+
+    roundRectPath(ctx, 390, slotY, slotW + 40, slotH, 8);
+    ctx.fillStyle = 'rgba(201,133,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('slot 2: T2  A→C $50 (rejected)', 390 + (slotW + 40) / 2, slotY + slotH / 2 + 4);
+
+    // replica lanes
+    var lanes = [140, 190, 240];
+    var laneLabs = ['R1', 'R2', 'R3'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(laneLabs[i], 30, lanes[i] + 4);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(60, lanes[i]); ctx.lineTo(680, lanes[i]); ctx.stroke();
+    }
+
+    // balance markers per lane
+    var markX = [150, 360, 570];
+    var markLabs = ['A=$100', 'A=$20', 'A=$20'];
+    var markCols = [P.mute, P.blue, P.blue];
+    for (var i = 0; i < 3; i++) {
+        var y = lanes[i];
+        for (var m = 0; m < 3; m++) {
+            ctx.fillStyle = markCols[m]; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(markLabs[m], markX[m], y - 8);
+        }
+        // arrows joining markers
+        arrowLine(ctx, markX[0] + 38, y, markX[1] - 40, y, P.blue, 2, false);
+        arrowLine(ctx, markX[1] + 38, y, markX[2] - 40, y, P.blue, 2, false);
+    }
+    // "T2 rejected" note on R1 only
+    ctx.fillStyle = P.yellow; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('T2 rejected', markX[2], lanes[0] + 16);
+
+    // feed arrows from log slots to marker columns
+    arrowLine(ctx, 180 + slotW / 2, slotY + slotH, markX[1], lanes[0] - 24, P.mute, 1, true);
+    arrowLine(ctx, 390 + (slotW + 40) / 2, slotY + slotH, markX[2], lanes[0] - 24, P.mute, 1, true);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('three replays, one answer: A=$20, B=$80', 690, 165);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('balances illustrative; replay logic exact', w - 12, h - 8);
+});
+
+// c3: equivalence diagram — TOB and consensus, plus the log strip
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Names for the Same Problem', w / 2, 24);
+
+    // top boxes
+    var boxY = 70, boxW = 210, boxH = 46;
+    roundRectPath(ctx, 90, boxY, boxW, boxH, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Total order broadcast', 90 + boxW / 2, boxY + boxH / 2 + 4);
+
+    roundRectPath(ctx, 420, boxY, boxW, boxH, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Consensus', 420 + boxW / 2, boxY + boxH / 2 + 4);
+
+    // arrows between boxes
+    arrowLine(ctx, 305, 80, 415, 80, P.green, 3, false);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('deliver messages, adopt the first delivered', 360, 68);
+    arrowLine(ctx, 415, 105, 305, 105, P.blue, 3, false);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui';
+    ctx.fillText('run one consensus decision per log slot', 360, 132);
+
+    // log strip
+    var stripY = 185, slotW2 = 100, slotH2 = 40;
+    var slotLabs = ['slot 1: T1', 'slot 2: T2', 'slot 3: T3', 'slot 4: T4', 'slot 5: ?'];
+    for (var i = 0; i < 5; i++) {
+        var x = 110 + i * slotW2;
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(42,120,214,0.15)' : 'rgba(74,58,167,0.12)';
+        ctx.fillRect(x, stripY, slotW2, slotH2);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.strokeRect(x, stripY, slotW2, slotH2);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(slotLabs[i], x + slotW2 / 2, stripY + slotH2 / 2 + 4);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each slot = one consensus decision', 360, 245);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('solve one and you have solved the other — for the same cost', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('diagram schematic', w - 12, h - 8);
+});
+
+// c4: two senders, two replicas, crossing deliveries — both FIFO-legal
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('FIFO-Legal at Every Sender, Divergent at Every Replica', w / 2, 24);
+
+    // sender boxes
+    var sy = 60, sw = 160, shh = 36;
+    roundRectPath(ctx, 140, sy, sw, shh, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('teller X sends T1', 140 + sw / 2, sy + shh / 2 + 4);
+
+    roundRectPath(ctx, 420, sy, sw, shh, 8);
+    ctx.fillStyle = 'rgba(201,133,0,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('teller Y sends T2', 420 + sw / 2, sy + shh / 2 + 4);
+
+    // replica boxes
+    var ry = 190, rw = 190, rh = 44;
+    roundRectPath(ctx, 110, ry, rw, rh, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('R1 delivers: T1, T2', 110 + rw / 2, ry + 18);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('A=$20', 110 + rw / 2, ry + 35);
+
+    roundRectPath(ctx, 420, ry, rw, rh, 8);
+    ctx.fillStyle = 'rgba(217,89,38,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('R2 delivers: T2, T1', 420 + rw / 2, ry + 18);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('A=$50', 420 + rw / 2, ry + 35);
+
+    // arrows: X to both replicas (blue), Y to both replicas (yellow) — crossing
+    arrowLine(ctx, 190, sy + shh, 180, ry, P.blue, 3, false);      // X -> R1
+    arrowLine(ctx, 270, sy + shh, 480, ry, P.blue, 3, false);      // X -> R2 (crosses)
+    arrowLine(ctx, 470, sy + shh, 250, ry, P.yellow, 3, false);    // Y -> R1 (crosses)
+    arrowLine(ctx, 550, sy + shh, 540, ry, P.yellow, 3, false);    // Y -> R2
+
+    // FIFO check marks
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('FIFO respected ✓', 310, ry + 26);
+    ctx.fillText('FIFO respected ✓', 618, ry + 26);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no per-sender rule was broken, yet R1 and R2 disagree by $30', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('balances illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
