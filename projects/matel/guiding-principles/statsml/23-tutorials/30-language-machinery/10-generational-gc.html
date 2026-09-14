@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generational GC</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Generational GC</h1>
+<p class="subtitle">Most objects a program creates are thrown away almost immediately &mdash; so the garbage collector checks the newest objects often and the old survivors rarely, and saves enormous work</p>
+
+<div class="card-section">
+    <h2>Busing Tables at a Busy Cafe</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">objects die young</span><span class="tag orange">two generations</span></div>
+                <ul>
+                    <li><b>The cafe</b> &mdash; a busy cafe hands out hundreds of paper cups a morning; most land in the trash within minutes</li>
+                    <li><b>The mugs</b> &mdash; a handful of regulars' ceramic mugs sit on the shelf for months and never move</li>
+                    <li><b>Smart staff</b> &mdash; bus the tables (where fresh cups pile up) every few minutes; dust the shelf once a week</li>
+                    <li><b>Programs too</b> &mdash; most objects a program creates are garbage moments later; a few live for hours</li>
+                    <li><b>The split</b> &mdash; new objects go to a small "nursery" swept often; survivors move to an old area swept rarely</li>
+                </ul>
+                <p class="example">A loop builds a temporary string on every pass and drops it a microsecond later &mdash; thousands of paper cups; the app's config object is the mug on the shelf.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Generational GC bets that most objects die young &mdash; so it sweeps the small nursery of new objects constantly and leaves the long-lived old generation almost alone.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Morning, 1,000 Cups: Counting the Survivors</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">minor GC</span></div>
+                <ul>
+                    <li><b>The batch</b> &mdash; the program allocates 1,000 new objects; all of them start life in the nursery</li>
+                    <li><b>First sweep</b> &mdash; the minor GC finds only 50 still reachable: it copies those 50 out, reclaims 950 slots</li>
+                    <li><b>The bill</b> &mdash; a copying collector pays only for live objects, so the sweep cost 50 copies, not 1,000 checks</li>
+                    <li><b>Second sweep</b> &mdash; of those 50 survivors, only 10 are still alive one cycle later; 40 more are reclaimed</li>
+                    <li><b>Promotion</b> &mdash; the 10 that survived twice get moved ("promoted") to the old generation, off the busy floor</li>
+                </ul>
+                <p class="example">1,000 allocated, 50 alive at sweep one, 10 alive at sweep two &mdash; the collector did 50 + 10 = 60 copies to reclaim 990 objects.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The minor GC touched 50 objects to free 950 &mdash; the cheaper your objects die, the cheaper the sweep, which is exactly why dying young is good news.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Nursery Trick Wins</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">pause times</span><span class="tag orange">throughput</span></div>
+                <ul>
+                    <li><b>Everywhere</b> &mdash; Java, C#, JavaScript's V8, and CPython's cycle collector all lean on generations</li>
+                    <li><b>Small room, often</b> &mdash; the nursery holds only recent objects, so each minor sweep is quick and frequent</li>
+                    <li><b>Big room, rarely</b> &mdash; the old generation is scanned only in an occasional major GC, since mugs rarely die</li>
+                    <li><b>The savings</b> &mdash; a full-heap sweep of our example touches all 1,050 live-or-dead slots; the minor sweep copies 50</li>
+                    <li><b>User-visible</b> &mdash; shorter sweeps mean shorter pauses; a game or web server stutters less between frames</li>
+                </ul>
+                <p class="example">Five collection rounds cost a full-heap collector 5 &times; 1,050 = 5,250 slots examined; the generational one does 5 minor sweeps of ~50 copies each, about 250.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Checking the whole heap every time wastes effort on objects that almost never die &mdash; generations focus every sweep where the garbage actually is.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"So Old Objects Never Get Collected?"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">major GC</span></div>
+                <ul>
+                    <li><b>The worry</b> &mdash; if the shelf is rarely checked, don't dead mugs pile up there forever?</li>
+                    <li><b>Major GC</b> &mdash; no: an occasional full collection sweeps the old generation too, just far less often</li>
+                    <li><b>Rare by design</b> &mdash; old objects rarely die, so scanning them every round would find almost nothing</li>
+                    <li><b>The trade</b> &mdash; many tiny minor pauses plus a rare bigger major pause, instead of a big pause every time</li>
+                    <li><b>Real leak risk</b> &mdash; a true leak is a reachable object you forgot about; no collector of any kind frees those</li>
+                </ul>
+                <p class="example">Over 30 seconds an app takes a 2 ms minor pause every second, then one 60 ms major pause &mdash; the shelf does get dusted, just once instead of thirty times.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Thinking generational GC abandons old objects. It still collects them in major GCs &mdash; "rarely swept" means "swept when it pays off", not "never swept".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// c1: survival curve — % of objects still alive by age in GC cycles
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Most Objects Die Young: % Still Alive by Age', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190;
+    function xOf(age) { return ox + age / 10 * pw; }
+    function yOf(pct) { return baseY - pct / 100 * ph; }
+
+    // y gridlines + labels
+    var yTicks = [0, 25, 50, 75, 100];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        if (yTicks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yTicks[i] + '%', ox - 8, y + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var a = 0; a <= 10; a++) ctx.fillText(String(a), xOf(a), baseY + 18);
+
+    var ages = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var alive = [100, 40, 18, 10, 7, 6, 5.5, 5.2, 5.1, 5.0, 5.0];
+
+    // fill under curve
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), baseY);
+    for (var i = 0; i < ages.length; i++) ctx.lineTo(xOf(ages[i]), yOf(alive[i]));
+    ctx.lineTo(xOf(10), baseY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.fill();
+
+    // floor marker at 5%
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(5)); ctx.lineTo(ox + pw, yOf(5)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('long-lived survivors ~5%', ox + pw - 6, yOf(5) - 8);
+
+    // cliff marker at age 1
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(1), baseY); ctx.lineTo(xOf(1), 70); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('60% dead after one cycle', xOf(1) + 8, 80);
+
+    // survival curve
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < ages.length; i++) {
+        var x = xOf(ages[i]), y = yOf(alive[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('paper cups vanish fast —', xOf(5.5), 110);
+    ctx.fillText('the mugs stay on the shelf', xOf(5.5), 127);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — typical shape across languages, not one measured program', w - 20, h - 8);
+});
+
+// c2: funnel — 1,000 allocated, 50 survive, 10 promoted
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('1,000 Allocated → 50 Survive → 10 Promoted', w / 2, 24);
+
+    var ax = 230, aw = 450, axisY = 250;
+    function xOf(count) { return ax + count / 1000 * aw; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+    var ticks = [0, 250, 500, 750, 1000];
+    var tickLabs = ['0', '250', '500', '750', '1,000'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var x = xOf(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, axisY + 5); ctx.stroke();
+        ctx.fillText(tickLabs[i], x, axisY + 20);
+    }
+
+    var rows = [
+        { y: 90, label: 'allocated in the nursery', val: 1000, valLab: '1,000', fill: 'rgba(42,120,214,0.35)', border: P.blue },
+        { y: 150, label: 'alive after minor GC #1', val: 50, valLab: '50', fill: 'rgba(0,131,0,0.35)', border: P.green },
+        { y: 210, label: 'promoted after minor GC #2', val: 10, valLab: '10', fill: 'rgba(217,89,38,0.35)', border: P.orange }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 4);
+        var bw = Math.max(xOf(r.val) - ax, 6);
+        ctx.fillStyle = r.fill;
+        rr(ctx, ax, r.y - 13, bw, 26, 5);
+        ctx.fill();
+        ctx.strokeStyle = r.border; ctx.lineWidth = 2;
+        rr(ctx, ax, r.y - 13, bw, 26, 5);
+        ctx.stroke();
+        ctx.fillStyle = r.border; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.valLab, ax + bw + 8, r.y + 4);
+    }
+
+    // reclaim callouts
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('950 reclaimed', xOf(50) + 48, 154);
+    ctx.fillText('40 more reclaimed', xOf(10) + 42, 214);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('sweep cost = survivors copied,', 430, 120);
+    ctx.fillText('not garbage counted', 430, 137);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative counts for one nursery batch', w - 20, h - 8);
+});
+
+// c3: grouped bars — full-heap sweep vs generational minor sweep per round
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Work per Collection Round: Full-Heap Sweep vs Nursery Sweep', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190;
+    function yOf(v) { return baseY - v / 1200 * ph; }
+
+    // y gridlines + labels
+    var yTicks = [0, 300, 600, 900, 1200];
+    var yLabs = ['0', '300', '600', '900', '1,200'];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        if (yTicks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yLabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var fullVals = [1050, 1050, 1050, 1050, 1050];
+    var nurseryVals = [50, 55, 45, 50, 50];
+    var groupW = pw / 5, barW = 38;
+
+    for (var i = 0; i < 5; i++) {
+        var cx = ox + groupW * i + groupW / 2;
+        // full-heap bar (magenta)
+        var fx = cx - barW - 4, fh = fullVals[i] / 1200 * ph;
+        ctx.fillStyle = 'rgba(213,81,129,0.35)';
+        ctx.fillRect(fx, baseY - fh, barW, fh);
+        ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+        ctx.strokeRect(fx, baseY - fh, barW, fh);
+        ctx.fillStyle = P.magenta; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('1,050', fx + barW / 2, baseY - fh - 6);
+        // nursery bar (green)
+        var nx = cx + 4, nh = nurseryVals[i] / 1200 * ph;
+        ctx.fillStyle = 'rgba(0,131,0,0.35)';
+        ctx.fillRect(nx, baseY - nh, barW, nh);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(nx, baseY - nh, barW, nh);
+        ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(nurseryVals[i]), nx + barW / 2, baseY - nh - 6);
+        // x label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText('round ' + (i + 1), cx, baseY + 18);
+    }
+
+    // legend top right inside plot
+    var lx = ox + pw - 210, ly = 62;
+    ctx.fillStyle = 'rgba(213,81,129,0.35)'; ctx.fillRect(lx, ly, 14, 12);
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 1.5; ctx.strokeRect(lx, ly, 14, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('full-heap sweep', lx + 20, ly + 11);
+    ctx.fillStyle = 'rgba(0,131,0,0.35)'; ctx.fillRect(lx, ly + 20, 14, 12);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.strokeRect(lx, ly + 20, 14, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('generational minor sweep', lx + 20, ly + 31);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same garbage reclaimed, ~20× less work per round', ox + pw / 2, 100);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — round 1 matches the worked example (50 survivors)', w - 20, h - 8);
+});
+
+// c4: pause timeline — thirty 2 ms minor pauses and one 60 ms major pause
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('30 Seconds of Pauses: Tiny Minor Sweeps, One Major Sweep', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190;
+    function xOf(t) { return ox + t / 32 * pw; }
+    function yOf(ms) { return baseY - ms / 70 * ph; }
+
+    // y gridlines + labels
+    var yTicks = [0, 20, 40, 60];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        if (yTicks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 30; t += 5) ctx.fillText(t + 's', xOf(t), baseY + 18);
+
+    // guide line at 2 ms
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(2)); ctx.lineTo(ox + pw, yOf(2)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('2 ms', ox + 4, yOf(2) - 5);
+
+    // thirty minor pause bars at t = 1..30, 2 ms each
+    ctx.fillStyle = P.blue;
+    for (var t = 1; t <= 30; t++) {
+        var bh = 2 / 70 * ph;
+        ctx.fillRect(xOf(t) - 3, baseY - bh, 6, bh);
+    }
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('minor GC: 2 ms each, every second', xOf(8), yOf(2) - 22);
+
+    // one major pause at t=30, 60 ms, drawn beside that second's minor bar
+    var mh = 60 / 70 * ph;
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(xOf(30) + 4, baseY - mh, 10, mh);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('major GC: 60 ms', xOf(30) + 14, baseY - mh - 8);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the old generation IS collected —', xOf(16), 110);
+    ctx.fillText('once, when it pays off', xOf(16), 127);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative pause pattern, not a measured runtime', w - 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

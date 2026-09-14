@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lambda vs Kappa Architecture</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Lambda vs Kappa Architecture</h1>
+<p class="subtitle">Two ways to serve fresh numbers from a stream of events &mdash; run batch and stream pipelines side by side (lambda), or make one stream job do everything and replay it when needed (kappa)</p>
+
+<div class="card-section">
+    <h2>One Dashboard, Two Ways to Feed It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">batch + stream</span><span class="tag orange">data pipelines</span></div>
+                <ul>
+                    <li><b>The shop</b> &mdash; a 12-store coffee chain wants a live "orders today" dashboard plus exact daily totals</li>
+                    <li><b>Two speeds</b> &mdash; the dashboard needs answers in seconds; the official totals can wait until night</li>
+                    <li><b>Lambda</b> &mdash; run two pipelines: a nightly batch job for truth, a stream job for the live approximation</li>
+                    <li><b>Kappa</b> &mdash; run one stream job over an append-only order log; recompute by replaying that same log</li>
+                    <li><b>The choice</b> &mdash; lambda buys speed-plus-accuracy with two codebases; kappa keeps a single codebase</li>
+                </ul>
+                <p class="example">Every order &mdash; latte, 9:02am, store #7 &mdash; lands exactly once in the event log; the only question is how many programs read it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Lambda answers "fast or correct?" with "both, via two parallel layers merged at serving time"; kappa answers it with one stream job whose replay IS the batch.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting Tuesday's 4,200 Orders Twice</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">late events</span></div>
+                <ul>
+                    <li><b>The live count</b> &mdash; the speed layer adds 1 per order event; by midnight it shows 4,180 orders</li>
+                    <li><b>Late arrivals</b> &mdash; 20 mobile-app orders sync hours late, after the phones reconnect to wifi</li>
+                    <li><b>The batch pass</b> &mdash; the nightly job rereads the full orders table and counts 4,200</li>
+                    <li><b>Hand-check</b> &mdash; 4,200 batch minus 4,180 live = 20 late orders the speed layer never saw in time</li>
+                    <li><b>The kappa way</b> &mdash; replay the log through the same stream job next morning: it also lands on 4,200</li>
+                </ul>
+                <p class="example">The 11pm dashboard says 4,180 and Wednesday's report says 4,200 &mdash; both are "right" for the moment they were computed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The speed layer quietly undercounts whenever data arrives late; the correction comes from a batch recompute (lambda) or a log replay (kappa) &mdash; the same 4,200 either way.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Two Codebases Bite a Data Scientist</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">training/serving skew</span><span class="tag green">feature stores</span></div>
+                <ul>
+                    <li><b>Feature stores</b> &mdash; "orders in the last hour" is computed in batch for training, in stream for serving</li>
+                    <li><b>Lambda drift</b> &mdash; the same window logic written twice (SQL and stream code) slowly disagrees</li>
+                    <li><b>Skew</b> &mdash; the model trains on the batch value but scores with the stream value at request time</li>
+                    <li><b>Kappa fix</b> &mdash; one job computes the feature once: live output now, replayed output for training sets</li>
+                    <li><b>Real cost</b> &mdash; every metric with two definitions becomes a meeting about whose number is right</li>
+                </ul>
+                <p class="example">At 7pm the batch feature says 320 orders/hour while the live stream feature says 312 &mdash; the model trained on one and serves on the other.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Lambda's price is the same logic maintained twice; when the copies drift, models inherit training/serving skew &mdash; kappa removes the second copy instead of reconciling it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Kappa Doesn't Mean the History Is Gone</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">replay</span></div>
+                <ul>
+                    <li><b>The fear</b> &mdash; "stream-only" sounds like numbers vanish once processed and old bugs stay forever</li>
+                    <li><b>The log</b> &mdash; kappa keeps the raw event log for weeks; the stream job's output table is disposable</li>
+                    <li><b>The fix path</b> &mdash; fix the code, start a second job at offset 0, and let it rebuild the whole table</li>
+                    <li><b>The swap</b> &mdash; when the rebuilt table catches up, point the dashboard at it and drop the old one</li>
+                    <li><b>The real limit</b> &mdash; replay only reaches as far back as the log's retention window allows</li>
+                </ul>
+                <p class="example">A tax-rounding bug ships on day 1 and is found on day 30; replaying 126,000 logged orders through the fixed job rebuilds every daily total in about 20 minutes.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating kappa as lambda-minus-correctness. The batch layer isn't deleted &mdash; it's replaced by replaying the retained log through the one stream codebase.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, dx, dy, size) {
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ux * size - uy * size * 0.5, y - uy * size + ux * size * 0.5);
+    ctx.lineTo(x - ux * size + uy * size * 0.5, y - uy * size - ux * size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: lambda flow (two layers) above kappa flow (one job + replay)
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Lambda: Two Parallel Pipelines — Kappa: One Job Plus Replay', w / 2, 24);
+
+    function box(x, cy, bw, lab1, lab2, col) {
+        var bh = 38;
+        var fills = {};
+        fills[P.blue] = 'rgba(42,120,214,0.15)';
+        fills[P.aqua] = 'rgba(25,158,112,0.15)';
+        fills[P.violet] = 'rgba(74,58,167,0.15)';
+        fills[P.green] = 'rgba(0,131,0,0.15)';
+        ctx.fillStyle = fills[col];
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lab2) {
+            ctx.fillText(lab1, x + bw / 2, cy - 3);
+            ctx.fillText(lab2, x + bw / 2, cy + 12);
+        } else {
+            ctx.fillText(lab1, x + bw / 2, cy + 4);
+        }
+    }
+    function arrow(x1, y1, x2, y2) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        arrowHead(ctx, x2, y2, x2 - x1, y2 - y1, 7);
+    }
+
+    // row 1: LAMBDA
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('LAMBDA', 20, 94);
+    box(90, 90, 110, 'order events', null, P.blue);
+    box(270, 55, 150, 'batch layer', 'nightly, exact', P.blue);
+    box(270, 115, 150, 'speed layer', 'live, approx', P.aqua);
+    box(520, 90, 130, 'serving layer', 'merges', P.violet);
+    arrow(200, 85, 268, 60);
+    arrow(200, 95, 268, 112);
+    arrow(420, 58, 518, 84);
+    arrow(420, 113, 518, 94);
+
+    // row 2: KAPPA
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('KAPPA', 20, 219);
+    box(90, 215, 110, 'order events', null, P.blue);
+    box(240, 215, 130, 'append-only log', null, P.green);
+    box(410, 215, 130, 'one stream job', null, P.aqua);
+    box(580, 215, 120, 'serving table', null, P.violet);
+    arrow(200, 215, 238, 215);
+    arrow(370, 215, 408, 215);
+    arrow(540, 215, 578, 215);
+
+    // dashed replay arrow from stream job back to log
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(475, 236);
+    ctx.quadraticCurveTo(390, 262, 308, 238);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute;
+    arrowHead(ctx, 305, 237, -1, -0.35, 7);
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replay to recompute', 392, 262);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('lambda: two codebases to keep in sync — kappa: one', w / 2, 285);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('flow schematic — no measured numbers', w - 12, 165);
+});
+
+// c2: cumulative live count vs recompute marker
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Live Count Ends at 4,180 — the Recompute Finds 4,200', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    function yOf(v) { return baseY - v / 4400 * chH; }
+    function xOf(hr) { return ox + hr / 24 * pw; }
+
+    var gl = [1100, 2200, 3300];
+    var glabs = ['1,100', '2,200', '3,300'];
+    for (var i = 0; i < 3; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var hr = 0; hr <= 24; hr += 4) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(hr + 'h', xOf(hr), baseY + 16);
+    }
+
+    // recompute guide line and marker
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(4200)); ctx.lineTo(xOf(24), yOf(4200)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('batch / replay: 4,200', xOf(24) - 6, yOf(4200) - 10);
+
+    // speed-layer cumulative line
+    var hrs = [0, 4, 8, 12, 16, 20, 24];
+    var cum = [0, 310, 1240, 2480, 3390, 3980, 4180];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 7; i++) {
+        var x = xOf(hrs[i]), y = yOf(cum[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(xOf(24), yOf(4180), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('live: 4,180', xOf(24) - 10, yOf(4180) + 16);
+
+    // recompute dot
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(24), yOf(4200), 5, 0, 2 * Math.PI); ctx.fill();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+20 late orders found overnight', xOf(14), 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order counts illustrative', w - 12, h - 8);
+});
+
+// c3: batch vs stream feature values paired bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Feature, Two Pipelines: 'Orders in the Last Hour'", w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    function yOf(v) { return baseY - v / 350 * chH; }
+
+    var gl = [100, 200, 300];
+    for (var i = 0; i < 3; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var labs = ['9am', '11am', '1pm', '3pm', '5pm', '7pm'];
+    var batch = [140, 210, 260, 235, 300, 320];
+    var stream = [140, 208, 255, 236, 297, 312];
+    var bw = 28;
+    var groupW = pw / 6;
+
+    for (var i = 0; i < 6; i++) {
+        var cx = ox + groupW * i + groupW / 2;
+        var bx1 = cx - bw - 2, bx2 = bx1 + bw + 32 - bw; // stream bar drawn 32px right of batch bar
+        var yB = yOf(batch[i]), yS = yOf(stream[i]);
+        ctx.fillStyle = 'rgba(42,120,214,0.65)';
+        ctx.fillRect(bx1, yB, bw, baseY - yB);
+        ctx.fillStyle = 'rgba(25,158,112,0.65)';
+        ctx.fillRect(bx1 + 32, yS, bw, baseY - yS);
+        ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(batch[i], bx1 + bw / 2, yB - 6);
+        ctx.fillStyle = P.aqua;
+        ctx.fillText(stream[i], bx1 + 32 + bw / 2, yS - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(labs[i], cx, baseY + 16);
+    }
+
+    // legend
+    ctx.fillStyle = P.blue; ctx.fillRect(ox + 10, 44, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('batch (training)', ox + 28, 54);
+    ctx.fillStyle = P.aqua; ctx.fillRect(ox + 140, 44, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('stream (serving)', ox + 158, 54);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same feature, two answers — skew up to 8', ox + pw - 6, 80);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('feature values illustrative', w - 12, h - 8);
+});
+
+// c4: the fear vs the kappa reality
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fixing 30 Days of Wrong Totals by Replaying the Log', w / 2, 24);
+
+    function box(x, cy, bw, lab1, lab2, col, fill) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lab2) {
+            ctx.fillText(lab1, x + bw / 2, cy - 3);
+            ctx.fillText(lab2, x + bw / 2, cy + 12);
+        } else {
+            ctx.fillText(lab1, x + bw / 2, cy + 4);
+        }
+    }
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        arrowHead(ctx, x2, y, 1, 0, 8);
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)', redFill = 'rgba(231,76,60,0.12)', greenFill = 'rgba(0,131,0,0.12)';
+    var red = '#e74c3c';
+
+    // row 1: the fear
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the fear', 20, y1 - 32);
+    box(150, y1, 165, 'bug found on day 30', null, P.blue, blueFill);
+    arrow(315, 420, y1);
+    box(420, y1, 180, 'old totals wrong', 'forever', red, redFill);
+    ctx.fillStyle = red; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ not true', 612, y1 + 4);
+
+    // row 2: the reality
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the reality', 20, y2 - 32);
+    box(130, y2, 140, 'fix the stream job', null, P.blue, blueFill);
+    arrow(270, 330, y2);
+    box(330, y2, 175, 'replay 126,000 events', 'from offset 0', P.green, greenFill);
+    arrow(505, 560, y2);
+    box(560, y2, 150, 'new table live', 'in ~20 min', P.green, greenFill);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ swap', 635, y2 + 38);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the log is the backup; replay is the batch', w / 2, 275);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('event counts and replay time illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

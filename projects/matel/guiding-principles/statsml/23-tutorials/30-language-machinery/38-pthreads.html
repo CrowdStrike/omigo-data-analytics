@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pthreads</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pthreads</h1>
+<p class="subtitle">When a program hires helpers that all work inside the same memory, the hiring paperwork is pthreads — the small C library that, on Unix-like systems, nearly every language's threads are a thin wrapper around</p>
+
+<div class="card-section">
+    <h2>Four Cooks, One Kitchen</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">shared memory</span><span class="tag orange">threads</span></div>
+                <ul>
+                    <li><b>The rush</b> — a sandwich shop gets slammed at lunch; one cook can't keep up, so the owner hires three more</li>
+                    <li><b>Same kitchen</b> — all four cooks work in one kitchen: same fridge, same order board, same tip jar</li>
+                    <li><b>A thread</b> — each cook is a thread: own hands and own to-do list (a stack), everything else shared</li>
+                    <li><b>pthread_create</b> — in C, hiring is one call: <code>pthread_create</code> starts a new cook on a function you name</li>
+                    <li><b>pthread_join</b> — at closing the owner waits at the door for each cook to finish: that wait is <code>pthread_join</code></li>
+                    <li><b>Not a new shop</b> — a second process would be a whole second shop with its own fridge; threads stay in one</li>
+                </ul>
+                <p class="example">The owner (the main thread) calls pthread_create three times, four cooks share one kitchen all lunch, and at 3pm the owner joins each one before locking up.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A pthread is a worker inside your process: it gets its own stack, but the heap and globals — the fridge and the tip jar — are shared by everyone.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Tip Jar Loses Two Dollars</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag red">race condition</span><span class="tag orange">mutex</span></div>
+                <ul>
+                    <li><b>The jar</b> — the tip jar starts at $0; cook A and cook B each drop in three $1 tips during the rush</li>
+                    <li><b>Hidden steps</b> — "drop a tip" is really three steps: read the jar, add 1 in your head, write it back</li>
+                    <li><b>The overlap</b> — A reads 0, B reads 0, A writes 1, B writes 1 — B just erased A's tip; jar shows $1, not $2</li>
+                    <li><b>Run it out</b> — with two such overlaps in 12 steps, the jar ends at $4 instead of the true $6</li>
+                    <li><b>The key</b> — <code>pthread_mutex_lock</code> is one jar key: only the key-holder may touch the jar, then hands it back</li>
+                    <li><b>Fixed</b> — with the key, each read-add-write finishes whole, and the jar always ends at exactly $6</li>
+                </ul>
+                <p class="example">Trace it by hand: A r0, B r0, A w1, B w1, A r1, A w2, B r2, B w3, A r3, B r3, A w4, B w4 — six tips in, $4 in the jar.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Two overlapping read-add-write triples silently ate $2; a pthread mutex makes each triple atomic, so 3 + 3 tips always equals $6.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The C Floor Under Every Language's Threads</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">wrappers</span><span class="tag orange">runtimes</span></div>
+                <ul>
+                    <li><b>The floor</b> — on Linux and macOS, Python's <code>threading.Thread</code>, Java's <code>Thread</code>, and C++'s <code>std::thread</code> all bottom out in <code>pthread_create</code></li>
+                    <li><b>NumPy too</b> — BLAS math libraries keep a pthread worker pool; <code>OMP_NUM_THREADS</code> sets its head-count</li>
+                    <li><b>Same bugs</b> — the tip-jar race lives in every wrapper, because the sharing model IS the pthreads model</li>
+                    <li><b>The GIL</b> — CPython threads are real pthreads; the GIL is one giant mutex the interpreter passes between them</li>
+                    <li><b>Reading crashes</b> — stack traces mention <code>pthread_mutex_lock</code> and friends; knowing the floor makes them readable</li>
+                </ul>
+                <p class="example">A data scientist sets OMP_NUM_THREADS=8 and never types "pthread", yet eight pthread_create calls fire under the hood — while sklearn's n_jobs instead spawns workers that are often separate processes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Pthreads is the shared C layer under nearly every thread you'll ever use — so its rules (shared memory, mutexes, joins) are the real rules of your language's threads.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Cooks Is Not Always Faster</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">oversubscription</span></div>
+                <ul>
+                    <li><b>Stations</b> — the kitchen has 4 stations (a 4-core machine); only 4 cooks can actually chop at once</li>
+                    <li><b>Sweet spot</b> — going 1 → 2 → 4 cooks cuts the rush from 60 to 31 to 16 minutes, near-perfect halving</li>
+                    <li><b>Past the cores</b> — 8 cooks take 18 minutes and 16 cooks take 23: they queue for stations and bump elbows</li>
+                    <li><b>Context switches</b> — every swap is a cook laying down a knife and picking up someone's half-made order</li>
+                    <li><b>The mistake</b> — treating thread count as a speed dial; past the core count it mostly buys coordination cost</li>
+                </ul>
+                <p class="example">The owner quadruples staff from 4 cooks to 16 hoping to crush the rush, and lunch takes 23 minutes instead of 16 — worse than doing nothing.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Setting thread counts far above the core count. On this 4-core kitchen, 16 threads finished slower (23 min) than 4 threads (16 min) — measure, don't assume.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one process, four threads — shared band + private stacks
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Process, Four Threads — Shared Kitchen, Private Stacks', w / 2, 24);
+
+    // process box
+    ctx.fillStyle = 'rgba(42,120,214,0.06)';
+    roundRect(ctx, 40, 55, 450, 220, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the shop (one process)', 52, 78);
+
+    // shared band
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    ctx.fillRect(60, 90, 410, 45);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(60, 90, 410, 45);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('shared: fridge, order board, tip jar (heap & globals)', 265, 117);
+
+    // four thread stacks
+    var stackXs = [60, 165, 270, 375];
+    var stackLabs = ['main', 'cook 2', 'cook 3', 'cook 4'];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.18)';
+        ctx.fillRect(stackXs[i], 155, 90, 95);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(stackXs[i], 155, 90, 95);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(stackLabs[i], stackXs[i] + 45, 173);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText('own stack', stackXs[i] + 45, 189);
+        arrow(ctx, stackXs[i] + 45, 155, stackXs[i] + 45, 138, P.blue, 1);
+    }
+
+    // other process box
+    ctx.fillStyle = 'rgba(107,114,128,0.08)';
+    ctx.setLineDash([5, 4]);
+    roundRect(ctx, 530, 90, 160, 160, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('another process', 610, 155);
+    ctx.fillText('= another shop', 610, 173);
+    ctx.fillText('own fridge, no sharing', 610, 191);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('threads share everything except their stacks', 265, 268);
+
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — the pthread memory picture', w - 15, h - 8);
+});
+
+// c2: race-condition interleaving timeline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Six $1 Tips, Two Cooks, No Lock — the Jar Ends at $4', w / 2, 24);
+
+    var yA = 115, yB = 175;
+
+    // lanes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(95, yA); ctx.lineTo(660, yA); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(95, yB); ctx.lineTo(660, yB); ctx.stroke();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue; ctx.fillText('cook A', 20, yA + 4);
+    ctx.fillStyle = P.orange; ctx.fillText('cook B', 20, yB + 4);
+
+    var xs = [110, 158, 206, 254, 302, 350, 398, 446, 494, 542, 590, 638];
+    // steps: [lane ('A'|'B'), label, lost?]
+    var steps = [
+        ['A', 'r0', false], ['B', 'r0', false], ['A', 'w1', false], ['B', 'w1', true],
+        ['A', 'r1', false], ['A', 'w2', false], ['B', 'r2', false], ['B', 'w3', false],
+        ['A', 'r3', false], ['B', 'r3', false], ['A', 'w4', false], ['B', 'w4', true]
+    ];
+    var jar = [0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4, 4];
+
+    for (var i = 0; i < 12; i++) {
+        var lane = steps[i][0], lab = steps[i][1], lost = steps[i][2];
+        var y = lane === 'A' ? yA : yB;
+        var col = lost ? '#e74c3c' : (lane === 'A' ? P.blue : P.orange);
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(xs[i], y, 4.5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, xs[i], y - 10);
+        if (lost) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui';
+            ctx.fillText('lost!', xs[i], y + 18);
+        }
+    }
+
+    // jar row
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('jar:', 20, 235);
+    for (var i = 0; i < 12; i++) {
+        if (i === 11) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        }
+        ctx.textAlign = 'center';
+        ctx.fillText(String(jar[i]), xs[i], 235);
+    }
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('$6 expected, $4 in the jar — two tips overwritten', 430, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one unlucky but legal interleaving — illustrative', w - 15, h - 8);
+});
+
+// c3: layer diagram — four APIs over one pthreads band over the kernel
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Different Languages, One C Floor', w / 2, 24);
+
+    var boxes = [
+        { x: 45, lab: 'Python / threading', border: P.blue, fill: 'rgba(42,120,214,0.12)' },
+        { x: 210, lab: 'Java / Thread', border: P.orange, fill: 'rgba(217,89,38,0.10)' },
+        { x: 375, lab: 'C++ / std::thread', border: P.green, fill: 'rgba(0,131,0,0.10)' },
+        { x: 540, lab: 'OpenMP / BLAS pool', border: P.violet, fill: 'rgba(74,58,167,0.10)' }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var b = boxes[i];
+        ctx.fillStyle = b.fill;
+        roundRect(ctx, b.x, 60, 150, 52, 6);
+        ctx.fill();
+        ctx.strokeStyle = b.border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = b.border; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.lab, b.x + 75, 90);
+        arrow(ctx, b.x + 75, 112, b.x + 75, 156, P.mute, 2);
+    }
+
+    // pthreads band
+    ctx.fillStyle = 'rgba(26,82,118,0.14)';
+    ctx.fillRect(45, 160, 645, 52);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.strokeRect(45, 160, 645, 52);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('pthreads — the C threading library', 367, 184);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pthread_create · pthread_join · pthread_mutex', 680, 203);
+
+    // arrow down to kernel
+    arrow(ctx, 367, 212, 367, 231, P.mute, 2);
+
+    // kernel band
+    ctx.fillStyle = 'rgba(107,114,128,0.12)';
+    ctx.fillRect(45, 235, 645, 40);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.strokeRect(45, 235, 645, 40);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('operating-system kernel threads', 367, 259);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('four wrappers, one floor', 555, 140);
+});
+
+// c4: rush-clearing time vs number of cooks
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rush-Clearing Time vs Cooks on a 4-Station Kitchen', w / 2, 24);
+
+    var ox = 70, baseY = 245, plotW = 580, plotH = 180;
+
+    // y gridlines: 0 to 70, labels at 0, 20, 40, 60
+    for (var m = 0; m <= 60; m += 20) {
+        var y = baseY - m / 70 * plotH;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(m), ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var centers = [145, 260, 375, 490, 605];
+    var cooks = ['1', '2', '4', '8', '16'];
+    var mins = [60, 31, 16, 18, 23];
+    var barW = 70;
+    for (var i = 0; i < 5; i++) {
+        var over = i >= 3;
+        var bh = mins[i] / 70 * plotH;
+        var bx = centers[i] - barW / 2;
+        ctx.fillStyle = over ? 'rgba(217,89,38,0.45)' : 'rgba(42,120,214,0.55)';
+        ctx.fillRect(bx, baseY - bh, barW, bh);
+        ctx.strokeStyle = over ? P.orange : P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, baseY - bh, barW, bh);
+        ctx.fillStyle = over ? P.orange : P.blue;
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(mins[i]), centers[i], baseY - bh - 6);
+        ctx.fillStyle = '#444'; ctx.font = '13px system-ui';
+        ctx.fillText(cooks[i], centers[i], baseY + 18);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cooks (threads)', ox + plotW / 2, baseY + 38);
+
+    // core marker
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(432, 65); ctx.lineTo(432, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 stations (cores)', 432, 58);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('past 4 cooks,', 520, 100);
+    ctx.fillText('minutes go back up', 520, 116);
+
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — a CPU-bound job on a 4-core machine', w - 15, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

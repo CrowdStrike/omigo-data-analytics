@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Process Isolation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Process Isolation</h1>
+<p class="subtitle">The operating system gives every program its own walled-off memory, so one crashing program cannot take down the others — one crash doesn't take the machine</p>
+
+<div class="card-section">
+    <h2>The Photo Editor Crashes, the Music Keeps Playing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">private memory</span><span class="tag orange">the OS wall</span></div>
+                <ul>
+                    <li><b>The laptop</b> — at 3pm it runs three programs: a spreadsheet, a music player, and a photo editor</li>
+                    <li><b>The bug</b> — the photo editor follows a bad pointer and writes to memory it doesn't own</li>
+                    <li><b>The wall</b> — each program runs as a process with its own private memory; none can touch another's</li>
+                    <li><b>The kill</b> — the hardware traps the bad write, the OS ends the editor, and only the editor</li>
+                    <li><b>The survivors</b> — the spreadsheet's unsaved edits and the song's playback position are untouched</li>
+                </ul>
+                <p class="example">The editor dies at 3:04pm; the spreadsheet's 45 unsaved edits and the music both carry on as if nothing happened.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Process isolation means each program lives in its own memory sandbox — a crash is contained to the process that caused it, never the whole machine.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Same Address, Two Different Bytes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">page tables</span></div>
+                <ul>
+                    <li><b>The trick</b> — every process sees its own private map of addresses; the OS translates them per process</li>
+                    <li><b>The pages</b> — memory is split into 4096-byte pages; a page table maps each page to a physical frame</li>
+                    <li><b>Hand-check A</b> — the editor's address 4096 is page 1; its table says page 1 &rarr; frame 7 &rarr; 7 &times; 4096 = 28672</li>
+                    <li><b>Hand-check B</b> — the music player's address 4096 is also page 1, but its table says frame 12 &rarr; 49152</li>
+                    <li><b>The trap</b> — the editor's wild write to 9000 lands on page 2 (9000 &minus; 8192 = offset 808), which has no entry</li>
+                    <li><b>The fault</b> — no entry means a page fault; the OS kills the editor before the write touches anyone</li>
+                </ul>
+                <p class="example">Both programs use address 4096, yet the editor reads physical byte 28672 and the music player reads 49152 — same number, two different bytes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The same virtual address in two processes points at two different physical locations — so no process can even name, let alone corrupt, another's memory.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Bad Row Doesn't Kill the Pipeline</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">data pipelines</span><span class="tag orange">crash containment</span></div>
+                <ul>
+                    <li><b>The pool</b> — a data job splits 8,000 rows across 8 worker processes, 1,000 rows each</li>
+                    <li><b>The bad row</b> — worker 5 hits a corrupt record at row 400 of its chunk and segfaults</li>
+                    <li><b>The containment</b> — the OS kills worker 5; the other 7 workers finish their 1,000 rows untouched</li>
+                    <li><b>The recovery</b> — the scheduler re-queues only worker 5's 600 unfinished rows, not all 8,000</li>
+                    <li><b>The notebook</b> — the same wall is why a crashed notebook kernel never takes down the laptop</li>
+                    <li><b>The browser</b> — one tab per process is the same idea: a bad page kills one tab, not the browser</li>
+                </ul>
+                <p class="example">Of 8,000 rows, 7,400 are done when worker 5 dies — only its remaining 600 rows need a re-run.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Multiprocessing buys crash containment: a data scientist's pipeline loses one worker's unfinished chunk to a bad row, not the whole job.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Threads Are Not Processes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">threads vs processes</span></div>
+                <ul>
+                    <li><b>The confusion</b> — threads live inside one process and share its memory; the wall is between processes</li>
+                    <li><b>Shared fate</b> — one thread's bad write can corrupt every other thread in the same process</li>
+                    <li><b>One bullet</b> — a segfault in any of 4 threads kills the whole process, all 4 workers at once</li>
+                    <li><b>No catch</b> — a try/except cannot catch a segfault; the OS kills the process before code sees it</li>
+                    <li><b>The price</b> — isolation isn't free: processes can't share variables and must copy data between them</li>
+                    <li><b>The choice</b> — threads for speed and shared state, processes when a crash must stay contained</li>
+                </ul>
+                <p class="example">The same bad row that cost 600 rows in the process pool kills all 4 threads of a threaded worker — 4,000 rows (4 threads &times; 1,000) lost in one shot.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming threads give the same crash safety as processes. Threads share one memory sandbox — one thread's segfault, or one silent corrupt write, takes down or poisons all of them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: three-lane alive/dead timeline from 3:00 to 3:10
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('3:04pm: One Process Dies, Two Never Notice', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600;
+    function xOf(min) { return ox + min / 10 * pw; }
+
+    // vertical gridlines and tick labels every 2 minutes
+    var ticks = ['3:00', '3:02', '3:04', '3:06', '3:08', '3:10'];
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 10; t += 2) {
+        var x = xOf(t);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 62); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(ticks[t / 2], x, baseY + 18);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // crash marker at minute 4
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(4), 62); ctx.lineTo(xOf(4), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('bad write → OS kills editor', xOf(4), 56);
+
+    // lanes
+    var lanes = [
+        { lab: 'spreadsheet',  y: 95,  color: P.blue,   endMin: 10 },
+        { lab: 'music player', y: 155, color: P.aqua,   endMin: 10 },
+        { lab: 'photo editor', y: 215, color: P.orange, endMin: 4 }
+    ];
+    for (var i = 0; i < lanes.length; i++) {
+        var ln = lanes[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(ln.lab, 8, ln.y - 8);
+        ctx.strokeStyle = ln.color; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(xOf(0), ln.y); ctx.lineTo(xOf(ln.endMin), ln.y); ctx.stroke();
+    }
+    // death mark on the editor lane
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', xOf(4) + 10, 220);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the other two processes never notice', xOf(7), 120);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timeline illustrative', w - 15, h - 8);
+});
+
+// c2: virtual address 4096 in two processes maps to two different frames
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Address 4096 in Two Processes → Two Different Physical Frames', w / 2, 24);
+
+    function box(x, y, bw, bh, border, fill, label, textColor) {
+        roundRect(ctx, x, y, bw, bh, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = border; ctx.stroke();
+        ctx.fillStyle = textColor || P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, y + bh / 2 + 4);
+    }
+
+    function arrow(x1, y1, x2, y2, color, width, dashed) {
+        ctx.strokeStyle = color; ctx.lineWidth = width;
+        if (dashed) ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 10 * Math.cos(ang - 0.4), y2 - 10 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 10 * Math.cos(ang + 0.4), y2 - 10 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    // left column: process boxes
+    box(30, 80, 190, 38, P.blue, 'rgba(42,120,214,0.15)', 'editor — virtual 4096 (page 1)');
+    box(30, 160, 190, 38, P.aqua, 'rgba(25,158,112,0.12)', 'music — virtual 4096 (page 1)');
+    box(30, 240, 190, 38, P.orange, 'rgba(217,89,38,0.12)', 'editor — virtual 9000 (page 2)');
+
+    // right column: frame boxes
+    box(470, 80, 200, 38, P.blue, 'rgba(42,120,214,0.08)', 'frame 7 → physical 28672');
+    box(470, 160, 200, 38, P.aqua, 'rgba(25,158,112,0.06)', 'frame 12 → physical 49152');
+
+    // arrows
+    arrow(220, 99, 466, 99, P.blue, 3, false);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("editor's page table", 343, 90);
+
+    arrow(220, 179, 466, 179, P.aqua, 3, false);
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText("music's page table", 343, 170);
+
+    // dead-end arrow for the wild write
+    arrow(220, 259, 350, 259, '#e74c3c', 3, true);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no entry → page fault → killed', 362, 263);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('physical = frame × 4096 + offset', w - 30, 55);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('frame numbers illustrative; 4096-byte pages exact', w - 15, h - 4);
+});
+
+// c3: rows completed per worker, worker 5 segfaults at row 400
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rows = [1000, 1000, 1000, 1000, 400, 1000, 1000, 1000];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8 Workers × 1,000 Rows: One Segfault Costs 600 Rows, Not 8,000', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxV = 1000;
+    function yOf(v) { return baseY - v / maxV * ph; }
+
+    // gridlines at 250/500/750
+    ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var g = 250; g <= 750; g += 250) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    for (var i = 0; i < 8; i++) {
+        var cx = ox + (i + 0.5) * pw / 8;
+        var bX = cx - 24, bY = yOf(rows[i]);
+        var crashed = (i === 4);
+        ctx.fillStyle = crashed ? 'rgba(217,89,38,0.30)' : 'rgba(42,120,214,0.35)';
+        ctx.fillRect(bX, bY, 48, baseY - bY);
+        ctx.lineWidth = 2; ctx.strokeStyle = crashed ? P.orange : P.blue;
+        ctx.strokeRect(bX, bY, 48, baseY - bY);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(rows[i]), cx, bY - 5);
+        ctx.font = '12px system-ui';
+        ctx.fillText('w' + (i + 1), cx, baseY + 18);
+        if (crashed) {
+            // re-queue cap from 400 up to 1000
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.strokeRect(bX, yOf(1000), 48, yOf(400) - yOf(1000));
+            ctx.setLineDash([]);
+            ctx.save();
+            ctx.translate(cx, (yOf(1000) + yOf(400)) / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('600 re-queued', 0, 4);
+            ctx.restore();
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('✗ segfault at row 400', cx, 50);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('7,400 of 8,000 rows survive the crash', ox + pw, 85);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts illustrative', w - 15, h - 8);
+});
+
+// c4: blast radius of one bad write, 4 threads vs 4 processes
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Bad Write: Blast Radius of Threads vs Processes', w / 2, 24);
+
+    function arrow(x1, y1, x2, y2, color, width) {
+        ctx.strokeStyle = color; ctx.lineWidth = width;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 10, y2); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2); ctx.lineTo(x2 - 12, y2 - 6); ctx.lineTo(x2 - 12, y2 + 6);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: 4 threads in one process
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 threads', 15, 100);
+
+    roundRect(ctx, 130, 70, 300, 60, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = P.blue; ctx.stroke();
+    var tLabs = ['t1', 't2', 't3 ✗', 't4'];
+    for (var i = 0; i < 4; i++) {
+        var tx = 130 + 40 + i * 74;
+        if (i === 2) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        }
+        ctx.textAlign = 'center';
+        ctx.fillText(tLabs[i], tx, 105);
+    }
+    arrow(430, 100, 490, 100, '#e74c3c', 3);
+    roundRect(ctx, 490, 70, 180, 60, 8);
+    ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#e74c3c'; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('process dies', 580, 92);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ all 4 gone', 580, 114);
+
+    // row 2: 4 separate processes
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 processes', 15, 210);
+
+    var pLabs = ['p1', 'p2', 'p3', 'p4'];
+    for (var i = 0; i < 4; i++) {
+        var px = 130 + i * 80;
+        var bad = (i === 2);
+        roundRect(ctx, px, 185, 60, 40, 8);
+        ctx.fillStyle = bad ? 'rgba(231,76,60,0.12)' : 'rgba(0,131,0,0.12)';
+        ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = bad ? '#e74c3c' : P.green;
+        ctx.stroke();
+        if (bad) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(pLabs[i] + ' ✗', px + 30, 210);
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(pLabs[i], px + 30, 210);
+        }
+    }
+    arrow(430, 205, 490, 205, P.green, 3);
+    roundRect(ctx, 490, 185, 180, 40, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = P.green; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 keep running', 570, 210);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓', 650, 210);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('threads share the sandbox; processes each get their own', w / 2, 275);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

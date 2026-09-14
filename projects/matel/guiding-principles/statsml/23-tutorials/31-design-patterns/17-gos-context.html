@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go's Context</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Go's Context</h1>
+<p class="subtitle">Go passes cancellation around as an ordinary value — one "stop" signal handed down the call chain tells every helper below to quit at once</p>
+
+<div class="card-section">
+    <h2>The Order Ticket That Says "Stop"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">cancellation</span><span class="tag green">Go</span></div>
+                <ul>
+                    <li><b>The order</b> — a coffee shop order fans out: one barista grinds beans, one steams milk, one warms a cup</li>
+                    <li><b>The walkout</b> — the customer leaves before pickup; all three helpers are still working for nobody</li>
+                    <li><b>The ticket</b> — Go's fix: every helper gets a copy of the same order ticket, the <code>context</code></li>
+                    <li><b>The stamp</b> — cancelling stamps the ticket once; every holder sees the stamp and stops their step</li>
+                    <li><b>The value</b> — the ticket is just a value passed as the first argument, not a hidden global switch</li>
+                </ul>
+                <p class="example">The customer walks out at 9:02am; the ticket is stamped, and the grinder, steamer, and cup-warmer all stop within a second instead of finishing a drink no one will drink.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A context is a value passed down every call; cancelling it flips one shared signal, so the whole tree of work below can notice and stop together.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Two-Second Deadline for Three Lookups</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">timeout</span></div>
+                <ul>
+                    <li><b>The setup</b> — a web request creates a context with a 2000 ms deadline, then starts three lookups</li>
+                    <li><b>Fast ones</b> — the cache lookup finishes in 120 ms and the database query finishes in 900 ms</li>
+                    <li><b>The slow one</b> — the recommendation call would take 3500 ms, far past the deadline</li>
+                    <li><b>The cut</b> — at 2000 ms the context expires; the recommendation call sees it and returns early</li>
+                    <li><b>Hand-check</b> — 3500 &minus; 2000 = 1500 ms of work is never done; the user waits 2000 ms, not 3500</li>
+                </ul>
+                <p class="example">The page renders at the 2000 ms mark with cache and database results filled in and a "recommendations unavailable" slot — not at 3500 ms with everything.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A deadline set once at the top bounds every call underneath it — the slowest branch is cut at 2000 ms without any per-call timer code.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Servers Leak Without It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">goroutine leak</span></div>
+                <ul>
+                    <li><b>The fan-out</b> — every web request in Go spawns helper goroutines: queries, RPCs, feature fetches</li>
+                    <li><b>The abandon</b> — users close tabs and clients time out; the request above the helpers is gone</li>
+                    <li><b>The leak</b> — without a context, each abandoned request leaves 1 helper goroutine stuck forever</li>
+                    <li><b>The math</b> — at 50 abandoned requests per minute, one hour of traffic strands 3000 goroutines</li>
+                    <li><b>Where you meet it</b> — model-serving and feature-store APIs fan out per request exactly this way</li>
+                </ul>
+                <p class="example">A feature service without contexts climbs to 3000 stuck goroutines after 60 minutes at 50 abandons/min; the same service with contexts stays flat at 0.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Contexts tie the lifetime of every helper to the request that spawned it — when the request dies, its whole subtree of work is reclaimed instead of accumulating.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Cancel Is a Request, Not a Kill Switch</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cooperative</span></div>
+                <ul>
+                    <li><b>The confusion</b> — calling <code>cancel()</code> does not stop anything by itself; it only flips the signal</li>
+                    <li><b>The check</b> — a worker must look at <code>ctx.Done()</code> inside its loop to actually notice and return</li>
+                    <li><b>The deaf worker</b> — a loop that never checks runs its full 8 seconds after a cancel at second 1</li>
+                    <li><b>The listening worker</b> — a loop that checks each pass stops at second 1, right after the cancel</li>
+                    <li><b>The habit</b> — pass ctx to every blocking call you make; most library calls check it for you</li>
+                </ul>
+                <p class="example">Two copies of the same 8-second job get cancelled at second 1 — the one ignoring <code>ctx.Done()</code> burns 7 more seconds; the one checking it exits immediately.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing cancel kills the goroutine. Cancellation is cooperative — the context only carries the news, and code that never checks <code>ctx.Done()</code> never hears it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBox(ctx, cx, cy, w, h, r, fill, stroke) {
+    var x = cx - w / 2, y = cy - h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: tree diagram — one handler passing ctx down to three workers, cancel propagating
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Cancel at the Top Reaches Every Worker Below', w / 2, 24);
+
+    // cancel stamp above the handler
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('cancel() at 9:02', 360, 38);
+
+    // handler box
+    roundBox(ctx, 360, 80, 190, 42, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.font = '13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('order handler (ctx)', 360, 85);
+
+    // worker boxes
+    var workers = [
+        { x: 110, label: 'grind beans', fill: 'rgba(0,131,0,0.12)', border: P.green },
+        { x: 360, label: 'steam milk', fill: 'rgba(25,158,112,0.12)', border: P.aqua },
+        { x: 610, label: 'warm cup', fill: 'rgba(74,58,167,0.10)', border: P.violet }
+    ];
+    for (var i = 0; i < 3; i++) {
+        roundBox(ctx, workers[i].x, 210, 160, 42, 8, workers[i].fill, workers[i].border);
+        ctx.font = '13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(workers[i].label, workers[i].x, 215);
+        // stop label under each worker box
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c';
+        ctx.fillText('stopped', workers[i].x, 252);
+    }
+
+    // arrows handler bottom -> worker tops, with ctx labels and red dots on midpoints
+    var hy = 101; // handler box bottom
+    var wy = 189; // worker box top
+    for (var i = 0; i < 3; i++) {
+        var x1 = 360, y1 = hy, x2 = workers[i].x, y2 = wy;
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        arrowHead(ctx, x2, y2, ang, 10, P.mute);
+        var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        // ctx label beside the arrow midpoint
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+        ctx.fillText('ctx', mx + 12, my - 4);
+        // red dot: the cancel signal travelling down
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(mx, my, 8, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'left';
+    ctx.fillText('one stamp, three stops', 560, 130);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('shop scenario illustrative', w - 12, h - 10);
+});
+
+// c2: Gantt-style timeline — three lookups against a 2000 ms deadline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One 2000 ms Deadline Bounds All Three Lookups', w / 2, 24);
+
+    var ox = 170, baseY = 245, pw = 480, ph = 170;
+    function xOf(ms) { return ox + ms / 4000 * pw; }
+
+    // gridlines + ticks
+    var ticks = [0, 1000, 2000, 3000, 4000];
+    for (var i = 0; i < ticks.length; i++) {
+        var x = xOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, baseY - ph); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(String(ticks[i]), x, baseY + 18);
+    }
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('time (ms)', ox + pw / 2, baseY + 36);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var barH = 26;
+    var rows = [
+        { y: 100, label: 'cache lookup — 120 ms', end: 120, color: P.green, endLab: '120 ms' },
+        { y: 150, label: 'database query — 900 ms', end: 900, color: P.blue, endLab: '900 ms' },
+        { y: 200, label: 'recommendations — cut at 2000', end: 2000, color: P.aqua, endLab: '' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 4);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(xOf(0), r.y - barH / 2, xOf(r.end) - xOf(0), barH);
+        if (r.endLab) {
+            ctx.font = '11px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+            ctx.fillText(r.endLab, xOf(r.end) + 6, r.y + 4);
+        }
+    }
+
+    // never-run segment on row 3: 2000 -> 3500 ms
+    var r3 = rows[2];
+    ctx.fillStyle = 'rgba(231,76,60,0.25)';
+    ctx.fillRect(xOf(2000), r3.y - barH / 2, xOf(3500) - xOf(2000), barH);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(xOf(2000), r3.y - barH / 2, xOf(3500) - xOf(2000), barH);
+    ctx.setLineDash([]);
+    ctx.font = '11px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('1500 ms never run', xOf(3500) + 6, r3.y + 4);
+
+    // deadline line
+    var dx = xOf(2000);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(dx, 70); ctx.lineTo(dx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('deadline 2000 ms', dx, 62);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'left';
+    ctx.fillText('user waits 2000 ms, not 3500', xOf(2600), 95);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 12, h - 10);
+});
+
+// c3: line chart — stuck goroutines over one hour, without vs with context
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Stuck Goroutines Over One Hour at 50 Abandons/min', w / 2, 24);
+
+    var ox = 80, baseY = 245, pw = 580, ph = 180;
+    function xOf(min) { return ox + min / 60 * pw; }
+    function yOf(g) { return baseY - g / 3000 * ph; }
+
+    // horizontal gridlines with labels
+    var yTicks = [750, 1500, 2250, 3000];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yOf(yTicks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[i]), ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var xTicks = [0, 15, 30, 45, 60];
+    for (var i = 0; i < xTicks.length; i++) {
+        var x = xOf(xTicks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY + 5); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(String(xTicks[i]), x, baseY + 20);
+    }
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('minutes', ox + pw / 2, baseY + 38);
+
+    var mins = [0, 15, 30, 45, 60];
+    var noCtx = [0, 750, 1500, 2250, 3000];
+    var withCtx = [0, 0, 0, 0, 0];
+
+    // without-context line (red, climbing)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(noCtx[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // with-context line (green, flat)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(withCtx[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // line labels
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('no context', xOf(40) + 8, yOf(2200));
+    ctx.fillStyle = P.green;
+    ctx.fillText('with context', xOf(40) + 8, yOf(0) - 8);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('every abandoned request leaks one worker', xOf(20) - 90, 85);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative — leak grows without bound', w - 12, h - 10);
+});
+
+// c4: two-row flow — worker that never checks ctx.Done() vs one that checks each pass
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('cancel() Only Flips a Flag — the Worker Must Check It', w / 2, 24);
+
+    function row(y, rowLab, resultLab, resultFill, resultBorder, verdict, verdictColor) {
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+        ctx.fillText(rowLab, 20, y + 4);
+
+        // cancel box
+        roundBox(ctx, 185, y, 160, 42, 8, 'rgba(42,120,214,0.15)', P.blue);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText('cancel() at 1s', 185, y + 4);
+
+        // arrow
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(265, y); ctx.lineTo(340, y); ctx.stroke();
+        arrowHead(ctx, 348, y, 0, 10, P.mute);
+
+        // result box
+        roundBox(ctx, 445, y, 190, 42, 8, resultFill, resultBorder);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(resultLab, 445, y + 4);
+
+        // verdict beneath
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = verdictColor;
+        ctx.fillText(verdict, 445, y + 40);
+    }
+
+    row(105, 'never checks', 'loop ignores ctx.Done()', 'rgba(231,76,60,0.12)', '#e74c3c',
+        '✗ runs all 8s — 7s wasted', '#e74c3c');
+    row(215, 'checks each pass', 'select on ctx.Done()', 'rgba(0,131,0,0.12)', P.green,
+        '✓ returns at 1s', P.green);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('the context carries the news; the code must listen', w / 2, 278);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('8-second job illustrative', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

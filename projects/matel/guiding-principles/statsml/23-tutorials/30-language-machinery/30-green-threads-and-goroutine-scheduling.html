@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Green Threads &amp; Goroutine Scheduling</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Green Threads &amp; Goroutine Scheduling</h1>
+<p class="subtitle">A green thread (goroutine) is a task the program schedules by itself onto a handful of OS threads &mdash; so a million of them can be mid-flight while the operating system only ever sees a few</p>
+
+<div class="card-section">
+    <h2>Forty Tables, Two Waiters</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">M:N scheduling</span><span class="tag orange">runtime</span></div>
+                <ul>
+                    <li><b>The restaurant</b> &mdash; 40 tables are mid-meal tonight, but only 2 waiters are on the floor</li>
+                    <li><b>Mostly waiting</b> &mdash; a table needs a waiter for brief moments; the rest is cooking and chewing</li>
+                    <li><b>The trick</b> &mdash; a waiter never stands at a waiting table; he parks it and serves whoever is ready</li>
+                    <li><b>Green threads</b> &mdash; goroutines are the tables: the program juggles thousands on a few OS threads</li>
+                    <li><b>Invisible to the OS</b> &mdash; the OS schedules only the 2 waiters; the 40 meals live inside the program</li>
+                </ul>
+                <p class="example">At any instant at most 2 tables are actually being served, yet all 40 meals move forward &mdash; nobody would say the restaurant "has only 2 meals going".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A goroutine is a task the program's own runtime schedules onto a few OS threads &mdash; the OS sees the waiters, never the tables.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Arithmetic: a Million Tables</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">stack sizes</span><span class="tag orange">do the math</span></div>
+                <ul>
+                    <li><b>Two price tags</b> &mdash; a new goroutine starts with a 2 KB stack; an OS thread reserves about 8 MB</li>
+                    <li><b>A thousand tasks</b> &mdash; 1,000 &times; 2 KB = 2 MB of goroutine stacks vs 1,000 &times; 8 MB = 8 GB of thread stacks</li>
+                    <li><b>A million tasks</b> &mdash; 1,000,000 &times; 2 KB = 2 GB vs 1,000,000 &times; 8 MB = 8 TB; only one of these fits</li>
+                    <li><b>The ratio</b> &mdash; 8 MB &divide; 2 KB = 4,096: one OS thread costs as much stack as about 4,000 goroutines</li>
+                    <li><b>Cheap handoffs</b> &mdash; parking a goroutine is a function call inside the program, not a trip into the OS</li>
+                </ul>
+                <p class="example">On a 16 GB laptop, 1,000,000 goroutines need about 2 GB and leave room to spare; 1,000,000 OS threads would need 8 TB &mdash; five hundred such laptops.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> 1,000,000 goroutines &asymp; 2 GB while 1,000,000 OS threads &asymp; 8 TB &mdash; the 4,096&times; stack gap is why "one thread per task" only works for green threads.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Chat Servers Bet on This</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">servers</span><span class="tag orange">blocking is fine</span></div>
+                <ul>
+                    <li><b>Connections are tables</b> &mdash; a chat server keeps one open connection per user, nearly all idle at once</li>
+                    <li><b>Thread per connection</b> &mdash; near 10,000 OS threads (80 GB of stack reservations) the box starts choking</li>
+                    <li><b>Goroutine per connection</b> &mdash; 1,000,000 connections cost about 2 GB of stacks on the same box</li>
+                    <li><b>Blocking reads are free</b> &mdash; a goroutine stuck on a quiet socket is parked; the waiter serves others</li>
+                    <li><b>The same trick everywhere</b> &mdash; Go goroutines, Erlang processes, Java virtual threads, Kotlin coroutines</li>
+                </ul>
+                <p class="example">A one-box chat service holds 1,000,000 mostly-idle connections on about 2 GB of goroutine stacks &mdash; the thread-per-connection version stalls near 10,000.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Green threads let each connection be written as simple blocking code, and the runtime turns every wait into a free handoff instead of a stalled OS thread.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Million Tables Is Not a Million Cooks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">concurrency vs parallelism</span></div>
+                <ul>
+                    <li><b>Waiters, not cooks</b> &mdash; goroutines overlap waiting; they do not add CPU cores to the machine</li>
+                    <li><b>The hard cap</b> &mdash; on 4 cores, at most 4 goroutines are executing in any instant, however many exist</li>
+                    <li><b>Do the math</b> &mdash; 8 jobs of 1 s pure computation on 4 cores take 8 s &divide; 4 = 2 s wall time, never 1 s</li>
+                    <li><b>More is not faster</b> &mdash; spawning 1,000,000 goroutines for that CPU work adds only scheduling overhead</li>
+                    <li><b>Where they shine</b> &mdash; tasks that wait on networks, disks, and timers; cores still cap the crunching</li>
+                </ul>
+                <p class="example">8 image-resize jobs of 1 s CPU each on a 4-core box finish in 2 s as 8 goroutines &mdash; the same 8 s of work split by 4 cores, not by 8 goroutines.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating goroutines as extra horsepower. They multiply how much waiting you can overlap, not how much computing you can do &mdash; the core count sets that limit.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width, dash) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), 8, color);
+}
+
+// c1: 8 goroutine tables mapped onto 2 OS-thread waiters
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8 Tables, 2 Waiters: the OS Only Sees the Waiters', w / 2, 24);
+
+    var gx = [70, 155, 240, 325, 410, 495, 580, 665];
+    var gy = 90;
+    for (var i = 0; i < 8; i++) {
+        var label = 'T' + (i + 1);
+        rr(ctx, gx[i] - 32, gy - 17, 64, 34, 6);
+        if (i === 1 || i === 4) { // T2, T5 being served
+            ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.fill();
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+            ctx.fillStyle = P.ink;
+        } else if (i === 6 || i === 7) { // T7, T8 ready, queued
+            ctx.fillStyle = 'rgba(25,158,112,0.15)'; ctx.fill();
+            ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+            ctx.fillStyle = P.ink;
+        } else { // waiting on kitchen
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 3]); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = P.mute;
+        }
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, gx[i], gy + 4);
+    }
+
+    // state legend at y=125
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(42,120,214,0.6)'; ctx.fillRect(60, 118, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('being served', 76, 127);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([3, 2]);
+    ctx.strokeRect(170, 118, 10, 10); ctx.setLineDash([]);
+    ctx.fillStyle = '#444'; ctx.fillText('waiting', 186, 127);
+    ctx.fillStyle = 'rgba(25,158,112,0.5)'; ctx.fillRect(250, 118, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('ready in queue', 266, 127);
+
+    // arrows from served tables to waiters (drawn before waiter boxes)
+    arrow(ctx, 155, 107, 240, 170, P.blue, 3);
+    arrow(ctx, 410, 107, 455, 170, P.blue, 3);
+
+    // OS-thread waiter boxes
+    var wx = [240, 480];
+    var wlabels = ['waiter 1 — OS thread', 'waiter 2 — OS thread'];
+    for (var i = 0; i < 2; i++) {
+        rr(ctx, wx[i] - 75, 190 - 20, 150, 40, 6);
+        ctx.fillStyle = 'rgba(26,82,118,0.10)'; ctx.fill();
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(wlabels[i], wx[i], 194);
+    }
+
+    // OS boundary
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(60, 232); ctx.lineTo(680, 232); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what the operating system can see', 60, 248);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('6 tables are parked for free — no waiter stands still', w / 2, 275);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative snapshot of one moment', 690, 293);
+});
+
+// c2: log-scale horizontal bars, stack memory for N tasks
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Stack Memory for N Tasks: 2 KB Each vs 8 MB Each', w / 2, 24);
+
+    // gridlines + ticks (log scale in MB, 1 decade = 70 px, x=200 is 1 MB)
+    var ticks = [[200, '1 MB'], [340, '100 MB'], [480, '10 GB'], [620, '1 TB']];
+    for (var i = 0; i < 4; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ticks[i][0], 60); ctx.lineTo(ticks[i][0], 250); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i][1], ticks[i][0], 266);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(200, 250); ctx.lineTo(690, 250); ctx.stroke();
+
+    // group labels
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1,000 tasks', 20, 100);
+    ctx.fillText('1,000,000 tasks', 20, 195);
+
+    // bars: [top y, end x, color, label, labelAbove]
+    var bars = [
+        [92, 221, P.blue, '2 MB', false],
+        [116, 474, P.orange, '8 GB', false],
+        [187, 432, P.blue, '2 GB', false],
+        [211, 685, P.orange, '8 TB', true]
+    ];
+    for (var i = 0; i < 4; i++) {
+        var by = bars[i][0], bend = bars[i][1], col = bars[i][2];
+        ctx.fillStyle = col;
+        rr(ctx, 200, by, bend - 200, 16, 6);
+        ctx.fill();
+        ctx.fillStyle = col; ctx.font = 'bold 12px system-ui';
+        if (bars[i][4]) {
+            ctx.textAlign = 'right';
+            ctx.fillText(bars[i][3], bend, by - 6);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(bars[i][3], bend + 8, by + 13);
+        }
+    }
+
+    // legend
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue; ctx.fillRect(490, 62, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('goroutines (2 KB each)', 506, 71);
+    ctx.fillStyle = P.orange; ctx.fillRect(490, 80, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('OS threads (8 MB each)', 506, 89);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('×4,096 memory per task, at every scale', 480, 160);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('log scale; typical default stack sizes, illustrative', 690, 294);
+});
+
+// c3: idle connections one box can hold, log-scale vertical bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Idle Chat Connections One Box Can Hold', w / 2, 24);
+
+    // gridlines + tick labels (log scale, 1 decade = 60 px)
+    var ticks = [[245, '1,000'], [185, '10,000'], [125, '100,000'], [65, '1,000,000']];
+    for (var i = 0; i < 4; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(140, ticks[i][0]); ctx.lineTo(660, ticks[i][0]); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(ticks[i][1], 130, ticks[i][0] + 4);
+    }
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(140, 245); ctx.lineTo(660, 245); ctx.stroke();
+
+    // bar 1: thread per connection, 10,000 -> y=185
+    ctx.fillStyle = 'rgba(217,89,38,0.35)';
+    ctx.fillRect(280 - 60, 185, 120, 245 - 185);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(280 - 60, 185, 120, 245 - 185);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('10,000', 280, 177);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('one OS thread per connection', 280, 268);
+
+    // bar 2: goroutine per connection, 1,000,000 -> y=65
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(520 - 60, 65, 120, 245 - 65);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(520 - 60, 65, 120, 245 - 65);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1,000,000', 520, 57);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('one goroutine per connection', 520, 268);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('×100 connections on the same hardware', 400, 105);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative capacities; log scale', 690, 294);
+});
+
+// c4: 8 CPU jobs on 4 cores gantt, wall time 2 s
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8 Jobs × 1 s of CPU on 4 Cores = 2 s, No Matter How Many Goroutines', w / 2, 24);
+
+    // gridline at 1 s
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(400, 60); ctx.lineTo(400, 252); ctx.stroke();
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(140, 252); ctx.lineTo(660, 252); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0 s', 140, 272);
+    ctx.fillText('1 s', 400, 272);
+    ctx.fillText('2 s', 660, 272);
+
+    // lanes
+    var laneY = [95, 138, 181, 224];
+    var laneLabels = ['core 1', 'core 2', 'core 3', 'core 4'];
+    var segs = [
+        [['G1', P.blue], ['G5', P.aqua]],
+        [['G2', P.orange], ['G6', P.violet]],
+        [['G3', P.green], ['G7', P.magenta]],
+        [['G4', P.yellow], ['G8', P.ink]]
+    ];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(laneLabels[i], 30, laneY[i] + 4);
+        for (var j = 0; j < 2; j++) {
+            var x0 = j === 0 ? 140 : 400;
+            var x1 = j === 0 ? 400 : 660;
+            rr(ctx, x0 + 2, laneY[i] - 15, x1 - x0 - 4, 30, 5);
+            ctx.fillStyle = segs[i][j][1];
+            ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(segs[i][j][0], (x0 + x1) / 2, laneY[i] + 4);
+        }
+    }
+
+    // midpoint marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(400, 60); ctx.lineTo(400, 252); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 s: 4 jobs done, 4 to go', 408, 70);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('goroutines added zero speed here', 530, 52);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — pure CPU work, no waiting to overlap', 690, 294);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

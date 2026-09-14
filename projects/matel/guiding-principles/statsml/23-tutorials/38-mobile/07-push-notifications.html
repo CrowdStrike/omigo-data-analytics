@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Push Notifications</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Push Notifications</h1>
+<p class="subtitle">Your phone isn't listening to every app's server — Apple and Google are, and they relay each message over the one connection the phone already keeps open</p>
+
+<div class="card-section">
+    <h2>The Order-Shipped Message's Three-Hop Journey</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">push path</span><span class="tag orange">APNs / FCM</span></div>
+                <ul>
+                    <li><b>The order</b> — a coffee-gear shop ships Maya's grinder at 3:12pm and wants her phone to say so</li>
+                    <li><b>The wrong guess</b> — the shop's app isn't running and isn't polling; the phone never asks the shop anything</li>
+                    <li><b>Hop 1</b> — the shop's server posts the message to Apple's APNs (or Google's FCM for Android phones)</li>
+                    <li><b>Hop 2</b> — APNs/FCM routes it down the single always-on connection the phone's OS keeps open</li>
+                    <li><b>Hop 3</b> — the OS itself draws the banner and plays the sound; the shop's app stays asleep throughout</li>
+                </ul>
+                <p class="example">At 3:12pm the shop's server sends one HTTPS request to APNs; two seconds later Maya's lock screen reads "Your grinder shipped" — and the shop's app never ran.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A push travels shop server → Apple/Google's push service → the phone's one always-on connection → the OS-drawn banner. The app did nothing; the platform relayed everything.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Token, the Payload, and the Battery Math</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">device token</span><span class="tag orange">battery</span></div>
+                <ul>
+                    <li><b>The token</b> — at install, the OS asks APNs/FCM for a device token, an opaque address (~64 hex characters on APNs)</li>
+                    <li><b>The handoff</b> — the app uploads that token to the shop's server, which files it under Maya's account</li>
+                    <li><b>The payload</b> — at ship time the server sends the token plus a small JSON body, capped at 4 KB by the platforms</li>
+                    <li><b>One pipe</b> — the OS holds ONE persistent connection for all apps; every app's pushes arrive through it</li>
+                    <li><b>The math</b> — 40 apps each keeping their own socket means 40 radio wake-up schedules; sharing cuts it to 1</li>
+                    <li><b>The cost</b> — the shared pipe idles at ~2% battery a day; 40 separate keep-alives would burn ~30% (illustrative)</li>
+                </ul>
+                <p class="example">payload: {"title": "Order shipped", "body": "Grinder on the way", "badge": 1} — about 70 bytes of the 4 KB allowance, addressed to Maya's 64-character token.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The token is the address, the payload is the letter, and the shared OS connection is why the whole system exists — one radio pipe for every app instead of forty.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From 100 Sends to 9 Taps: Best Effort, Not a Promise</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">engagement</span><span class="tag orange">best effort</span></div>
+                <ul>
+                    <li><b>Reach</b> — a push is the shop's only channel to someone who hasn't opened the app in weeks</li>
+                    <li><b>No promise</b> — Apple and Google document delivery as best-effort: offline phones, stale tokens, opt-outs</li>
+                    <li><b>The funnel</b> — of 100 "order shipped" pushes, 94 are accepted, 86 reach a phone, 62 are seen, 9 are tapped</li>
+                    <li><b>Only-latest</b> — for an offline phone, APNs stores just the most recent push per app; older ones are dropped</li>
+                    <li><b>Design rule</b> — never send anything critical solely as a push; pair it with in-app state or email</li>
+                </ul>
+                <p class="example">Of the shop's 100 pushes one morning, 6 bounce on stale tokens, 8 more never reach a switched-off phone, and only 9 end in a tap — and no step past "sent" was guaranteed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Push is the highest-reach, lowest-guarantee channel a product has — treat every hop after "sent" as probabilistic and keep a second channel for anything that must arrive.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Push Is Not Your App Running</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">silent push</span></div>
+                <ul>
+                    <li><b>The confusion</b> — people picture the app "listening in the background"; the OS listens, once, for everyone</li>
+                    <li><b>The banner</b> — a normal push is drawn by the OS; the app's code runs only if the user taps it</li>
+                    <li><b>Silent pushes</b> — a payload can wake the app briefly with no banner, but the OS rations these strictly</li>
+                    <li><b>The throttle</b> — Apple documents background pushes as budgeted; the OS defers or drops the excess</li>
+                    <li><b>The mistake</b> — building "real-time" sync on silent pushes, then wondering why updates arrive hours late</li>
+                </ul>
+                <p class="example">The shop sends a silent push per price change — 30 an hour; the OS wakes the app for a handful and defers the rest, so carts sync stale all afternoon.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a push as remote code execution. The OS shows the banner itself, wakes the app only on tap or within a strict silent-push budget, and quietly defers everything beyond it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBox(ctx, x, y, w, h, r, fill, stroke, lw) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 2; ctx.stroke(); }
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: the three hops from server to lock screen, app asleep below
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Push, Three Hops: Server → APNs/FCM → OS → Lock Screen', w / 2, 24);
+
+    var by = 120, bh = 44;
+
+    roundBox(ctx, 30, by, 130, bh, 8, 'rgba(42,120,214,0.15)', P.blue, 2);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('shop server', 95, by + 27);
+
+    roundBox(ctx, 215, by, 130, bh, 8, 'rgba(42,120,214,0.15)', P.blue, 2);
+    ctx.fillStyle = P.text;
+    ctx.fillText('APNs / FCM', 280, by + 27);
+
+    roundBox(ctx, 400, by, 150, bh, 8, 'rgba(42,120,214,0.15)', P.blue, 2);
+    ctx.fillStyle = P.text;
+    ctx.fillText('phone OS (one', 475, by + 19);
+    ctx.fillText('open connection)', 475, by + 34);
+
+    roundBox(ctx, 605, by, 95, bh, 8, 'rgba(42,120,214,0.15)', P.green, 2);
+    ctx.fillStyle = P.text;
+    ctx.fillText('lock-screen', 652, by + 19);
+    ctx.fillText('banner', 652, by + 34);
+
+    // arrows with labels above
+    arrow(ctx, 160, by + 22, 211, by + 22, P.ink, 3);
+    arrow(ctx, 345, by + 22, 396, by + 22, P.ink, 3);
+    arrow(ctx, 550, by + 22, 601, by + 22, P.ink, 3);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('HTTPS + device token', 185, by - 10);
+    ctx.fillText('the always-on pipe', 370, by - 10);
+    ctx.fillText('OS draws it', 575, by - 10);
+
+    // asleep app box
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.strokeRect(400, 200, 150, 36);
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the shop's app — asleep", 475, 222);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the app slept through all three hops', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('APNs/FCM relay path is documented platform behavior', w - 12, h - 8);
+});
+
+// c2: one shared connection vs 40 per-app connections, battery per day
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Shared Connection vs 40 Per-App Connections (battery per day)', w / 2, 24);
+
+    var bx = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 80); ctx.lineTo(bx, 240); ctx.stroke();
+
+    // row 1: shared connection, 2% -> 28px
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('1 shared OS connection (1 socket)', 20, 124);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.fillRect(bx, 110, 28, 22);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 110, 28, 22);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui';
+    ctx.fillText('~2%/day', bx + 28 + 8, 125);
+
+    // row 2: 40 per-app connections, 30% -> 420px
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('40 per-app connections (40 sockets)', 20, 204);
+    ctx.fillStyle = 'rgba(217,89,38,0.30)';
+    ctx.fillRect(bx, 190, 420, 22);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 190, 420, 22);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('~30%/day', bx + 420 - 8, 205);
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('this is why Apple and Google sit in the middle', 300, 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('battery percentages illustrative; the 4 KB payload cap is the documented limit', w - 12, h - 8);
+});
+
+// c3: the 100-push funnel
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Shop's 100 Pushes: the Funnel Nobody Guarantees", w / 2, 24);
+
+    var bx = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 258); ctx.stroke();
+
+    var rows = [
+        { y: 70, lab: 'sent by the server', bw: 440, col: P.blue, cnt: '100' },
+        { y: 110, lab: 'accepted by APNs/FCM', bw: 414, col: P.aqua, cnt: '94 (6 stale tokens)' },
+        { y: 150, lab: 'delivered to a phone', bw: 378, col: P.green, cnt: '86 (8 offline)' },
+        { y: 190, lab: 'seen on the lock screen', bw: 273, col: P.yellow, cnt: '62' },
+        { y: 230, lab: 'tapped', bw: 40, col: P.magenta, cnt: '9' }
+    ];
+    var fills = ['rgba(42,120,214,0.30)', 'rgba(25,158,112,0.30)', 'rgba(0,131,0,0.30)', 'rgba(201,133,0,0.30)', 'rgba(213,81,129,0.30)'];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 14);
+        ctx.fillStyle = fills[i];
+        ctx.fillRect(bx, r.y, r.bw, 20);
+        ctx.strokeStyle = r.col; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y, r.bw, 20);
+        ctx.fillStyle = r.col; ctx.font = '11px system-ui';
+        ctx.fillText(r.cnt, bx + r.bw + 8, r.y + 14);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("no hop past 'sent' is guaranteed", 300, 262);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; best-effort delivery is the documented contract', w - 12, h - 8);
+});
+
+// c4: what people imagine a push does vs what actually happens
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Banner Is the OS's Work, Not the App's", w / 2, 24);
+
+    // row 1: what people imagine
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what people imagine', 20, y1 + 4);
+    roundBox(ctx, 170, y1 - 20, 140, 40, 8, 'rgba(42,120,214,0.15)', P.blue, 2);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('push arrives', 240, y1 + 4);
+    arrow(ctx, 310, y1, 426, y1, P.mute, 3);
+    roundBox(ctx, 430, y1 - 20, 170, 40, 8, 'rgba(231,76,60,0.12)', '#e74c3c', 2);
+    ctx.fillStyle = P.text;
+    ctx.fillText('app wakes, runs code freely', 515, y1 + 4);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ the app is asleep', 515, y1 + 38);
+
+    // row 2: what actually happens
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('what actually happens', 20, y2 + 4);
+    roundBox(ctx, 170, y2 - 20, 140, 40, 8, 'rgba(42,120,214,0.15)', P.blue, 2);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('push arrives', 240, y2 + 4);
+    arrow(ctx, 310, y2, 356, y2, P.mute, 3);
+    roundBox(ctx, 360, y2 - 20, 155, 40, 8, 'rgba(0,131,0,0.12)', P.green, 2);
+    ctx.fillStyle = P.text;
+    ctx.fillText('OS draws the banner', 437, y2 + 4);
+    arrow(ctx, 515, y2, 551, y2, P.mute, 3);
+    roundBox(ctx, 555, y2 - 20, 145, 40, 8, 'rgba(0,131,0,0.12)', P.green, 2);
+    ctx.fillStyle = P.text;
+    ctx.fillText('tap → app launches', 627, y2 + 4);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓', 627, y2 + 38);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('silent pushes can wake the app — but the OS budgets them and defers the excess', w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

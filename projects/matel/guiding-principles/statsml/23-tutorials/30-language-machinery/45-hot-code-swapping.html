@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hot Code Swapping</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Hot Code Swapping</h1>
+<p class="subtitle">Erlang lets you replace a function inside a running program without stopping it — like changing a tire while the car is still driving</p>
+
+<div class="card-section">
+    <h2>The Phone Switch That Never Hangs Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">zero downtime</span><span class="tag orange">Erlang</span></div>
+                <ul>
+                    <li><b>The switch</b> — a small-town phone exchange routes 900 live calls at 2pm on a Tuesday</li>
+                    <li><b>The bug</b> — call billing rounds seconds up twice; the fix is a one-line change</li>
+                    <li><b>The old way</b> — stop the switch, install, restart: every live call drops for the update</li>
+                    <li><b>The swap</b> — Erlang loads the new billing function beside the old one while calls keep running</li>
+                    <li><b>The handoff</b> — each call picks up the new code the next time it calls the function</li>
+                </ul>
+                <p class="example">The fix goes live at 2:03pm; all 900 calls stay connected, and callers never learn an upgrade happened.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Hot code swapping replaces a module in a running system — the process keeps its state and simply starts executing the new version at the next call.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Versions in Memory at Once</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">old and new code</span></div>
+                <ul>
+                    <li><b>Two copies</b> — after the load, the VM holds billing v1 and billing v2 side by side</li>
+                    <li><b>The rule</b> — a fully-qualified call (<code>billing:rate(...)</code>) always jumps to the newest version</li>
+                    <li><b>The count</b> — of 900 live calls, a call re-rates every 60s, so within a minute all 900 have crossed over</li>
+                    <li><b>Hand-check</b> — at 15s after the swap roughly 225 calls (a quarter of 900) have re-rated onto v2</li>
+                    <li><b>The purge</b> — once no process runs v1, the old code is deleted; only then is the swap complete</li>
+                </ul>
+                <p class="example">15 seconds after the 2:03pm swap, ~225 calls bill on v2 and ~675 still run v1 — by 2:04pm all 900 are on v2.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The VM keeps old and new code simultaneously; each process migrates at its next qualified call, so the crossover is gradual and no state is lost.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where Always-On Systems Need It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">uptime</span></div>
+                <ul>
+                    <li><b>Telecom</b> — Erlang was built at Ericsson for switches with nine-nines uptime targets</li>
+                    <li><b>Messaging</b> — chat backends carry millions of open connections that must survive deploys</li>
+                    <li><b>The math</b> — 99.9999999% uptime allows ~0.03 seconds of downtime per year; a restart costs minutes</li>
+                    <li><b>The trade</b> — most languages restart instead because two-versions-at-once is hard to reason about</li>
+                    <li><b>Modern echo</b> — rolling deploys and blue-green releases imitate the idea at the server level</li>
+                </ul>
+                <p class="example">A restart deploy that takes 3 minutes uses up ~5,700 years' worth of a nine-nines downtime budget in one shot.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Hot swapping exists for systems where the cost of stopping — dropped calls, lost connections — is worse than the complexity of running two code versions briefly.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not the Same as a Rolling Deploy</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">state</span></div>
+                <ul>
+                    <li><b>The confusion</b> — rolling deploys swap whole servers; hot swapping swaps code inside one process</li>
+                    <li><b>State survives</b> — a hot swap keeps the process's in-memory state (the call's timer keeps ticking)</li>
+                    <li><b>A restart forgets</b> — a rolled server loses its in-memory state unless it was saved elsewhere</li>
+                    <li><b>The catch</b> — if v2 changes the shape of the state, you must write a state-upgrade function</li>
+                    <li><b>The mistake</b> — swapping code that reads old-shaped state and crashes every live process at once</li>
+                </ul>
+                <p class="example">v2 adds a field to the call record; without a converter, all 900 calls crash at their next re-rate — worse than a restart.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a hot swap as free. New code meeting old in-memory state is a real migration — Erlang runs an explicit <code>code_change</code> callback for exactly this.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: live calls during upgrade — restart (drops to 0) vs hot swap (flat)
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var maxCalls = 1000;
+
+    function xOf(min) { return ox + min / 10 * pw; }
+    function yOf(calls) { return baseY - calls / maxCalls * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Upgrade at 2:03pm: Restart Drops Every Call, Hot Swap Drops None', w / 2, 24);
+
+    // gridlines at 250/500/750
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [250, 500, 750].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g, ox - 6, yOf(g) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 2 minutes: 2:00 to 2:10
+    var tickMins = [0, 2, 4, 6, 8, 10];
+    var tickLabs = ['2:00', '2:02', '2:04', '2:06', '2:08', '2:10'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tickMins.length; i++) {
+        ctx.fillText(tickLabs[i], xOf(tickMins[i]), baseY + 16);
+    }
+
+    // swap marker: vertical dashed line at minute 3
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(3), baseY - ph); ctx.lineTo(xOf(3), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('new code loaded', xOf(3), baseY - ph - 6);
+
+    // restart line
+    var rMins = [0, 2, 3, 3.2, 4, 5, 6, 8, 10];
+    var rCalls = [900, 905, 903, 0, 120, 340, 560, 810, 895];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < rMins.length; i++) {
+        var x = xOf(rMins[i]), y = yOf(rCalls[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('restart: all calls drop', xOf(3.6), yOf(160));
+
+    // hot swap line
+    var hCalls = [900, 905, 903, 902, 908, 901, 897, 904, 900];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < rMins.length; i++) {
+        var x = xOf(rMins[i]), y = yOf(hCalls[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('900 calls never notice the upgrade', xOf(6), 90);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('call counts illustrative', w - 12, h - 8);
+});
+
+// c2: stacked area — calls on v1 shrinking vs v2 growing over 60s
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var maxCalls = 900;
+
+    function xOf(sec) { return ox + sec / 60 * pw; }
+    function yOf(calls) { return baseY - calls / maxCalls * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The 60-Second Crossover: 900 Calls Migrate One Call at a Time', w / 2, 24);
+
+    // gridlines at 225/450/675
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [225, 450, 675].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g, ox - 6, yOf(g) + 4);
+    });
+
+    var secs = [0, 15, 30, 45, 60];
+    var v2 = [0, 225, 450, 675, 900];
+
+    // v2 area (bottom): green fill under the v2 line
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), baseY);
+    for (var i = 0; i < secs.length; i++) ctx.lineTo(xOf(secs[i]), yOf(v2[i]));
+    ctx.lineTo(xOf(60), baseY);
+    ctx.closePath(); ctx.fill();
+
+    // v1 area (top): blue fill between the v2 line and constant total 900
+    ctx.fillStyle = 'rgba(42,120,214,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(900));
+    ctx.lineTo(xOf(60), yOf(900));
+    for (var i = secs.length - 1; i >= 0; i--) ctx.lineTo(xOf(secs[i]), yOf(v2[i]));
+    ctx.closePath(); ctx.fill();
+
+    // v2 line edge
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        var x = xOf(secs[i]), y = yOf(v2[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // v1 upper edge at constant 900
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(0), yOf(900)); ctx.lineTo(xOf(60), yOf(900)); ctx.stroke();
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x tick labels every 15s
+    var tickSecs = [0, 15, 30, 45, 60];
+    var tickLabs = ['0s', '15s', '30s', '45s', '60s'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tickSecs.length; i++) {
+        ctx.fillText(tickLabs[i], xOf(tickSecs[i]), baseY + 16);
+    }
+
+    // band labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('still on v1', xOf(12), yOf(900) + (yOf(180) - yOf(900)) / 2 + 4);
+    ctx.fillStyle = P.green;
+    ctx.fillText('migrated to v2', xOf(45), yOf(200) + 30);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('total never dips below 900 — no dropped calls', xOf(30), 46);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('linear migration, illustrative — each call re-rates once per minute', w - 12, h - 8);
+});
+
+// c3: one 3-minute restart vs yearly downtime budgets
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One 3-Minute Restart vs the Yearly Downtime Budget', w / 2, 24);
+
+    var bx = 230; // baseline x
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 50); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { y: 70,  label: '99.9% — budget 526 min/yr',   budgetW: 440, deployW: 3,   deployColor: P.green,   deployLab: '3 min' },
+        { y: 120, label: '99.99% — budget 53 min/yr',   budgetW: 240, deployW: 14,  deployColor: P.green,   deployLab: '3 min' },
+        { y: 170, label: '99.999% — budget 5.3 min/yr', budgetW: 120, deployW: 68,  deployColor: P.orange,  deployLab: '3 min' },
+        { y: 220, label: '99.9999% — budget 0.5 min/yr', budgetW: 40, deployW: 240, deployColor: '#e74c3c', deployLab: '3 min' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        // row label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 11);
+        // budget bar
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(bx, r.y, r.budgetW, 14);
+        // deploy overlay bar
+        ctx.fillStyle = r.deployColor;
+        ctx.fillRect(bx, r.y, r.deployW, 14);
+        // width label at bar end
+        ctx.fillStyle = r.deployColor; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        var endX = bx + Math.max(r.budgetW, r.deployW) + 8;
+        if (i === 3) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui';
+            ctx.fillText('6× over budget', endX, r.y + 11);
+        } else {
+            ctx.fillText(r.deployLab + ' deploy', endX, r.y + 11);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('past four nines, restarts stop being an option', w - 20, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic, budget minutes exact', w - 12, h - 8);
+});
+
+// c4: old state meets new code — the code_change step
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Old State Meets New Code: the code_change Step', w / 2, 24);
+
+    function roundRect(x, y, bw, bh, r, fill, stroke) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.arcTo(x + bw, y, x + bw, y + r, r);
+        ctx.lineTo(x + bw, y + bh - r);
+        ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+        ctx.lineTo(x + r, y + bh);
+        ctx.arcTo(x, y + bh, x, y + bh - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    function arrow(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    // Row 1: no converter (y=95)
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no converter', 20, y1 + 25);
+
+    roundRect(180, y1, 160, 40, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('state v1 {id, start}', 260, y1 + 25);
+
+    arrow(345, y1 + 20, 425, y1 + 20, P.mute);
+
+    roundRect(430, y1, 170, 40, 8, 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('code v2 reads .plan — crash', 515, y1 + 25);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ 900 processes die', 515, y1 + 58);
+
+    // Row 2: with code_change (y=205)
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with code_change', 20, y2 + 25);
+
+    roundRect(180, y2, 160, 40, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('state v1 {id, start}', 260, y2 + 25);
+
+    arrow(345, y2 + 20, 355, y2 + 20, P.mute);
+
+    roundRect(360, y2, 170, 40, 8, 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('convert: add plan=default', 445, y2 + 25);
+
+    arrow(535, y2 + 20, 555, y2 + 20, P.mute);
+
+    roundRect(560, y2, 130, 40, 8, 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('code v2 runs', 625, y2 + 25);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓', 625, y2 + 58);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the swap is instant; the state migration is the real work', w / 2, 285);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

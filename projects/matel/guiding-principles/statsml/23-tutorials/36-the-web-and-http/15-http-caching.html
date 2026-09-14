@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTTP Caching</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>HTTP Caching</h1>
+<p class="subtitle">A browser can keep a copy of a response and reuse it — Cache-Control says how long to trust the copy, and ETag lets it be re-checked for 0.3 KB instead of re-downloaded</p>
+
+<div class="card-section">
+    <h2>The Same Menu Photo, Three Visits</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">browser cache</span><span class="tag orange">HTTP headers</span></div>
+                <ul>
+                    <li><b>The photo</b> — a coffee shop's homepage shows latte.jpg, a 240 KB picture that rarely changes</li>
+                    <li><b>First visit, 9:00</b> — the browser downloads all 240 KB; the reply says Cache-Control: max-age=3600</li>
+                    <li><b>The fingerprint</b> — the reply also carries ETag: "v7", a short tag identifying the file's current bytes</li>
+                    <li><b>Second visit, 9:40</b> — still inside the hour, the browser reuses its saved copy; zero network traffic</li>
+                    <li><b>Third visit, 10:15</b> — past the hour, the browser asks "still v7?" and the server answers 304 Not Modified</li>
+                    <li><b>The win</b> — that 304 reply is about 0.3 KB of headers, not the 240 KB photo again</li>
+                </ul>
+                <p class="example">Three visits, one download — 240 KB at 9:00, 0 KB at 9:40, 0.3 KB at 10:15; the photo crosses the network exactly once.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> HTTP caching lets the browser reuse a saved response: Cache-Control sets how long the copy is trusted, and ETag makes an expired copy cheap to re-check instead of re-fetch.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The max-age Clock and the ETag Handshake</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">freshness math</span><span class="tag orange">304</span></div>
+                <ul>
+                    <li><b>The rule</b> — max-age=3600 means the copy is fresh for 3,600 s (one hour) counted from 9:00:00</li>
+                    <li><b>9:40 check</b> — age is 2,400 s, under the 3,600 s budget, so the cache answers alone: 0 KB moved</li>
+                    <li><b>10:15 check</b> — age is 4,500 s, over budget by 900 s: stale, so the browser sends If-None-Match: "v7"</li>
+                    <li><b>Server side</b> — the file's current ETag is still "v7", so the server replies 304 with no body at all</li>
+                    <li><b>Bytes saved</b> — 0.3 KB instead of 240 KB on that visit, a 99.9% saving for an unchanged photo</li>
+                    <li><b>If it had changed</b> — the new file gets ETag "v8" and a full 200 with 240 KB; nothing stale is shown</li>
+                </ul>
+                <p class="example">10:15 minus 9:00 is 4,500 s of age against a 3,600 s budget — stale by 900 s, so one cheap "still v7?" round trip replaces a full download.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Freshness is plain arithmetic — age versus max-age; the ETag handshake only runs once the copy is stale, and it costs a 304 (0.3 KB) when the bytes haven't changed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Saved Bytes Show Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">page speed</span><span class="tag orange">CDN</span></div>
+                <ul>
+                    <li><b>Repeat visits</b> — a page with 30 cached assets skips 30 downloads; only the fresh HTML is fetched</li>
+                    <li><b>The numbers</b> — first visit moves 1,800 KB and takes 2.4 s; the repeat moves 60 KB in 0.4 s</li>
+                    <li><b>CDNs</b> — edge servers obey the same headers, serving one cached origin response to thousands of users</li>
+                    <li><b>Server load</b> — answering a 304 is a fingerprint compare, not a file read plus a 240 KB transfer</li>
+                    <li><b>Stale-data bugs</b> — a long max-age on changing data shows old prices until the clock runs out</li>
+                    <li><b>The pattern</b> — long max-age for fingerprinted files (app.9f3c.css), short or none for the HTML itself</li>
+                </ul>
+                <p class="example">After a price change published with max-age=86400, some customers can see yesterday's price for up to 24 hours — the cache is doing exactly what it was told.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Caching is the cheapest speed win on the web, but max-age is a promise the server cannot take back — pick durations by how bad it is for a user to see the old copy.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>no-cache Does Not Mean "Don't Cache"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">Cache-Control</span></div>
+                <ul>
+                    <li><b>The trap</b> — Cache-Control: no-cache still stores the reply; it only forces a check before every reuse</li>
+                    <li><b>The real off switch</b> — no-store is the directive that keeps a response out of the cache entirely</li>
+                    <li><b>What no-cache buys</b> — each reuse costs one revalidation round trip, but a 304 keeps that at 0.3 KB</li>
+                    <li><b>max-age=0</b> — a close cousin: store the copy, but it is stale immediately, so always revalidate</li>
+                    <li><b>The symptom</b> — a team picks no-cache to keep a private reply off disk, and it gets stored anyway</li>
+                    <li><b>The cost</b> — with no-store, three visits move 240 + 240 + 240 KB; with no-cache, 240 + 0.3 + 0.3 KB</li>
+                </ul>
+                <p class="example">Serving latte.jpg with no-cache instead of no-store cuts three visits from 720 KB to 240.6 KB — and the copy is still verified as "v7" before every reuse.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading no-cache as "never cache". It means "cache it, but revalidate before each use" — if the response must never be stored at all, the directive is no-store.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: three visits — full download, cache hit, revalidation
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Photo, Three Visits: 240 KB, then 0 KB, then 0.3 KB', w / 2, 24);
+
+    function box(x, cy, bw, fill, border, label) {
+        roundRectPath(ctx, x, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, cy + 4);
+    }
+    function arrow(x1, x2, y, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.moveTo(x2, y); ctx.lineTo(x2 - 9, y - 5); ctx.lineTo(x2 - 9, y + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: 9:00 first visit
+    var y1 = 95;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('9:00 first visit', 20, y1 + 4);
+    box(110, y1, 150, 'rgba(42,120,214,0.15)', P.blue, 'GET latte.jpg');
+    arrow(260, 430, y1, P.blue);
+    box(430, y1, 190, 'rgba(0,131,0,0.12)', P.green, '200 OK — 240 KB body');
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('max-age=3600, ETag: "v7"', 345, y1 + 32);
+
+    // row 2: 9:40 cache hit
+    var y2 = 165;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('9:40 cache hit', 20, y2 + 4);
+    box(110, y2, 300, 'rgba(25,158,112,0.12)', P.aqua, 'served from cache — 0 KB on the network');
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('server never asked', 470, y2 + 4);
+
+    // row 3: 10:15 revalidate
+    var y3 = 235;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('10:15 revalidate', 20, y3 + 4);
+    box(110, y3, 185, 'rgba(42,120,214,0.15)', P.blue, 'GET + If-None-Match: "v7"');
+    arrow(295, 430, y3, P.blue);
+    box(430, y3, 190, 'rgba(74,58,167,0.12)', P.violet, '304 Not Modified — 0.3 KB');
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'right';
+    ctx.fillText('the 240 KB photo travels only once', 700, 272);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444';
+    ctx.fillText('sizes illustrative', 705, 292);
+});
+
+// c2: freshness timeline 9:00-10:30 with bytes-transferred bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+    var x0 = 60, baseY = 245, plotW = 600, plotH = 180;
+    function xOf(min) { return x0 + min / 90 * plotW; } // minutes after 9:00, 9:00-10:30
+    function yOf(kb) { return baseY - kb / 240 * plotH; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fresh Until 10:00: Age vs max-age Decides What Goes Over the Wire', w / 2, 24);
+
+    // fresh window shading
+    ctx.fillStyle = 'rgba(0,131,0,0.10)';
+    ctx.fillRect(xOf(0), baseY - plotH, xOf(60) - xOf(0), plotH);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('fresh — max-age=3600', (xOf(0) + xOf(60)) / 2, 78);
+    ctx.fillStyle = P.yellow;
+    ctx.fillText('stale — must revalidate', (xOf(60) + xOf(90)) / 2, 78);
+
+    // y gridlines and labels
+    var yTicks = [60, 120, 180];
+    for (var g = 0; g < 3; g++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, yOf(yTicks[g])); ctx.lineTo(x0 + plotW, yOf(yTicks[g])); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[g]), x0 - 8, yOf(yTicks[g]) + 4);
+    }
+    // axes and x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, baseY - plotH); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    var tickMins = [0, 30, 60, 90];
+    var tickLabs = ['9:00', '9:30', '10:00', '10:30'];
+    for (var t = 0; t < 4; t++) {
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[t], xOf(tickMins[t]), baseY + 18);
+    }
+
+    // expiry marker at 10:00
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(60), baseY - plotH); ctx.lineTo(xOf(60), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('age = 3,600 s', xOf(60) + 6, 100);
+
+    // bars at the three visits
+    // 9:00 — 200, 240 KB
+    ctx.fillStyle = P.blue;
+    ctx.fillRect(xOf(0), yOf(240), 30, baseY - yOf(240));
+    ctx.font = '11px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('200 — 240 KB', xOf(0) + 15 + 22, yOf(240) - 6);
+    // 9:40 — cache hit, no bar
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.aqua;
+    ctx.fillText('cache hit — 0 KB', xOf(40), baseY - 8);
+    // 10:15 — 304, 0.3 KB
+    ctx.fillStyle = P.violet;
+    ctx.fillRect(xOf(75) - 15, baseY - 2, 30, 2);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText('304 — 0.3 KB', xOf(75), baseY - 10);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText("stale ≠ re-download: ask 'still v7?' first", xOf(50), 105);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; times exact for max-age=3600', 705, 292);
+});
+
+// c3: first visit vs repeat visit — bytes and load time
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+    var baseX = 230;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Page, Second Visit: 30× Fewer Bytes, 6× Faster', w / 2, 24);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 55); ctx.lineTo(baseX, 245); ctx.stroke();
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('bytes moved', 20, 62);
+    ctx.fillText('load time', 20, 172);
+
+    var rows = [
+        { y: 85,  lab: 'first visit — 1,800 KB', width: 440, solid: false, val: '1,800 KB' },
+        { y: 120, lab: 'repeat visit — 60 KB',   width: 15,  solid: true,  val: '60 KB' },
+        { y: 195, lab: 'first visit — 2.4 s',    width: 440, solid: false, val: '2.4 s' },
+        { y: 230, lab: 'repeat visit — 0.4 s',   width: 73,  solid: true,  val: '0.4 s' }
+    ];
+    for (var r = 0; r < 4; r++) {
+        var row = rows[r];
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+        ctx.fillText(row.lab, 20, row.y + 4);
+        if (row.solid) {
+            ctx.fillStyle = P.aqua;
+            ctx.fillRect(baseX, row.y - 9, row.width, 18);
+            ctx.font = '11px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+            ctx.fillText(row.val, baseX + row.width + 8, row.y + 4);
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(baseX, row.y - 9, row.width, 18);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(baseX, row.y - 9, row.width, 18);
+            ctx.font = '11px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'right';
+            ctx.fillText(row.val, baseX + row.width - 8, row.y + 4);
+        }
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'right';
+    ctx.fillText('only the HTML re-crossed the network', 700, 160);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444';
+    ctx.fillText('page weights illustrative; bar widths proportional per group', 705, 290);
+});
+
+// c4: KB moved per visit under no-store, no-cache, max-age=3600
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+    var baseY = 245, plotH = 180, x0 = 60, plotW = 600;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Directives, Three Visits: KB Moved Each Time', w / 2, 24);
+
+    // y gridlines
+    var yTicks = [60, 120, 180];
+    for (var g = 0; g < 3; g++) {
+        var gy = baseY - yTicks[g] / 240 * plotH;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x0 + plotW, gy); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(yTicks[g]), x0 - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, baseY - plotH); ctx.lineTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+
+    var groupX = [170, 370, 570];
+    var groupLabs = ['visit 1 (9:00)', 'visit 2 (9:40)', 'visit 3 (10:15)'];
+    // pixel heights per directive per visit
+    var heights = {
+        noStore: [180, 180, 180],
+        noCache: [180, 2, 2],
+        maxAge: [180, 0, 0]
+    };
+    var valLabs = {
+        noStore: ['240', '240', '240'],
+        noCache: ['240', '0.3', '0.3'],
+        maxAge: ['240', '0', '0']
+    };
+    var barW = 26, gap = 3;
+    for (var gI = 0; gI < 3; gI++) {
+        var startX = groupX[gI] - (barW * 3 + gap * 2) / 2;
+        var bars = [
+            { h: heights.noStore[gI], v: valLabs.noStore[gI], color: P.orange },
+            { h: heights.noCache[gI], v: valLabs.noCache[gI], color: P.blue },
+            { h: heights.maxAge[gI],  v: valLabs.maxAge[gI],  color: P.green }
+        ];
+        for (var b = 0; b < 3; b++) {
+            var bx = startX + b * (barW + gap);
+            if (bars[b].h > 0) {
+                ctx.fillStyle = bars[b].color;
+                ctx.fillRect(bx, baseY - bars[b].h, barW, bars[b].h);
+            }
+            ctx.font = '11px system-ui'; ctx.fillStyle = bars[b].color; ctx.textAlign = 'center';
+            ctx.fillText(bars[b].v, bx + barW / 2, baseY - bars[b].h - 5);
+        }
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(groupLabs[gI], groupX[gI], baseY + 18);
+    }
+
+    // legend
+    var legend = [
+        { lab: 'no-store', color: P.orange },
+        { lab: 'no-cache', color: P.blue },
+        { lab: 'max-age=3600', color: P.green }
+    ];
+    var lx = 400;
+    for (var L = 0; L < 3; L++) {
+        ctx.fillStyle = legend[L].color;
+        ctx.fillRect(lx, 46, 12, 12);
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+        ctx.fillText(legend[L].lab, lx + 17, 56);
+        lx += 17 + legend[L].lab.length * 7 + 18;
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta; ctx.textAlign = 'center';
+    ctx.fillText('no-cache still caches — it just checks first', w / 2, 80);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; 0.3 KB is the 304 header cost', 705, 290);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

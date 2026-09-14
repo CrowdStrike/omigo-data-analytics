@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tail Calls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Tail Calls</h1>
+<p class="subtitle">A tail call is a recursive call made as the very last act of a function &mdash; nothing is left waiting for its answer, so the computer can reuse one stack frame and run the recursion like a loop</p>
+
+<div class="card-section">
+    <h2>Adding a Pile of Receipts Two Ways</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running total</span><span class="tag orange">one reused frame</span></div>
+                <ul>
+                    <li><b>The pile</b> &mdash; a cashier totals 5 receipts: 12, 7, 5, 9, 4 &mdash; and does it by peeling one off the top</li>
+                    <li><b>The come-back way</b> &mdash; "total = my receipt + total of the rest": each receipt waits for the rest's answer</li>
+                    <li><b>Waiting costs memory</b> &mdash; every waiting receipt keeps its own stack frame open; 5 receipts, 5 frames</li>
+                    <li><b>The carry-forward way</b> &mdash; pass a running total down with the pile; the top receipt is done the instant it hands off</li>
+                    <li><b>The tail call</b> &mdash; when the hand-off is the very last act, nobody needs to come back, so one frame is reused</li>
+                    <li><b>Loop in disguise</b> &mdash; the compiler can replace "call myself" with "jump back to the top": recursion becomes a loop</li>
+                </ul>
+                <p class="example">Handing the pile plus "running total so far: 12" to the next person and walking away is a tail call; staying to add your 12 after they finish is not.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> If the recursive call is the last thing the function does, no one waits &mdash; the same stack frame can be reused, and the recursion runs as a loop.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Hand-Checking the Total: 12 + 7 + 5 + 9 + 4 = 37</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">accumulator</span></div>
+                <ul>
+                    <li><b>The rule</b> &mdash; sum(pile, total): if the pile is empty, answer total; else sum(rest, total + top)</li>
+                    <li><b>Start</b> &mdash; sum([12, 7, 5, 9, 4], 0): peel the 12, hand off sum([7, 5, 9, 4], 12)</li>
+                    <li><b>Each step is final</b> &mdash; nothing is written down to do later; the total travels with the pile</li>
+                    <li><b>The chain</b> &mdash; totals go 0 &rarr; 12 &rarr; 19 &rarr; 24 &rarr; 33 &rarr; 37 as the pile shrinks to empty</li>
+                    <li><b>The answer</b> &mdash; the empty pile returns 37 straight to the original caller; no unwinding, no adding on the way back</li>
+                </ul>
+                <p class="example">Redo it on paper: 0+12=12, 12+7=19, 19+5=24, 24+9=33, 33+4=37 &mdash; that pencil trace IS the loop the compiler runs.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The accumulator does the arithmetic on the way down (0, 12, 19, 24, 33, 37), so the way back up has nothing to do &mdash; which is exactly why the frames can be thrown away.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why a Loop in Disguise Matters</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">stack overflow</span><span class="tag green">constant memory</span></div>
+                <ul>
+                    <li><b>Small piles hide it</b> &mdash; 5 receipts either way is fine; the difference appears when the pile gets deep</li>
+                    <li><b>The crash</b> &mdash; come-back recursion needs one frame per receipt, and the stack allows about 10,000 frames</li>
+                    <li><b>Day-of-sales pile</b> &mdash; a 20,000-receipt pile overflows the come-back version at receipt 10,000</li>
+                    <li><b>The tail version</b> &mdash; reuses 1 frame no matter the pile size; 20,000 receipts, still 1 frame</li>
+                    <li><b>Who optimizes</b> &mdash; Scheme and some functional languages guarantee it; C compilers often do; Python never does</li>
+                    <li><b>Same trick elsewhere</b> &mdash; walking long linked lists, retry loops, state machines written as mutual calls</li>
+                </ul>
+                <p class="example">The come-back version dies with "maximum recursion depth exceeded" on a 20,000-receipt day; the tail version totals it in one reused frame.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Tail-call optimization turns "one stack frame per item" into "one stack frame, period" &mdash; deep recursion stops being a crash risk and becomes an ordinary loop.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What Counts as "Last"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">pending work</span></div>
+                <ul>
+                    <li><b>The test</b> &mdash; after the recursive call returns, is there anything left to do? If yes, it is not a tail call</li>
+                    <li><b>Looks last, isn't</b> &mdash; <code>return 12 + sum(rest)</code>: the call sits at the end of the line, but the "+ 12" runs after it</li>
+                    <li><b>Truly last</b> &mdash; <code>return sum(rest, total + 12)</code>: the adding happens before the call; the call's answer is THE answer</li>
+                    <li><b>The rewrite</b> &mdash; moving the pending "+" into an accumulator argument is what converts one form into the other</li>
+                    <li><b>Language fine print</b> &mdash; writing a perfect tail call in Python still overflows; the language must do the optimization</li>
+                </ul>
+                <p class="example"><code>return 12 + sum(rest)</code> must come back for the "+", so its frame stays open &mdash; one plus sign is the whole difference from the tail form.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Judging by where the call appears on the line instead of by pending work. "Last thing executed" is the test, not "last thing written" &mdash; and even a true tail call only saves memory if the language optimizes it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: two stack diagrams — 5 stacked frames vs 1 reused frame
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 5 Receipts: One Way Stacks Frames, One Way Reuses a Frame', w / 2, 24);
+
+    // left panel: come back and add
+    var lx = 40, boxW = 250, boxH = 30, gap = 6;
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('come back and add', lx + boxW / 2, 52);
+
+    var labels = ['sum(12,7,5,9,4) — waiting', 'sum(7,5,9,4) — waiting', 'sum(5,9,4) — waiting', 'sum(9,4) — waiting', 'sum(4) — working'];
+    var notes = ['+12', '+7', '+5', '+9'];
+    for (var i = 0; i < 5; i++) {
+        var by = 250 - i * (boxH + gap);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(lx, by, boxW, boxH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(lx, by, boxW, boxH);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labels[i], lx + boxW / 2, by + 20);
+        if (i < 4) {
+            ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(notes[i], lx + boxW + 8, by + 20);
+        }
+    }
+
+    // right panel: carry the total forward
+    var rx = 400;
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('carry the total forward', rx + boxW / 2, 52);
+
+    var oy = 250;
+    ctx.fillStyle = 'rgba(0,131,0,0.15)';
+    ctx.fillRect(rx, oy, boxW, boxH);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(rx, oy, boxW, boxH);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sum(pile, total) — reused', rx + boxW / 2, oy + 20);
+
+    // circular arrow above the reused frame (two arcs + arrowhead)
+    var ccx = rx + boxW / 2, ccy = 212, r = 22;
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ccx, ccy, r, -0.4 * Math.PI, 0.55 * Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ccx, ccy, r, 0.65 * Math.PI, 1.5 * Math.PI); ctx.stroke();
+    // arrowhead at the end of the first arc
+    var ax = ccx + r * Math.cos(0.55 * Math.PI), ay = ccy + r * Math.sin(0.55 * Math.PI);
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax - 8, ay - 6);
+    ctx.lineTo(ax - 2, ay - 10);
+    ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('total: 0 → 12 → 19 → 24 → 33 → 37', rx + boxW / 2, 172);
+
+    // annotation between panels
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('left: 5 frames held open', 450, 112);
+    ctx.fillText('right: 1 frame, reused 5 times', 450, 130);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same pile, same answer 37 — different memory shape', w - 12, h - 8);
+});
+
+// c2: hand-off chain — shrinking pile, growing total
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Running Total Travels With the Pile', w / 2, 24);
+
+    var piles = ['[12,7,5,9,4]', '[7,5,9,4]', '[5,9,4]', '[9,4]', '[4]', '[ ] empty'];
+    var totals = ['total 0', 'total 12', 'total 19', 'total 24', 'total 33', 'answer 37'];
+    var addLabs = ['+12', '+7', '+5', '+9', '+4'];
+    var bw = 95, bh = 64, cy = 150;
+    var pitch = (695 - 25 - bw) / 5; // 115
+
+    function roundRect(x, y, wd, ht, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + wd - r, y); ctx.arcTo(x + wd, y, x + wd, y + r, r);
+        ctx.lineTo(x + wd, y + ht - r); ctx.arcTo(x + wd, y + ht, x + wd - r, y + ht, r);
+        ctx.lineTo(x + r, y + ht); ctx.arcTo(x, y + ht, x, y + ht - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    for (var i = 0; i < 6; i++) {
+        var bx = 25 + i * pitch, by = cy - bh / 2;
+        var last = (i === 5);
+        roundRect(bx, by, bw, bh, 6);
+        ctx.fillStyle = last ? 'rgba(0,131,0,0.15)' : 'rgba(42,120,214,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = last ? P.green : P.blue; ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(piles[i], bx + bw / 2, cy - 6);
+        if (last) {
+            ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+        } else {
+            ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui';
+        }
+        ctx.fillText(totals[i], bx + bw / 2, cy + 16);
+    }
+
+    // arrows between boxes
+    for (var i = 0; i < 5; i++) {
+        var x1 = 25 + i * pitch + bw, x2 = 25 + (i + 1) * pitch;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1 + 2, cy); ctx.lineTo(x2 - 4, cy); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2 - 2, cy);
+        ctx.lineTo(x2 - 9, cy - 4);
+        ctx.lineTo(x2 - 9, cy + 4);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = P.orange; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(addLabs[i], (x1 + x2) / 2, cy - 8);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each box replaces the last — nothing waits behind it', 360, 70);
+
+    // trace line
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('totals: 0 → 12 → 19 → 24 → 33 → 37', 245, 245);
+    ctx.fillStyle = P.green;
+    ctx.fillText('stack depth the whole time: 1 frame', 540, 245);
+});
+
+// c3: frames needed vs receipts — crash line vs flat tail-call line
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Frames Needed vs Receipts in the Pile', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 590, ph = 185;
+    var xMax = 20000, yMax = 12000;
+    function X(v) { return ox + v / xMax * pw; }
+    function Y(v) { return baseY - v / yMax * ph; }
+
+    // gridlines + y ticks
+    var yTicks = [0, 4000, 8000, 12000];
+    for (var i = 0; i < yTicks.length; i++) {
+        var gy = Y(yTicks[i]);
+        if (yTicks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(yTicks[i].toLocaleString('en-US'), ox - 8, gy + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var xTicks = [0, 5000, 10000, 15000, 20000];
+    var xLabs = ['0', '5,000', '10,000', '15,000', '20,000'];
+    for (var i = 0; i < xTicks.length; i++) {
+        var gx = X(xTicks[i]);
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(gx, baseY); ctx.lineTo(gx, baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(xLabs[i], gx, baseY + 20);
+    }
+
+    // stack limit dashed red line at 10,000 frames
+    var limY = Y(10000);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, limY); ctx.lineTo(ox + pw, limY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('stack limit ~10,000 frames', ox + 6, limY - 8);
+
+    // come-back line: one frame per receipt, stops at the limit
+    var cb = [[0, 0], [2500, 2500], [5000, 5000], [7500, 7500], [10000, 10000]];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < cb.length; i++) {
+        var px = X(cb[i][0]), py = Y(cb[i][1]);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ crash', X(10000) + 8, Y(10000) + 4);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one frame per receipt', X(5500), Y(6300));
+
+    // tail-call line: flat at 1 frame (drawn a few px above baseline)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(X(0), baseY - 4); ctx.lineTo(X(20000), baseY - 4); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('tail call: 1 frame, always', X(20000), baseY - 12);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('20,000 receipts:', 545, 115);
+    ctx.fillText('crash vs. still 1 frame', 545, 133);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('frame counts and 10,000 limit illustrative — real limits vary by language', w - 12, h - 8);
+});
+
+// c4: two code boxes — the pending "+" decides it
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Plus Sign Decides It', w / 2, 24);
+
+    function roundRect(x, y, wd, ht, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + wd - r, y); ctx.arcTo(x + wd, y, x + wd, y + r, r);
+        ctx.lineTo(x + wd, y + ht - r); ctx.arcTo(x + wd, y + ht, x + wd - r, y + ht, r);
+        ctx.lineTo(x + r, y + ht); ctx.arcTo(x, y + ht, x, y + ht - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    // left box: not a tail call
+    var lx = 40, ly = 70, lw2 = 305, lh2 = 140;
+    roundRect(lx, ly, lw2, lh2, 8);
+    ctx.fillStyle = 'rgba(231,76,60,0.06)'; ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('not a tail call', lx + lw2 / 2, ly - 8);
+
+    var code1 = 'return 12 + sum(rest)';
+    ctx.font = '14px ui-monospace, Menlo, monospace';
+    var cw1 = ctx.measureText(code1).width;
+    var cx1 = lx + lw2 / 2 - cw1 / 2, cy1 = ly + 48;
+    ctx.fillStyle = P.text; ctx.textAlign = 'left';
+    ctx.fillText(code1, cx1, cy1);
+    // circle around the "+" glyph
+    var preW = ctx.measureText('return 12 ').width;
+    var plusW = ctx.measureText('+').width;
+    var plusX = cx1 + preW + plusW / 2;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(plusX, cy1 - 5, 11, 0, 2 * Math.PI); ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the + runs AFTER the call returns', lx + lw2 / 2, ly + 96);
+    ctx.fillText('frame must stay open and wait', lx + lw2 / 2, ly + 114);
+
+    // right box: tail call
+    var rx = 375, ry = 70, rw2 = 305, rh2 = 140;
+    roundRect(rx, ry, rw2, rh2, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.06)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('tail call', rx + rw2 / 2, ry - 8);
+
+    ctx.fillStyle = P.text; ctx.font = '14px ui-monospace, Menlo, monospace';
+    ctx.fillText('return sum(rest, total + 12)', rx + rw2 / 2, ry + 48);
+
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui';
+    ctx.fillText('the + runs BEFORE the call', rx + rw2 / 2, ry + 96);
+    ctx.fillText('nothing pending — frame can be reused', rx + rw2 / 2, ry + 114);
+
+    // arrow left box -> right box
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(lx + lw2 + 3, 140); ctx.lineTo(rx - 6, 140); ctx.stroke();
+    ctx.fillStyle = P.mute;
+    ctx.beginPath();
+    ctx.moveTo(rx - 3, 140);
+    ctx.lineTo(rx - 11, 135);
+    ctx.lineTo(rx - 11, 145);
+    ctx.closePath(); ctx.fill();
+    ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('move the + into an argument', (lx + lw2 + rx) / 2, 128);
+
+    // bottom annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('tail = the call is the very last act — its answer is your answer', w / 2, 260);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,49 @@
+# The Web & HTTP
+
+**Page type:** grid page (tutorials category grid: single flat 4-column nav-grid of cards with topic tags)
+**HTML title tag:** The Web & HTTP
+
+**Subtitle:** How the web actually talks — addresses, plain-text messages, verbs that make promises, memory bolted onto a forgetful protocol, and proving who you are.
+
+## Cards
+
+Each card links to a topic page under `web-http/`. The card shows a colored uppercase subcategory label (`.card-num`), a numbered title, a one-line description, and 2-4 topic tag pills. All cards sit in one flat `.nav-grid`; the colored labels carry the grouping.
+
+| # | Category | Title | Link | Description | Topic tags |
+|---|----------|-------|------|-------------|------------|
+| 1 | URLS & MESSAGES | Anatomy of a URL | [36-the-web-and-http/01-anatomy-of-a-url.md](36-the-web-and-http/01-anatomy-of-a-url.md) | Every web address is six labeled parts glued together by fixed punctuation — learn the delimiters and you can read any link like a sentence. | scheme, host & path, delimiters |
+| 2 | URLS & MESSAGES | Query Parameters | [36-the-web-and-http/02-query-parameters.md](36-the-web-and-http/02-query-parameters.md) | Everything after the ? in a web address is key=value data riding along with the request — the URL doubles as a data channel. | key=value, ? and &, analytics tags |
+| 3 | URLS & MESSAGES | Anatomy of an HTTP Request & Response | [36-the-web-and-http/03-anatomy-of-an-http-request-and-response.md](36-the-web-and-http/03-anatomy-of-an-http-request-and-response.md) | Every HTTP message is plain text in four parts — a first line, some headers, one blank line, and an optional body — and you can read every byte. | request line, headers, body |
+| 4 | URLS & MESSAGES | HTTP Headers | [36-the-web-and-http/04-http-headers.md](36-the-web-and-http/04-http-headers.md) | Before any web message arrives, the two machines exchange short key: value notes about it — headers are that metadata conversation. | metadata, key: value, content-type |
+| 5 | URLS & MESSAGES | Status Codes as a Language | [36-the-web-and-http/05-status-codes-as-a-language.md](36-the-web-and-http/05-status-codes-as-a-language.md) | Every HTTP response opens with a three-digit code — the first digit says whose fault it was, and about a dozen codes cover almost everything. | 2xx/4xx/5xx, whose fault, error handling |
+| 6 | URLS & MESSAGES | Redirects | [36-the-web-and-http/06-redirects.md](36-the-web-and-http/06-redirects.md) | The web's "we moved" note — the server answers with a 3xx code and a new address in the Location header, and the browser follows it before you notice. | 3xx, Location header, 301 vs 302 |
+| 7 | APIS & PROTOCOL | Forms & Method Semantics | [36-the-web-and-http/07-forms-and-method-semantics.md](36-the-web-and-http/07-forms-and-method-semantics.md) | A form that only looks something up uses GET, a form that changes something uses POST — the method is a promise about sending the request twice. | GET vs POST, resubmission, safe methods |
+| 8 | APIS & PROTOCOL | REST | [36-the-web-and-http/08-rest.md](36-the-web-and-http/08-rest.md) | A REST API gives every piece of data its own URL and reuses the same few HTTP verbs on all of them — the URL is the noun, the verb says what to do. | resources, nouns and verbs, endpoints |
+| 9 | APIS & PROTOCOL | HTTP Semantics | [36-the-web-and-http/09-http-semantics.md](36-the-web-and-http/09-http-semantics.md) | Every verb is a promise about running twice — GET swears "nothing changes", PUT and DELETE swear "twice is the same as once", POST promises nothing. | idempotency, safety, retries |
+| 10 | APIS & PROTOCOL | REST vs RPC vs GraphQL | [36-the-web-and-http/10-rest-vs-rpc-vs-graphql.md](36-the-web-and-http/10-rest-vs-rpc-vs-graphql.md) | Three ways to ask a server for the same data — name the thing (REST), name the action (RPC), or name the exact fields you want (GraphQL). | API styles, over-fetching, endpoints |
+| 11 | APIS & PROTOCOL | HTTP/2 & HTTP/3 | [36-the-web-and-http/11-http-2-and-http-3.md](36-the-web-and-http/11-http-2-and-http-3.md) | HTTP/2 lets one connection carry many requests at once; HTTP/3 abandons TCP itself, so one lost packet can no longer stall the whole page. | multiplexing, QUIC, head-of-line blocking |
+| 12 | STATE & PATTERNS | Cookies, localStorage, Sessions | [36-the-web-and-http/12-cookies-localstorage-sessions.md](36-the-web-and-http/12-cookies-localstorage-sessions.md) | HTTP forgets you the instant a page loads — these are three places the web stashes a note so the next request still knows who you are. | browser storage, statelessness, remembering users |
+| 13 | STATE & PATTERNS | Cookie Attributes | [36-the-web-and-http/13-cookie-attributes.md](36-the-web-and-http/13-cookie-attributes.md) | A cookie is just a name=value pair the browser re-sends — the attributes after the semicolons are rules about when and to whom it gets re-sent. | HttpOnly, Secure, SameSite |
+| 14 | STATE & PATTERNS | How a Session Actually Works | [36-the-web-and-http/14-how-a-session-actually-works.md](36-the-web-and-http/14-how-a-session-actually-works.md) | A session is the server's memory of one login, carried back and forth as a tiny random id in a cookie. | session id, login, server memory |
+| 15 | STATE & PATTERNS | HTTP Caching | [36-the-web-and-http/15-http-caching.md](36-the-web-and-http/15-http-caching.md) | A browser can keep a copy of a response and reuse it — Cache-Control says how long to trust the copy, and ETag lets it be re-checked instead of re-downloaded. | Cache-Control, ETag, freshness |
+| 16 | STATE & PATTERNS | Webhooks | [36-the-web-and-http/16-webhooks.md](36-the-web-and-http/16-webhooks.md) | Instead of your code asking "anything new?" every minute, you hand over a URL and the provider calls you the instant something happens — the API that calls you. | reverse API, push vs poll, callbacks |
+| 17 | STATE & PATTERNS | Stateful vs Stateless | [36-the-web-and-http/17-stateful-vs-stateless.md](36-the-web-and-http/17-stateful-vs-stateless.md) | If a server remembers nothing between requests, any copy of it can answer the next one — that single property decides what scales by just adding machines. | horizontal scaling, no memory, load balancing |
+| 18 | IDENTITY & AUTH | Sessions vs Tokens | [36-the-web-and-http/18-sessions-vs-tokens.md](36-the-web-and-http/18-sessions-vs-tokens.md) | After login, the server either remembers you in its own ledger or hands you signed proof to carry — a coat-check ticket vs a stamped wristband. | server ledger, signed proof, revocation |
+| 19 | IDENTITY & AUTH | OAuth | [36-the-web-and-http/19-oauth.md](36-the-web-and-http/19-oauth.md) | Lets an app act on your account with a limited, revocable key — like a valet key that starts the car but never opens the trunk. | delegated access, scopes, valet key |
+| 20 | IDENTITY & AUTH | JWT | [36-the-web-and-http/20-jwt.md](36-the-web-and-http/20-jwt.md) | A signed note the client carries with every request — the server checks the signature instead of looking the user up. | signed token, claims, no lookup |
+| 21 | IDENTITY & AUTH | SSO & SAML/OIDC | [36-the-web-and-http/21-sso-and-saml-oidc.md](36-the-web-and-http/21-sso-and-saml-oidc.md) | Prove who you are once — to one identity provider — and every company app accepts its signed note; SAML and OIDC are the two dialects that note is written in. | single sign-on, identity provider, SAML vs OIDC |
+| 22 | IDENTITY & AUTH | MFA & Passkeys | [36-the-web-and-http/22-mfa-and-passkeys.md](36-the-web-and-http/22-mfa-and-passkeys.md) | A phishing page can steal a password and a 6-digit code in seconds — a passkey signs only for the real site, so there is nothing to steal. | phishing, second factor, WebAuthn |
+
+## Regeneration instructions
+
+To rebuild the HTML from this spec:
+
+- **Template:** tutorials category grid. Single page: h1, `.subtitle` paragraph, then one flat `.nav-grid` of `.nav-card` anchors (no h2 section headings).
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, 15px top margin; responsive: 3 columns below 1400px, 2 below 1100px, 1 below 600px.
+- **Links:** the tables above link to the `.md` versions for markdown navigation; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
+- **Card structure:** `<a class="nav-card" href="...">` containing `<div class="card-num">SUBCATEGORY LABEL</div>`, `<h3>N. Topic Title</h3>` (unpadded index number matching the 2-digit zero-padded file index), `<p>description</p>`, then `<div class="topics">` of `<span class="topic-tag">` pills.
+- **Category label colors:** applied by a small script mapping `.card-num` text to color — "URLS & MESSAGES" `#2980b9`, "APIS & PROTOCOL" `#27ae60`, "STATE & PATTERNS" `#8e44ad`, "IDENTITY & AUTH" `#e67e22`; the CSS default for `.card-num` is `#2980b9`, 0.75em bold, 4px bottom margin.
+- **Card style:** background `#ffffff`, border `1px solid #d8d8d8`, radius 10px, padding 20px, shadow `0 2px 4px rgba(0,0,0,0.05)`, transition on border-color/transform; hover: border `#2980b9`, `translateY(-2px)`. h3 `#1a3a4a` 1em with 6px bottom margin; description `#555` 0.85em. Topic tags: background `#f0f0f0`, border `1px solid #ccc`, radius 4px, padding 2px 6px, 0.7em `#666`, in a flex-wrap row with 4px gap and 8px top margin.
+- **Page style:** body system sans-serif, background `#f5f5f0`, text `#2a2a2a`, padding 40px, line-height 1.6; universal `* { margin:0; padding:0; box-sizing:border-box }` reset; h1 1.8em `#2980b9` with 10px bottom margin; subtitle `#666` 1.05em with 30px bottom margin. No nav bar, no back/home links.
+- **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22` (page accents here use `#2980b9`, `#27ae60`, `#8e44ad`, `#e67e22`).
+- **Canvases:** none on this page; any canvases elsewhere in this series use `window.devicePixelRatio` scaling.

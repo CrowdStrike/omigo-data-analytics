@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How TCP Delivers Reliability</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>How TCP Delivers Reliability</h1>
+<p class="subtitle">TCP builds a lossless byte stream on top of a network that drops packets — by numbering every byte, demanding receipts, and resending anything unacknowledged</p>
+
+<div class="card-section">
+    <h2>Numbered Cards Through a Courier That Loses Mail</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">sequence numbers</span><span class="tag orange">ACKs</span></div>
+                <ul>
+                    <li><b>The recipe</b> — a coffee shop's HQ mails a new 6-card recipe to a branch via a lossy courier</li>
+                    <li><b>The numbers</b> — every card carries its number, 1 through 6, so the branch can spot a hole</li>
+                    <li><b>The receipt</b> — for each card that arrives, the branch mails back "got card N" (an ACK)</li>
+                    <li><b>The timer</b> — HQ keeps a copy of every card and resends any card not receipted in time</li>
+                    <li><b>The reorder</b> — cards 5 and 6 may arrive before 4; the numbers let the branch reshuffle them</li>
+                </ul>
+                <p class="example">Card 4 vanishes in the mail; the branch sets 5 and 6 aside, HQ resends 4, and the branch assembles cards 1–6 in perfect order.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> TCP does exactly this with bytes: sequence numbers name the data, ACKs confirm receipt, and retransmission fills the holes — a reliable stream built on an unreliable courier.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Lost Segment, Millisecond by Millisecond</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">retransmission</span><span class="tag orange">timeout</span></div>
+                <ul>
+                    <li><b>The setup</b> — 6 segments leave together at t=0; the one-way trip is 50 ms, so a receipt takes 100 ms</li>
+                    <li><b>The loss</b> — segment 4 is dropped by the network at t=25; segments 5 and 6 land fine at t=50</li>
+                    <li><b>The wait</b> — the receiver buffers 5 and 6 but keeps answering "still expecting 4"</li>
+                    <li><b>The timeout</b> — no receipt for 4 by t=300 (the 300 ms timer), so the sender resends it</li>
+                    <li><b>The finish</b> — the resent 4 lands at t=350; the receipt covering all 6 reaches the sender at t=400</li>
+                </ul>
+                <p class="example">One lost segment turned a 100 ms transfer into a 400 ms one — every byte arrived intact, just 4× later.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The arithmetic is hand-checkable: resend at 300, arrive at 300 + 50 = 350, final ACK at 350 + 50 = 400 — the retransmission timer, not the data size, sets the finish time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Retransmits Show Up in Your Dashboards</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">tail latency</span></div>
+                <ul>
+                    <li><b>The stream</b> — every API call, database query, and file download you run rides on TCP</li>
+                    <li><b>The tail</b> — a small packet-loss rate shows up as rare requests taking 3–4× the median time</li>
+                    <li><b>The dashboard</b> — p50 latency looks healthy while p99 spikes; retransmits live in that gap</li>
+                    <li><b>The download</b> — a 10 GB training-data pull survives thousands of drops without one corrupt byte</li>
+                    <li><b>The diagnosis</b> — a flat median plus a spiky tail on one network path smells like retransmission</li>
+                </ul>
+                <p class="example">18 of 20 identical API calls return in about 100 ms; the 2 that hit a retransmit take about 400 ms — same server, same query.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> TCP hides loss from your data but not from your clock — retransmission trades latency for correctness, and that trade surfaces as tail latency, not as errors.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Delivered to TCP Is Not Delivered to the App</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">end-to-end</span></div>
+                <ul>
+                    <li><b>The illusion</b> — a successful send() means the bytes entered the local TCP buffer, nothing more</li>
+                    <li><b>The gap</b> — the connection can die with data in flight; the sender cannot tell what arrived</li>
+                    <li><b>The receiver side</b> — even an ACKed byte may sit in the receive buffer, never read by the app</li>
+                    <li><b>The fix</b> — confirmations that matter come from the application: "payment 8127 recorded"</li>
+                    <li><b>The habit</b> — make retried requests idempotent, because "unknown" means you may send twice</li>
+                </ul>
+                <p class="example">The write returned success, the connection then dropped, and the payment row never appeared — TCP delivered to a buffer, not to the database.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating TCP's reliability as end-to-end application delivery. It guarantees the byte stream between two sockets while the connection lives — acknowledging the business outcome is your job.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: message sequence diagram — six cards, one lost, one resent
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Six Numbered Cards, One Lost, One Resent — the Whole Trick', w / 2, 24);
+
+    // lifelines
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(150, 60); ctx.lineTo(150, 265); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(570, 60); ctx.lineTo(570, 265); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('HQ (sender)', 150, 52);
+    ctx.fillText('Branch (receiver)', 570, 52);
+
+    // cards 1-3
+    var cardYs = [70, 94, 118];
+    for (var i = 0; i < 3; i++) {
+        arrow(ctx, 150, cardYs[i], 570, cardYs[i] + 16, P.blue, 2);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('card ' + (i + 1), 360, cardYs[i] + 4);
+    }
+
+    // lost card 4
+    arrow(ctx, 150, 142, 360, 152, P.orange, 2);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ card 4 lost', 372, 156);
+
+    // cards 5 and 6
+    arrow(ctx, 150, 166, 570, 182, P.blue, 2);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('card 5', 360, 170);
+    arrow(ctx, 150, 188, 570, 204, P.blue, 2);
+    ctx.fillText('card 6', 360, 192);
+    ctx.fillStyle = P.aqua; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('held — waiting for 4', 565, 200);
+
+    // ACK arrow back
+    arrow(ctx, 570, 138, 150, 152, P.green, 2, [4, 3]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('got 1–3, still expecting 4', 300, 141);
+
+    // resend + final ACK
+    arrow(ctx, 150, 214, 570, 230, P.green, 2);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('card 4 (resent)', 360, 216);
+    arrow(ctx, 570, 234, 150, 248, P.green, 2, [4, 3]);
+    ctx.fillText('got all 6', 360, 252);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('numbers + receipts + resend = reliability', 360, 278);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('cards illustrative — TCP numbers bytes, not cards', w - 12, h - 8);
+});
+
+// c2: gantt timeline — one lost segment, 100 ms transfer becomes 400 ms
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Lost Segment: a 100 ms Transfer Becomes 400 ms', w / 2, 24);
+
+    var ox = 60, baseY = 245;
+    function xOf(ms) { return ox + ms * 1.5; }
+
+    // gridlines + tick labels
+    var ticks = [0, 100, 200, 300, 400];
+    var tickLabs = ['0', '100', '200', '300', '400 ms'];
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = xOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, 65); ctx.lineTo(tx, baseY); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], tx, baseY + 18);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + 600, baseY); ctx.stroke();
+
+    var rowYs = [75, 103, 131, 159, 187, 215];
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('seg ' + (i + 1), 15, rowYs[i] + 10);
+    }
+
+    // segments 1-3: blue bars 0 -> 100
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(xOf(0), rowYs[i], xOf(100) - xOf(0), 12);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('acked at 100 ms', xOf(100) + 8, rowYs[0] + 10);
+
+    // segment 4: orange bar 0 -> 25 (lost), green bar 300 -> 400 (resent)
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(xOf(0), rowYs[3], xOf(25) - xOf(0), 12);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ lost at 25 ms', xOf(25) + 8, rowYs[3] + 10);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(xOf(300), rowYs[3], xOf(400) - xOf(300), 12);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('resent 300, acked 400', xOf(300), rowYs[3] - 4);
+
+    // segments 5-6: blue 0 -> 50, aqua 50 -> 400
+    for (var i = 4; i < 6; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(xOf(0), rowYs[i], xOf(50) - xOf(0), 12);
+        ctx.fillStyle = P.aqua;
+        ctx.fillRect(xOf(50), rowYs[i], xOf(400) - xOf(50), 12);
+    }
+    ctx.fillStyle = P.aqua; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('buffered at receiver until 4 arrives', xOf(90), rowYs[4] - 4);
+
+    // timeout marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(300), 60); ctx.lineTo(xOf(300), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('300 ms timer fires', xOf(300), 54);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('everything arrived — just 4× later', 230, 62);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times illustrative — 50 ms one-way, 300 ms timeout', w - 12, h - 8);
+});
+
+// c3: 20 API call latencies bar chart with two retransmit spikes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('20 Identical API Calls: Retransmits Live in the Tail', w / 2, 24);
+
+    var ox = 60, baseY = 245, ph = 180;
+    function yOf(ms) { return baseY - ms / 450 * ph; }
+
+    // gridlines + y labels
+    var gys = [100, 200, 300, 400];
+    for (var i = 0; i < gys.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(gys[i])); ctx.lineTo(ox + 600, yOf(gys[i])); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gys[i], ox - 8, yOf(gys[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 600, baseY); ctx.stroke();
+
+    var lat = [102, 98, 105, 100, 97, 103, 401, 99, 101, 104, 96, 100, 98, 102, 403, 99, 97, 101, 100, 103];
+    var bw = 22, gap = 8;
+    for (var i = 0; i < 20; i++) {
+        var bx = ox + 4 + i * (bw + gap);
+        var by = yOf(lat[i]);
+        if (i === 6 || i === 14) {
+            ctx.fillStyle = P.orange;
+            ctx.fillRect(bx, by, bw, baseY - by);
+            ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('retransmit', bx + bw / 2, by - 8);
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.35)';
+            ctx.fillRect(bx, by, bw, baseY - by);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + bw, by); ctx.stroke();
+        }
+    }
+
+    // x tick labels at calls 1, 5, 10, 15, 20
+    var callTicks = [1, 5, 10, 15, 20];
+    for (var i = 0; i < callTicks.length; i++) {
+        var c = callTicks[i];
+        var bx = ox + 4 + (c - 1) * (bw + gap) + bw / 2;
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c, bx, baseY + 18);
+    }
+
+    // median line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(100)); ctx.lineTo(ox + 600, yOf(100)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('median 100 ms', ox + 4, yOf(100) - 8);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('p50 healthy, tail at 4× — the network ate the tail', 380, 70);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative — 2 of 20 calls hit one retransmission', w - 12, h - 8);
+});
+
+// c4: send() assumption vs application-level receipt
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('send() Returned — What Does That Actually Prove?', w / 2, 24);
+
+    function flowBox(x, cy, wd, lab, fill, border) {
+        roundRect(ctx, x, cy - 20, wd, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, x + wd / 2, cy + 4);
+    }
+
+    // Row 1: the assumption
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the assumption', 20, 99);
+    flowBox(150, 95, 160, 'app: send(payment)', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(ctx, 310, 95, 345, 95, P.blue, 3);
+    flowBox(345, 95, 170, 'bytes in local TCP buffer', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(ctx, 515, 95, 545, 95, P.blue, 3);
+    flowBox(545, 95, 160, 'link dies — arrived?', 'rgba(213,81,129,0.12)', P.magenta);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ unknown, maybe sent twice', 625, 137);
+
+    // Row 2: the fix
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the fix', 20, 209);
+    flowBox(150, 205, 160, 'app: send(payment)', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(ctx, 310, 205, 345, 205, P.blue, 3);
+    flowBox(345, 205, 170, 'TCP delivers and ACKs bytes', 'rgba(42,120,214,0.15)', P.blue);
+    arrow(ctx, 515, 205, 545, 205, P.blue, 3);
+    flowBox(545, 205, 165, 'reply: payment 8127 recorded', 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ app-level receipt', 627, 247);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('TCP guarantees the pipe, not the business outcome', w / 2, 275);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Java Memory Model</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+code {
+    background: #f0f2f4;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+</style>
+</head>
+<body>
+
+<h1>The Java Memory Model</h1>
+<p class="subtitle">When two threads share a variable, the language &mdash; not the hardware &mdash; decides what one thread may see of the other's writes, and happens-before is that written contract</p>
+
+<div class="card-section">
+    <h2>The OPEN Sign and the Price Board</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">two threads</span><span class="tag orange">stale reads</span></div>
+                <ul>
+                    <li><b>The bakery</b> &mdash; a price board and an OPEN sign: one thread writes them, another thread reads them</li>
+                    <li><b>The plan</b> &mdash; the owner sets <code>price = 42</code>, then flips <code>open = true</code>; two ordinary shared variables</li>
+                    <li><b>The customer</b> &mdash; waits until <code>open == true</code>, then reads <code>price</code>, expecting today's 42</li>
+                    <li><b>The surprise</b> &mdash; the customer can see OPEN and still read 0; the two writes arrived out of order</li>
+                    <li><b>Why</b> &mdash; compilers and CPUs reorder and cache writes; each thread may watch a different replay</li>
+                    <li><b>The contract</b> &mdash; the Java memory model spells out exactly which reads must see which writes</li>
+                </ul>
+                <p class="example">The owner swears "I wrote 42 before flipping the sign" &mdash; and a customer reading plain variables can still, legally, see OPEN and read 0.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Without a happens-before edge between two threads, "I wrote it first" means nothing to the thread doing the reading.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Race: 1,000,000 Openings</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">volatile</span></div>
+                <ul>
+                    <li><b>The rerun</b> &mdash; open the shop 1,000,000 times with plain variables and tally what the customer read</li>
+                    <li><b>Mostly fine</b> &mdash; in 999,827 runs the customer saw OPEN and read the fresh price, 42</li>
+                    <li><b>The stale few</b> &mdash; in 173 runs the customer saw OPEN yet read 0; rare, real, and perfectly legal</li>
+                    <li><b>One keyword</b> &mdash; declare <code>volatile boolean open</code>; writing it now happens-before every later read of it</li>
+                    <li><b>The chain</b> &mdash; price=42 comes before the flag write, the flag write before the flag read: 42 must show</li>
+                    <li><b>New tally</b> &mdash; 1,000,000 fresh reads and 0 stale ones; the 0 is a promise, not a lucky streak</li>
+                </ul>
+                <p class="example">173 stale reads in a million is the kind of bug that passes every test on a laptop and pages you at peak traffic.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Making the flag <code>volatile</code> chains price=42 &rarr; open=true &rarr; sees open into one happens-before path, so stale reads drop from 173 to exactly 0 &mdash; by contract, not by chance.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Rulebook of Edges, Everywhere</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">happens-before</span><span class="tag orange">synchronization</span></div>
+                <ul>
+                    <li><b>The edges</b> &mdash; program order, volatile write &rarr; read, unlock &rarr; lock, thread <code>start()</code> and <code>join()</code></li>
+                    <li><b>Chaining</b> &mdash; edges are transitive: a path from a write to a read means the read must see the write</li>
+                    <li><b>Locks too</b> &mdash; everything written before releasing a lock is visible after the next grab of that lock</li>
+                    <li><b>Data race</b> &mdash; one thread writes, another reads, no edge between them: the model allows weird results</li>
+                    <li><b>Real code</b> &mdash; lazy init, double-checked locking, and every concurrent library lean on these edges</li>
+                    <li><b>Portable</b> &mdash; one contract on x86 and ARM alike; the JVM plants the hardware fences for you</li>
+                </ul>
+                <p class="example">A cache refresher builds a whole new map, then swaps one volatile reference &mdash; readers get the old map or the new map, never a half-built one.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You never reason about CPU caches or fences directly &mdash; you find, or build, a happens-before path from the write to the read.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: volatile Is Not a Lock</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">atomicity</span></div>
+                <ul>
+                    <li><b>Two promises</b> &mdash; visibility means "you see my write"; atomicity means "my update is one step"</li>
+                    <li><b>volatile gives one</b> &mdash; later reads see the latest volatile write; that is visibility, nothing more</li>
+                    <li><b>count++</b> &mdash; is really read, add 1, write back: three steps another thread can barge into</li>
+                    <li><b>The tally</b> &mdash; two threads each add 10,000 to a volatile counter; expected 20,000, one run got 13,742</li>
+                    <li><b>The fix</b> &mdash; <code>AtomicInteger</code> or <code>synchronized</code> makes read-add-write one indivisible step: 20,000 every run</li>
+                </ul>
+                <p class="example">Two clerks both read the counter at 500 and both write back 501 &mdash; one whole increment vanishes, volatile or not.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reaching for <code>volatile</code> to fix <code>count++</code>. Volatile orders and publishes individual writes; compound read-modify-writes need an atomic class or a lock.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width, dash) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), 8, color);
+}
+
+// c1: two-lane timeline of one legal racy execution
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Threads, One Bakery: the Sign Outruns the Price', w / 2, 24);
+
+    // lanes
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(130, 115); ctx.lineTo(690, 115); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(130, 205); ctx.lineTo(690, 205); ctx.stroke();
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('owner', 20, 108);
+    ctx.fillText('thread', 20, 124);
+    ctx.fillText('customer', 20, 198);
+    ctx.fillText('thread', 20, 214);
+
+    function box(cx, cy, label, borderColor, fillColor, textColor) {
+        rr(ctx, cx - 75, cy - 17, 150, 34, 6);
+        ctx.fillStyle = fillColor; ctx.fill();
+        ctx.strokeStyle = borderColor; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = textColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+    }
+
+    // program-order arrows first (under boxes)
+    arrow(ctx, 285, 115, 315, 115, P.mute, 2);
+    arrow(ctx, 545, 205, 565, 205, P.mute, 2);
+
+    // owner events
+    box(210, 115, 'price = 42', P.blue, 'rgba(42,120,214,0.12)', P.ink);
+    box(390, 115, 'open = true', P.blue, 'rgba(42,120,214,0.12)', P.ink);
+    // customer events
+    box(470, 205, 'sees open == true', P.blue, 'rgba(42,120,214,0.12)', P.ink);
+    box(640, 205, 'reads price → 0', '#e74c3c', 'rgba(231,76,60,0.10)', '#e74c3c');
+
+    // flag arrow: open = true -> sees open == true
+    arrow(ctx, 400, 132, 458, 188, P.green, 2, [6, 4]);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the flag got through', 348, 168);
+
+    // broken arrow: price = 42 -> reads price -> 0
+    arrow(ctx, 240, 132, 600, 188, '#e74c3c', 2, [6, 4]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✕', 420, 164);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("the 42 didn't", 440, 178);
+
+    // time axis
+    arrow(ctx, 130, 262, 690, 262, '#999', 1);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('time →', 690, 278);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no happens-before edge — OPEN arrived, 42 didn’t', 400, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one legal execution with plain variables', 690, 294);
+});
+
+// c2: stale reads per 1,000,000 openings, plain vs volatile
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Stale Reads per 1,000,000 Openings', w / 2, 24);
+
+    var ox = 90, baseY = 245, pw = 560, ph = 180, maxV = 200;
+
+    // gridlines + y labels
+    for (var g = 50; g <= 200; g += 50) {
+        var gy = baseY - g / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, gy + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // bar 1: plain, 173 stale reads
+    var b1h = 173 / maxV * ph;
+    ctx.fillStyle = 'rgba(231,76,60,0.35)';
+    ctx.fillRect(260 - 70, baseY - b1h, 140, b1h);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(260 - 70, baseY - b1h, 140, b1h);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('173', 260, baseY - b1h - 8);
+
+    // bar 2: volatile, 0 stale reads (flat green segment)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(520 - 70, baseY); ctx.lineTo(520 + 70, baseY); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0', 520, baseY - 10);
+
+    // category labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('plain boolean open', 260, baseY + 20);
+    ctx.fillText('volatile boolean open', 520, baseY + 20);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0 is a guarantee,', 470, 120);
+    ctx.fillText('not luck', 470, 138);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative — real stale-read rates vary by hardware', 690, 294);
+});
+
+// c3: happens-before chain diagram
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The happens-before Chain That Delivers the 42', w / 2, 24);
+
+    // column headers
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('owner thread', 220, 58);
+    ctx.fillText('customer thread', 540, 58);
+
+    function box(cx, cy, label, borderColor, fillColor, textColor) {
+        rr(ctx, cx - 100, cy - 18, 200, 36, 6);
+        ctx.fillStyle = fillColor; ctx.fill();
+        ctx.strokeStyle = borderColor; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = textColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+    }
+
+    // transitive edge first (under boxes): price = 42 curving to reads price -> 42
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(150, 118);
+    ctx.bezierCurveTo(60, 230, 260, 290, 470, 238);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 470, 238, Math.atan2(238 - 258, 470 - 420), 9, P.violet);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('guaranteed by transitivity', 280, 272);
+
+    // program-order arrows
+    arrow(ctx, 220, 118, 220, 162, P.blue, 2);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('program order', 232, 144);
+    arrow(ctx, 540, 158, 540, 202, P.blue, 2);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('program order', 552, 184);
+
+    // volatile edge: open = true (220,180) -> reads open -> true (540,140)
+    arrow(ctx, 322, 174, 438, 146, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('volatile write → read', 380, 138);
+
+    // owner boxes
+    box(220, 100, 'price = 42', P.blue, 'rgba(42,120,214,0.12)', P.ink);
+    box(220, 180, 'open = true  (volatile)', P.blue, 'rgba(42,120,214,0.12)', P.ink);
+    // customer boxes
+    box(540, 140, 'reads open → true', P.blue, 'rgba(42,120,214,0.12)', P.ink);
+    box(540, 220, 'reads price → 42', P.green, 'rgba(0,131,0,0.12)', P.green);
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a path of edges from write to read means the read must see the write', w / 2, 292);
+});
+
+// c4: two threads x 10,000 increments, three bars
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Threads × 10,000 Increments: Where Did 6,258 Go?', w / 2, 24);
+
+    var ox = 90, baseY = 245, pw = 560, ph = 180, maxV = 22000;
+
+    // gridlines + y labels
+    var gl = [5000, 10000, 15000, 20000], glab = ['5k', '10k', '15k', '20k'];
+    for (var i = 0; i < 4; i++) {
+        var gy = baseY - gl[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glab[i], ox - 8, gy + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var vals = [20000, 13742, 20000];
+    var cats = ['expected', 'volatile count++', 'AtomicInteger'];
+    var vlabs = ['20,000', '13,742', '20,000'];
+    var xs = [220, 400, 580];
+    var fills = ['rgba(42,120,214,0.35)', 'rgba(231,76,60,0.35)', 'rgba(0,131,0,0.20)'];
+    var borders = [P.blue, '#e74c3c', P.green];
+
+    for (var i = 0; i < 3; i++) {
+        var bh = vals[i] / maxV * ph;
+        ctx.fillStyle = fills[i];
+        ctx.fillRect(xs[i] - 55, baseY - bh, 110, bh);
+        ctx.strokeStyle = borders[i]; ctx.lineWidth = 2;
+        ctx.strokeRect(xs[i] - 55, baseY - bh, 110, bh);
+        ctx.fillStyle = borders[i]; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(vlabs[i], xs[i], baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(cats[i], xs[i], baseY + 20);
+    }
+
+    // target line at 20,000
+    var ty = baseY - 20000 / maxV * ph;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, ty); ctx.lineTo(ox + pw, ty); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('6,258 increments lost —', 400, 95);
+    ctx.fillText('visible, but not atomic', 400, 113);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative single run — losses vary run to run', 690, 294);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

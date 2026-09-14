@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory-Mapped I/O</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Memory-Mapped I/O</h1>
+<p class="subtitle">The CPU talks to hardware by writing to special memory addresses — storing a byte at the right address doesn't save data, it starts a machine</p>
+
+<div class="card-section">
+    <h2>The Cubby That Starts the Roaster</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">addresses as commands</span><span class="tag orange">hardware</span></div>
+                <ul>
+                    <li><b>The cubby wall</b> — a coffee shop has 256 numbered cubbies; staff drop cups and notes into them all day</li>
+                    <li><b>Ordinary slots</b> — cubbies 0 through 239 just hold things: put a note in, the same note comes back out</li>
+                    <li><b>The special slot</b> — cubby 240 is not storage; it is a chute wired straight into the roaster</li>
+                    <li><b>The trick</b> — dropping an order slip into 240 starts the roaster; peeking into 241 shows its status light</li>
+                    <li><b>The CPU's version</b> — some memory addresses are wired to device registers, not RAM chips</li>
+                    <li><b>Same instruction</b> — the CPU uses its normal store instruction; the address decides who receives it</li>
+                </ul>
+                <p class="example">A barista "stores" the slip <code>dark roast, 2 kg</code> into cubby 240 and the roaster drum starts turning — no special verb, just the right slot.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Memory-mapped I/O carves device registers into the ordinary address space — a plain load or store to those addresses reads a sensor or commands hardware, so talking to a device looks exactly like touching memory.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Sending "HI" Out a Serial Port by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">poll the status</span></div>
+                <ul>
+                    <li><b>The map</b> — addresses 0&ndash;239 are RAM; 240 is the serial data register, 241 is the status register</li>
+                    <li><b>The rule</b> — status 1 means the port is ready; status 0 means it is still shipping the last byte</li>
+                    <li><b>Step 1</b> — read 241, get 1 (ready), so store 72 (the code for "H") into 240; the wire starts sending</li>
+                    <li><b>Step 2</b> — read 241, get 0; read again, 0; read a third time, 1 — the port is ready again</li>
+                    <li><b>Step 3</b> — store 73 (the code for "I") into 240; "HI" is now on the wire</li>
+                    <li><b>Hand-check</b> — 2 data writes plus 4 status reads = 6 bus operations to send 2 characters</li>
+                </ul>
+                <p class="example">The whole transmission is six ordinary memory operations: R241&rarr;1, W240=72, R241&rarr;0, R241&rarr;0, R241&rarr;1, W240=73.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A device driver is often just this loop — read the status address until it says ready, write the data address, repeat — and every step is a plain memory instruction you can replay by hand.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From Device Registers to 40 GB Files</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">memory-mapped files</span><span class="tag orange">big data</span></div>
+                <ul>
+                    <li><b>Embedded chips</b> — blinking an LED on a microcontroller is one store to a pin-control address</li>
+                    <li><b>Screens</b> — a framebuffer maps every pixel to an address; drawing is writing bytes into it</li>
+                    <li><b>Files too</b> — <code>mmap</code> extends the trick: the OS maps a file's bytes into your address space</li>
+                    <li><b>Lazy loading</b> — a mapped page is fetched from disk only when your code first touches it</li>
+                    <li><b>The math</b> — reading a 40 GB file fully at 0.5 GB/s takes 80 s; a memmap touches one 4 KB page</li>
+                    <li><b>Data science</b> — numpy's <code>memmap</code> opens a 40 GB array on a 16 GB laptop because nothing loads up front</li>
+                </ul>
+                <p class="example"><code>np.memmap('features.dat')</code> on a 40 GB file returns in milliseconds and reads row 3 by pulling in a single 4 KB page, while <code>read()</code> would need 40 GB of RAM and about 80 seconds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The same idea scales from a 1-byte LED register to a 40 GB dataset — map the thing into the address space, then plain reads and writes do the I/O, fetching only what is actually touched.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Status Read the Compiler Threw Away</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">volatile</span></div>
+                <ul>
+                    <li><b>The trap</b> — to a compiler, address 241 looks like ordinary memory that nobody else changes</li>
+                    <li><b>The "optimization"</b> — it hoists the read out of the poll loop: read 241 once, reuse the value forever</li>
+                    <li><b>The hang</b> — the one read returns 0 (busy), the cached 0 never changes, the loop spins forever</li>
+                    <li><b>The fix</b> — marking the pointer <code>volatile</code> tells the compiler every read must really happen</li>
+                    <li><b>Reads have side effects too</b> — on some chips reading a register clears a flag, so extra reads also break things</li>
+                </ul>
+                <p class="example">The driver polls status 241 in a <code>while</code> loop; with optimization on, the compiled loop reads the register once, sees 0, and hangs the boot — adding <code>volatile</code> fixes it.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a device register like normal memory. Hardware changes the value behind the compiler's back, so the compiler must be told (<code>volatile</code>) that every single load and store is a real, visible event.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: 256-address strip — RAM 0-239, device registers 240-255, store arrow into 240
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Address Space, Two Kinds of Slots: RAM Ends Where the Roaster Begins', w / 2, 24);
+
+    var top = 140, sh = 56;
+    var ramL = 60, ramR = 622, devR = 660;
+
+    // RAM segment (0-239)
+    roundRect(ctx, ramL, top, ramR - ramL, sh, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.25)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('RAM — 240 ordinary cubbies', (ramL + ramR) / 2, top + sh / 2 + 5);
+
+    // device segment (240-255)
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(ramR, top, devR - ramR, sh);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(ramR, top, devR - ramR, sh);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('device registers', (ramR + devR) / 2 - 20, 110);
+
+    // address ticks
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0', ramL, top + sh + 16);
+    ctx.fillText('239', ramR - 14, top + sh + 16);
+    ctx.fillText('240', ramR + 6, top + sh + 30);
+    ctx.fillText('255', devR, top + sh + 16);
+
+    // store box and arrow into address 240
+    var bx = 430, by = 32, bw = 180, bh = 26;
+    roundRect(ctx, bx, by, bw, bh, 6);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('store 72 → address 240', bx + bw / 2, by + 17);
+
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(bx + bw - 10, by + bh); ctx.lineTo(626, top - 8); ctx.stroke();
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(626, top - 2); ctx.lineTo(620, top - 12); ctx.lineTo(631, top - 13);
+    ctx.closePath(); ctx.fill();
+
+    // register callouts
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('240 = serial data (the chute)', 430, 230);
+    ctx.fillText('241 = serial status (the light)', 430, 248);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same store instruction — the address picks RAM or hardware', 70, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('256-address machine, illustrative', w - 12, h - 8);
+});
+
+// c2: six bus operations spell "HI"
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Six Memory Operations Spell 'HI': Poll 241, Write 240", w / 2, 24);
+
+    var centers = [100, 196, 292, 388, 484, 580];
+    var ops  = ['R 241', 'W 240', 'R 241', 'R 241', 'R 241', 'W 240'];
+    var vals = ['→ 1 ready', "= 72 'H'", '→ 0 busy', '→ 0 busy', '→ 1 ready', "= 73 'I'"];
+    // box colors: ready reads (ops 1,5), busy reads (ops 3,4), writes (ops 2,6)
+    var fills   = ['rgba(42,120,214,0.20)', 'rgba(0,131,0,0.15)', 'rgba(201,133,0,0.18)', 'rgba(201,133,0,0.18)', 'rgba(42,120,214,0.20)', 'rgba(0,131,0,0.15)'];
+    var borders = [P.blue, P.green, P.yellow, P.yellow, P.blue, P.green];
+
+    // baseline and op labels
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 245); ctx.lineTo(660, 245); ctx.stroke();
+
+    for (var i = 0; i < 6; i++) {
+        var cx = centers[i], bw = 84, bh = 52, bx = cx - bw / 2, by = 160 - bh / 2;
+        roundRect(ctx, bx, by, bw, bh, 6);
+        ctx.fillStyle = fills[i]; ctx.fill();
+        ctx.strokeStyle = borders[i]; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ops[i], cx, 156);
+        ctx.fillText(vals[i], cx, 173);
+        ctx.fillStyle = '#444';
+        ctx.fillText('op ' + (i + 1), cx, 263);
+    }
+
+    // wire row
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('on the wire:', 60, 95);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('H', centers[1], 95);
+    ctx.fillText('HI', centers[5], 95);
+
+    // poll bracket spanning ops 3-5
+    var pL = centers[2] - 42, pR = centers[4] + 42, py = 125;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(pL, py + 6); ctx.lineTo(pL, py); ctx.lineTo(pR, py); ctx.lineTo(pR, py + 6);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('poll until ready', (pL + pR) / 2, py - 8);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no special I/O instruction anywhere — just loads and stores', w / 2, 280);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; 72/73 are the real codes for H/I', w - 12, h - 4);
+});
+
+// c3: full read vs memmap — RAM needed and time to first row (schematic widths)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('40 GB File, 16 GB Laptop: Full Read vs Memory Map', w / 2, 24);
+
+    var bx = 230;
+    var rows = [
+        { y: 70,  lab: 'full read — RAM needed 40 GB',        width: 420, fill: 'rgba(231,76,60,0.85)',  edge: '#b03a2e', valLab: null },
+        { y: 115, lab: 'full read — time to first row 80 s',  width: 420, fill: 'rgba(201,133,0,0.85)',  edge: '#8a5c00', valLab: '80 s' },
+        { y: 185, lab: 'memmap — RAM needed 4 KB (one page)', width: 4,   fill: 'rgba(0,131,0,0.85)',    edge: '#005c00', valLab: '4 KB' },
+        { y: 230, lab: 'memmap — time to first row ~0.1 ms',  width: 3,   fill: 'rgba(0,131,0,0.85)',    edge: '#005c00', valLab: '~0.1 ms' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 12);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.width, 16);
+        ctx.strokeStyle = r.edge; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, r.y, r.width, 16);
+        if (r.valLab) {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+            ctx.fillText(r.valLab, bx + r.width + 8, r.y + 12);
+        }
+    }
+
+    // 16 GB machine limit line crossing the first bar
+    var lx = bx + 168;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(lx, 58); ctx.lineTo(lx, 96); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('16 GB machine limit', lx + 6, 54);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('map first, load only the pages you touch', w - 30, 265);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bar widths schematic; 80 s = 40 GB ÷ 0.5 GB/s, other numbers illustrative', w - 12, h - 8);
+});
+
+// c4: poll loop with and without volatile
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Poll Loop vs the Optimizer: Why the Register Must Be volatile', w / 2, 24);
+
+    function box(x, cy, bw, fill, stroke, label) {
+        roundRect(ctx, x, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, cy + 4);
+    }
+
+    function arrow(x1, x2, cy) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, cy); ctx.lineTo(x2 - 8, cy); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2, cy); ctx.lineTo(x2 - 9, cy - 5); ctx.lineTo(x2 - 9, cy + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: without volatile
+    var r1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('without volatile', 20, r1 - 32);
+    box(170, r1, 150, 'rgba(42,120,214,0.15)', P.blue, 'read 241 once → 0');
+    arrow(320, 400, r1);
+    box(400, r1, 170, 'rgba(231,76,60,0.12)', '#e74c3c', 'reuse cached 0 forever');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ loop never exits', 590, r1 + 4);
+
+    // hardware note
+    ctx.fillStyle = P.mute; ctx.font = 'italic 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hardware flips 241 to 1 when ready — the cached copy never sees it', 170, 150);
+
+    // row 2: with volatile
+    var r2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with volatile', 20, r2 - 32);
+    box(170, r2, 140, 'rgba(42,120,214,0.15)', P.blue, 'read 241 → 0');
+    arrow(310, 340, r2);
+    box(340, r2, 140, 'rgba(42,120,214,0.15)', P.blue, 'read again → 0');
+    arrow(480, 510, r2);
+    box(510, r2, 150, 'rgba(0,131,0,0.12)', P.green, 'read again → 1');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ exit loop', 585, 245);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the address is a wire to a device, not a slot the compiler owns', w / 2, 280);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Actor Model &amp; Erlang</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The Actor Model &amp; Erlang</h1>
+<p class="subtitle">Instead of workers sharing one memory and fighting over locks, every worker keeps its own private state and talks only by sending messages — share nothing, and running on ten machines looks the same as running on one</p>
+
+<div class="card-section">
+    <h2>A Coffee Shop With No Shared Whiteboard</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">share nothing</span><span class="tag orange">Erlang</span></div>
+                <ul>
+                    <li><b>The shared way</b> — three baristas write every order on one whiteboard, so only one can write at a time</li>
+                    <li><b>The lock</b> — whoever holds the marker blocks the other two; a dropped marker freezes the whole shop</li>
+                    <li><b>The actor way</b> — each barista keeps a private notebook nobody else can read or touch</li>
+                    <li><b>The mailbox</b> — orders arrive as paper slips in each barista's tray, handled one slip at a time</li>
+                    <li><b>The name</b> — each barista is an <i>actor</i>: private state, a mailbox, and behavior for each message</li>
+                    <li><b>Erlang</b> — the language built at Ericsson where actors (processes) are the only way to share work</li>
+                </ul>
+                <p class="example">Barista A never peeks at barista B's notebook — if A needs B's tab total, A drops a slip in B's tray and B replies with a slip.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An actor owns its state outright and communicates only by asynchronous messages — with nothing shared, there is nothing to lock and nothing two workers can corrupt at once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Overloaded Espresso Mailbox</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">backlog math</span></div>
+                <ul>
+                    <li><b>The setup</b> — the espresso actor receives 8 order slips per minute but brews only 6 per minute</li>
+                    <li><b>The growth</b> — the mailbox backlog grows by 8 &minus; 6 = 2 slips every minute</li>
+                    <li><b>Hand-check</b> — after 5 minutes the backlog is 5 &times; 2 = 10 slips waiting in the tray</li>
+                    <li><b>The fix</b> — at minute 5, spawn a second espresso actor; a router splits arrivals 4/min to each</li>
+                    <li><b>The drain</b> — combined brewing is 12/min against 8/min arriving, so the backlog shrinks 4/min</li>
+                    <li><b>Hand-check again</b> — 10 slips &divide; 4 per minute = 2.5 minutes; the backlog hits zero at minute 7.5</li>
+                </ul>
+                <p class="example">At minute 6 the backlog is 10 &minus; 4 = 6 slips; at minute 7 it is 2; halfway through minute 8 the tray is empty.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because actors share nothing, scaling is arithmetic, not surgery — you spawn another actor and split the mail instead of adding locks around shared state.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Crashes Stay Small and Machines Look Alike</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">let it crash</span><span class="tag orange">distribution</span></div>
+                <ul>
+                    <li><b>Let it crash</b> — an Erlang actor that hits a bug simply dies; its private state dies with it alone</li>
+                    <li><b>The supervisor</b> — a parent actor watches its workers and restarts a dead one with fresh state</li>
+                    <li><b>No contagion</b> — with nothing shared, a crashed actor cannot corrupt what other actors hold</li>
+                    <li><b>Distribution by default</b> — sending to an actor on another machine is the same send call as local</li>
+                    <li><b>The heritage</b> — Ericsson built Erlang for telecom switches; nine-nines uptime was once reported</li>
+                    <li><b>Where you meet it</b> — streaming pipelines, chat backends, per-user session workers, job queues</li>
+                </ul>
+                <p class="example">The tab actor for one table crashes at 14:03:07 and is restarted by its supervisor a second later — every other table's tab never notices.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Share-nothing message passing buys two things at once: a crash is contained to one mailbox, and because messages already cross actor boundaries, crossing machine boundaries needs no new code.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Message Is a Copy, Not a Shared Pointer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">message copies</span></div>
+                <ul>
+                    <li><b>The confusion</b> — newcomers treat a sent message like a shared reference both sides can edit</li>
+                    <li><b>The truth</b> — the receiver gets its own copy; editing your original changes nothing they hold</li>
+                    <li><b>The symptom</b> — you update "the" order after sending it and the barista still brews the old one</li>
+                    <li><b>The cost</b> — copying means huge messages are expensive; send ids or deltas, not whole tables</li>
+                    <li><b>The fix</b> — to change remote state, send another message; there is nothing shared to edit</li>
+                    <li><b>The relapse</b> — routing everything through one giant actor quietly rebuilds the single lock</li>
+                </ul>
+                <p class="example">The customer scribbles "decaf" on their own copy of the slip after sending it — the barista's copy still says latte, so a second slip "change to decaf" is the only real fix.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting actor messages to behave like shared memory. A message is a snapshot; the only way to affect another actor's state is to send it a new message it chooses to act on.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHeadAt(ctx, x, y, ux, uy, color) {
+    var ah = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ah * ux - ah * 0.5 * uy, y - ah * uy + ah * 0.5 * ux);
+    ctx.lineTo(x - ah * ux + ah * 0.5 * uy, y - ah * uy - ah * 0.5 * ux);
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: locked whiteboard vs private mailboxes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Baristas: One Locked Whiteboard vs Three Private Mailboxes', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 50); ctx.lineTo(360, 270); ctx.stroke();
+
+    // ---- left panel: shared memory + lock ----
+    ctx.fillStyle = P.mute; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('shared memory + lock', 30, 60);
+
+    // whiteboard box centered at (190, 150)
+    roundRectPath(ctx, 190 - 55, 150 - 23, 110, 46, 8);
+    ctx.fillStyle = 'rgba(217,89,38,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('whiteboard 🔒', 190, 154);
+
+    // barista boxes at (40, 92) / (40, 152) / (40, 212), 86x34
+    var bLabels = ['barista A', 'barista B', 'barista C'];
+    var bY = [92, 152, 212];
+    for (var i = 0; i < 3; i++) {
+        roundRectPath(ctx, 40, bY[i], 86, 34, 6);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bLabels[i], 40 + 43, bY[i] + 21);
+    }
+
+    // arrows to the whiteboard: solid from A, dashed red from B and C
+    function panelArrow(x1, y1, x2, y2, color, dashed) {
+        var dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy);
+        var ux = dx / len, uy = dy / len;
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        if (dashed) ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 9 * ux, y2 - 9 * uy); ctx.stroke();
+        ctx.setLineDash([]);
+        arrowHeadAt(ctx, x2, y2, ux, uy, color);
+    }
+    panelArrow(126, 109, 138, 138, P.blue, false);       // A -> whiteboard (holds it)
+    panelArrow(126, 169, 133, 155, '#e74c3c', true);     // B waiting
+    panelArrow(126, 229, 138, 165, '#e74c3c', true);     // C waiting
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('waiting', 150, 235);
+
+    // ---- right panel: actors, share nothing ----
+    ctx.fillStyle = P.mute; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('actors: share nothing', 390, 60);
+
+    var aY = [92, 152, 212];
+    for (var i = 0; i < 3; i++) {
+        roundRectPath(ctx, 400, aY[i], 86, 34, 6);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bLabels[i], 400 + 43, aY[i] + 21);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText('own notebook', 400 + 43, aY[i] + 46);
+
+        // mailbox: three stacked 14x10 squares at x=560
+        for (var k = 0; k < 3; k++) {
+            ctx.fillStyle = 'rgba(0,131,0,0.15)';
+            ctx.fillRect(560, aY[i] + 2 + k * 11, 14, 10);
+            ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+            ctx.strokeRect(560, aY[i] + 2 + k * 11, 14, 10);
+        }
+    }
+
+    // slip arrows: A's box -> B's mailbox, B's box -> C's mailbox
+    function slipArrow(x1, y1, x2, y2) {
+        var dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy);
+        var ux = dx / len, uy = dy / len;
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 9 * ux, y2 - 9 * uy); ctx.stroke();
+        arrowHeadAt(ctx, x2, y2, ux, uy, P.aqua);
+        ctx.fillStyle = P.aqua; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('slip', (x1 + x2) / 2 + 10, (y1 + y2) / 2 - 4);
+    }
+    slipArrow(486, 109, 558, 165);   // A -> B's mailbox
+    slipArrow(486, 169, 558, 225);   // B -> C's mailbox
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no locks anywhere — only slips landing in mailboxes', w / 2, 288);
+});
+
+// c2: mailbox backlog — rising alone, falling after the spawn
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Mailbox Backlog: +2 Slips/min Alone, −4 Slips/min After the Spawn', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(m) { return ox + m / 8 * pw; }
+    function yOf(v) { return baseY - v / 12 * ph; }
+
+    // gridlines at 3/6/9/12
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [3, 6, 9, 12].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 8; m++) ctx.fillText(String(m), xOf(m), baseY + 16);
+    ctx.textAlign = 'right';
+    [0, 3, 6, 9, 12].forEach(function(v) { ctx.fillText(String(v), ox - 8, yOf(v) + 4); });
+    ctx.textAlign = 'center';
+    ctx.fillText('minutes', ox + pw / 2, baseY + 34);
+
+    // spawn marker at minute 5
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(5), baseY); ctx.lineTo(xOf(5), 70); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('second actor spawned', xOf(5), 62);
+
+    // rising line (one actor)
+    var riseM = [0, 1, 2, 3, 4, 5], riseB = [0, 2, 4, 6, 8, 10];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < riseM.length; i++) {
+        var x = xOf(riseM[i]), y = yOf(riseB[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < riseM.length; i++) {
+        var x = xOf(riseM[i]), y = yOf(riseB[i]);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill();
+        if (i > 0) {
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(String(riseB[i]), x - 4, y - 10);
+        }
+    }
+
+    // falling line (two actors)
+    var fallM = [5, 6, 7, 7.5], fallB = [10, 6, 2, 0];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < fallM.length; i++) {
+        var x = xOf(fallM[i]), y = yOf(fallB[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < fallM.length; i++) {
+        var x = xOf(fallM[i]), y = yOf(fallB[i]);
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill();
+        if (i > 0) {
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(String(fallB[i]), x + 10, y - 8);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('spawn, don\'t lock — empty by 7.5 min', xOf(6.2) - 120, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('arrival and brew rates illustrative', w - 12, h - 10);
+});
+
+// c3: supervisor tree — a crash restarts, a remote send looks local
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Supervisor, Three Workers: a Crash Restarts, a Remote Send Looks Local', w / 2, 24);
+
+    // machine boundary around worker 3 (draw first so boxes sit on top)
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.strokeRect(485, 150, 175, 85);
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('machine B', 490, 146);
+
+    // supervisor centered at (310, 75), 150x40
+    roundRectPath(ctx, 310 - 75, 75 - 20, 150, 40, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('supervisor', 310, 79);
+
+    // workers at y=175, 140x44
+    var workers = [
+        { x: 60, label: 'tab actor: table 4', stroke: P.blue, fill: 'rgba(42,120,214,0.15)' },
+        { x: 240, label: 'crashed 14:03:07', stroke: '#e74c3c', fill: 'rgba(231,76,60,0.12)' },
+        { x: 500, label: 'tab actor: table 9', stroke: P.blue, fill: 'rgba(42,120,214,0.15)' }
+    ];
+    // supervision lines
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    for (var i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(310, 95);
+        ctx.lineTo(workers[i].x + 70, 175);
+        ctx.stroke();
+    }
+    for (var i = 0; i < 3; i++) {
+        roundRectPath(ctx, workers[i].x, 175, 140, 44, 8);
+        ctx.fillStyle = workers[i].fill; ctx.fill();
+        ctx.strokeStyle = workers[i].stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(workers[i].label, workers[i].x + 70, 201);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', 240 + 132, 173 + 10);
+
+    // restart box at (240, 240), 140x34
+    roundRectPath(ctx, 240, 240, 140, 34, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('restarted 14:03:08', 310, 261);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ fresh state', 388, 261);
+
+    // curved green arrow from supervisor to restart box
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(390, 90);
+    ctx.quadraticCurveTo(455, 165, 388, 245);
+    ctx.stroke();
+    arrowHeadAt(ctx, 385, 248, -0.6, 0.8, P.green);
+
+    // aqua arrow from worker 1 to worker 3 across the dashed border
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(200, 197); ctx.lineTo(492, 197); ctx.stroke();
+    arrowHeadAt(ctx, 500, 197, 1, 0, P.aqua);
+    ctx.fillStyle = P.aqua; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same send call', 440, 190);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('failure is contained to one mailbox — not the whole shop', 60, 290);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timestamps illustrative', w - 12, h - 10);
+});
+
+// c4: editing your copy vs sending a new message
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Editing Your Copy Doesn\'t Edit Theirs — Send a New Message', w / 2, 24);
+
+    // divider at y=170
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(20, 170); ctx.lineTo(700, 170); ctx.stroke();
+
+    function box(x, y, bw, txt, fill, stroke) {
+        roundRectPath(ctx, x, y - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(txt, x + bw / 2, y + 4);
+    }
+
+    // Row 1: expects shared memory
+    var y1 = 105;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('expects shared', 20, y1 - 2);
+    ctx.fillText('memory', 20, y1 + 12);
+
+    box(170, y1, 150, 'my slip: latte', 'rgba(42,120,214,0.15)', P.blue);
+
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(320, y1); ctx.lineTo(382, y1); ctx.stroke();
+    arrowHeadAt(ctx, 390, y1, 1, 0, P.blue);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('send (copied)', 355, y1 - 8);
+
+    box(390, y1, 160, "barista's copy: latte", 'rgba(42,120,214,0.15)', P.blue);
+
+    // yellow edit box beneath the first box
+    roundRectPath(ctx, 170, 140, 150, 28, 8);
+    ctx.fillStyle = 'rgba(201,133,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('I edit mine: decaf', 245, 158);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ still brews latte', 560, y1 + 4);
+
+    // Row 2: send a new message
+    var y2 = 225;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('send a new', 20, y2 - 2);
+    ctx.fillText('message', 20, y2 + 12);
+
+    box(170, y2, 190, 'slip 2: change to decaf', 'rgba(0,131,0,0.12)', P.green);
+
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(360, y2); ctx.lineTo(412, y2); ctx.stroke();
+    arrowHeadAt(ctx, 420, y2, 1, 0, P.green);
+
+    box(420, y2, 160, 'mailbox → decaf', 'rgba(0,131,0,0.12)', P.green);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ brews decaf', 590, y2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('state changes travel as messages — never as edits in place', w / 2, 288);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CQRS &amp; Event Sourcing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>CQRS &amp; Event Sourcing</h1>
+<p class="subtitle">Store what happened, not what is &mdash; keep every event as an append-only log, and rebuild any "current state" you need by replaying it</p>
+
+<div class="card-section">
+    <h2>The Gift Card That Keeps a Diary</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">append-only log</span><span class="tag orange">event sourcing</span></div>
+                <ul>
+                    <li><b>The card</b> &mdash; a coffee shop sells a gift card; most systems store one number per card: the balance</li>
+                    <li><b>The overwrite</b> &mdash; every purchase UPDATEs that number in place, and the old value is gone forever</li>
+                    <li><b>The diary</b> &mdash; event sourcing stores the events instead: "loaded $25", "bought latte &minus;$5", one row each</li>
+                    <li><b>The replay</b> &mdash; the balance is only a derived cache; the truth is recomputed by replaying the log</li>
+                    <li><b>The payoff</b> &mdash; the log answers questions the single number cannot: when, what, in which order</li>
+                </ul>
+                <p class="example">Card #114's row isn't "balance: $15" &mdash; it's five dated lines: load +$25, latte &minus;$5, muffin &minus;$4, refund +$4, latte &minus;$5.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Event sourcing keeps the full history as immutable facts and treats current state as a cached calculation &mdash; the log is the truth, the balance is derived.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Replaying the Ledger to $15</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">replay</span></div>
+                <ul>
+                    <li><b>The events</b> &mdash; card #114 has five: +$25 (Mar 1), &minus;$5 (Mar 3), &minus;$4 (Mar 5), +$4 (Mar 8), &minus;$5 (Mar 9)</li>
+                    <li><b>The fold</b> &mdash; start at $0 and apply each event in order: 0 &rarr; 25 &rarr; 20 &rarr; 16 &rarr; 20 &rarr; 15</li>
+                    <li><b>Hand-check</b> &mdash; 25 &minus; 5 &minus; 4 + 4 &minus; 5 = 15; anyone can redo it on paper and get the same answer</li>
+                    <li><b>Time travel</b> &mdash; "what was the balance on Mar 6?" &mdash; replay only events up to Mar 6: $16</li>
+                    <li><b>The snapshot</b> &mdash; long logs get a saved checkpoint so replay starts from it, not from event one</li>
+                </ul>
+                <p class="example">An accountant disputing the Mar 8 refund replays the log up to Mar 7 ($16) and after ($20) and sees exactly what the refund did.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> State at any moment is a pure function of the events before it &mdash; replaying the same log always yields the same balance, so every past state is recoverable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Log, Many Read Models</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">CQRS</span><span class="tag orange">read models</span></div>
+                <ul>
+                    <li><b>The split</b> &mdash; CQRS separates the write side (append events) from the read side (query projections)</li>
+                    <li><b>Projections</b> &mdash; background jobs fold the log into shaped tables: balances, daily sales, top items</li>
+                    <li><b>Many views</b> &mdash; the same log feeds a balance lookup, a finance report, and a fraud feature table</li>
+                    <li><b>For data science</b> &mdash; the log is training data with true timestamps; no "state at time T" guesswork</li>
+                    <li><b>New questions</b> &mdash; a projection nobody planned for is built later by replaying the log from day one</li>
+                </ul>
+                <p class="example">A churn model needs "refund count in the 30 days before cancellation" &mdash; the team replays two years of events and has the feature by afternoon.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Writes go to one append-only log; each read model is a disposable, rebuildable fold of that log &mdash; so queries and features never require guessing what the state used to be.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>You Can't Edit the Past</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">immutability</span></div>
+                <ul>
+                    <li><b>The temptation</b> &mdash; the Mar 5 muffin was rung up wrong, so a developer UPDATEs the event to &minus;$3</li>
+                    <li><b>The break</b> &mdash; every projection built before the edit now disagrees with a fresh replay</li>
+                    <li><b>The audit hole</b> &mdash; the log was the proof of what happened; an edited log proves nothing</li>
+                    <li><b>The right fix</b> &mdash; append a correcting event: "Mar 10 price adjustment +$1", balance 15 &rarr; 16</li>
+                    <li><b>The rule</b> &mdash; events are immutable facts; mistakes are corrected by new events, never rewrites</li>
+                </ul>
+                <p class="example">Accounting works the same way &mdash; a wrong journal entry gets a reversing entry, not an eraser.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the event log like a normal table and fixing errors with UPDATE or DELETE. That silently invalidates every replay and projection &mdash; corrections must be appended as compensating events.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, dx, dy, size) {
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ux * size - uy * size * 0.5, y - uy * size + ux * size * 0.5);
+    ctx.lineTo(x - ux * size + uy * size * 0.5, y - uy * size - ux * size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: state table vs event log panels
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Card, Two Records: One Overwritten Number vs the Full Story', w / 2, 24);
+
+    // left panel: state table
+    ctx.fillStyle = 'rgba(42,120,214,0.10)';
+    roundRect(ctx, 50, 70, 280, 190, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('state table', 190, 92);
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui';
+    ctx.fillText('card #114 — balance $15', 190, 122);
+
+    // strikethrough ghosts
+    var ghosts = ['$20', '$16', '$25'];
+    ctx.font = '12px system-ui';
+    for (var i = 0; i < 3; i++) {
+        var gy = 152 + i * 24;
+        ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+        ctx.fillText(ghosts[i], 190, gy);
+        var tw = ctx.measureText(ghosts[i]).width;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(190 - tw / 2 - 3, gy - 4); ctx.lineTo(190 + tw / 2 + 3, gy - 4); ctx.stroke();
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('old values destroyed by UPDATE', 190, 244);
+
+    // right panel: event log
+    ctx.fillStyle = 'rgba(0,131,0,0.08)';
+    roundRect(ctx, 390, 70, 280, 190, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('event log (append-only)', 530, 92);
+    var rows = ['Mar 1   load    +$25', 'Mar 3   latte    −$5', 'Mar 5   muffin  −$4', 'Mar 8   refund  +$4', 'Mar 9   latte    −$5'];
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    for (var i = 0; i < 5; i++) {
+        ctx.fillText(rows[i], 430, 118 + i * 30);
+    }
+
+    // arrow from log to replay label
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(530, 260); ctx.lineTo(530, 272); ctx.stroke();
+    ctx.fillStyle = P.mute;
+    arrowHead(ctx, 530, 274, 0, 1, 6);
+    ctx.fillStyle = P.ink; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('replay → $15', 542, 278);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the log can rebuild the number; the number can never rebuild the log', 280, 285);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative', w - 12, 62);
+});
+
+// c2: replay step chart
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Replaying Card #114: 0 → 25 → 20 → 16 → 20 → 15', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    function yOf(b) { return baseY - b / 30 * chH; }
+    var xs = [60, 160, 260, 360, 460, 560];
+    var bals = [0, 25, 20, 16, 20, 15];
+    var ticks = ['start', 'Mar 1', 'Mar 3', 'Mar 5', 'Mar 8', 'Mar 9'];
+
+    var gl = [10, 20, 30];
+    for (var i = 0; i < 3; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + gl[i], ox - 8, y + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('$0', ox - 8, baseY + 4);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i], xs[i], baseY + 16);
+    }
+
+    // time-travel dashed line between Mar 5 and Mar 8
+    var ttx = (xs[3] + xs[4]) / 2;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ttx, 52); ctx.lineTo(ttx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Mar 6 query → $16', ttx, 46);
+
+    // step-after line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xs[0], yOf(bals[0]));
+    for (var i = 1; i < 6; i++) {
+        ctx.lineTo(xs[i], yOf(bals[i - 1]));
+        ctx.lineTo(xs[i], yOf(bals[i]));
+    }
+    ctx.lineTo(ox + pw, yOf(bals[5]));
+    ctx.stroke();
+
+    // event markers with labels
+    var evs = [
+        { i: 1, lab: '+$25', col: P.green },
+        { i: 2, lab: '−$5', col: P.orange },
+        { i: 3, lab: '−$4', col: P.orange },
+        { i: 4, lab: '+$4', col: P.green },
+        { i: 5, lab: '−$5', col: P.orange }
+    ];
+    for (var k = 0; k < 5; k++) {
+        var e = evs[k];
+        var mx = xs[e.i], my = yOf(bals[e.i]);
+        ctx.fillStyle = e.col;
+        ctx.beginPath(); ctx.arc(mx, my, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(e.lab, mx + 9, my - 8);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replay stops anywhere — every past balance is recoverable', 430, 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative; arithmetic exact', w - 12, h - 8);
+});
+
+// c3: CQRS flow diagram
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('CQRS: One Write Path, Three Read Models from the Same Log', w / 2, 24);
+
+    // command box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 30, 125, 130, 50, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('commands:', 95, 145);
+    ctx.fillText('buy, load, refund', 95, 161);
+
+    // arrow to log
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(160, 150); ctx.lineTo(212, 150); ctx.stroke();
+    ctx.fillStyle = P.blue;
+    arrowHead(ctx, 218, 150, 1, 0, 8);
+
+    // event log box
+    ctx.fillStyle = 'rgba(26,82,118,0.12)';
+    roundRect(ctx, 220, 110, 170, 80, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('event log', 305, 140);
+    ctx.fillText('(append-only)', 305, 157);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('the single source of truth', 305, 176);
+
+    // read model boxes
+    var rms = [
+        { y: 60, lab: 'balance table — card #114: $15', col: P.green, fill: 'rgba(0,131,0,0.08)' },
+        { y: 127, lab: 'daily sales report', col: P.aqua, fill: 'rgba(25,158,112,0.08)' },
+        { y: 194, lab: 'ML feature table (refunds/30d)', col: P.violet, fill: 'rgba(74,58,167,0.08)' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var r = rms[i];
+        // arrow from log to box
+        ctx.strokeStyle = r.col; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(390, 150); ctx.lineTo(462, r.y + 23); ctx.stroke();
+        ctx.fillStyle = r.col;
+        arrowHead(ctx, 468, r.y + 23, 462 - 390, r.y + 23 - 150, 8);
+
+        ctx.fillStyle = r.fill;
+        roundRect(ctx, 470, r.y, 210, 46, 8);
+        ctx.fill();
+        ctx.strokeStyle = r.col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.lab, 575, r.y + 28);
+    }
+
+    // side labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('WRITE SIDE', 30, 112);
+    ctx.fillStyle = P.green;
+    ctx.fillText('READ SIDE', 470, 50);
+
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('drop any read model and rebuild it by replay — the log never changes', w / 2, 280);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('schematic; balance matches the worked example', w - 12, h - 4);
+});
+
+// c4: edit history vs append correction
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fixing a Wrong Event: Edit History vs Append a Correction', w / 2, 24);
+
+    function box(x, y, bw, lab1, lab2, col, fill) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y - 20, bw, 40, 8);
+        ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lab2) {
+            ctx.fillText(lab1, x + bw / 2, y - 3);
+            ctx.fillText(lab2, x + bw / 2, y + 12);
+        } else {
+            ctx.fillText(lab1, x + bw / 2, y + 4);
+        }
+    }
+    function arrow(x1, x2, y, col) {
+        ctx.strokeStyle = col; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = col;
+        arrowHead(ctx, x2, y, 1, 0, 8);
+    }
+
+    var redFill = 'rgba(231,76,60,0.12)', blueFill = 'rgba(42,120,214,0.15)', greenFill = 'rgba(0,131,0,0.12)';
+    var red = '#e74c3c';
+
+    // row 1: edit in place
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('edit in place', 20, y1 - 32);
+    box(140, y1, 160, 'Mar 5  muffin  −$4', null, P.blue, blueFill);
+    arrow(300, 340, y1, P.mute);
+    box(340, y1, 150, 'UPDATE to −$3', null, red, redFill);
+    arrow(490, 540, y1, P.mute);
+    box(540, y1, 165, 'old reports disagree', null, red, redFill);
+    ctx.fillStyle = red; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ audit trail broken', 540, y1 + 38);
+
+    // row 2: append correction
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('append correction', 20, y2 - 32);
+    box(140, y2, 160, 'Mar 5  muffin  −$4', null, P.blue, blueFill);
+    arrow(300, 340, y2, P.mute);
+    box(340, y2, 155, 'append Mar 10 +$1', null, P.green, greenFill);
+    arrow(495, 540, y2, P.mute);
+    box(540, y2, 170, 'replay → $16', 'everywhere', P.green, greenFill);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ history intact', 540, y2 + 38);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the log records facts; a fact can be superseded, never unsaid', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

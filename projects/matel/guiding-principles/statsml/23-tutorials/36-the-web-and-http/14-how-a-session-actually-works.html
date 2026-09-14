@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How a Session Actually Works</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>How a Session Actually Works</h1>
+<p class="subtitle">HTTP forgets you after every request — a session is the server's memory of one login, carried back and forth as a tiny random id in a cookie</p>
+
+<div class="card-section">
+    <h2>One Login, Traced Request by Request</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">cookies</span><span class="tag orange">HTTP is stateless</span></div>
+                <ul>
+                    <li><b>The login</b> — Maya POSTs her email and password once to a coffee shop's online order site</li>
+                    <li><b>The stateless problem</b> — HTTP forgets her the moment the response ends; each request starts blank</li>
+                    <li><b>The session</b> — the server invents a random id <code>SID-0001</code> and files "SID-0001 = maya" in a table</li>
+                    <li><b>The cookie</b> — the response says <code>Set-Cookie: sid=SID-0001</code>; her browser attaches it from then on</li>
+                    <li><b>The lookup</b> — on <code>GET /orders</code> the server reads the cookie, finds the row, and knows it's Maya</li>
+                    <li><b>The logout</b> — <code>POST /logout</code> deletes the row; the same cookie now matches nothing</li>
+                </ul>
+                <p class="example">Maya types her password exactly once at 9:00; the cookie SID-0001 answers for her on every request after that.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A session is a server-side row keyed by a random id; the cookie only carries the id back, which is how the server recognizes an anonymous next request as Maya's.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Thirty Minutes on the Clock: the Session Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">expiry</span><span class="tag orange">sliding timeout</span></div>
+                <ul>
+                    <li><b>The row</b> — sid <code>SID-0001</code>, user maya, created 9:00, expires 9:30: one table row per login</li>
+                    <li><b>Sliding timeout</b> — every request pushes the expiry 30 minutes forward from that moment</li>
+                    <li><b>9:05 request</b> — the expiry slides from 9:30 to 9:35</li>
+                    <li><b>9:12 request</b> — the expiry slides again, from 9:35 to 9:42</li>
+                    <li><b>The gap</b> — Maya walks away; no request lands between 9:12 and 9:50</li>
+                    <li><b>9:50 request</b> — it arrives after 9:42, so the row is dead: 401, back to the login page</li>
+                </ul>
+                <p class="example">Two quick clicks at 9:05 and 9:12 keep Maya's session alive, but a 38-minute coffee break out-waits the 30-minute timer.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Expiry lives on the server row, not in the cookie — the browser can keep sending SID-0001 forever; the server just stops honoring it after 9:42.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why "I Got Logged Out" Lands on Your Desk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">debugging</span><span class="tag green">analytics</span></div>
+                <ul>
+                    <li><b>The bug report</b> — "the site logged me out" is one symptom with at least four different root causes</li>
+                    <li><b>Idle expiry</b> — the commonest cause: the user out-waited the timeout, working exactly as designed</li>
+                    <li><b>Server restart</b> — sessions kept only in memory vanish on deploy; everyone is logged out at once</li>
+                    <li><b>Cookie loss</b> — privacy modes, extensions, or a cleared cache drop the sid before the server does</li>
+                    <li><b>Analytics</b> — session rows are the raw data behind every "average session length" dashboard</li>
+                    <li><b>First question</b> — did the cookie stop arriving, or did the row stop existing? Always check which</li>
+                </ul>
+                <p class="example">120 logout tickets in one month split into 54 idle expiries, 30 from a restart, 21 lost cookies, and 15 second-device logins.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every "logged out" bug is either the cookie missing from the request or the row missing from the server — the fix is completely different for each side.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Cookie Holds a Key, Not the Login</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">JWT</span><span class="tag green">security</span></div>
+                <ul>
+                    <li><b>The mistake</b> — thinking the cookie stores the password or username; it stores only the random id</li>
+                    <li><b>Opaque key</b> — <code>SID-0001</code> means nothing by itself; all the meaning lives in the server's table row</li>
+                    <li><b>The JWT twist</b> — a signed token packs "user=maya, exp=9:42" inside the cookie itself, no table</li>
+                    <li><b>Trade-off</b> — JWTs skip the table lookup but can't be revoked by deleting a row; they die only at exp</li>
+                    <li><b>Theft</b> — whoever holds a valid sid IS Maya to the server; hence HTTPS and HttpOnly cookies</li>
+                    <li><b>Clearing</b> — deleting the cookie logs the browser out but leaves the server row alive until expiry</li>
+                </ul>
+                <p class="example">Maya clears her cookies at 9:15, yet row SID-0001 stays valid until 9:42 — a stolen copy of the cookie would still work.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating "session" as one thing. A session-id cookie is a key into server state; a JWT is the state itself, signed. Revocation, expiry, and theft behave differently for each — logout on one is a delete, on the other a wait.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<p style="font-style:italic;font-size:12px;color:#6b7280;margin:18px 4px;">Note: session ids, cookie values, tracking ids, token parts, and example passwords on this page are made-up placeholders &mdash; for illustration only, and to avoid false positives from secret scanners.</p>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: sequence diagram — one login, six messages
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+    var bx = 150, sx = 570;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Login, Six Messages: the Life of Cookie sid=SID-0001', w / 2, 24);
+
+    // lifelines
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 275); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx, 60); ctx.lineTo(sx, 275); ctx.stroke();
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Maya's browser", bx, 50);
+    ctx.fillText('server', sx, 50);
+
+    function msg(y, dir, color, label) {
+        var x1 = dir === 'right' ? bx + 4 : sx - 4;
+        var x2 = dir === 'right' ? sx - 4 : bx + 4;
+        var hd = dir === 'right' ? -1 : 1; // head offset direction
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 + hd * 9, y); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y);
+        ctx.lineTo(x2 + hd * 10, y - 5);
+        ctx.lineTo(x2 + hd * 10, y + 5);
+        ctx.closePath(); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, (bx + sx) / 2, y - 6);
+    }
+    msg(90, 'right', P.blue, 'POST /login  email + password');
+    msg(120, 'left', P.green, '200 OK  Set-Cookie: sid=SID-0001');
+    msg(155, 'right', P.blue, 'GET /orders  Cookie: sid=SID-0001');
+    msg(185, 'left', P.green, '200 OK  Hi Maya — 3 past orders');
+    msg(220, 'right', P.orange, 'POST /logout  Cookie: sid=SID-0001');
+    msg(250, 'left', P.mute, '200 OK  row SID-0001 deleted');
+
+    // server-side note
+    roundRectPath(ctx, 556, 92, 156, 26, 6);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('table: SID-0001 = maya', 634, 109);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText('the password crosses the wire once; the id crosses every time', (bx + sx) / 2, 270);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('session id is a made-up placeholder; real ids are long and random', 705, 293);
+});
+
+// c2: the session table row and its sliding expiry on a 9:00-10:00 timeline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Row per Login: sid SID-0001 and Its Sliding 30-Minute Expiry', w / 2, 24);
+
+    // table
+    var colX = [80, 240, 400, 560], colW = 150;
+    var heads = ['sid', 'user', 'created', 'expires'];
+    var vals = ['SID-0001', 'maya', '9:00', '9:30 → 9:35 → 9:42'];
+    for (var c = 0; c < 4; c++) {
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(colX[c], 55, colW, 30);
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+        ctx.fillText(heads[c], colX[c] + colW / 2, 75);
+        ctx.fillStyle = 'rgba(42,120,214,0.10)';
+        ctx.fillRect(colX[c], 85, colW, 30);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+        ctx.fillText(vals[c], colX[c] + colW / 2, 105);
+    }
+
+    // timeline: 9:00-10:00, 10 px per minute, x = 60 + minute*10
+    function xOf(min) { return 60 + min * 10; }
+    var axisY = 225;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, axisY); ctx.lineTo(660, axisY); ctx.stroke();
+    var ticks = [0, 15, 30, 45, 60];
+    var tickLabs = ['9:00', '9:15', '9:30', '9:45', '10:00'];
+    for (var t = 0; t < 5; t++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(ticks[t]), axisY - 4); ctx.lineTo(xOf(ticks[t]), axisY + 4); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[t], xOf(ticks[t]), axisY + 22);
+    }
+
+    // expired zone: minutes 42-50 shaded
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(xOf(42), axisY - 20, xOf(50) - xOf(42), 40);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('expired at 9:42', xOf(46), axisY - 26);
+
+    // expiry arcs (dashed green) with landing ticks
+    var slides = [[0, 30], [5, 35], [12, 42]];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    for (var a = 0; a < 3; a++) {
+        var x1 = xOf(slides[a][0]), x2 = xOf(slides[a][1]);
+        var peakY = axisY - 44 - a * 9;
+        ctx.beginPath();
+        ctx.moveTo(x1, axisY - 6);
+        ctx.quadraticCurveTo((x1 + x2) / 2, peakY, x2, axisY - 6);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    for (var a = 0; a < 3; a++) {
+        var x2 = xOf(slides[a][1]);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x2, axisY - 10); ctx.lineTo(x2, axisY - 2); ctx.stroke();
+    }
+
+    // request markers
+    var reqMins = [0, 5, 12];
+    var reqLabs = ['9:00 login', '9:05', '9:12'];
+    for (var r = 0; r < 3; r++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(reqMins[r]), axisY, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+        ctx.fillText(reqLabs[r], xOf(reqMins[r]) + (r === 0 ? 12 : 0), axisY + 40);
+    }
+
+    // the miss at 9:50
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('✕', xOf(50), axisY + 5);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('9:50 request — 401', xOf(50) + 30, axisY - 40);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('every click buys 30 more minutes', 180, 160);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('times illustrative; 30-min idle timeout', 705, 292);
+});
+
+// c3: 120 logout tickets by root cause
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('120 Logout Tickets, Four Root Causes', w / 2, 24);
+
+    var rows = [
+        { lab: 'idle expiry (by design)', width: 440, fill: 'rgba(0,131,0,0.85)', stroke: P.green, count: '54' },
+        { lab: 'server restart wiped memory', width: 244, fill: 'rgba(217,89,38,0.85)', stroke: P.orange, count: '30' },
+        { lab: 'cookie blocked or cleared', width: 171, fill: 'rgba(42,120,214,0.85)', stroke: P.blue, count: '21' },
+        { lab: 'login on a second device', width: 122, fill: 'rgba(74,58,167,0.85)', stroke: P.violet, count: '15' }
+    ];
+    var rowY = [80, 130, 180, 230], baseX = 230;
+    for (var r = 0; r < 4; r++) {
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+        ctx.fillText(rows[r].lab, 20, rowY[r] + 4);
+        ctx.fillStyle = rows[r].fill;
+        ctx.fillRect(baseX, rowY[r] - 11, rows[r].width, 22);
+        ctx.strokeStyle = rows[r].stroke; ctx.lineWidth = 1;
+        ctx.strokeRect(baseX, rowY[r] - 11, rows[r].width, 22);
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = rows[r].stroke;
+        ctx.fillText(rows[r].count, baseX + rows[r].width + 8, rowY[r] + 4);
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta; ctx.textAlign = 'right';
+    ctx.fillText('only one of the four is actually a bug in your code', 700, 55);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444';
+    ctx.fillText('ticket counts illustrative', 705, 290);
+});
+
+// c4: session id vs JWT flow
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Session Id vs JWT: Key to a Row vs the Row Itself', w / 2, 24);
+
+    function box(x, cy, bw, fill, border, lines) {
+        roundRectPath(ctx, x, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 4);
+            ctx.fillText(lines[1], x + bw / 2, cy + 12);
+        }
+    }
+    function arrow(x1, x2, y, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.moveTo(x2, y); ctx.lineTo(x2 - 9, y - 5); ctx.lineTo(x2 - 9, y + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: session id
+    var y1 = 100;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('session id', 20, y1 + 4);
+    box(140, y1, 160, 'rgba(42,120,214,0.15)', P.blue, ['cookie: sid=SID-0001']);
+    arrow(300, 360, y1, P.blue);
+    box(360, y1, 150, 'rgba(42,120,214,0.15)', P.blue, ['table lookup']);
+    arrow(510, 560, y1, P.blue);
+    box(560, y1, 150, 'rgba(0,131,0,0.12)', P.green, ['row says: maya']);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('revoke = delete the row', 635, y1 + 38);
+
+    // row 2: JWT
+    var y2 = 210;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('JWT', 20, y2 + 4);
+    box(140, y2, 190, 'rgba(217,89,38,0.12)', P.orange, ['cookie: user=maya,', 'exp=9:42, sig']);
+    arrow(330, 390, y2, P.orange);
+    box(390, y2, 150, 'rgba(217,89,38,0.12)', P.orange, ['check signature']);
+    arrow(540, 580, y2, P.orange);
+    box(580, y2, 130, 'rgba(0,131,0,0.12)', P.green, ['trusted as-is']);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('no row to delete', 645, y2 + 38);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText('one design remembers on the server; the other trusts the math', w / 2, 275);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('token contents simplified for display', 705, 293);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

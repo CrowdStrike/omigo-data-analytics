@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The GIL</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+code {
+    background: #f0f2f4;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+</style>
+</head>
+<body>
+
+<h1>The GIL</h1>
+<p class="subtitle">Python's Global Interpreter Lock lets only one thread run Python code at a time &mdash; so threads speed up waiting, never computing</p>
+
+<div class="card-section">
+    <h2>One Knife in a Kitchen of Four Cooks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">one at a time</span><span class="tag orange">the lock</span></div>
+                <ul>
+                    <li><b>The kitchen</b> &mdash; a food truck hires four cooks to make salads faster, but the kitchen owns one knife</li>
+                    <li><b>Chopping</b> &mdash; only the cook holding the knife can chop; the other three stand around and wait their turn</li>
+                    <li><b>The GIL</b> &mdash; Python has the same rule: one global lock, and only the thread holding it runs Python code</li>
+                    <li><b>Turn taking</b> &mdash; threads swap the lock every few milliseconds, so they take turns but never chop together</li>
+                    <li><b>One core</b> &mdash; on an 8-core laptop, pure-Python threads still do about one core's worth of chopping</li>
+                </ul>
+                <p class="example">Four cooks each need 10 minutes of chopping; with one knife the meal still takes 40 minutes &mdash; exactly what one cook alone would need.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The GIL is a single lock inside the Python interpreter: many threads can exist, but only the one holding the lock executes Python instructions at any instant.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Timing It: Counting vs Downloading</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">cpu vs waiting</span></div>
+                <ul>
+                    <li><b>The CPU job</b> &mdash; a pure-Python loop counting to 40 million takes about 4.0 s on one thread</li>
+                    <li><b>Split four ways</b> &mdash; four threads counting 10 million each still take 4.1 s: the lock made them queue</li>
+                    <li><b>The waiting job</b> &mdash; fetching four files that each take 3 s takes 12.0 s when done one after another</li>
+                    <li><b>Threads shine</b> &mdash; four threads fetch all four in 3.1 s: a thread waiting on the network drops the lock</li>
+                    <li><b>The rule</b> &mdash; the GIL blocks parallel computing, not parallel waiting</li>
+                </ul>
+                <p class="example">Same four threads, opposite outcomes: counting stayed at 4.1 s vs 4.0 s (no gain), downloads fell from 12.0 s to 3.1 s (almost 4&times; faster).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Four threads cut download time from 12.0 s to 3.1 s but left the counting loop at ~4 s &mdash; the GIL is released while a thread waits, never while it computes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where a Data Scientist Hits the Lock</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">right tool</span></div>
+                <ul>
+                    <li><b>The trap</b> &mdash; "I'll speed up my pure-Python feature loop with threads" is the classic wasted afternoon</li>
+                    <li><b>Processes</b> &mdash; multiprocessing gives each worker its own interpreter and own lock: real multi-core gains</li>
+                    <li><b>NumPy escape</b> &mdash; big NumPy array math runs in C and releases the GIL; pandas only sometimes</li>
+                    <li><b>I/O work</b> &mdash; scraping, API calls, reading a folder of files: threads (or asyncio) are exactly right</li>
+                    <li><b>Rule of thumb</b> &mdash; CPU-bound Python code wants processes; waiting-bound work wants threads</li>
+                </ul>
+                <p class="example">A team put a pure-Python cleaning loop on 4 threads and got 1.0&times; speedup; switching the same loop to 4 processes gave 3.8&times;.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Choose workers by what the job spends time on: 4 processes gave the Python loop 3.8&times;, and threads gave 3.7&ndash;3.9&times; only where C code or network waits released the lock.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"So Threads Are Useless in Python?"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">released while waiting</span></div>
+                <ul>
+                    <li><b>The myth</b> &mdash; the GIL makes people call Python threads pointless; that is only true for pure CPU loops</li>
+                    <li><b>Held vs free</b> &mdash; a downloading thread holds the lock for tiny slivers, then waits with the lock released</li>
+                    <li><b>Mostly free</b> &mdash; in the 3.1 s download run, each thread held the lock well under 1% of the time</li>
+                    <li><b>Not thread safety</b> &mdash; the GIL does not make code safe: two threads can still corrupt a shared counter</li>
+                    <li><b>Changing</b> &mdash; Python 3.13+ offers an optional "free-threaded" build with no GIL, still maturing</li>
+                </ul>
+                <p class="example">Zoom into the 3.1 s download run and each thread's lane is almost entirely "waiting, lock free", with only pin-thin stripes of "running Python, lock held".</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Concluding either "threads never help" or "the GIL makes my code thread-safe" &mdash; threads help whenever the job is waiting, and shared data still needs its own locks.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// c1: four cooks, one knife gantt over 40 minutes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Cooks, One Knife — Dinner Still Takes 40 Minutes', w / 2, 24);
+
+    var ax = 110, aw = 580, baseY = 250;
+    function tx(min) { return ax + min / 40 * aw; }
+
+    // gridlines + ticks
+    var tickLabs = ['0', '10', '20', '30', '40 min'];
+    for (var i = 0; i <= 4; i++) {
+        var x = tx(i * 10);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 70); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], x, baseY + 18);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, baseY); ctx.lineTo(ax + aw, baseY); ctx.stroke();
+
+    var rows = [85, 128, 171, 214];
+    var names = ['cook A', 'cook B', 'cook C', 'cook D'];
+    var turns = [[0, 10], [10, 20], [20, 30], [30, 40]];
+    var cols = [P.blue, P.green, P.orange, P.violet];
+
+    for (var i = 0; i < 4; i++) {
+        var y = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(names[i], 20, y + 4);
+
+        // waiting stretches: before and after the knife turn
+        var t0 = turns[i][0], t1 = turns[i][1];
+        var waits = [];
+        if (t0 > 0) waits.push([0, t0]);
+        if (t1 < 40) waits.push([t1, 40]);
+        for (var j = 0; j < waits.length; j++) {
+            var wx0 = tx(waits[j][0]), wx1 = tx(waits[j][1]);
+            ctx.fillStyle = 'rgba(107,114,128,0.10)';
+            ctx.fillRect(wx0, y - 8, wx1 - wx0, 16);
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+            ctx.strokeRect(wx0, y - 8, wx1 - wx0, 16);
+        }
+
+        // knife turn: solid bar
+        rr(ctx, tx(t0), y - 8, tx(t1) - tx(t0), 16, 3);
+        ctx.fillStyle = cols[i];
+        ctx.fill();
+    }
+
+    // "waiting for the knife" inside cook D's 0-30 stretch
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('waiting for the knife', tx(15), rows[3] + 4);
+
+    // knife hand-off arrows at 10, 20, 30
+    for (var i = 1; i <= 3; i++) {
+        var x = tx(i * 10);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, 58); ctx.lineTo(x, 70); ctx.stroke();
+        ctx.fillStyle = P.ink;
+        ctx.beginPath();
+        ctx.moveTo(x, 74); ctx.lineTo(x - 4, 66); ctx.lineTo(x + 4, 66);
+        ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('knife passed', tx(10), 52);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one knife → 40 min total, same as one cook', 430, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — each salad needs 10 min of chopping', 690, 292);
+});
+
+// c2: grouped bars, counting vs downloading, 1 thread vs 4 threads
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Threads Help Downloads, Not Counting', w / 2, 24);
+
+    var ox = 70, baseY = 245, ph = 185, maxV = 13;
+
+    // gridlines + y labels
+    var gl = [0, 4, 8, 12];
+    for (var i = 0; i < 4; i++) {
+        var gy = baseY - gl[i] / maxV * ph;
+        if (gl[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + 590, gy); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i] + 's', ox - 8, gy + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 590, baseY); ctx.stroke();
+
+    // bars: [center x, seconds, border color, fill]
+    var bars = [
+        [180, 4.0, P.mute, 'rgba(107,114,128,0.35)', '4.0 s'],
+        [280, 4.1, P.blue, 'rgba(42,120,214,0.35)', '4.1 s'],
+        [460, 12.0, P.mute, 'rgba(107,114,128,0.35)', '12.0 s'],
+        [560, 3.1, P.green, 'rgba(0,131,0,0.30)', '3.1 s']
+    ];
+    for (var i = 0; i < 4; i++) {
+        var cx = bars[i][0], bh = bars[i][1] / maxV * ph;
+        ctx.fillStyle = bars[i][3];
+        ctx.fillRect(cx - 35, baseY - bh, 70, bh);
+        ctx.strokeStyle = bars[i][2]; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - 35, baseY - bh, 70, bh);
+        ctx.fillStyle = bars[i][2]; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bars[i][4], cx, baseY - bh - 8);
+    }
+
+    // group labels
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('count to 40 million (CPU)', 230, baseY + 20);
+    ctx.fillText('download 4 files (waiting)', 510, baseY + 20);
+
+    // legend
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.mute; ctx.fillRect(560, 42, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('1 thread', 576, 51);
+    ctx.fillStyle = P.blue; ctx.fillRect(560, 60, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('4 threads', 576, 69);
+
+    // annotations
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 threads, zero speedup —', 230, 152);
+    ctx.fillText('the lock made them queue', 230, 168);
+    ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('waiting releases the lock:', 470, 116);
+    ctx.fillText('~4× faster', 470, 132);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings on a 4-core laptop', 690, 294);
+});
+
+// c3: speedup with 4 workers, four setups, horizontal bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Speedup with 4 Workers — Same Laptop, Four Setups', w / 2, 24);
+
+    var ax = 250, aw = 430, baseY = 255, maxV = 4.5;
+    function sx(v) { return ax + v / maxV * aw; }
+
+    // gridlines + ticks
+    for (var i = 0; i <= 4; i++) {
+        var x = sx(i);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(i + '×', x, baseY + 18);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, baseY); ctx.lineTo(ax + aw, baseY); ctx.stroke();
+
+    // rows
+    var rows = [
+        ['pure-Python loop + 4 threads', 1.0, '#e74c3c', 'rgba(231,76,60,0.25)', '1.0×', 80],
+        ['pure-Python loop + 4 processes', 3.8, P.green, 'rgba(0,131,0,0.30)', '3.8×', 125],
+        ['NumPy matrix math + 4 threads', 3.7, P.blue, 'rgba(42,120,214,0.30)', '3.7×', 170],
+        ['API downloads + 4 threads', 3.9, P.aqua, 'rgba(25,158,112,0.30)', '3.9×', 215]
+    ];
+    for (var i = 0; i < 4; i++) {
+        var y = rows[i][5], bend = sx(rows[i][1]);
+        ctx.fillStyle = rows[i][3];
+        ctx.fillRect(ax, y, bend - ax, 22);
+        ctx.strokeStyle = rows[i][2]; ctx.lineWidth = 1;
+        ctx.strokeRect(ax, y, bend - ax, 22);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(rows[i][0], 240, y + 15);
+        ctx.fillStyle = rows[i][2]; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rows[i][4], bend + 6, y + 15);
+    }
+
+    // guide line at 4.0
+    var gx = sx(4.0);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(gx, 60); ctx.lineTo(gx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('perfect 4×', gx, 54);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the GIL: threads queued, nothing gained', 400, 94);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — processes and C code sidestep the lock', 690, 294);
+});
+
+// c4: inside the 3.1 s download run, lock held vs released
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Inside the 3.1 s Download Run: the Lock Is Almost Always Free', w / 2, 24);
+
+    var ax = 110, aw = 580, baseY = 250, maxT = 3.1;
+    function tx(t) { return ax + t / maxT * aw; }
+
+    // gridlines + ticks
+    var ticks = [[0, '0'], [1, '1s'], [2, '2s'], [3, '3s']];
+    for (var i = 0; i < 4; i++) {
+        var x = tx(ticks[i][0]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 72); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i][1], x, baseY + 18);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, baseY); ctx.lineTo(ax + aw, baseY); ctx.stroke();
+
+    var lanes = [85, 128, 171, 214];
+    var stripes = [
+        [0.02, 0.80, 1.60, 2.40, 3.00],
+        [0.06, 0.95, 1.75, 2.55],
+        [0.10, 1.10, 1.90, 2.70],
+        [0.14, 1.25, 2.05, 2.85]
+    ];
+    for (var i = 0; i < 4; i++) {
+        var y = lanes[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('thread ' + (i + 1), 20, y + 4);
+        // waiting base bar 0.0-3.05 s
+        var x0 = tx(0), x1 = tx(3.05);
+        ctx.fillStyle = 'rgba(25,158,112,0.25)';
+        ctx.fillRect(x0, y - 8, x1 - x0, 16);
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 1;
+        ctx.strokeRect(x0, y - 8, x1 - x0, 16);
+        // lock-held stripes
+        ctx.fillStyle = P.ink;
+        for (var j = 0; j < stripes[i].length; j++) {
+            ctx.fillRect(tx(stripes[i][j]) - 2, y - 8, 4, 16);
+        }
+    }
+
+    // legend (left margin, clear of the centered annotation)
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(25,158,112,0.5)'; ctx.fillRect(20, 36, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('waiting — lock released', 36, 45);
+    ctx.fillStyle = P.ink; ctx.fillRect(20, 54, 10, 10);
+    ctx.fillStyle = '#444'; ctx.fillText('running Python — lock held', 36, 63);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("lock held < 1% of the time — that's why 4 threads finished in 3.1 s", 430, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — stripe widths exaggerated to stay visible', 690, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

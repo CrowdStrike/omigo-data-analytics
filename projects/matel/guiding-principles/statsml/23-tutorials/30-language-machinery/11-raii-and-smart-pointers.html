@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAII &amp; Smart Pointers</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>RAII &amp; Smart Pointers</h1>
+<p class="subtitle">Tie a resource to an owning object &mdash; acquired at check-in, given back at checkout &mdash; so the room is freed the moment its owner's life ends, down every exit path</p>
+
+<div class="card-section">
+    <h2>The Key Card Comes Back at Checkout</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">ownership</span><span class="tag orange">scope</span></div>
+                <ul>
+                    <li><b>Check-in</b> &mdash; a guest arrives and the front desk hands over the one key card to room 214</li>
+                    <li><b>The owner</b> &mdash; the card lives in the guest's pocket: whoever holds the card holds the room</li>
+                    <li><b>Checkout</b> &mdash; when the guest leaves for good, the desk takes the card back and frees room 214</li>
+                    <li><b>No forgetting</b> &mdash; the desk collects the card at every kind of exit: checkout, fire alarm, eviction</li>
+                    <li><b>RAII</b> &mdash; that is RAII: the constructor takes the resource, the destructor gives it back, always</li>
+                    <li><b>unique_ptr</b> &mdash; a <code>unique_ptr</code> is the single card: one owner, handed over (moved) but never copied</li>
+                </ul>
+                <p class="example">The guest dashes out during a fire alarm without stopping at the desk &mdash; the card still comes back, because leaving the building is exactly what returns it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Bind the resource to an owning object &mdash; taken in the constructor, returned in the destructor &mdash; and room 214 is freed the instant its owner's life ends, however that end comes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Room 214 and a Family of Cards</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">reference count</span></div>
+                <ul>
+                    <li><b>Copies allowed</b> &mdash; a <code>shared_ptr</code> is a card the desk will photocopy: parent, kid A, kid B</li>
+                    <li><b>The tally</b> &mdash; the desk counts live cards for room 214: check-in makes it 1, the copies make it 2, then 3</li>
+                    <li><b>Cards return</b> &mdash; kid A leaves (3 &rarr; 2), kid B leaves (2 &rarr; 1), the parent finally leaves (1 &rarr; 0)</li>
+                    <li><b>Zero means free</b> &mdash; the instant the tally hits 0, the desk cleans and releases room 214</li>
+                    <li><b>Hand-check</b> &mdash; six events, tally 1, 2, 3, 2, 1, 0: the room is freed exactly once, at the very end</li>
+                </ul>
+                <p class="example">Swap the order so the parent leaves before the kids &mdash; the tally still walks down to 0 exactly once, and only the last card returned frees the room.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Shared ownership is a live-card tally: copying a card adds 1, returning one subtracts 1, and whichever owner drives the count to 0 is the one whose destructor frees the room.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Four Ways Out of a Function</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">leaks</span><span class="tag orange">exception safety</span></div>
+                <ul>
+                    <li><b>Manual freeing</b> &mdash; with raw <code>new</code>/<code>delete</code>, giving the room back is a line YOU must write at every exit</li>
+                    <li><b>Four exits</b> &mdash; one function, four ways out: a normal return, two early returns, one thrown exception</li>
+                    <li><b>One delete</b> &mdash; a single <code>delete</code> at the bottom covers only 1 of the 4 exits; the other 3 leak</li>
+                    <li><b>Leaks add up</b> &mdash; a leaked room is never rentable again; a server doing this all day runs out of rooms</li>
+                    <li><b>RAII wins</b> &mdash; an owning object's destructor runs on all 4 exits, exception included, for free</li>
+                    <li><b>Everywhere</b> &mdash; files, locks, sockets, database handles: anything you must give back fits this pattern</li>
+                </ul>
+                <p class="example">A request handler opens a file, hits bad input, and returns early &mdash; with RAII the file closes itself; with manual code that early return quietly leaks it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Nobody remembers cleanup at every exit forever &mdash; RAII moves the give-back into the destructor, so the language remembers for you on all 4 paths, exceptions included.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Rooms Holding Each Other's Cards</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">reference cycle</span></div>
+                <ul>
+                    <li><b>The trap</b> &mdash; a booking holds a card to the guest profile, and the profile holds a card back</li>
+                    <li><b>Stuck at 1</b> &mdash; everyone outside leaves, yet each tally still reads 1: the two cards prop each other up</li>
+                    <li><b>Never freed</b> &mdash; neither count can reach 0 first, so neither room is ever released: a cycle leak</li>
+                    <li><b>The fix</b> &mdash; make one direction a <code>weak_ptr</code>: a card that lets you look but does not hold the room</li>
+                    <li><b>Not magic</b> &mdash; smart pointers automate the give-back; you still must decide who really owns whom</li>
+                </ul>
+                <p class="example">After the customer logs out, both tallies read 1 forever &mdash; the booking keeps the profile alive and the profile keeps the booking alive, with nobody using either.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing <code>shared_ptr</code> can never leak. Two objects holding owning cards to each other never reach count 0 &mdash; break the loop with a <code>weak_ptr</code> in one direction.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrowhead(ctx, x, y, ang, size) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(ang - 0.4), y - size * Math.sin(ang - 0.4));
+    ctx.lineTo(x - size * Math.cos(ang + 0.4), y - size * Math.sin(ang + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: paired lifetimes — owner bar and room bar start and end together
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Owner and Room: Two Lifetimes That Always Start and End Together', w / 2, 24);
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(160, 252); ctx.lineTo(680, 252); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('check-in', 170, 268);
+    ctx.fillText('midday', 420, 268);
+    ctx.fillText('checkout', 660, 268);
+
+    // start marker: vertical dashed at x=170
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(170, 60); ctx.lineTo(170, 252); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('constructor takes room 214', 176, 56);
+
+    function barPair(ownerY, roomY, x1, x2) {
+        // owner bar
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        rr(ctx, x1, ownerY, x2 - x1, 18, 4); ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        rr(ctx, x1, ownerY, x2 - x1, 18, 4); ctx.stroke();
+        ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('guest object (owner)', x1 + 8, ownerY + 13);
+        // room bar
+        ctx.fillStyle = 'rgba(0,131,0,0.25)';
+        rr(ctx, x1, roomY, x2 - x1, 18, 4); ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        rr(ctx, x1, roomY, x2 - x1, 18, 4); ctx.stroke();
+        ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('room 214 (resource)', x1 + 8, roomY + 13);
+        // end ticks
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x2, ownerY - 4); ctx.lineTo(x2, roomY + 24); ctx.stroke();
+        ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('key returned', x2 + 6, (ownerY + roomY) / 2 + 14);
+    }
+
+    // scenario 1: normal stay
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('normal stay', 20, 95);
+    barPair(78, 104, 170, 640);
+
+    // scenario 2: fire-alarm exit
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fire-alarm exit', 20, 192);
+    barPair(175, 201, 170, 420);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ends early or on time —', 470, 225);
+    ctx.fillText('the key comes back with the owner', 470, 241);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one guest, room 214', w - 20, h - 10);
+});
+
+// c2: stepped line — shared_ptr tally across six events
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Desk's Tally for Room 214: Live Cards After Each Event", w / 2, 24);
+
+    var ox = 70, baseY = 240, ph = 170;
+    function yOf(count) { return baseY - count / 3 * ph; }
+    var ex = [120, 220, 320, 420, 520, 620];
+    var events = ['check-in', '+ kid A', '+ kid B', 'kid A out', 'kid B out', 'parent out'];
+    var tally = [1, 2, 3, 2, 1, 0];
+
+    // gridlines at counts 1..3 + y labels
+    for (var c = 0; c <= 3; c++) {
+        var y = yOf(c);
+        if (c > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + 590, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(c), ox - 8, y + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 590, baseY); ctx.stroke();
+    // event labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 6; i++) ctx.fillText(events[i], ex[i], baseY + 18);
+
+    // freed marker at x=620
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(620, 90); ctx.lineTo(620, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // stepped line: horizontal segment at each level, vertical riser between events
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(ex[0] - 30, yOf(tally[0]));
+    for (var i = 0; i < 6; i++) {
+        ctx.lineTo(ex[i], yOf(tally[i]));
+        if (i < 5) {
+            ctx.lineTo((ex[i] + ex[i + 1]) / 2, yOf(tally[i]));
+            ctx.lineTo((ex[i] + ex[i + 1]) / 2, yOf(tally[i + 1]));
+        }
+    }
+    ctx.stroke();
+
+    // dots + count labels
+    for (var i = 0; i < 6; i++) {
+        var last = (i === 5);
+        ctx.fillStyle = last ? P.green : P.blue;
+        ctx.beginPath(); ctx.arc(ex[i], yOf(tally[i]), 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(tally[i]), ex[i], yOf(tally[i]) - 12);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('only the last returned card', 400, 95);
+    ctx.fillText('frees the room — exactly once', 400, 112);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one parent, two kids, six events', w - 20, h - 10);
+});
+
+// c3: check/cross grid — four exit paths, manual vs RAII
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Function, Four Ways Out: Who Remembers to Free the Room?', w / 2, 24);
+
+    // column headers
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('manual delete at the end', 430, 65);
+    ctx.fillText('RAII owner', 615, 65);
+
+    var rows = ['normal return', 'early return — bad input', 'exception thrown', 'early return — timeout'];
+    var rowY = [100, 138, 176, 214];
+    for (var i = 0; i < 4; i++) {
+        var y = rowY[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rows[i], 20, y + 4);
+        // manual column
+        if (i === 0) {
+            ctx.fillStyle = P.green; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('✓', 430, y + 5);
+        } else {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('✗', 430, y + 5);
+            ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('leaks', 442, y + 4);
+        }
+        // RAII column
+        ctx.fillStyle = P.green; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('✓', 615, y + 5);
+        // separator line
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(20, y + 16); ctx.lineTo(690, y + 16); ctx.stroke();
+    }
+
+    // tallies
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('frees 1 of 4', 430, 248);
+    ctx.fillStyle = P.green;
+    ctx.fillText('frees 4 of 4', 615, 248);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3 of the 4 exits leak room 214 in the manual version', 40, 282);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one function with four exit paths', w - 20, h - 8);
+});
+
+// c4: reference cycle — the leak and the weak_ptr fix
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Cycle: Two Owning Cards Keep Both Tallies Stuck at 1', w / 2, 24);
+
+    // panel headers
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('the leak', 175, 62);
+    ctx.fillStyle = P.green;
+    ctx.fillText('the fix', 530, 62);
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(355, 55); ctx.lineTo(355, 265); ctx.stroke();
+
+    function box(cx, cy, name, badge, badgeColor) {
+        var bx = cx - 90, by = cy - 26;
+        ctx.fillStyle = '#f8f9fa';
+        rr(ctx, bx, by, 180, 52, 8); ctx.fill();
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        rr(ctx, bx, by, 180, 52, 8); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(name, cx, cy + 5);
+        ctx.fillStyle = badgeColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(badge, bx + 186, cy + 4);
+    }
+
+    // left panel boxes
+    box(175, 105, 'booking', 'tally: 1', P.orange);
+    box(175, 215, 'guest profile', 'tally: 1', P.orange);
+
+    // left panel arrows: booking left side arcing down to profile; profile right side arcing up to booking
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(85, 115); ctx.quadraticCurveTo(45, 160, 85, 205); ctx.stroke();
+    ctx.fillStyle = P.blue;
+    arrowhead(ctx, 85, 205, Math.atan2(205 - 160, 85 - 45), 8);
+    ctx.beginPath(); ctx.moveTo(265, 205); ctx.quadraticCurveTo(305, 160, 265, 115); ctx.stroke();
+    arrowhead(ctx, 265, 115, Math.atan2(115 - 160, 265 - 305), 8);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('owning card', 52, 164);
+    ctx.textAlign = 'left';
+    ctx.fillText('owning card', 300, 164);
+
+    // right panel boxes
+    box(530, 105, 'booking', 'tally → 0, freed', P.green);
+    box(530, 215, 'guest profile', 'freed next', P.green);
+
+    // right panel arrows: downward solid blue booking -> profile; upward dashed aqua profile -> booking
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(505, 131); ctx.lineTo(505, 189); ctx.stroke();
+    ctx.fillStyle = P.blue;
+    arrowhead(ctx, 505, 189, Math.PI / 2, 8);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('owning card', 498, 164);
+
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(555, 189); ctx.lineTo(555, 131); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.aqua;
+    arrowhead(ctx, 555, 131, -Math.PI / 2, 8);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('weak card — no hold', 562, 164);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('everyone logged out, yet neither count can reach 0 first', 45, 282);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — two objects, one card each way', w - 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

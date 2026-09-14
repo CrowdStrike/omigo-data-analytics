@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cache Coherence &amp; False Sharing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Cache Coherence &amp; False Sharing</h1>
+<p class="subtitle">CPU cores copy memory in cache lines (typically 64 bytes) and only one core may write a line at a time — so two cores updating different variables on the same line still fight over it, like two baristas sharing one tally card</p>
+
+<div class="card-section">
+    <h2>Two Baristas, One Laminated Tally Card</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">cache lines</span><span class="tag orange">one writer at a time</span></div>
+                <ul>
+                    <li><b>The counters</b> — two baristas keep separate tallies: Ana marks espressos, Ben marks lattes</li>
+                    <li><b>The card</b> — both tallies live on one laminated card, and only one barista may hold the card to write</li>
+                    <li><b>The grab</b> — every mark Ana makes means snatching the card back from Ben, and vice versa</li>
+                    <li><b>The cores</b> — CPUs do the same: memory moves in cache lines (usually 64 B), one writer per line</li>
+                    <li><b>The trap</b> — Ana and Ben never touch each other's tally, yet they still fight over the card all day</li>
+                </ul>
+                <p class="example">Ana and Ben each mark 10 drinks in alternating order; the card changes hands 19 times even though no single mark is ever shared.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Cache coherence is the hardware rule that only one core may hold a cache line for writing at a time; false sharing is when two cores write different variables that happen to sit on the same line, so the line bounces between them anyway.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting a Million Orders: 1 ms vs 40 ms</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">padding fix</span></div>
+                <ul>
+                    <li><b>The setup</b> — thread A bumps counter <code>a</code> one million times; thread B bumps counter <code>b</code> one million times</li>
+                    <li><b>The layout</b> — <code>a</code> and <code>b</code> are 8-byte numbers at bytes 0–7 and 8–15: the same 64-byte line</li>
+                    <li><b>Fast case</b> — a write to a line the core already owns costs about 1 ns: 1,000,000 &times; 1 ns = 1 ms</li>
+                    <li><b>Slow case</b> — a write to a line the other core just stole costs about 40 ns: 1,000,000 &times; 40 ns = 40 ms</li>
+                    <li><b>The fix</b> — pad 56 bytes after <code>a</code> so <code>b</code> starts its own line: both threads drop back to about 1 ms</li>
+                </ul>
+                <p class="example">One line of padding turns a 40 ms loop into a 1 ms loop — a 40&times; speedup without changing a single line of counting logic.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You can hand-check the whole effect from two costs: an owned-line write is ~1 ns, a stolen-line write is ~40 ns — so a million false-shared increments take 40 ms instead of 1 ms.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Threads, Slower Job</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">parallel counting</span><span class="tag orange">scaling</span></div>
+                <ul>
+                    <li><b>The pattern</b> — 8 workers tally rows into <code>counts[0..7]</code>; eight 8-byte slots fill exactly one 64-byte line</li>
+                    <li><b>The symptom</b> — adding threads makes the job slower while every core shows 100% busy</li>
+                    <li><b>The numbers</b> — padded counters reach 7.6 M updates/ms at 8 threads; the shared line drops to 0.3</li>
+                    <li><b>The smell</b> — "the parallel version is slower than serial" is the classic false-sharing signature</li>
+                    <li><b>The fix</b> — one counter per cache line, or let each thread total privately and merge at the end</li>
+                </ul>
+                <p class="example">The same tally job at 8 threads runs 25&times; faster padded than false-shared — 7.6 versus 0.3 million updates per millisecond.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Any per-thread accumulator packed into one array — histogram bins, metric counters, gradient partials — is a false-sharing trap, and the giveaway is throughput that falls as cores are added.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Is Not a Race Condition</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">correct but slow</span></div>
+                <ul>
+                    <li><b>The confusion</b> — a data race is two threads writing the same variable; false sharing is different variables, same line</li>
+                    <li><b>Correct but slow</b> — false sharing never corrupts a result: the answers are right, only the clock is wrong</li>
+                    <li><b>Locks don't help</b> — a mutex serializes the code, but the line still ping-pongs and you now also wait for the lock</li>
+                    <li><b>Padding helps</b> — alignment or padding gives each hot variable its own 64-byte line; the hand-offs vanish</li>
+                    <li><b>Finding it</b> — hardware counters for cache-line transfers expose it; the source code alone looks innocent</li>
+                </ul>
+                <p class="example">A team "fixes" a slow parallel tally by wrapping each counter in its own mutex — the output was already correct, and the job gets slower still.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Ruling out sharing problems because the output is correct. False sharing hides precisely because nothing is ever wrong except the run time — the cure is layout (padding), not locking.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedBox(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: ownership timeline — the card ping-pongs across 20 alternating marks
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('20 Marks, 19 Hand-Offs: the Card Never Rests', w / 2, 24);
+
+    var anaY = 115, benY = 195;
+    function xOf(mark) { return 130 + (mark - 1) * (560 / 19); }
+
+    // lane gridlines and labels
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(130, anaY); ctx.lineTo(690, anaY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(130, benY); ctx.lineTo(690, benY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Ana (core A)', 20, anaY + 4);
+    ctx.fillText('Ben (core B)', 20, benY + 4);
+
+    // baseline with tick labels at marks 1/5/10/15/20
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(130, 245); ctx.lineTo(690, 245); ctx.stroke();
+    var ticks = [1, 5, 10, 15, 20];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t < ticks.length; t++) {
+        var tx = xOf(ticks[t]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, 241); ctx.lineTo(tx, 249); ctx.stroke();
+        ctx.fillText('' + ticks[t], tx, 264);
+    }
+    ctx.fillText('mark #', 690, 264);
+
+    // hand-off connectors between consecutive boxes (drawn first, under boxes)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    for (var i = 1; i < 20; i++) {
+        var x1 = xOf(i), x2 = xOf(i + 1);
+        var y1 = (i % 2 === 1) ? anaY : benY;
+        var y2 = (i % 2 === 1) ? benY : anaY;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // ownership boxes: odd marks Ana (blue), even marks Ben (orange)
+    for (var i = 1; i <= 20; i++) {
+        var cx = xOf(i);
+        var isAna = (i % 2 === 1);
+        var cy = isAna ? anaY : benY;
+        roundedBox(ctx, cx - 11, cy - 10, 22, 20, 4);
+        ctx.fillStyle = isAna ? 'rgba(42,120,214,0.30)' : 'rgba(217,89,38,0.25)';
+        ctx.fill();
+        ctx.strokeStyle = isAna ? P.blue : P.orange; ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('different tallies, same card — every mark forces a hand-off', 430, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('mark sequence illustrative', w - 15, h - 10);
+});
+
+// c2: vertical bars — one million increments under three layouts
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Million Increments: Same Line Is 40× Slower', w / 2, 24);
+
+    var ox = 70, baseY = 245, plotH = 180;
+    function yOf(ms) { return baseY - ms / 40 * plotH; }
+
+    // gridlines and y labels
+    ctx.font = '12px system-ui';
+    var grids = [10, 20, 30];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + 590, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(grids[g] + ' ms', ox - 8, gy + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + 590, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 180, ms: 1,  fill: 'rgba(0,131,0,0.30)',    stroke: P.green,   label: '1 thread, alone',        val: '1 ms',  valColor: P.green },
+        { cx: 380, ms: 40, fill: 'rgba(231,76,60,0.25)',  stroke: '#e74c3c', label: '2 threads, same line',   val: '40 ms', valColor: '#e74c3c' },
+        { cx: 580, ms: 1,  fill: 'rgba(42,120,214,0.30)', stroke: P.blue,    label: '2 threads, padded',      val: '1 ms',  valColor: P.blue }
+    ];
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        var bh = b.ms / 40 * plotH;
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(b.cx - 45, baseY - bh, 90, bh);
+        ctx.strokeStyle = b.stroke; ctx.lineWidth = 1.5;
+        ctx.strokeRect(b.cx - 45, baseY - bh, 90, bh);
+        ctx.fillStyle = b.valColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.val, b.cx, baseY - bh - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.label, b.cx, baseY + 18);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('56 bytes of padding buys a 40× speedup', 520, 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1 ns owned / 40 ns stolen per write — costs illustrative, arithmetic exact', w - 15, h - 10);
+});
+
+// c3: throughput vs threads — padded scales up, shared collapses
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Throughput vs Threads: One Layout Scales, the Other Collapses', w / 2, 24);
+
+    var ox = 70, baseY = 245, plotW = 580, plotH = 180;
+    var threads = [1, 2, 4, 8];
+    var padded = [1.0, 2.0, 3.9, 7.6];
+    var shared = [1.0, 0.55, 0.4, 0.3];
+    function xOf(i) { return ox + plotW * (i + 0.5) / 4; }
+    function yOf(v) { return baseY - v / 8 * plotH; }
+
+    // gridlines and y labels
+    ctx.font = '12px system-ui';
+    var grids = [2, 4, 6];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText('' + grids[g], ox - 8, gy + 4);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('M updates/ms', ox + 40, 50);
+
+    // axes and x tick labels
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var i = 0; i < 4; i++) ctx.fillText('' + threads[i], xOf(i), baseY + 18);
+    ctx.fillText('threads', ox + plotW / 2, baseY + 36);
+
+    // divergence marker at threads = 2
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(1), baseY); ctx.lineTo(xOf(1), baseY - plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('second core joins', xOf(1), baseY - plotH - 6);
+
+    function line(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < 4; i++) {
+            var x = xOf(i), y = yOf(vals[i]);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        for (var i = 0; i < 4; i++) {
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(xOf(i), yOf(vals[i]), 4, 0, 2 * Math.PI); ctx.fill();
+        }
+    }
+    line(padded, P.green);
+    line(shared, '#e74c3c');
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one counter per line', xOf(3) - 12, yOf(7.6) + 4);
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'right';
+    ctx.fillText('eight counters, one line', xOf(3) - 12, yOf(0.3) + 18);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same code, same math — 25× apart at 8 threads', w / 2, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput numbers illustrative', w - 15, h - 10);
+});
+
+// c4: memory layout — packed (ping-pong) vs padded (one writer per line)
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fix the Layout, Not the Locking', w / 2, 24);
+
+    // row 1: packed — one 64-byte line, a and b in slots 1 and 2
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('packed', 20, y1 + 4);
+
+    var lx = 140, lw = 460, lh = 40, ly = y1 - 20;
+    var slotW = lw / 8;
+    // slot fills first
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(lx, ly, slotW, lh);
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(lx + slotW, ly, slotW, lh);
+    // dividers
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 1; i < 8; i++) {
+        ctx.beginPath(); ctx.moveTo(lx + i * slotW, ly); ctx.lineTo(lx + i * slotW, ly + lh); ctx.stroke();
+    }
+    // outline
+    roundedBox(ctx, lx, ly, lw, lh, 4);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    // slot labels
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a', lx + slotW / 2, y1 + 4);
+    ctx.fillText('b', lx + slotW * 1.5, y1 + 4);
+    // byte ruler
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0', lx, ly + lh + 14);
+    ctx.textAlign = 'right';
+    ctx.fillText('63', lx + lw, ly + lh + 14);
+    // red label
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one line,', 615, y1 - 14);
+    ctx.fillText('two writers', 615, y1 + 2);
+    ctx.fillText('— ping-pong', 615, y1 + 18);
+
+    // row 2: padded — two 64-byte lines
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('padded', 20, y2 + 4);
+
+    var l2w = 220, l2y = y2 - 20;
+    var slot2W = l2w / 8;
+
+    // line 1: a + 56 B pad
+    var l1x = 140;
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(l1x, l2y, slot2W, lh);
+    ctx.fillStyle = 'rgba(107,114,128,0.15)';
+    ctx.fillRect(l1x + slot2W, l2y, l2w - slot2W, lh);
+    roundedBox(ctx, l1x, l2y, l2w, lh, 4);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a', l1x + slot2W / 2, y2 + 4);
+    ctx.fillStyle = P.mute;
+    ctx.fillText('56 B pad', l1x + slot2W + (l2w - slot2W) / 2, y2 + 4);
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0', l1x, l2y + lh + 14);
+    ctx.textAlign = 'right';
+    ctx.fillText('63', l1x + l2w, l2y + lh + 14);
+
+    // line 2: b
+    var l2x = 380;
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(l2x, l2y, slot2W, lh);
+    roundedBox(ctx, l2x, l2y, l2w, lh, 4);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('b', l2x + slot2W / 2, y2 + 4);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0', l2x, l2y + lh + 14);
+    ctx.textAlign = 'right';
+    ctx.fillText('63', l2x + l2w, l2y + lh + 14);
+
+    // green label
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one writer', 615, y2 - 6);
+    ctx.fillText('per line', 615, y2 + 10);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the variables were never shared — only the line was', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

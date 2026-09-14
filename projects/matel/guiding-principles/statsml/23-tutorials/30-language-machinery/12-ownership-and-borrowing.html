@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ownership &amp; Borrowing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Ownership &amp; Borrowing</h1>
+<p class="subtitle">Rust makes memory safety a compile-time proof: every value has exactly one owner, lending it out follows a strict sign-out sheet, and any program that breaks the rules is refused before it ever runs</p>
+
+<div class="card-section">
+    <h2>One Drill, One Name on the Sheet</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">single owner</span><span class="tag orange">moves</span></div>
+                <ul>
+                    <li><b>The tool shed</b> &mdash; an apartment building shares one power drill, tracked on a sign-out sheet</li>
+                    <li><b>The owner</b> &mdash; exactly one name is on the sheet at a time; on day 1 that name is Maya</li>
+                    <li><b>Owner's job</b> &mdash; when the owner's name is crossed off for good, the drill goes back in the shed (freed)</li>
+                    <li><b>The move</b> &mdash; on day 3 Maya hands the drill to Omar; the sheet now says Omar, not Maya</li>
+                    <li><b>Access revoked</b> &mdash; on day 4 Maya reaches for the drill anyway; the sheet says no &mdash; she gave it away</li>
+                    <li><b>In Rust</b> &mdash; assigning or passing a value is that handover: the old variable is dead at compile time</li>
+                </ul>
+                <p class="example">Maya hands Omar the drill on day 3, then tries to drill a shelf on day 4 &mdash; the sheet (the compiler) refuses: "value moved on day 3".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every value has exactly one owner; handing it over is a move, and the compiler refuses any later use through the old name &mdash; that's use-after-free made impossible.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Seven Lines on the Sign-Out Sheet</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">borrow rules</span></div>
+                <ul>
+                    <li><b>Borrowing</b> &mdash; neighbors can borrow without taking ownership: Maya's name stays on the sheet</li>
+                    <li><b>Two kinds</b> &mdash; a look-only borrow (read the manual) or an exclusive borrow (swap the drill bit)</li>
+                    <li><b>The rule</b> &mdash; at any moment: any number of lookers, or exactly one changer &mdash; never both at once</li>
+                    <li><b>Lines 2&ndash;3</b> &mdash; Sam then Priya borrow to read: 2 readers, 0 writers &mdash; the sheet allows it</li>
+                    <li><b>Line 5</b> &mdash; after both return, Omar signs out to change the bit: 0 readers, 1 writer &mdash; allowed</li>
+                    <li><b>Line 6</b> &mdash; Sam asks to read mid-swap: 1 reader + 1 writer &mdash; refused; line 7, Omar returns it</li>
+                </ul>
+                <p class="example">Check line 6 by hand: readers 1, writers 1 &mdash; the rule "at most one writer, and readers &times; writers = 0" fails, so the request is refused before anyone touches the drill.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The borrow checker is this sheet: many simultaneous readers OR one exclusive writer, never both &mdash; and every line is checked before the program runs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Bugs That Never Reach Run Time</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">memory safety</span><span class="tag orange">no garbage collector</span></div>
+                <ul>
+                    <li><b>Use-after-free</b> &mdash; using the drill after giving it away; the move rule makes it a compile error</li>
+                    <li><b>Double free</b> &mdash; two people returning the same drill to the shed; one owner means one return, ever</li>
+                    <li><b>Data race</b> &mdash; reading the bit while someone swaps it; readers-or-one-writer forbids the overlap</li>
+                    <li><b>Dangling reference</b> &mdash; a borrow that outlives the owner; borrows must end before the owner does</li>
+                    <li><b>The proof</b> &mdash; the compiler checks every line like the sheet, so a compiled program can't hit these</li>
+                    <li><b>The price</b> &mdash; no garbage collector, zero runtime cost for these checks &mdash; proven at compile time</li>
+                </ul>
+                <p class="example">The same four bugs in C surface as crashes at run time &mdash; sometimes months later in production &mdash; while Rust's checker rejects each one at compile time, before the program exists.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Ownership plus the borrow rules turn four classic memory bugs from runtime surprises into compile-time refusals &mdash; safety is a proof, not a hope.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Borrowing Is Not Copying</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">clone vs borrow</span></div>
+                <ul>
+                    <li><b>The album</b> &mdash; the value is a 1,000-photo album; three ways to share it with a friend</li>
+                    <li><b>Borrow</b> &mdash; hand over a viewing pass: still 1,000 photos stored, one extra reference card</li>
+                    <li><b>Clone</b> &mdash; print a full duplicate: 2,000 photos stored, and edits to the copy never reach the original</li>
+                    <li><b>Move</b> &mdash; hand over the album itself: still 1,000 photos, but now the friend owns it and you don't</li>
+                    <li><b>The mistake</b> &mdash; cloning everywhere "to make the borrow checker shut up": correct, but 2&times; the memory</li>
+                    <li><b>Rule of thumb</b> &mdash; reach for a borrow first, move when handing off for good, clone only on purpose</li>
+                </ul>
+                <p class="example">Newcomers see "cannot borrow" errors, sprinkle clone on every line, and the 1,000-photo album quietly becomes 2,000 stored photos with two diverging versions.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating borrow, clone, and move as interchangeable. A borrow shares the one album, a clone doubles it to 2,000 photos, a move changes whose name is on it &mdash; pick deliberately.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function xMark(ctx, cx, cy, size, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - size / 2, cy - size / 2); ctx.lineTo(cx + size / 2, cy + size / 2);
+    ctx.moveTo(cx + size / 2, cy - size / 2); ctx.lineTo(cx - size / 2, cy + size / 2);
+    ctx.stroke();
+}
+
+// c1: ownership timeline — the move on day 3, refused use on day 4
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Owner at a Time: the Move on Day 3', w / 2, 24);
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(160, 250); ctx.lineTo(680, 250); ctx.stroke();
+    var dayX = [160, 290, 420, 550, 680];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 5; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(dayX[i], 250); ctx.lineTo(dayX[i], 256); ctx.stroke();
+        ctx.fillText('day ' + (i + 1), dayX[i], 270);
+    }
+
+    // row labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Maya', 20, 114);
+    ctx.fillText('Omar', 20, 184);
+
+    // Maya's bar: day 1 to day 3, centered on y=110
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    rr(ctx, 160, 102, 260, 16, 4); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    rr(ctx, 160, 102, 260, 16, 4); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('owns the drill', 290, 94);
+
+    // move arrow: (420,118) down to (420,172)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(420, 118); ctx.lineTo(420, 164); ctx.stroke();
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.moveTo(420, 172); ctx.lineTo(414, 160); ctx.lineTo(426, 160); ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('move (handover)', 432, 149);
+
+    // Omar's bar: day 3 to day 5, centered on y=180
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    rr(ctx, 420, 172, 260, 16, 4); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    rr(ctx, 420, 172, 260, 16, 4); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('owns it now', 550, 164);
+
+    // rejected use: X on Maya's row at day 4
+    xMark(ctx, 550, 110, 14, '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('day-4 use refused', 550, 92);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the old name is dead at compile time —', 175, 55);
+    ctx.fillText('no run needed to catch it', 175, 72);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — days stand for lines of code', w - 20, h - 10);
+});
+
+// c2: gantt-style borrow chart — many readers or one writer
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Sign-Out Sheet: Many Readers or One Writer', w / 2, 24);
+
+    var lineX = [200, 281.7, 363.3, 445, 526.7, 608.3, 690];
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(200, 252); ctx.lineTo(690, 252); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 7; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(lineX[i], 252); ctx.lineTo(lineX[i], 258); ctx.stroke();
+        ctx.fillText(String(i + 1), lineX[i], 272);
+    }
+    ctx.fillText('line on the sheet', 445, 288);
+
+    // row labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Maya (owner)', 20, 92);
+    ctx.fillText('Sam (read)', 20, 136);
+    ctx.fillText('Priya (read)', 20, 180);
+    ctx.fillText('Omar (write)', 20, 224);
+
+    function bar(x1, x2, y, fill, border) {
+        ctx.fillStyle = fill;
+        rr(ctx, x1, y - 6, x2 - x1, 12, 3); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        rr(ctx, x1, y - 6, x2 - x1, 12, 3); ctx.stroke();
+    }
+
+    // Maya: lines 1–7
+    bar(200, 690, 88, 'rgba(42,120,214,0.30)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ownership never moves', 210, 92);
+    // Sam: lines 2–4
+    bar(281.7, 445, 132, 'rgba(25,158,112,0.30)', P.aqua);
+    // Priya: lines 3–4
+    bar(363.3, 445, 176, 'rgba(25,158,112,0.30)', P.aqua);
+    // Omar: lines 5–7
+    bar(526.7, 690, 220, 'rgba(217,89,38,0.30)', P.orange);
+
+    // rule checks
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2 readers, 0 writers — OK', 404, 112);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('0 readers, 1 writer — OK', 608, 200);
+
+    // refused request: X on Sam's row at line 6
+    xMark(ctx, 608.3, 132, 14, '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1 reader + 1 writer — refused', 590, 136);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('at most one writer, and readers × writers = 0 — on every line', 210, 58);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one drill, seven sheet lines', w - 20, h - 8);
+});
+
+// c3: dot chart — when each bug is caught, Rust vs C
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('When the Bug Is Caught: Compile Time vs Run Time', w / 2, 24);
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(230, 250); ctx.lineTo(680, 250); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('compile time', 320, 270);
+    ctx.fillText('run time (in production)', 590, 270);
+    // divider
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(455, 60); ctx.lineTo(455, 250); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var rows = ['use-after-free', 'double free', 'data race', 'dangling reference'];
+    var rowY = [95, 135, 175, 215];
+    for (var i = 0; i < 4; i++) {
+        var y = rowY[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rows[i], 20, y + 4);
+        // connector
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(320, y); ctx.lineTo(590, y); ctx.stroke();
+        // Rust dot
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(320, y, 8, 0, 2 * Math.PI); ctx.fill();
+        // C dot
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(590, y, 8, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Rust', 320, 78);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('C', 590, 78);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('all four refused before the program runs —', 240, 42);
+    ctx.fillText('the compiler is the proof', 240, 58);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — catch points, not measurements', w - 20, h - 8);
+});
+
+// c4: horizontal bars — photos stored after borrow vs clone vs move
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Sharing a 1,000-Photo Album: Borrow vs Clone vs Move', w / 2, 24);
+
+    var ax = 200, aw = 480, axisY = 250;
+    function xOf(v) { return ax + v / 2000 * aw; }
+
+    // gridlines + tick labels
+    var ticks = [0, 500, 1000, 1500, 2000];
+    var tickLabs = ['0', '500', '1,000', '1,500', '2,000'];
+    for (var i = 0; i < ticks.length; i++) {
+        var x = xOf(ticks[i]);
+        if (ticks[i] > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, 70); ctx.lineTo(x, axisY); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], x, axisY + 18);
+    }
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+
+    var rows = [
+        { y: 100, label: 'borrow', val: 1000, valLab: '1,000 + a pass', out: 'you still own it', fill: 'rgba(0,131,0,0.30)', border: P.green },
+        { y: 150, label: 'clone', val: 2000, valLab: '2,000', out: 'two diverging albums', fill: 'rgba(231,76,60,0.20)', border: '#e74c3c' },
+        { y: 200, label: 'move', val: 1000, valLab: '1,000', out: 'friend owns it now', fill: 'rgba(42,120,214,0.30)', border: P.blue }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 4);
+        var bw = xOf(r.val) - ax;
+        ctx.fillStyle = r.fill;
+        rr(ctx, ax, r.y - 13, bw, 26, 5); ctx.fill();
+        ctx.strokeStyle = r.border; ctx.lineWidth = 2;
+        rr(ctx, ax, r.y - 13, bw, 26, 5); ctx.stroke();
+        ctx.fillStyle = r.border; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.valLab, ax + bw + 8, r.y + 4);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(r.out, 210, r.y + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reflex-cloning doubles storage —', 460, 118);
+    ctx.fillText('borrow first, clone on purpose', 460, 135);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one photo, one stored unit', w - 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

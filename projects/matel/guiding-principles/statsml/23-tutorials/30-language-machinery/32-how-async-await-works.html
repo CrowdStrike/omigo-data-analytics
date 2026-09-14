@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Async/Await Works</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+code {
+    background: #f0f2f4;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+</style>
+</head>
+<body>
+
+<h1>How Async/Await Works</h1>
+<p class="subtitle"><code>await</code> means "start the slow thing, save my place, and go do other work" &mdash; the compiler makes that possible by rewriting your function into a checklist with a bookmark: a state machine</p>
+
+<div class="card-section">
+    <h2>A Barista Who Never Stands Still</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">pausing a function</span><span class="tag orange">state machine</span></div>
+                <ul>
+                    <li><b>The latte recipe</b> &mdash; grind the beans, start the espresso machine, wait for the shot, pour and serve</li>
+                    <li><b>The wait</b> &mdash; the machine takes 30 seconds; a bad barista stares at it, a good one serves someone else</li>
+                    <li><b><code>await</code> is the walk-away</b> &mdash; "start the machine, note where I am in the recipe, come back at the beep"</li>
+                    <li><b>The bookmark</b> &mdash; the recipe card records the current step and the details in hand (whose cup, what milk)</li>
+                    <li><b>The rewrite</b> &mdash; the compiler cuts your function at every <code>await</code> into numbered steps: a state machine</li>
+                    <li><b>Resuming</b> &mdash; when the machine beeps, the barista reads the card and continues from the saved step</li>
+                </ul>
+                <p class="example">The barista starts latte A's espresso shot, writes "order A: at step 2, oat milk" on the card, and takes latte B's order during the 30-second brew.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> <code>await</code> does not make the wait shorter &mdash; it frees the worker during the wait, and the saved step number plus saved locals are exactly what a state machine is.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Lattes: 90 Seconds Becomes 55</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">timeline</span></div>
+                <ul>
+                    <li><b>One latte</b> &mdash; grind 10 s (hands busy), brew 30 s (machine runs alone), pour and serve 5 s (hands busy)</li>
+                    <li><b>Blocking barista</b> &mdash; stares at each brew: (10 + 30 + 5) &times; 2 lattes = 90 s for two orders</li>
+                    <li><b>Async barista</b> &mdash; grinds A (0&ndash;10 s), starts A's brew, grinds B (10&ndash;20 s), starts B's brew</li>
+                    <li><b>The beeps</b> &mdash; A's brew ends at 40 s, pour A 40&ndash;45 s; B's brew ends at 50 s, pour B 50&ndash;55 s</li>
+                    <li><b>The saving</b> &mdash; 55 s instead of 90 s, and every saved second came out of stare-at-the-machine time</li>
+                    <li><b>Check by hand</b> &mdash; hands-on work is still 2 &times; 15 = 30 s; only the overlapped waiting got cheaper</li>
+                </ul>
+                <p class="example">At the 15-second mark the blocking barista is watching latte A brew; the async barista is already grinding latte B's beans.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Two lattes take 90 s blocking and 55 s with await &mdash; the 35 s saved is exactly the waiting that now overlaps with useful work.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Worker, Many Slow Calls</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">network waits</span><span class="tag orange">throughput</span></div>
+                <ul>
+                    <li><b>The daily reality</b> &mdash; most program "work" is waiting: web requests, database queries, file reads</li>
+                    <li><b>Six downloads</b> &mdash; a script fetches 6 files, 2 s each: one-at-a-time <code>await</code>s take 6 &times; 2 = 12 s</li>
+                    <li><b>Start first, await later</b> &mdash; kick off all 6 requests, then await them together: about 2 s total</li>
+                    <li><b>Still one worker</b> &mdash; no extra threads; one worker holds 6 bookmarks and resumes each reply as it lands</li>
+                    <li><b>Why servers care</b> &mdash; a waiter thread per customer runs out fast; bookmarks are nearly free to keep</li>
+                    <li><b>The habit</b> &mdash; put <code>await</code> where the wait is real, and start independent waits before awaiting any</li>
+                </ul>
+                <p class="example">The same 6 downloads finish in 12 s when each one is awaited before the next starts, and in about 2 s when all six are started first &mdash; the network does all six waits at once.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Async/await turns dead waiting time into throughput: start the independent slow calls first, and 12 s of downloads collapses to about 2 s.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Await Is Not a Second Pair of Hands</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cpu vs waiting</span></div>
+                <ul>
+                    <li><b>The confusion</b> &mdash; people hear "async" and picture threads; <code>await</code> adds bookmarks, not workers</li>
+                    <li><b>Grinding still blocks</b> &mdash; the 10 s of grinding needs the barista's hands; no beep can free them</li>
+                    <li><b>A mixed job</b> &mdash; a task with 4 s of number crunching and 20 s of database waiting takes 24 s alone</li>
+                    <li><b>What await reclaims</b> &mdash; the 20 s wait can host other orders; the 4 s crunch hogs the worker either way</li>
+                    <li><b>The symptom</b> &mdash; an "async" server that freezes during a big in-memory sort: CPU work between awaits</li>
+                    <li><b>The fix</b> &mdash; awaits help waits; heavy computation needs a real second worker (a thread or a process)</li>
+                </ul>
+                <p class="example">Sorting a 10-million-row table between two awaits stalls every other bookmark for the whole sort &mdash; async never promised a second pair of hands.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Using <code>await</code> to speed up computation. Await reclaims the 20 s of waiting, never the 4 s of crunching &mdash; if the CPU is the busy part, async/await alone saves nothing.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width, dash) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), 8, color);
+}
+
+// c1: one await cuts the recipe into two states
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One await Cuts the Recipe into Two States', w / 2, 24);
+
+    // state 0 box
+    rr(ctx, 40, 70, 250, 130, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('STATE 0 — before the await', 165, 92);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('grind the beans', 165, 116);
+    ctx.fillText('start the espresso machine', 165, 136);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('save bookmark: step=1, cup=A, milk=oat', 165, 158);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('return to the counter', 165, 180);
+
+    // state 1 box
+    rr(ctx, 430, 70, 250, 130, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('STATE 1 — after the beep', 555, 92);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('read bookmark: cup=A, milk=oat', 555, 122);
+    ctx.fillText('pour the shot', 555, 144);
+    ctx.fillText('serve latte A — done', 555, 166);
+
+    // suspended zone
+    ctx.setLineDash([4, 3]);
+    rr(ctx, 305, 95, 110, 80, 8);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('machine brews', 360, 128);
+    ctx.fillText('30 s — no one waits', 360, 148);
+
+    // arrows into and out of the zone
+    arrow(ctx, 290, 135, 303, 135, P.mute, 3);
+    arrow(ctx, 415, 135, 428, 135, P.green, 3);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the function is not running while it waits — it is a saved card, resumed at the beep', w / 2, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — one await, two states; every extra await adds one more state', 690, 292);
+});
+
+// c2: blocking 90 s vs async 55 s gantt
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Two Lattes: Blocking 90 s vs Async 55 s', w / 2, 24);
+
+    var ax = 140, aw = 540, baseY = 250;
+    function tx(sec) { return ax + sec / 90 * aw; }
+
+    // gridlines + ticks every 15 s
+    for (var t = 0; t <= 90; t += 15) {
+        var x = tx(t);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 55); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' s', x, baseY + 18);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, baseY); ctx.lineTo(ax + aw, baseY); ctx.stroke();
+
+    function grindBar(t0, t1, cy) {
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(tx(t0), cy - 11, tx(t1) - tx(t0), 22);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('grind', (tx(t0) + tx(t1)) / 2, cy + 4);
+    }
+    function pourBar(t0, t1, cy) {
+        ctx.fillStyle = P.green;
+        ctx.fillRect(tx(t0), cy - 11, tx(t1) - tx(t0), 22);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('pour', (tx(t0) + tx(t1)) / 2, cy + 4);
+    }
+    function brewBar(t0, t1, cy, hh, labeled) {
+        ctx.fillStyle = 'rgba(107,114,128,0.30)';
+        ctx.fillRect(tx(t0), cy - hh / 2, tx(t1) - tx(t0), hh);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        ctx.strokeRect(tx(t0), cy - hh / 2, tx(t1) - tx(t0), hh);
+        ctx.setLineDash([]);
+        if (labeled) {
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('brew (wait)', (tx(t0) + tx(t1)) / 2, cy + 4);
+        }
+    }
+
+    // lane 1: blocking barista, center y=105
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('blocking', 20, 100);
+    ctx.fillText('barista', 20, 116);
+    grindBar(0, 10, 105);
+    brewBar(10, 40, 105, 22, true);
+    pourBar(40, 45, 105);
+    grindBar(45, 55, 105);
+    brewBar(55, 85, 105, 22, true);
+    pourBar(85, 90, 105);
+    // end bracket at 90 s
+    ctx.strokeStyle = P.text; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tx(90), 88); ctx.lineTo(tx(90), 122); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('90 s', tx(90), 80);
+
+    // lane 2: async barista, center y=185, brews sub-row y=205
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('async', 20, 180);
+    ctx.fillText('barista', 20, 196);
+    grindBar(0, 10, 185);
+    grindBar(10, 20, 185);
+    pourBar(40, 45, 185);
+    pourBar(50, 55, 185);
+    brewBar(10, 40, 205, 12, true);
+    brewBar(20, 50, 205, 12, false);
+    // end bracket at 55 s
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tx(55), 168); ctx.lineTo(tx(55), 214); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('55 s', tx(55), 160);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('brews overlap with work — 35 s of staring reclaimed', 430, 160);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings — grind 10 s, brew 30 s, pour 5 s per latte', 690, 294);
+});
+
+// c3: six 2-second downloads, sequential vs concurrent
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Six 2-second Downloads: One at a Time vs Started Together', w / 2, 24);
+
+    var ax = 130, aw = 540, baseY = 255;
+    function tx(sec) { return ax + sec / 12 * aw; }
+
+    // gridlines + ticks every 2 s
+    for (var t = 0; t <= 12; t += 2) {
+        var x = tx(t);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 50); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' s', x, baseY + 18);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, baseY); ctx.lineTo(ax + aw, baseY); ctx.stroke();
+
+    // top panel: sequential
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('await each', 20, 88);
+    ctx.fillText('in turn', 20, 104);
+    var seqY = [60, 76, 92, 108, 124, 140];
+    var seqStart = [0, 2, 4, 6, 8, 10];
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(tx(seqStart[i]), seqY[i], tx(2) - tx(0), 14);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(tx(seqStart[i]), seqY[i], tx(2) - tx(0), 14);
+    }
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('12 s', tx(12) + 6, 152);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ax, 160); ctx.lineTo(ax + aw, 160); ctx.stroke();
+
+    // bottom panel: concurrent
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('start all,', 20, 198);
+    ctx.fillText('then await', 20, 214);
+    var conY = [178, 188, 198, 208, 218, 228];
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.35)';
+        ctx.fillRect(tx(0), conY[i], tx(2) - tx(0), 8);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+        ctx.strokeRect(tx(0), conY[i], tx(2) - tx(0), 8);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('≈ 2 s', tx(2) + 6, 208);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one worker, six bookmarks — the network waits in parallel', 420, 195);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — equal 2 s responses; real replies land in any order', 690, 294);
+});
+
+// c4: one mixed job, await reclaims only the wait
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Job = 4 s Crunch + 20 s Wait: Await Reclaims Only the Wait', w / 2, 24);
+
+    var ax = 110, aw = 560, axisY = 230;
+    function tx(sec) { return ax + sec / 24 * aw; }
+
+    // gridlines + ticks every 4 s
+    for (var t = 0; t <= 24; t += 4) {
+        var x = tx(t);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, axisY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' s', x, axisY + 18);
+    }
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axisY); ctx.lineTo(ax + aw, axisY); ctx.stroke();
+
+    // job bar: crunch 0-4 s
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(tx(0), 126, tx(4) - tx(0), 28);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('CPU crunch 4 s', (tx(0) + tx(4)) / 2, 144);
+
+    // job bar: wait 4-24 s
+    ctx.fillStyle = 'rgba(107,114,128,0.25)';
+    ctx.fillRect(tx(4), 126, tx(24) - tx(4), 28);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(tx(4), 126, tx(24) - tx(4), 28);
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('database wait 20 s', (tx(4) + tx(24)) / 2, 144);
+
+    // reclaimed bracket above wait segment (4 s to 24 s, at y=95)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tx(4), 105); ctx.lineTo(tx(4), 95);
+    ctx.lineTo(tx(24), 95); ctx.lineTo(tx(24), 105);
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('await frees this — 20 s hosts other orders', (tx(4) + tx(24)) / 2, 85);
+
+    // blocked bracket below crunch segment (0 s to 4 s, at y=185)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tx(0), 175); ctx.lineTo(tx(0), 185);
+    ctx.lineTo(tx(4), 185); ctx.lineTo(tx(4), 175);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('worker is hostage here —', tx(2), 202);
+    ctx.fillText('await cannot help', tx(2), 218);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('async reclaims waiting, never computing — 20 s back, 4 s untouchable', 420, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — a 4 s crunch + 20 s wait job', 690, 294);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

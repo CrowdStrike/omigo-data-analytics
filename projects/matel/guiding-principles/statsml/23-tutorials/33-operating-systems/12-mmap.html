@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mmap</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>mmap</h1>
+<p class="subtitle">mmap tells the OS to make a file appear as ordinary memory — you index into it like an array, and 4 KB pages load from disk only when you touch them</p>
+
+<div class="card-section">
+    <h2>The 8 GB Orders File That Opens in a Blink</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">zero copy</span><span class="tag orange">page fault</span></div>
+                <ul>
+                    <li><b>The file</b> — a coffee-shop chain's order log holds 125 million orders of 64 bytes each: 8 GB</li>
+                    <li><b>The old way</b> — read() copies bytes from disk into a kernel buffer, then again into your buffer</li>
+                    <li><b>The map</b> — mmap() makes the file appear at an address, so orders[n] is just a memory access</li>
+                    <li><b>Nothing loads yet</b> — the map is created instantly; not one byte leaves the disk at mmap time</li>
+                    <li><b>First touch</b> — reading an unloaded mapped byte triggers a page fault; the OS pulls in one 4 KB page</li>
+                </ul>
+                <p class="example">The program calls mmap on the 8 GB log and gets an address back in under a millisecond — no order has been read from disk yet.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> mmap doesn't copy a file into memory — it makes the file's bytes addressable, and the OS fetches 4 KB pages lazily the first time each one is touched.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Finding Order #500,000 by Arithmetic</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hand check</span></div>
+                <ul>
+                    <li><b>Fixed records</b> — every order is exactly 64 bytes, so order n starts at byte n × 64</li>
+                    <li><b>The target</b> — order 500,000 starts at byte 500,000 × 64 = 32,000,000</li>
+                    <li><b>The page</b> — 32,000,000 ÷ 4096 = page 7812 remainder 2048: byte 2048 inside page 7812</li>
+                    <li><b>The fault</b> — first touch of page 7812 reads that 4 KB page (plus a few pre-fetched neighbors)</li>
+                    <li><b>Ten lookups</b> — 10 random orders touch at most 10 pages: 40 KB read instead of 8 GB</li>
+                    <li><b>The reread</b> — asking for order 500,000 again is a plain RAM access; the page is already in</li>
+                </ul>
+                <p class="example">To price-check order 500,000, the program reads orders[500000] — the OS loads page 7812 and the other 1,953,124 pages of the file stay on disk.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Cost follows pages touched, not file size — 10 random 64-byte reads cost 10 page faults, 40 KB of I/O against an 8 GB file.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Big Files on Small Laptops</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">data science</span><span class="tag orange">shared memory</span></div>
+                <ul>
+                    <li><b>numpy</b> — np.memmap opens the 8 GB log as an array on a 16 GB laptop without loading it</li>
+                    <li><b>Databases</b> — SQLite and LMDB serve queries straight out of mapped file pages</li>
+                    <li><b>Columnar files</b> — Arrow and Parquet readers map files so each slice loads page by page</li>
+                    <li><b>Sharing</b> — two processes mapping the same file share one physical copy of each page</li>
+                    <li><b>Programs themselves</b> — the OS starts every executable and library by mmap-ing it</li>
+                </ul>
+                <p class="example">A dashboard process and a batch job both map the orders log; the hot pages exist once in RAM, not twice.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Whenever a tool opens a huge file "instantly" and memory grows only as you scan it, mmap is usually what's underneath.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Mapped Is Not Loaded, Written Is Not Saved</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">durability</span></div>
+                <ul>
+                    <li><b>The scare</b> — top shows the process "using" 8 GB of virtual memory; resident is just the touched pages</li>
+                    <li><b>Mapped ≠ loaded</b> — the map is a promise; RAM fills one 4 KB page at a time as bytes are touched</li>
+                    <li><b>Written ≠ saved</b> — storing into a mapped page changes RAM and marks the page dirty</li>
+                    <li><b>The flush</b> — the disk copy updates only when the OS writes back — or when you call msync</li>
+                    <li><b>The crash</b> — power loss before the flush loses the "written" order; the file keeps its old bytes</li>
+                </ul>
+                <p class="example">The program stamps order 500,000 as refunded and crashes a second later — on reboot the file still says paid, because the dirty page never flushed.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a store into a mapped file as durable. The write lands in a RAM page marked dirty; until write-back or an explicit msync, the file on disk still holds the old bytes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x0, y0, x1, y1, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - 9 * Math.cos(ang - 0.4), y1 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x1 - 9 * Math.cos(ang + 0.4), y1 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function labeledBox(ctx, x, cy, bw, fill, stroke, label) {
+    var bh = 40;
+    ctx.fillStyle = fill;
+    roundRect(ctx, x, cy - bh / 2, bw, bh, 8); ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+    roundRect(ctx, x, cy - bh / 2, bw, bh, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(label, x + bw / 2, cy + 4);
+}
+
+// c1: read() copies twice vs mmap() just points
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('read() Copies Twice; mmap() Just Points', w / 2, 24);
+
+    // row 1: read()
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read()', 20, y1 + 4);
+    labeledBox(ctx, 110, y1, 160, 'rgba(42,120,214,0.15)', P.blue, 'orders file (disk)');
+    arrow(ctx, 272, y1, 308, y1, P.yellow, 3);
+    labeledBox(ctx, 310, y1, 180, 'rgba(201,133,0,0.12)', P.yellow, 'kernel buffer — copy 1');
+    arrow(ctx, 492, y1, 518, y1, P.orange, 3);
+    labeledBox(ctx, 520, y1, 180, 'rgba(217,89,38,0.12)', P.orange, 'your buffer — copy 2');
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('8 GB moved twice', 405, y1 + 40);
+
+    // row 2: mmap()
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('mmap()', 20, y2 + 4);
+    labeledBox(ctx, 110, y2, 160, 'rgba(42,120,214,0.15)', P.blue, 'orders file (disk)');
+    arrow(ctx, 272, y2, 428, y2, P.mute, 2, [5, 4]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('page fault on first touch', 350, y2 - 12);
+    labeledBox(ctx, 430, y2, 250, 'rgba(0,131,0,0.12)', P.green, 'your address space — file appears here');
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('touch a byte, load one 4 KB page', 430, 265);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('box sizes schematic, file size illustrative', w - 12, h - 8);
+});
+
+// c2: page strip, lookup arithmetic, bytes-read bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Order 500,000 → Byte 32,000,000 → Page 7812, Offset 2048', w / 2, 24);
+
+    // page strip
+    var stripY = 70, stripH = 34, cellW = 22, sx = 60, cells = 25;
+    for (var i = 0; i < cells; i++) {
+        var x = sx + i * cellW;
+        if (i === 9) {
+            ctx.fillStyle = 'rgba(0,131,0,0.25)';
+            ctx.fillRect(x, stripY, cellW, stripH);
+            ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+            ctx.strokeRect(x, stripY, cellW, stripH);
+        } else {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x, stripY, cellW, stripH);
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.strokeRect(x, stripY, cellW, stripH);
+        }
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('page 7812', sx + 9 * cellW + cellW / 2, stripY - 8);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('page 0', sx, stripY + stripH + 14);
+    ctx.textAlign = 'right';
+    ctx.fillText('page 1,953,124', sx + cells * cellW, stripY + stripH + 14);
+
+    // arithmetic lines
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('byte = 500,000 × 64 = 32,000,000', 60, 150);
+    ctx.fillText('page = 32,000,000 ÷ 4096 = 7812 rem 2048', 60, 172);
+
+    // bytes-read bars
+    var bx = 230, barH = 14;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read whole file — 8 GB', 20, 215 + barH - 3);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(bx, 215, 440, barH);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('mmap, 10 lookups — 40 KB', 20, 248 + barH - 3);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, 248, 4, barH);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('40 KB', bx + 12, 248 + barH - 3);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one page in, 1,953,124 stay on disk', 690, 190);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('strip and bar widths schematic; arithmetic exact', w - 12, h - 8);
+});
+
+// c3: resident memory for three ways of using the same 8 GB file
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 230, barH = 16;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 8 GB File, Three Memory Footprints (16 GB Laptop)', w / 2, 24);
+
+    // 16 GB budget line
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(630, 55); ctx.lineTo(630, 235); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('16 GB RAM', 630, 48);
+
+    var rows = [
+        { label: 'read all into memory — 8 GB', y: 90, wpx: 200, fill: P.orange, note: '8 GB', bold: false },
+        { label: 'mmap + scan 10% of rows — 0.8 GB', y: 150, wpx: 20, fill: P.blue, note: '0.8 GB', bold: false },
+        { label: 'mmap + 10 lookups — 40 KB', y: 210, wpx: 2, fill: P.green, note: '40 KB', bold: true }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + barH - 3);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.wpx, barH);
+        ctx.fillStyle = r.bold ? P.green : '#444';
+        ctx.font = (r.bold ? 'bold 11px' : '11px') + ' system-ui';
+        ctx.fillText(r.note, bx + r.wpx + 8, r.y + barH - 3);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 78); ctx.lineTo(bx, 235); ctx.stroke();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('memory follows pages touched, not file size', w / 2, 260);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('footprints illustrative', w - 12, h - 8);
+});
+
+// c4: write through mmap — crash before flush vs msync
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Write Through mmap Is Not on Disk Yet', w / 2, 24);
+
+    // row 1: no msync
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no msync', 20, y1 + 4);
+    labeledBox(ctx, 110, y1, 190, 'rgba(42,120,214,0.15)', P.blue, 'store: order 500,000 → refunded');
+    arrow(ctx, 302, y1, 328, y1, P.yellow, 3);
+    labeledBox(ctx, 330, y1, 170, 'rgba(201,133,0,0.12)', P.yellow, 'dirty page in RAM');
+    arrow(ctx, 502, y1, 528, y1, '#e74c3c', 3);
+    labeledBox(ctx, 530, y1, 180, 'rgba(231,76,60,0.12)', '#e74c3c', 'crash — disk still says paid');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ write lost', 620, y1 + 38);
+
+    // row 2: with msync
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with msync', 20, y2 + 4);
+    labeledBox(ctx, 110, y2, 190, 'rgba(42,120,214,0.15)', P.blue, 'store: order 500,000 → refunded');
+    arrow(ctx, 302, y2, 328, y2, P.green, 3);
+    labeledBox(ctx, 330, y2, 170, 'rgba(0,131,0,0.12)', P.green, 'msync flushes the page');
+    arrow(ctx, 502, y2, 528, y2, P.green, 3);
+    labeledBox(ctx, 530, y2, 160, 'rgba(0,131,0,0.12)', P.green, 'disk says refunded');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ durable', 610, y2 + 38);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the store is instant; durability is a separate step', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

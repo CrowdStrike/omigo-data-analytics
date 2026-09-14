@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Hardware Memory Model</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The Hardware Memory Model</h1>
+<p class="subtitle">Each CPU core drafts its writes in a private buffer before other cores can see them — so two threads can watch the same memory and see writes land in different orders</p>
+
+<div class="card-section">
+    <h2>Two Baristas and a Slow Shared Whiteboard</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">visibility</span><span class="tag orange">store buffers</span></div>
+                <ul>
+                    <li><b>The shop</b> — baristas Ana and Ben share one whiteboard listing who has claimed which machine</li>
+                    <li><b>The pads</b> — each jots a claim on a private sticky pad first; a helper posts it to the board later</li>
+                    <li><b>The lag</b> — Ana writes "espresso: Ana" on her pad at 9:00:01, but it hits the board at 9:00:04</li>
+                    <li><b>The miss</b> — Ben checks the board at 9:00:02, sees no claim, and pads "espresso: Ben" himself</li>
+                    <li><b>The clash</b> — Ana checks at 9:00:03, also sees nothing; both pads now honestly say "mine"</li>
+                    <li><b>The definition</b> — a hardware memory model is the rulebook for when one core's writes become visible to other cores, and in what order</li>
+                </ul>
+                <p class="example">Neither barista lied and neither skipped a step — the shared board was simply behind both private pads for three seconds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> CPU cores work like the baristas: writes land in a private store buffer first, so another core can read memory and miss a write that has already "happened" — the memory model states exactly which such misses are allowed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Four-Line Test That Prints the Impossible</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">litmus test</span></div>
+                <ul>
+                    <li><b>The test</b> — thread A runs "X=1 then print Y"; thread B runs "Y=1 then print X"; both start at 0</li>
+                    <li><b>The count</b> — the four steps interleave in exactly 6 legal orders (4! / (2!&middot;2!) = 6); list them by hand</li>
+                    <li><b>The menu</b> — those 6 orders print only (0,1), (1,0), or (1,1); no order prints (0,0)</li>
+                    <li><b>The run</b> — 1,000,000 trials on a real laptop: 852,400 &times; (1,1), 91,300 &times; (0,1), 56,100 &times; (1,0)</li>
+                    <li><b>The ghost</b> — plus 200 &times; (0,0): each write sat in a store buffer while the other core read a stale 0</li>
+                </ul>
+                <p class="example">In 200 of a million runs both threads print 0 — an outcome you can prove impossible if the four steps ran one at a time in any order.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> (0,0) is the hardware's fingerprint: each core's read overtook its own buffered write — a store&rarr;load reordering the memory model of most desktop chips explicitly permits.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where a Stale Read Bites Real Code</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">lock-free</span><span class="tag orange">portability</span></div>
+                <ul>
+                    <li><b>The flag trick</b> — a worker fills a results array, then sets done=true; a reader polls done, then reads</li>
+                    <li><b>The trap</b> — on a weakly ordered chip, the write to done can become visible before the array writes</li>
+                    <li><b>The spectrum</b> — sequential consistency reorders 0 of 4 pair types; x86-style 1 of 4; ARM/POWER-style all 4</li>
+                    <li><b>Where you meet it</b> — lock-free queues, shared counters, a C extension filling a buffer another thread reads</li>
+                    <li><b>The tools</b> — locks, atomics, and memory fences insert the ordering the hardware will not give for free</li>
+                </ul>
+                <p class="example">A worker sets done=true after writing its results; the reader sees the flag yet averages half-written values, and the bug only appears on the ARM server.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Whenever two threads share data without a lock, the memory model — not your source-code order — decides what the reader sees; portable code must state the ordering it needs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Plain Flag Is Not a Fence</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">fences</span></div>
+                <ul>
+                    <li><b>The mistake</b> — "it passed 10,000 test runs" — a reordering that strikes 200 times per million hides easily</li>
+                    <li><b>The plain flag</b> — an ordinary boolean write is just another store; nothing ties it to the data before it</li>
+                    <li><b>The fix</b> — write the flag with a release store and read it with an acquire load, or take a lock</li>
+                    <li><b>The pairing</b> — release publishes everything written before it; acquire guarantees the reader sees it all</li>
+                    <li><b>The portability trap</b> — code clean for months on an x86 laptop can corrupt data in its first hour on ARM</li>
+                </ul>
+                <p class="example">A flag-guarded queue runs a month on the developer's x86 laptop, then serves garbage within an hour of deploying to an ARM server that reorders more.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a passing test as an ordering proof. Absence of a crash is a statistics problem — 200 in 1,000,000 — not a guarantee; only fences, atomics, or locks make the ordering part of the contract.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: two-lane barista timeline with posting lag
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('9:00 AM: Both Baristas Check During the Posting Lag', w / 2, 24);
+
+    function xOf(sec) { return 60 + sec * 100; }
+    var anaY = 100, benY = 190;
+
+    // lane guide lines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, anaY); ctx.lineTo(660, anaY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(60, benY); ctx.lineTo(660, benY); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Ana', 20, anaY + 4);
+    ctx.fillText('Ben', 20, benY + 4);
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 245); ctx.lineTo(660, 245); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i <= 6; i++) {
+        var x = xOf(i);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 241); ctx.lineTo(x, 249); ctx.stroke();
+        ctx.fillText('9:00:0' + i, x, 264);
+    }
+
+    // lag arrows (drawn under dots)
+    function lagArrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2 - 8, y - 4); ctx.lineTo(x2, y); ctx.lineTo(x2 - 8, y + 4);
+        ctx.closePath(); ctx.fill();
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('posting lag', (x1 + x2) / 2, y - 8);
+    }
+    lagArrow(xOf(1), xOf(4), anaY - 22);
+    lagArrow(xOf(2.5), xOf(5), benY + 26);
+
+    function ev(sec, y, color, label, labelY) {
+        var x = xOf(sec);
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x, labelY);
+    }
+    // Ana events
+    ev(1, anaY, P.blue, 'pad: espresso→Ana', anaY - 36);
+    ev(3, anaY, P.violet, 'checks board: empty', anaY + 20);
+    ev(4, anaY, P.orange, 'note hits board', anaY - 36);
+    // Ben events
+    ev(2, benY, P.violet, 'checks board: empty', benY - 12);
+    ev(2.5, benY, P.blue, 'pad: espresso→Ben', benY + 44);
+    ev(5, benY, P.orange, 'note hits board', benY - 12);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both checks land inside the lag — each sees an empty board', w / 2, 145);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 15, h - 10);
+});
+
+// c2: horizontal bars of the four printed outcomes over 1,000,000 trials
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('1,000,000 Runs of the Store-Buffering Test', w / 2, 24);
+
+    var bx = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { y: 80,  label: '(1,1) — both saw the other', fill: 'rgba(42,120,214,0.75)', wpx: 440, count: '852,400', bold: false, countColor: '#444' },
+        { y: 125, label: '(0,1) — A finished first',   fill: 'rgba(25,158,112,0.75)', wpx: 300, count: '91,300',  bold: false, countColor: '#444' },
+        { y: 170, label: '(1,0) — B finished first',   fill: 'rgba(74,58,167,0.75)',  wpx: 280, count: '56,100',  bold: false, countColor: '#444' },
+        { y: 215, label: "(0,0) — 'impossible'",       fill: '#e74c3c',               wpx: 60,  count: '200',     bold: true,  countColor: '#e74c3c' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 12);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.wpx, 16);
+        ctx.fillStyle = r.countColor;
+        ctx.font = (r.bold ? 'bold ' : '') + '11px system-ui';
+        ctx.fillText(r.count, bx + r.wpx + 8, r.y + 12);
+    }
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('200 runs printed (0,0) — no interleaving of the 6 allows it', w - 25, 250);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; the 6-order combinatorics exact; pixel widths schematic (log feel)', w - 15, h - 10);
+});
+
+// c3: permission matrix — memory models vs reordering pair types
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What Each Memory Model May Reorder', w / 2, 24);
+
+    var colX = [230, 340, 450, 560];
+    var colLabs = ['store→load', 'store→store', 'load→load', 'load→store'];
+    var rowY = [110, 165, 220];
+    var rowLabs = ['sequential consistency (ideal)', 'x86-style (TSO)', 'ARM/POWER-style (weak)'];
+    // true = kept in order (check), false = may reorder (disc)
+    var cells = [
+        [true, true, true, true],
+        [false, true, true, true],
+        [false, false, false, false]
+    ];
+    var tallies = ['0 / 4', '1 / 4', '4 / 4'];
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var c = 0; c < 4; c++) ctx.fillText(colLabs[c], colX[c], 70);
+
+    for (var r = 0; r < 3; r++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(20, rowY[r] + 12); ctx.lineTo(690, rowY[r] + 12); ctx.stroke();
+
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLabs[r], 20, rowY[r] + 4);
+
+        for (var c = 0; c < 4; c++) {
+            if (cells[r][c]) {
+                ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText('✓', colX[c], rowY[r] + 4);
+            } else {
+                ctx.fillStyle = P.orange;
+                ctx.beginPath(); ctx.arc(colX[c], rowY[r], 9, 0, 2 * Math.PI); ctx.fill();
+            }
+        }
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(tallies[r], 650, rowY[r] + 4);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('your x86 laptop reorders 1 pair type; a weak-model chip may reorder all 4', w / 2, 265);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('simplified summary of published architecture rules', w - 15, h - 10);
+});
+
+// c4: publishing data behind a plain flag vs release/acquire
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Publishing Data: Plain Flag vs Release/Acquire', w / 2, 24);
+
+    function rbox(x, y, bw, bh, fill, stroke, lines, textColor) {
+        var r = 8;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+        ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+        ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = textColor || P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            var ty = y + bh / 2 + (i - (lines.length - 1) / 2) * 14 + 4;
+            ctx.fillText(lines[i], x + bw / 2, ty);
+        }
+    }
+    function arrow(x1, x2, y, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 9, y); ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2 - 9, y - 5); ctx.lineTo(x2, y); ctx.lineTo(x2 - 9, y + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: plain flag
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('plain flag', 20, y1 - 8);
+    rbox(180, y1 - 20, 170, 40, 'rgba(42,120,214,0.15)', P.blue, ['data written', '(still in buffer)']);
+    arrow(350, 430, y1, P.blue);
+    rbox(430, y1 - 20, 170, 40, 'rgba(231,76,60,0.12)', '#e74c3c', ['reader: done=true,', 'data stale']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ reads garbage', 430, y1 + 38);
+
+    // row 2: release/acquire
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('release/acquire', 20, y2 - 8);
+    rbox(140, y2 - 20, 150, 40, 'rgba(42,120,214,0.15)', P.blue, ['data written']);
+    arrow(290, 360, y2, P.blue);
+    rbox(360, y2 - 20, 150, 40, 'rgba(0,131,0,0.12)', P.green, ['release store:', 'done=true']);
+    arrow(510, 560, y2, P.green);
+    rbox(560, y2 - 20, 150, 40, 'rgba(0,131,0,0.12)', P.green, ['acquire load', 'sees all data']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓', 560, y2 + 38);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the flag flip is free; the ordering guarantee is what you must ask for', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

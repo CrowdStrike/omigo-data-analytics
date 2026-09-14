@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Virtual Memory</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Virtual Memory</h1>
+<p class="subtitle">The OS gives every process its own private map of memory, so every program is written as if it owns all the RAM — the hardware translates behind the scenes</p>
+
+<div class="card-section">
+    <h2>Every Program Thinks It Starts at Address Zero</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">private address space</span><span class="tag orange">the OS translates</span></div>
+                <ul>
+                    <li><b>Two apps</b> — a photo editor and a music player both run on the same 8-frame stick of RAM</li>
+                    <li><b>The illusion</b> — each app sees its own private addresses 0, 1, 2, 3... starting from zero</li>
+                    <li><b>The map</b> — the OS keeps a page table per process: "your page 0 is really frame 2 of RAM"</li>
+                    <li><b>No collisions</b> — both apps can use "address 0" at once because each maps to a different frame</li>
+                    <li><b>The overflow</b> — a page nobody touched lately can even live on disk until it is needed again</li>
+                </ul>
+                <p class="example">The photo editor writes to its page 0 and lands in RAM frame 2; the music player writes to its page 0 and lands in frame 4 — neither ever sees the other's data.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Virtual memory is a per-process map from pretend addresses to real RAM frames — every program gets the same simple view (I start at zero and own everything) while the OS juggles the real hardware.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Translating Address 9,300 by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">page table</span></div>
+                <ul>
+                    <li><b>Page size</b> — memory moves in 4,096-byte pages, so an address splits into (page number, offset)</li>
+                    <li><b>The split</b> — virtual address 9,300 &divide; 4,096 = page 2, remainder 1,108 &rarr; offset 1,108 within the page</li>
+                    <li><b>The lookup</b> — the photo editor's page table says virtual page 2 lives in physical frame 7</li>
+                    <li><b>The rebuild</b> — physical address = 7 &times; 4,096 + 1,108 = 28,672 + 1,108 = 29,780</li>
+                    <li><b>Offset untouched</b> — translation swaps only the page number; the offset 1,108 rides along unchanged</li>
+                </ul>
+                <p class="example">The app asks for byte 9,300; the hardware quietly reads byte 29,780 of real RAM — the app never learns the real number.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every memory access is a two-step arithmetic trick: split the address into page + offset, replace the page number using the page table, keep the offset — 9,300 in, 29,780 out.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why a Big DataFrame "Fits" — Until It Doesn't</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">paging</span><span class="tag red">thrashing</span></div>
+                <ul>
+                    <li><b>The gift</b> — memory-mapped files let a 30 GB dataset open on a 16 GB laptop; pages load on demand</li>
+                    <li><b>The scan</b> — while the working set fits in RAM, each pass over the data stays fast</li>
+                    <li><b>The cliff</b> — past physical RAM the OS evicts pages you still need; every access becomes a disk trip</li>
+                    <li><b>The numbers</b> — a pass at 14 GB takes 29 s; at 18 GB the same pass takes 210 s, at 22 GB, 540 s</li>
+                    <li><b>The symptom</b> — the process isn't "broken", the disk light is solid: that slowdown is thrashing</li>
+                </ul>
+                <p class="example">A data scientist's 18 GB join runs 7&times; slower than the 14 GB version — not 1.3&times; slower — because 2 GB of pages keep bouncing between RAM and disk.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Virtual memory degrades gracefully until the working set exceeds physical RAM, then falls off a cliff — the 16 GB line on the chart is the real capacity of the machine, whatever the address space claims.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Virtual Size Is Not Memory Used</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">VIRT vs RES</span></div>
+                <ul>
+                    <li><b>The confusion</b> — <code>top</code> shows the process at VIRT 12.4 GB and people cry memory leak</li>
+                    <li><b>VIRT</b> — address space the process has <i>reserved</i>: mapped files, arenas, pages never touched</li>
+                    <li><b>RES</b> — pages actually sitting in physical RAM right now: here it is only 1.3 GB</li>
+                    <li><b>Cheap promises</b> — reserving pages costs almost nothing until a page is first written to</li>
+                    <li><b>What to watch</b> — rising RES (plus swap activity) means pressure; a big VIRT alone means nothing</li>
+                </ul>
+                <p class="example">A worker that memory-maps a 10 GB file shows VIRT 12.4 GB, RES 1.3 GB, swap 0.3 GB — it is actually holding about a tenth of what the scary column says.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading VIRT as memory consumed. Virtual size counts promises, not occupancy — judge a process by resident pages and swap traffic, or you will "fix" leaks that never existed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, width, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), 7);
+}
+
+// c1: two virtual address spaces mapped onto one physical RAM
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Processes, One RAM: the Page Table Is the Map', w / 2, 24);
+
+    var pageW = 110, pageH = 34, pageGap = 4, pageY0 = 80;
+    var frameX = 520, frameW = 130, frameH = 22, frameGap = 3, frameY0 = 60;
+    function pageY(i) { return pageY0 + i * (pageH + pageGap); }
+    function frameY(i) { return frameY0 + i * (frameH + frameGap); }
+
+    var photoMap = [2, 5, 0, 7];
+    var musicMap = [4, 1, 6];
+
+    // physical RAM frames (draw first so mapped fills go on top)
+    for (var i = 0; i < 8; i++) {
+        ctx.fillStyle = '#f4f6f8';
+        ctx.fillRect(frameX, frameY(i), frameW, frameH);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.strokeRect(frameX, frameY(i), frameW, frameH);
+    }
+    for (var i = 0; i < photoMap.length; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.20)';
+        ctx.fillRect(frameX, frameY(photoMap[i]), frameW, frameH);
+    }
+    for (var i = 0; i < musicMap.length; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.18)';
+        ctx.fillRect(frameX, frameY(musicMap[i]), frameW, frameH);
+    }
+    for (var i = 0; i < 8; i++) {
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('frame ' + i, frameX + 8, frameY(i) + 15);
+    }
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('physical RAM', frameX + frameW / 2, frameY0 - 10);
+
+    // photo editor column at x=70
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('photo editor', 70 + pageW / 2, pageY0 - 10);
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.20)';
+        ctx.fillRect(70, pageY(i), pageW, pageH);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(70, pageY(i), pageW, pageH);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText('page ' + i, 70 + pageW / 2, pageY(i) + 22);
+    }
+
+    // music player column at x=250
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('music player', 250 + pageW / 2, pageY0 - 10);
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.18)';
+        ctx.fillRect(250, pageY(i), pageW, pageH);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(250, pageY(i), pageW, pageH);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText('page ' + i, 250 + pageW / 2, pageY(i) + 22);
+    }
+
+    // mapping arrows: photo editor (from x=180), music player (from x=360)
+    for (var i = 0; i < photoMap.length; i++) {
+        arrowLine(ctx, 70 + pageW, pageY(i) + pageH / 2, frameX - 4, frameY(photoMap[i]) + frameH / 2, P.blue, 2);
+    }
+    for (var i = 0; i < musicMap.length; i++) {
+        arrowLine(ctx, 250 + pageW, pageY(i) + pageH / 2, frameX - 4, frameY(musicMap[i]) + frameH / 2, P.green, 2);
+    }
+
+    // disk box, music page 3 paged out
+    ctx.fillStyle = '#f4f6f8';
+    rrect(ctx, 380, 255, 70, 30, 6); ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    rrect(ctx, 380, 255, 70, 30, 6); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('disk', 415, 274);
+    arrowLine(ctx, 250 + pageW, pageY(3) + pageH / 2, 396, 253, P.mute, 2, [4, 3]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('paged out', 388, 245);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("both apps use 'page 0' — different frames, no clash", 380, 45);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('8 frames and page layout illustrative', w - 12, h - 10);
+});
+
+// c2: one address translation, left to right
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Lookup: Virtual 9,300 Becomes Physical 29,780', w / 2, 24);
+
+    function box(x, y, bw, bh, fill, stroke, strokeW, r) {
+        ctx.fillStyle = fill;
+        rrect(ctx, x, y, bw, bh, r); ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = strokeW;
+        rrect(ctx, x, y, bw, bh, r); ctx.stroke();
+    }
+
+    // stage 1: virtual address
+    box(40, 110, 150, 44, 'rgba(42,120,214,0.15)', P.blue, 2, 8);
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('virtual addr 9,300', 115, 137);
+
+    // stage 2: split into page + offset
+    box(250, 70, 110, 40, 'rgba(42,120,214,0.15)', P.blue, 2, 6);
+    ctx.fillStyle = P.text; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('page 2', 305, 95);
+    box(250, 160, 110, 40, '#f4f6f8', P.grid, 1, 6);
+    ctx.fillStyle = P.text;
+    ctx.fillText('offset 1,108', 305, 185);
+    arrowLine(ctx, 190, 125, 246, 92, P.mute, 2);
+    arrowLine(ctx, 190, 140, 246, 178, P.mute, 2);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('9300 ÷ 4096', 250, 62);
+    ctx.fillText('remainder', 250, 214);
+
+    // stage 3: page table lookup
+    box(420, 70, 130, 40, 'rgba(0,131,0,0.12)', P.green, 2, 8);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('page table: 2 → 7', 485, 95);
+    arrowLine(ctx, 360, 90, 416, 90, P.mute, 2);
+
+    // stage 4: physical address (shifted from spec x=590 to fit 720px canvas)
+    box(560, 110, 150, 44, 'rgba(0,131,0,0.12)', P.green, 2, 8);
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('physical 29,780', 635, 137);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('7×4096 + 1,108', 635, 170);
+    arrowLine(ctx, 550, 95, 620, 106, P.mute, 2);
+
+    // offset passes through unchanged (dashed aqua)
+    arrowLine(ctx, 360, 180, 618, 148, P.aqua, 2, [4, 3]);
+    ctx.fillStyle = P.aqua; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('offset passes through unchanged', 380, 195);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the app said 9,300 — the RAM heard 29,780', w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('4,096-byte pages; all arithmetic exact', w - 12, h - 10);
+});
+
+// c3: pass time vs dataset size, cliff past physical RAM
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Pass Over the Data: Fast Until the Working Set Outgrows RAM', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function xOf(gb) { return ox + gb / 24 * pw; }
+    function yOf(sec) { return baseY - sec / 600 * ph; }
+
+    var gl = [150, 300, 450];
+    for (var i = 0; i < gl.length; i++) {
+        var gy = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i], ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var gb = 0; gb <= 24; gb += 4) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gb + ' GB', xOf(gb), baseY + 18);
+    }
+
+    // RAM marker at 16 GB
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(16), baseY - ph); ctx.lineTo(xOf(16), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('physical RAM = 16 GB', xOf(16), baseY - ph - 6);
+
+    // pass-time line
+    var sizes = [2, 6, 10, 14, 16, 18, 22];
+    var secs = [4, 12, 20, 29, 48, 210, 540];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < sizes.length; i++) {
+        var x = xOf(sizes[i]), y = yOf(secs[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < sizes.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(sizes[i]), yOf(secs[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // point labels
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('29 s', xOf(14), yOf(29) - 10);
+    ctx.textAlign = 'left';
+    ctx.fillText('210 s', xOf(18) + 8, yOf(210) + 4);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('past RAM, every page fault is a disk trip', xOf(19), 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pass times illustrative', w - 12, h - 10);
+});
+
+// c4: VIRT vs RES vs swap on one GB scale
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Process, Three Numbers: Only One Is RAM', w / 2, 24);
+
+    var bx = 190, maxW = 460, maxGB = 12.4;
+    function xOf(gb) { return bx + gb / maxGB * maxW; }
+
+    // gridlines at 4/8/12 GB
+    var gl = [4, 8, 12];
+    for (var i = 0; i < gl.length; i++) {
+        var gx = xOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gx, 60); ctx.lineTo(gx, 255); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gl[i] + ' GB', gx, 268);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 255); ctx.stroke();
+
+    // VIRT
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('VIRT — reserved 12.4 GB', 20, 102);
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(bx, 85, 460, 26);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 85, 460, 26);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('12.4 GB', bx + 460 - 6, 102);
+
+    // dashed bracket over the mostly-untouched right portion of VIRT
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(xOf(1.6), 80); ctx.lineTo(xOf(1.6), 74); ctx.lineTo(xOf(12.4) - 6, 74); ctx.lineTo(xOf(12.4) - 6, 80);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mostly never-touched mappings', (xOf(1.6) + xOf(12.4)) / 2, 68);
+
+    // RES
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('RES — in RAM 1.3 GB', 20, 167);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, 150, 48, 26);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('1.3 GB', bx + 48 + 8, 167);
+
+    // swap
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('swap — paged out 0.3 GB', 20, 232);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(bx, 215, 11, 26);
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('0.3 GB', bx + 11 + 8, 232);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the 'leak' was a promise, not a payment", 420, 150);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; one mmap-heavy worker', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webhooks</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Webhooks</h1>
+<p class="subtitle">Instead of your code asking the payment provider "anything new?" every minute, you hand over a URL and the provider calls you the instant something happens — the API that calls you</p>
+
+<div class="card-section">
+    <h2>The Shop That Stopped Asking</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">push not pull</span><span class="tag orange">HTTP callback</span></div>
+                <ul>
+                    <li><b>The shop</b> — an online coffee-bean shop takes card payments through a payment provider, PayLine</li>
+                    <li><b>The old way</b> — the shop's server polls PayLine every 60 seconds: "any new charges?" — 1,440 requests a day</li>
+                    <li><b>The waste</b> — on a slow day with 3 charges, 1,437 of those requests come back empty-handed</li>
+                    <li><b>The lag</b> — a charge landing right after a poll sits unseen for up to 60 seconds, 30 on average</li>
+                    <li><b>The webhook</b> — the shop registers <code>https://shop.example/webhook</code>; PayLine POSTs there when a charge succeeds</li>
+                    <li><b>The flip</b> — now PayLine makes 3 requests that day, each arriving about 1 second after the charge</li>
+                </ul>
+                <p class="example">A customer pays at 2 min 24 s past the hour; the poller learns at the 3-minute mark, the webhook fires within a second.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A webhook is just an HTTP request in reverse — you give the other service a URL, and it becomes the client that calls your server whenever the event you care about occurs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Event's Delivery Diary</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">retries</span><span class="tag orange">idempotency</span></div>
+                <ul>
+                    <li><b>The event</b> — at 14:02:05 a $18.50 charge succeeds; PayLine builds event <code>evt_9d41</code> with a JSON body</li>
+                    <li><b>The signature</b> — PayLine adds header <code>X-Signature</code>: HMAC-SHA256 of the body using the shared secret</li>
+                    <li><b>The bad luck</b> — the shop's server is mid-deploy and down for 40 minutes; attempt 1 gets no answer</li>
+                    <li><b>The backoff</b> — PayLine retries at +1 min, +5 min, +30 min, +2 h — each gap roughly 5&times; the last</li>
+                    <li><b>The success</b> — attempt 5 at 16:02 reaches the recovered server, which verifies the HMAC and returns 200</li>
+                    <li><b>The dedupe</b> — the handler records <code>evt_9d41</code> in a processed-events table; a second copy is skipped</li>
+                </ul>
+                <p class="example">Attempts 1–4 fail during the 40-minute outage; attempt 5 at +2 h lands a 200, and the order ships exactly once.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A well-behaved webhook delivery is signed, retried on an exponential backoff schedule, and identified by an event id so the receiver can process duplicates exactly once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Calls-You Pattern Runs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">event pipelines</span></div>
+                <ul>
+                    <li><b>Payments</b> — charge succeeded, refund issued, subscription renewed: fulfillment starts from a webhook</li>
+                    <li><b>Integrations</b> — a code push webhook triggers CI; a form submission webhook updates the CRM</li>
+                    <li><b>Pipelines</b> — one event fans out: mark order paid, email the receipt, decrement inventory, log analytics</li>
+                    <li><b>The cost math</b> — to notice 25 orders a day, 10-second polling spends 8,640 requests; webhooks spend 25</li>
+                    <li><b>The freshness math</b> — 5-minute polling is 150 s stale on average; a webhook arrives in about 1 s</li>
+                    <li><b>The trade</b> — you now run a public endpoint that must be up, fast, and verified</li>
+                </ul>
+                <p class="example">Moving the coffee shop from 60-second polling to webhooks cuts 1,440 daily requests to 25 and average delay from 30 s to ~1 s.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Polling cost scales with the clock — every interval, forever — while webhook cost scales with actual events; that is why event pipelines and cross-service integrations are built on webhooks.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Public URL Anyone Can POST To</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">security</span><span class="tag blue">duplicates</span></div>
+                <ul>
+                    <li><b>The exposure</b> — <code>/webhook</code> is a public URL; anyone who guesses it can POST a fake "charge succeeded"</li>
+                    <li><b>The forgery</b> — an unverified handler that trusts the body will ship order 4412 with $0 collected</li>
+                    <li><b>The fix</b> — recompute the HMAC-SHA256 of the raw body with the shared secret; mismatch means reject 401</li>
+                    <li><b>The duplicate</b> — retries mean the same event can arrive twice; a non-idempotent handler ships twice</li>
+                    <li><b>The slow handler</b> — doing heavy work before replying times out the sender and triggers more retries</li>
+                    <li><b>The pattern</b> — verify the signature, record the event id, return 200 fast, do the real work off a queue</li>
+                </ul>
+                <p class="example">A forged POST claiming order 4412 is paid sails through an unverified handler; with the HMAC check it is rejected in one line.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a webhook body as trusted input. The request came from the open internet, not "from PayLine" — only the signature proves the sender, and only the event id protects you from doing the work twice.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: two-lane timeline — 11 polls vs 3 webhook deliveries over 10 minutes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 250, pw = 600;
+
+    function xOf(min) { return ox + min / 10 * pw; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Three Charges: Eleven Polls vs Three Webhook Calls', w / 2, 24);
+
+    // x axis with tick labels every 2 minutes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 10; m += 2) {
+        ctx.strokeStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(xOf(m), baseY); ctx.lineTo(xOf(m), baseY + 5); ctx.stroke();
+        ctx.fillText(m + ' min', xOf(m), baseY + 20);
+    }
+
+    // charge event dashed lines
+    var charges = [2.4, 5.1, 8.7];
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    for (var i = 0; i < charges.length; i++) {
+        var cx = xOf(charges[i]);
+        ctx.beginPath(); ctx.moveTo(cx, 80); ctx.lineTo(cx, 230); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('charge', cx, 74);
+    }
+    ctx.setLineDash([]);
+
+    // lanes
+    var laneY1 = 110, laneY2 = 200;
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, laneY1); ctx.lineTo(ox + pw, laneY1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, laneY2); ctx.lineTo(ox + pw, laneY2); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('polling, every 60s', 62, laneY1 - 10);
+    ctx.fillText('webhook', 62, laneY2 - 10);
+
+    // polling lane: 11 circles, minutes 0..10; 3, 6, 9 filled blue
+    var seen = { 3: true, 6: true, 9: true };
+    for (var m2 = 0; m2 <= 10; m2++) {
+        var px = xOf(m2);
+        ctx.beginPath(); ctx.arc(px, laneY1, 6, 0, 2 * Math.PI);
+        if (seen[m2]) {
+            ctx.fillStyle = P.blue; ctx.fill();
+        } else {
+            ctx.fillStyle = '#fff'; ctx.fill();
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+        }
+    }
+
+    // webhook lane: 3 green circles right on the charge lines
+    var hooks = [2.42, 5.12, 8.72];
+    ctx.fillStyle = P.green;
+    for (var j = 0; j < hooks.length; j++) {
+        ctx.beginPath(); ctx.arc(xOf(hooks[j]), laneY2, 6, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 calls, ~1 s fresh — polling burns 11 calls and runs up to 60 s stale', 340, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('charge times illustrative', w - 14, h - 10);
+});
+
+// c2: retry timeline for evt_9d41 — five attempts, exponential backoff
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('evt_9d41: Five Attempts, Exponential Backoff, One Success', w / 2, 24);
+
+    var y = 180;
+    var xs = [90, 180, 285, 405, 560];
+    var labs = ['+0', '+1m', '+5m', '+30m', '+2h'];
+
+    // outage band
+    ctx.fillStyle = 'rgba(217,89,38,0.12)';
+    ctx.fillRect(70, 120, 440 - 70, 180 - 120);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('shop server down 40 min', (70 + 440) / 2, 112);
+
+    // timeline axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, y); ctx.lineTo(660, y); ctx.stroke();
+
+    // attempt labels below
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 5; i++) {
+        ctx.fillText(labs[i], xs[i], 205);
+    }
+
+    // backoff arcs between consecutive attempts
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 1.5;
+    for (var i2 = 0; i2 < 4; i2++) {
+        var x1 = xs[i2], x2 = xs[i2 + 1];
+        var mid = (x1 + x2) / 2, r = (x2 - x1) / 2;
+        ctx.beginPath(); ctx.arc(mid, y, r, Math.PI, 2 * Math.PI); ctx.stroke();
+        if (i2 > 0) {
+            ctx.fillStyle = P.violet; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('~×5', mid, y - r - 5);
+        }
+    }
+
+    // failed attempts
+    ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    for (var i3 = 0; i3 < 4; i3++) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('✗', xs[i3], 172);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText('no 200', xs[i3], 150);
+        ctx.font = 'bold 16px system-ui';
+    }
+
+    // success
+    ctx.fillStyle = P.green; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ 200', xs[4], 172);
+    ctx.font = '11px system-ui';
+    ctx.fillText('HMAC ok, processed once', xs[4], 150);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('gaps grow ~5× — the event outlives the outage', 430, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('retry schedule illustrative; providers publish their own', w - 14, h - 10);
+});
+
+// c3: horizontal bar chart — requests/day at three polling rates vs webhooks
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('25 Orders a Day: Requests Spent Finding Out About Them', w / 2, 24);
+
+    var bx = 230;
+    var rows = [
+        { label: 'poll every 10 s — 5 s stale',   y: 70,  bw: 440, end: '8,640 req/day', fill: 'rgba(42,120,214,0.30)' },
+        { label: 'poll every 60 s — 30 s stale',  y: 120, bw: 240, end: '1,440 req/day', fill: 'rgba(42,120,214,0.30)' },
+        { label: 'poll every 5 min — 150 s stale', y: 170, bw: 120, end: '288 req/day',  fill: 'rgba(42,120,214,0.30)' },
+        { label: 'webhooks — ~1 s fresh',          y: 220, bw: 14,  end: '25 req/day',   fill: P.green }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 11);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.bw, 14);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText(r.end, bx + r.bw + 8, r.y + 11);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 58); ctx.lineTo(bx, 244); ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('polling pays by the clock; webhooks pay by the event', w - 30, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bar widths schematic, request counts exact for 25 orders/day', w - 14, h - 10);
+});
+
+// c4: two-row flow — forged POST without vs with the HMAC signature check
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same Forged POST, With and Without the Signature Check', w / 2, 24);
+
+    function box(cx, cy, bw, bh, fill, stroke, text) {
+        var x = cx - bw / 2, y = cy - bh / 2, r = 8;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+        ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+        ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, cx, cy + 4);
+    }
+
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = '#999';
+        ctx.beginPath(); ctx.moveTo(x2, y); ctx.lineTo(x2 - 9, y - 5); ctx.lineTo(x2 - 9, y + 5); ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: no check
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no check', 20, y1 + 4);
+    box(150, y1, 170, 40, 'rgba(42,120,214,0.15)', P.blue, 'POST {order 4412 paid}');
+    arrow(235, 335, y1);
+    box(430, y1, 190, 40, 'rgba(231,76,60,0.12)', '#e74c3c', 'handler trusts body — ships order');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ $0 collected', 535, y1 + 4);
+
+    // row 2: verify HMAC
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('verify HMAC', 20, y2 + 4);
+    box(150, y2, 170, 40, 'rgba(42,120,214,0.15)', P.blue, 'POST {order 4412 paid}');
+    arrow(235, 265, y2);
+    box(360, y2, 190, 40, 'rgba(0,131,0,0.12)', P.green, 'recompute HMAC — mismatch');
+    arrow(455, 485, y2);
+    box(560, y2, 150, 40, 'rgba(0,131,0,0.12)', P.green, 'reject 401');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓', 645, y2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('verify the sender, dedupe by event id, ack fast — then do the work', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order and amounts illustrative', w - 14, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

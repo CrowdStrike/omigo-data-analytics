@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copy-on-Write</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Copy-on-Write</h1>
+<p class="subtitle">When two owners want the same data, don't copy it — share one original and copy only at the moment somebody writes</p>
+
+<div class="card-section">
+    <h2>Two Roommates, One Recipe Binder</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">sharing</span><span class="tag orange">lazy copy</span></div>
+                <ul>
+                    <li><b>The binder</b> — two roommates both "have" the family recipe binder: 300 pages sitting on one shelf</li>
+                    <li><b>No duplication</b> — nobody photocopies 300 pages up front; both just point at the same binder</li>
+                    <li><b>The write</b> — one roommate wants to scribble on the lasagna page; only THAT page gets photocopied</li>
+                    <li><b>The split</b> — after the scribble there are 301 physical pages: 299 shared, 2 private lasagna versions</li>
+                    <li><b>The name</b> — copy-on-write (COW): share everything until a write forces a copy of just that piece</li>
+                </ul>
+                <p class="example">Both roommates read for months without a single copy made; the first edit costs one photocopied page, not 300.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Copy-on-write makes copies look instant and free by deferring the real work — physical copying happens per piece, only when a piece is first written.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Pages by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">memory math</span></div>
+                <ul>
+                    <li><b>Setup</b> — a 4,000-page dataset is "copied" to a second owner: physical pages stay 4,000</li>
+                    <li><b>Writes land</b> — the new owner edits 120 different pages over the next hour</li>
+                    <li><b>The rule</b> — each first-write to a page adds exactly one physical page</li>
+                    <li><b>Hand-check</b> — physical pages = 4,000 + 120 = 4,120, not the 8,000 an eager copy would need</li>
+                    <li><b>The savings</b> — 8,000 &minus; 4,120 = 3,880 pages never copied because nobody ever wrote them</li>
+                </ul>
+                <p class="example">An eager copy costs 4,000 pages on day one; COW costs 120 pages spread over the hour writes actually happen — 97% of the copy never occurs.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> After the writes, memory = original + pages actually written (4,000 + 120 = 4,120) — the unwritten 3,880 pages are shared forever at zero cost.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Trick Runs Your Machine</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">fork</span><span class="tag orange">snapshots</span></div>
+                <ul>
+                    <li><b>fork()</b> — when a process forks, the child shares all parent memory COW; a fork is near-instant</li>
+                    <li><b>Snapshots</b> — ZFS, APFS, and Btrfs snapshot terabytes in milliseconds by sharing blocks COW</li>
+                    <li><b>Strings &amp; arrays</b> — Swift arrays and PHP strings copy-on-write behind ordinary assignment</li>
+                    <li><b>Redis saves</b> — Redis forks to snapshot; the child reads frozen COW pages while the parent keeps serving</li>
+                    <li><b>Databases</b> — MVCC storage keeps old row versions readable while writers make new copies</li>
+                </ul>
+                <p class="example">A 30 GB Redis process forks in a few milliseconds — the snapshot child shares all 30 GB and pays only for pages the parent rewrites during the save.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> COW is why fork, filesystem snapshots, and "copying" a big value in Swift all feel instant — the copy is a promise, paid page by page only if writes arrive.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Latency Hiding in the First Write</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">performance cliff</span></div>
+                <ul>
+                    <li><b>The illusion</b> — benchmarks of "copying" look free because nobody wrote afterward</li>
+                    <li><b>The cliff</b> — the first write to a shared page stalls while the real copy happens right then</li>
+                    <li><b>Redis pain</b> — a write-heavy minute during a snapshot can double memory: every hot page copies</li>
+                    <li><b>Fork bombs</b> — forking a huge process is cheap until both sides write everywhere at once</li>
+                    <li><b>The mistake</b> — sizing memory for the shared state and forgetting writes un-share it</li>
+                </ul>
+                <p class="example">A 30 GB Redis under heavy writes during a save copies most hot pages — memory spikes toward 60 GB and the box starts swapping.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating COW's deferred cost as no cost. The copy still happens — just later, on the write path, exactly when your system is busiest.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: two owners share one page stack; after a write, one page splits
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Share 300 Pages, Copy Only the One You Write', w / 2, 24);
+
+    function roundRect(x, y, bw, bh, r, fill, stroke) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.arcTo(x + bw, y, x + bw, y + r, r);
+        ctx.lineTo(x + bw, y + bh - r);
+        ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+        ctx.lineTo(x + r, y + bh);
+        ctx.arcTo(x, y + bh, x, y + bh - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    function arrow(x1, y1, x2, y2) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ---- left panel (before) ----
+    roundRect(100, 60, 80, 30, 6, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('owner A', 140, 80);
+    roundRect(220, 60, 80, 30, 6, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillText('owner B', 260, 80);
+
+    // shared stack: 3 offset gray-bordered rectangles
+    for (var i = 2; i >= 0; i--) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.fillRect(160 + i * 6, 140 + i * 6, 80, 52);
+        ctx.strokeRect(160 + i * 6, 140 + i * 6, 80, 52);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('300 shared', 206, 165);
+    ctx.fillText('pages', 206, 181);
+
+    arrow(140, 92, 190, 136);
+    arrow(260, 92, 220, 136);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('before: 300 physical pages', 200, 240);
+
+    // ---- right panel (after) ----
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('write → copy that page only', 520, 48);
+
+    roundRect(420, 60, 80, 30, 6, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('owner A', 460, 80);
+    roundRect(540, 60, 80, 30, 6, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillText('owner B', 580, 80);
+
+    // shared stack at center
+    for (var i = 2; i >= 0; i--) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.fillRect(482 + i * 6, 130 + i * 6, 80, 46);
+        ctx.strokeRect(482 + i * 6, 130 + i * 6, 80, 46);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('299 shared', 528, 158);
+
+    // A's private lasagna page (green)
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.fillRect(405, 190, 80, 40);
+    ctx.strokeRect(405, 190, 80, 40);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('lasagna', 445, 207);
+    ctx.fillText("(A's copy)", 445, 221);
+
+    // B kept original lasagna page (orange)
+    ctx.fillStyle = 'rgba(217,89,38,0.12)';
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.fillRect(555, 190, 90, 40);
+    ctx.strokeRect(555, 190, 90, 40);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('lasagna', 600, 207);
+    ctx.fillText('(B kept original)', 600, 221);
+
+    arrow(460, 92, 500, 126);   // A -> shared
+    arrow(580, 92, 545, 126);   // B -> shared
+    arrow(452, 92, 445, 186);   // A -> its private page
+    arrow(588, 92, 598, 186);   // B -> original page
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('after one write: 301 physical pages', 525, 252);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('page counts illustrative', w - 12, h - 8);
+});
+
+// c2: eager copy vs COW physical pages over the hour
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    var maxPages = 9000;
+
+    function xOf(min) { return ox + min / 60 * pw; }
+    function yOf(p) { return baseY - p / maxPages * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Eager Copy vs COW: 8,000 Pages vs 4,120', w / 2, 24);
+
+    // gridlines at 2000/4000/6000/8000
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [2000, 4000, 6000, 8000].forEach(function(g) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g.toLocaleString(), ox - 6, yOf(g) + 4);
+    });
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks
+    var tickMins = [0, 15, 30, 45, 60];
+    var tickLabs = ['0', '15', '30', '45', '60 min'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tickMins.length; i++) {
+        ctx.fillText(tickLabs[i], xOf(tickMins[i]), baseY + 16);
+    }
+
+    var mins = [0, 15, 30, 45, 60];
+
+    // COW fill under line
+    var cow = [4000, 4045, 4080, 4105, 4120];
+    ctx.fillStyle = 'rgba(0,131,0,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), baseY);
+    for (var i = 0; i < mins.length; i++) ctx.lineTo(xOf(mins[i]), yOf(cow[i]));
+    ctx.lineTo(xOf(60), baseY);
+    ctx.closePath(); ctx.fill();
+
+    // eager line: starts at (0, 4000), vertical step to 8000, then flat
+    var eager = [8000, 8000, 8000, 8000, 8000];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(4000));
+    ctx.lineTo(xOf(0), yOf(8000));
+    for (var i = 0; i < mins.length; i++) ctx.lineTo(xOf(mins[i]), yOf(eager[i]));
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('eager copy: 8,000', xOf(40), yOf(8000) - 10);
+
+    // COW line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(cow[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('COW: 4,120', xOf(60) - 6, yOf(4120) + 20);
+
+    // gap marker: vertical double-headed arrow at x=60 between the lines
+    var gx = xOf(60) - 14, gy1 = yOf(8000), gy2 = yOf(4120);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(gx, gy1 + 8); ctx.lineTo(gx, gy2 - 8); ctx.stroke();
+    ctx.fillStyle = P.mute;
+    ctx.beginPath(); ctx.moveTo(gx, gy1); ctx.lineTo(gx - 5, gy1 + 9); ctx.lineTo(gx + 5, gy1 + 9); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(gx, gy2); ctx.lineTo(gx - 5, gy2 - 9); ctx.lineTo(gx + 5, gy2 - 9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('3,880 pages never copied', gx - 8, (gy1 + gy2) / 2 + 4);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('write pattern illustrative — 120 distinct pages written', w - 12, h - 8);
+});
+
+// c3: apparent copy size vs physical bytes copied, four real uses
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What the Copy Claims vs What It Physically Copies', w / 2, 24);
+
+    var bx = 250;
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 50); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { y: 70,  label: 'fork a 30 GB process',          budgetW: 420, budgetLab: '30 GB apparent',   ovW: 8,   ovColor: P.green,  ovLab: '~0.6 GB rewritten' },
+        { y: 120, label: 'snapshot a 2 TB volume',        budgetW: 420, budgetLab: '2 TB apparent',    ovW: 4,   ovColor: P.green,  ovLab: 'metadata only' },
+        { y: 170, label: 'assign a Swift array (1M items)', budgetW: 420, budgetLab: '1M items apparent', ovW: 2, ovColor: P.green, ovLab: '8 bytes (a pointer)' },
+        { y: 220, label: 'array then mutated',            budgetW: 420, budgetLab: '',                 ovW: 420, ovColor: P.orange, ovLab: 'full copy now — write triggered it' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 11);
+        // apparent (blue) bar
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(bx, r.y, r.budgetW, 14);
+        // overlay bar
+        ctx.fillStyle = r.ovColor;
+        ctx.fillRect(bx, r.y, r.ovW, 14);
+        // labels
+        if (i === 3) {
+            ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(r.ovLab, bx + r.budgetW - 6, r.y - 4);
+        } else {
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(r.budgetLab, bx + r.budgetW - 6, r.y - 4);
+            ctx.fillStyle = r.ovColor; ctx.textAlign = 'left';
+            ctx.fillText(r.ovLab, bx + r.ovW + 8, r.y + 11);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('row 4 is the fine print: the first write pays the whole bill', w / 2, 258);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative', w - 12, h - 8);
+});
+
+// c4: memory during a COW snapshot under light vs heavy write load
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var ox = 70, baseY = 245, pw = 590, ph = 180;
+    var maxGB = 64;
+
+    function xOf(min) { return ox + min / 10 * pw; }
+    function yOf(gb) { return baseY - gb / maxGB * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('During a COW Snapshot, Writes Un-Share Memory', w / 2, 24);
+
+    // snapshot window band: minute 2 to 8
+    ctx.fillStyle = 'rgba(107,114,128,0.10)';
+    ctx.fillRect(xOf(2), baseY - ph, xOf(8) - xOf(2), ph);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('snapshot in progress', (xOf(2) + xOf(8)) / 2, baseY - ph + 14);
+
+    // gridlines at 16/32/48
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    var gls = [16, 32, 48], glabs = ['16', '32', '48 GB'];
+    for (var i = 0; i < gls.length; i++) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(gls[i])); ctx.lineTo(ox + pw, yOf(gls[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 6, yOf(gls[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every 2 min
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 10; m += 2) {
+        ctx.fillText(m, xOf(m), baseY + 16);
+    }
+
+    // limit line at 56 GB
+    ctx.strokeStyle = P.orange; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(56)); ctx.lineTo(ox + pw, yOf(56)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('box RAM 56 GB', ox + 6, yOf(56) - 6);
+
+    var mins = [0, 2, 4, 6, 8, 10];
+
+    // light writes line
+    var light = [30, 30, 31, 32, 33, 30];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(light[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('light writes: +3 GB peak', xOf(4.2), yOf(28));
+
+    // heavy writes line
+    var heavy = [30, 30, 42, 52, 58, 31];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(heavy[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('heavy writes: 58 GB peak', xOf(7.6), yOf(60));
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hot pages all copied at once — swap begins', xOf(6.5) - 160, 55);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('GB values illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

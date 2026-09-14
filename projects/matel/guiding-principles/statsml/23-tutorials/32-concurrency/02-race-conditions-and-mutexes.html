@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Race Conditions &amp; Mutexes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Race Conditions &amp; Mutexes</h1>
+<p class="subtitle">When two threads update one shared number at the same time, one update can silently vanish — a mutex makes them take turns</p>
+
+<div class="card-section">
+    <h2>Two Registers, One Cup Tally</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">shared state</span><span class="tag orange">lost update</span></div>
+                <ul>
+                    <li><b>The tally</b> — a coffee shop tracks cups sold today as one shared number, currently 100</li>
+                    <li><b>Two registers</b> — cashiers A and B each ring up a cup at the same instant</li>
+                    <li><b>Three steps</b> — "add one" is really read the tally, add 1 in your head, write it back</li>
+                    <li><b>The collision</b> — both read 100, both compute 101, both write 101 — one sale is gone</li>
+                    <li><b>The race</b> — the final tally depends on who writes last, not on how many cups were sold</li>
+                </ul>
+                <p class="example">Two cups leave the counter at 2:03pm, but the tally goes from 100 to 101 — register B's write lands on top of A's and erases it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The classic race condition is two threads doing read-modify-write on the same value with overlapping steps; the interleaving decides the result, so the answer changes run to run.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Ringing Up 1,000 Cups on Each Register</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">mutex</span></div>
+                <ul>
+                    <li><b>The run</b> — each register increments the shared tally 1,000 times; the true total is 2,000</li>
+                    <li><b>No lock</b> — one unlocked run ends at 1,438: the two registers overwrote each other 562 times</li>
+                    <li><b>Every run differs</b> — eight unlocked runs land anywhere from 1,367 to 1,602, never 2,000</li>
+                    <li><b>The mutex</b> — a lock only one thread can hold; take it, do read-add-write, release it</li>
+                    <li><b>Locked runs</b> — with the mutex around all three steps, all eight runs end at exactly 2,000</li>
+                </ul>
+                <p class="example">Unlocked run 3 finishes at 1,367 — 633 of 2,000 sales lost — while every mutex-protected run hand-checks to 1,000 + 1,000 = 2,000.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The mutex forces the two registers to take turns on the whole read-modify-write, so no write ever lands on a stale read — the count becomes deterministic.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where a Data Scientist Hits This</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">pipelines</span><span class="tag orange">silent corruption</span></div>
+                <ul>
+                    <li><b>Parallel pipelines</b> — worker processes bumping a shared rows-processed or error counter</li>
+                    <li><b>Feature stores</b> — two jobs read-modify-write the same aggregate row without a transaction</li>
+                    <li><b>Dashboards</b> — a metric that is quietly 5% low looks plausible, so nobody investigates</li>
+                    <li><b>It scales badly</b> — more parallel workers means more overlapping writes and more lost updates</li>
+                    <li><b>The fix family</b> — mutexes, atomic increments, and database transactions are the same idea</li>
+                </ul>
+                <p class="example">A 4-worker ingest job reports 3,880 of 4,000 rows processed — the missing 120 are lost counter updates, not lost rows, but the on-call engineer can't tell.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Races rarely crash anything — they corrupt numbers silently, and a slightly-wrong metric is far more dangerous to an analysis than a loud exception.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Locking Only the Write Doesn't Fix It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">lock scope</span></div>
+                <ul>
+                    <li><b>The trap</b> — putting the mutex around the write alone; the stale read already happened</li>
+                    <li><b>Replay</b> — A reads 100, B reads 100, then each politely takes the lock to write 101: still 101</li>
+                    <li><b>The rule</b> — the lock must cover the whole read-modify-write, not just the last step</li>
+                    <li><b>Same trap, dressed up</b> — check-then-act ("if seat free, book it") outside the lock races too</li>
+                    <li><b>Looks fixed</b> — narrow locks pass small tests because collisions are rare, then fail under load</li>
+                </ul>
+                <p class="example">With a write-only lock, the two registers still both read 100 and the tally still ends at 101 — the mutex guarded the wrong span.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating the mutex as protecting a line of code. It has to protect the invariant — every step from reading the value to writing its replacement stays inside one lock.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two-lane interleaved read/add/write timeline, tally ends at 101
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Both Read 100, Both Write 101: One Sale Vanishes', w / 2, 24);
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Register A', 20, 95 + 22);
+    ctx.fillText('Register B', 20, 185 + 22);
+
+    var bw = 110, bh = 34;
+    function stepBox(x, y, border, fill, label) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundRect(ctx, x, y, bw, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, y + bh / 2 + 4);
+    }
+
+    // lane A (y=95): blue boxes
+    var yA = 95, yB = 185;
+    stepBox(140, yA, P.blue, 'rgba(42,120,214,0.15)', 'read 100');
+    stepBox(290, yA, P.blue, 'rgba(42,120,214,0.15)', 'add 1 → 101');
+    stepBox(440, yA, P.blue, 'rgba(42,120,214,0.15)', 'write 101');
+    // lane B (y=185): aqua boxes, shifted right one slot
+    stepBox(215, yB, P.aqua, 'rgba(25,158,112,0.15)', 'read 100');
+    stepBox(365, yB, P.aqua, 'rgba(25,158,112,0.15)', 'add 1 → 101');
+    stepBox(515, yB, P.aqua, 'rgba(25,158,112,0.15)', 'write 101');
+
+    // shared-tally strip at y=250
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, 262); ctx.lineTo(700, 262); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('shared tally:', 20, 254);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('100', 120, 254);
+    ctx.fillText('101', 430, 254);
+    ctx.fillText('101', 590, 254);
+
+    // arrows: reads down to "100", writes down to the strip
+    arrow(ctx, 165, yA + bh, 128, 244, P.mute, 2);           // A read -> 100
+    arrow(ctx, 240, yB + bh, 132, 248, P.mute, 2);           // B read -> 100
+    arrow(ctx, 470, yA + bh, 438, 242, P.mute, 2);           // A write -> tally
+    arrow(ctx, 570, yB + bh, 596, 244, P.mute, 2);           // B write -> tally (lands after A's)
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('expected 102, got 101 — A’s sale erased', 560, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('tally values illustrative', w - 12, h - 10);
+});
+
+// c2: eight unlocked run totals vs mutex, dashed expected line at 2000
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxV = 2000;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('1,000 + 1,000 Increments: Unlocked Runs Never Reach 2,000', w / 2, 24);
+
+    // gridlines
+    var grids = [500, 1000, 1500, 2000];
+    for (var i = 0; i < grids.length; i++) {
+        var y = baseY - grids[i] / maxV * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var vals = [1438, 1521, 1367, 1489, 1602, 1414, 1553, 1476];
+    var bw = 48, slot = pw / 9;
+    for (var i = 0; i < 8; i++) {
+        var cx = ox + slot * (i + 0.5);
+        var bh = vals[i] / maxV * ph;
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(cx - bw / 2, baseY - bh, bw, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw / 2, baseY - bh, bw, bh);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(vals[i], cx, baseY - bh - 5);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText('run ' + (i + 1), cx, baseY + 16);
+    }
+    // mutex bar
+    var cm = ox + slot * 8.5;
+    var bhm = 2000 / maxV * ph;
+    ctx.fillStyle = P.green;
+    ctx.fillRect(cm - bw / 2, baseY - bhm, bw, bhm);
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2000', cm, baseY - bhm - 5);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('mutex', cm, baseY + 16);
+
+    // expected line
+    var yExp = baseY - 2000 / maxV * ph;
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yExp); ctx.lineTo(ox + pw, yExp); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('expected 2,000', ox + 6, yExp - 6);
+
+    // annotation near run 3
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('worst run lost 633 updates', ox + slot * 2.5, 80);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('run totals illustrative — real losses vary with timing', w - 12, h - 8);
+});
+
+// c3: lost updates vs workers, unlocked line vs mutex line
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxPct = 35;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('More Workers, More Collisions: Lost Updates Grow with Parallelism', w / 2, 24);
+
+    // y gridlines at 10/20/30
+    var grids = [10, 20, 30];
+    for (var i = 0; i < grids.length; i++) {
+        var y = baseY - grids[i] / maxPct * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i] + '%', ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var workers = [2, 4, 8, 16];
+    var xs = [];
+    for (var i = 0; i < 4; i++) {
+        xs[i] = ox + pw * (i + 0.5) / 4;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(workers[i], xs[i], baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('workers', ox + pw / 2, baseY + 34);
+
+    // unlocked line
+    var lost = [4, 11, 19, 28];
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 4; i++) {
+        var y = baseY - lost[i] / maxPct * ph;
+        i === 0 ? ctx.moveTo(xs[i], y) : ctx.lineTo(xs[i], y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 4; i++) {
+        var y = baseY - lost[i] / maxPct * ph;
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(xs[i], y, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lost[i] + '%', xs[i], y - 10);
+    }
+
+    // mutex line flat at 0
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xs[0], baseY); ctx.lineTo(xs[3], baseY); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('with mutex: 0% lost', xs[3], baseY - 10);
+
+    // annotation near 8 workers
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('scaling up makes the corruption worse, not rarer', xs[2] - 60, 75);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('loss percentages illustrative', w - 12, h - 8);
+});
+
+// c4: lock-scope flow diagram — write-only lock vs full read-modify-write lock
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Lock Scope Decides Everything: Guard the Whole Read-Modify-Write', w / 2, 24);
+
+    var bh = 40;
+    function flowBox(cx, cy, bw, border, fill, label) {
+        var x = cx - bw / 2, y = cy - bh / 2;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundRect(ctx, x, y, bw, bh, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+        return { left: x, right: x + bw, y: cy };
+    }
+
+    // row 1 (y=95): write-only lock
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lock write only', 20, y1 - 34);
+    var b1 = flowBox(150, y1, 170, P.blue, 'rgba(42,120,214,0.15)', 'A & B both read 100');
+    var b2 = flowBox(350, y1, 180, P.yellow, 'rgba(201,133,0,0.15)', 'lock · write 101 · unlock');
+    var b3 = flowBox(555, y1, 130, '#e74c3c', 'rgba(231,76,60,0.12)', 'tally 101');
+    arrow(ctx, b1.right, y1, b2.left - 2, y1, P.mute, 3);
+    arrow(ctx, b2.right, y1, b3.left - 2, y1, P.mute, 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ update lost', 555, y1 + 38);
+
+    // row 2 (y=205): lock all three steps
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lock all three steps', 20, y2 - 34);
+    var c1b = flowBox(150, y2, 210, P.yellow, 'rgba(201,133,0,0.15)', 'A: lock · read 100 · write 101 · unlock');
+    var c2b = flowBox(390, y2, 210, P.yellow, 'rgba(201,133,0,0.15)', 'B: lock · read 101 · write 102 · unlock');
+    var c3b = flowBox(608, y2, 110, P.green, 'rgba(0,131,0,0.12)', 'tally 102');
+    arrow(ctx, c1b.right, y2, c2b.left - 2, y2, P.mute, 3);
+    arrow(ctx, c2b.right, y2, c3b.left - 2, y2, P.mute, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 608, y2 + 38);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a mutex in the wrong place gives the confidence without the safety', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('tally values illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

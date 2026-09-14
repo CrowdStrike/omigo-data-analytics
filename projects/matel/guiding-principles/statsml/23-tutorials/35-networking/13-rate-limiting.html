@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rate Limiting</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Rate Limiting</h1>
+<p class="subtitle">A token bucket lets a service absorb a short burst but hold a steady pace — extra requests get a polite "try again in a moment" instead of a crash</p>
+
+<div class="card-section">
+    <h2>The Pizza Shop That Says "Not Yet"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">saying no gracefully</span><span class="tag orange">capacity</span></div>
+                <ul>
+                    <li><b>The kitchen</b> — a pizza shop's online ordering page feeds ovens that can bake 6 pizzas per minute</li>
+                    <li><b>The rush</b> — at 6:04pm a game ends nearby and orders spike to 12 per minute, double the ovens</li>
+                    <li><b>The bad yes</b> — accepting everything means every pizza runs late and every customer gets it cold</li>
+                    <li><b>The graceful no</b> — the site takes 6 orders and tells the rest "kitchen full — retry in 30 seconds"</li>
+                    <li><b>The name</b> — rate limiting is exactly this: capping how fast requests are accepted, on purpose</li>
+                </ul>
+                <p class="example">At 6:04pm the site accepts 6 orders, asks 6 customers to retry in 30 seconds, and every accepted pizza still arrives hot.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Rate limiting protects the work you already accepted — a clear, early "not yet" beats a slow "yes" that fails everyone.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Bucket of Ten Tokens, One Back Per Second</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">token bucket</span></div>
+                <ul>
+                    <li><b>The bucket</b> — the limiter holds at most 10 tokens; each accepted order spends exactly one</li>
+                    <li><b>The refill</b> — 1 token drips back every second, and the bucket never fills past 10</li>
+                    <li><b>The burst</b> — at second 0 six orders land at once: the full bucket pays 10 &minus; 6 = 4 tokens left</li>
+                    <li><b>The drain</b> — 2 orders/sec keep arriving against 1 token/sec refill: 4, 3, 2, 1, 0 by second 4</li>
+                    <li><b>Empty bucket</b> — from second 5 on, each second's lone token serves 1 order and 1 is told to wait</li>
+                </ul>
+                <p class="example">At second 4 the last held token plus the refill serve both orders; from second 5 each second's lone refill token splits the pair — one accepted, one asked to retry.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Capacity sets the burst allowance and refill sets the sustained pace — a 10-token bucket refilling at 1/sec absorbs a 10-order burst but never sustains more than 60 orders a minute.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Servers Ration Their Own Door</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">overload</span><span class="tag green">fairness</span></div>
+                <ul>
+                    <li><b>Collapse</b> — a server pushed past capacity slows for everyone, queues balloon, then it falls over</li>
+                    <li><b>The cap</b> — a limiter set at 150 requests/sec keeps serving 150 no matter how hard the flood hits</li>
+                    <li><b>Fair share</b> — per-client buckets stop one greedy script from starving every other user</li>
+                    <li><b>The polite no</b> — a rejected request gets an instant answer plus a wait hint, not a hung timeout</li>
+                    <li><b>Everyday spots</b> — public APIs, login attempts, checkout buttons, scrapers hitting a data pipeline</li>
+                </ul>
+                <p class="example">At 300 incoming requests/sec the unprotected server completes 0, while the rate-limited one still completes its full 150.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Rate limiting turns overload from a cliff into a plateau — the service does less than was asked, but never less than it can.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A 60-Per-Minute Limit Is Not One Per Second</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">fixed window</span><span class="tag blue">bursts</span></div>
+                <ul>
+                    <li><b>The label</b> — "60 requests per minute" reads like a smooth 1 per second, but limiters rarely mean that</li>
+                    <li><b>Fixed window</b> — a counter that resets each minute lets all 60 land in the last second of a window</li>
+                    <li><b>The double burst</b> — 60 at 0:59 plus 60 at 1:00 is 120 requests in two seconds, both windows "legal"</li>
+                    <li><b>Token bucket</b> — capacity 10 refilling 1/sec bounds any instant burst at 10, sustained still 60/min</li>
+                    <li><b>The silent no</b> — the other mistake: rejecting with no retry hint, so clients hammer back instantly</li>
+                </ul>
+                <p class="example">A client that saves its 60 calls for 0:59 and fires 60 more at 1:00 stays inside a fixed-window limit while hitting the server with 120 in two seconds.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a rate limit as a smooth pace. A fixed window allows 2&times; bursts at its boundary; a token bucket makes the burst bound explicit — it is the bucket's capacity, nothing more.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: evening rush — orders/min line vs oven capacity 6/min, excess shaded
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('6:04pm Rush: 12 Orders a Minute vs 6 the Ovens Can Bake', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxX = 10, maxY = 14;
+    function xOf(m) { return ox + m / maxX * pw; }
+    function yOf(v) { return baseY - v / maxY * ph; }
+
+    var grids = [4, 8, 12];
+    for (var i = 0; i < 3; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var tickMins = [0, 2, 4, 6, 8, 10];
+    var tickLabs = ['6:00', '6:02', '6:04', '6:06', '6:08', '6:10'];
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tickLabs[i], xOf(tickMins[i]), baseY + 18);
+    }
+
+    var mins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var orders = [3, 4, 5, 9, 12, 8, 5, 4, 3, 3, 2];
+
+    // excess shading: orders above capacity 6 (crossings at m=2.25 and m=5.667)
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(2.25), yOf(6));
+    ctx.lineTo(xOf(3), yOf(9));
+    ctx.lineTo(xOf(4), yOf(12));
+    ctx.lineTo(xOf(5), yOf(8));
+    ctx.lineTo(xOf(5 + 2 / 3), yOf(6));
+    ctx.closePath(); ctx.fill();
+
+    // capacity line at 6/min
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(6)); ctx.lineTo(ox + pw, yOf(6)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('oven capacity: 6/min', ox + pw - 4, yOf(6) - 8);
+
+    // orders line with dots
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(orders[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < mins.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(mins[i]), yOf(orders[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the shaded orders must hear a graceful no', xOf(4), 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order counts illustrative', w - 14, 292);
+});
+
+// c2: token bucket step line after a burst of 6, rejections from second 5
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Token Bucket: Burst of 6 at t=0, Then 2 Orders/sec vs 1 Token/sec', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxX = 12, maxY = 10;
+    function xOf(sec) { return ox + sec / maxX * pw; }
+    function yOf(v) { return baseY - v / maxY * ph; }
+
+    var grids = [2, 4, 6, 8];
+    for (var i = 0; i < 4; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var t = 0; t <= 12; t += 2) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(t), xOf(t), baseY + 18);
+    }
+
+    // capacity line at 10 tokens
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(10)); ctx.lineTo(ox + pw, yOf(10)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('capacity 10', ox + 6, yOf(10) - 6);
+
+    var secs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    var tokens = [4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+    // step line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xOf(secs[0]), yOf(tokens[0]));
+    for (var i = 1; i < secs.length; i++) {
+        ctx.lineTo(xOf(secs[i]), yOf(tokens[i - 1]));
+        ctx.lineTo(xOf(secs[i]), yOf(tokens[i]));
+    }
+    ctx.stroke();
+    for (var i = 0; i < secs.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(secs[i]), yOf(tokens[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('10 → 4 after the burst', xOf(0) + 10, yOf(4) - 10);
+
+    // rejection marks from second 5 on
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    var rejSecs = [5, 6, 7, 8, 9, 10, 11, 12];
+    for (var i = 0; i < rejSecs.length; i++) {
+        ctx.fillText('✗', xOf(rejSecs[i]), baseY - 6);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1 order rejected each second', xOf(8.5), baseY - 26);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('refill rate = the sustained pace: 60 orders/min', xOf(8), 95);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts exact for the stated rules; the scenario is illustrative', w - 14, 292);
+});
+
+// c3: completed vs incoming load — collapse without a limiter, plateau with one
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Ramping Load: Collapse Without a Limiter, Plateau With One', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxY = 300;
+    function xOf(load) { return ox + (load - 50) / 250 * pw; }
+    function yOf(v) { return baseY - v / maxY * ph; }
+
+    var grids = [75, 150, 225];
+    for (var i = 0; i < 3; i++) {
+        var gy = yOf(grids[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(grids[i]), ox - 6, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var loads = [50, 100, 150, 200, 250, 300];
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(loads[i]), xOf(loads[i]), baseY + 18);
+    }
+
+    // dashed guide at the 150/s cap
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(150)); ctx.lineTo(ox + pw, yOf(150)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cap 150/s', ox + 6, yOf(150) - 6);
+
+    var noLim = [50, 100, 140, 90, 20, 0];
+    var withLim = [50, 100, 150, 150, 150, 150];
+
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = xOf(loads[i]), y = yOf(noLim[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = xOf(loads[i]), y = yOf(withLim[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no limiter', xOf(250), yOf(20) + 20);
+    ctx.fillStyle = P.green;
+    ctx.fillText('with limiter', xOf(250), yOf(150) - 10);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('at 300/s incoming: 0 vs 150 completed', xOf(300), 80);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput curves illustrative', w - 14, 292);
+});
+
+// c4: fixed-window boundary burst vs token-bucket burst bound
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Same '60/min' Label, Very Different Bursts at the 1:00 Boundary", w / 2, 24);
+
+    var xs = [150, 260, 370, 480, 590];
+    var secLabs = ['0:58', '0:59', '1:00', '1:01', '1:02'];
+    var scale = 1.2; // px per accepted request
+
+    // window-reset dashed vertical line at the 1:00 position
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(370, 42); ctx.lineTo(370, 262); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('window resets', 370, 40);
+
+    // row 1: fixed window
+    var base1 = 130;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(110, base1); ctx.lineTo(640, base1); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fixed window', 20, base1 - 4);
+    var fixedCounts = [0, 60, 60, 0, 0];
+    for (var i = 0; i < 5; i++) {
+        var bh = fixedCounts[i] * scale;
+        if (bh > 0) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(xs[i] - 18, base1 - bh, 36, bh);
+        }
+        ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(fixedCounts[i]), xs[i], base1 - bh - 4);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('120 in 2 seconds — allowed', 240, base1 - 60 * scale - 20);
+
+    // row 2: token bucket
+    var base2 = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(110, base2); ctx.lineTo(640, base2); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('token bucket (10, 1/sec)', 20, base2 - 4);
+    var bucketCounts = [0, 10, 1, 1, 1];
+    for (var i = 0; i < 5; i++) {
+        var bh = bucketCounts[i] * scale;
+        if (bh > 0) {
+            ctx.fillStyle = P.green;
+            ctx.fillRect(xs[i] - 18, base2 - bh, 36, bh);
+        }
+        ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(bucketCounts[i]), xs[i], base2 - bh - 4);
+    }
+    // second labels below row 2
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(secLabs[i], xs[i], base2 + 18);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('burst bound = bucket capacity: 10', 700, 200);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('worst-case client behavior, counts exact for the stated rules', w - 14, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The JavaScript Event Loop</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The JavaScript Event Loop</h1>
+<p class="subtitle">JavaScript runs on one thread and never stands around waiting — slow work runs in the background, and finished results line up in queues until the thread is free</p>
+
+<div class="card-section">
+    <h2>One Barista, No Waiting Around</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">one thread</span><span class="tag orange">background work</span></div>
+                <ul>
+                    <li><b>The barista</b> — one barista is the only worker: one thread, one thing happening at a time</li>
+                    <li><b>The machine</b> — the espresso machine brews on its own, like a setTimeout or fetch in the background</li>
+                    <li><b>No waiting</b> — she starts a 25-second brew, then rings up the next customers instead of watching it</li>
+                    <li><b>The ding</b> — when the machine dings at 35s, "serve drink 1" joins the back of her to-do queue</li>
+                    <li><b>The loop</b> — finish the current job, take the next item off the queue, repeat: that is the event loop</li>
+                </ul>
+                <p class="example">In 40 seconds she rings up orders 1, 2 and 3 while drink 1 brews from 10s to 35s — the 25-second brew never once makes her stand idle.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The event loop is one thread working a queue: slow jobs run elsewhere, and only their finished callbacks come back as new items in the queue.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Four Logs, One Surprising Order</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">task vs microtask</span><span class="tag orange">ordering</span></div>
+                <ul>
+                    <li><b>The code</b> — four lines: log "A"; setTimeout(log "B", 0); a promise .then(log "C"); log "D"</li>
+                    <li><b>The stack</b> — the script runs top to bottom first without interruption: "A" prints, then "D"</li>
+                    <li><b>Two queues</b> — the timer callback B waits in the task queue; the promise callback C in the microtask queue</li>
+                    <li><b>Drain rule</b> — when the stack empties, ALL microtasks run before the next task: C prints before B</li>
+                    <li><b>Final order</b> — A, D, C, B — and no line of your own code is ever interrupted mid-run</li>
+                </ul>
+                <p class="example">Run the four lines in any browser console and the output is always A, D, C, B — a fixed rule, not a race.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Finish the stack, drain the whole microtask queue, then take one task — that single rule predicts every ordering puzzle in JavaScript.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why a Busy Loop Freezes the Whole Page</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">page freeze</span><span class="tag green">async/await</span></div>
+                <ul>
+                    <li><b>One thread for everything</b> — the same thread runs your code, paints the page, and answers clicks</li>
+                    <li><b>The freeze</b> — a 3-second synchronous loop blocks it all: no paint, no scroll, no click for 3 seconds</li>
+                    <li><b>The math</b> — at 60 frames per second, 3 blocked seconds means 180 skipped paint frames</li>
+                    <li><b>async/await</b> — await pauses one function and frees the thread; it is promise queues in nicer clothes</li>
+                    <li><b>Node.js</b> — servers run the same loop: one thread juggles thousands of requests between I/O waits</li>
+                </ul>
+                <p class="example">Five clicks that arrive during the 3-second loop all fire in one burst at the end — to the user the page simply looks broken.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Never block the one thread: keep synchronous work short and hand all waiting — network, timers, disk — to the background.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>setTimeout(0) Does Not Mean Now</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">setTimeout(0)</span><span class="tag blue">microtask priority</span></div>
+                <ul>
+                    <li><b>The trap</b> — setTimeout(fn, 0) does not run fn now; it queues fn behind everything already pending</li>
+                    <li><b>Behind sync code</b> — a timer cannot fire while the stack is busy: 40ms of remaining code is 40ms of delay</li>
+                    <li><b>Behind microtasks</b> — every waiting promise callback also runs first; microtasks always cut the line</li>
+                    <li><b>Hand-check</b> — 40ms of sync code plus 3 microtasks at 1ms each turns "0ms" into a 43ms wait</li>
+                    <li><b>Starvation</b> — a microtask that queues another microtask can starve tasks and rendering forever</li>
+                </ul>
+                <p class="example">A "0ms" timer queued at the top of a script that still has 40ms of sync code and 3 one-millisecond promise callbacks ahead of it fires 43ms later.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading setTimeout(0) as "immediately". It means "at the earliest opportunity" — after the current stack finishes and after every waiting microtask has run.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: barista Gantt timeline
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Thread, 40 Seconds: the Barista Never Waits on the Machine', w / 2, 24);
+
+    var x0 = 140, plotW = 540, baseY = 245;
+    function xOf(sec) { return x0 + sec / 40 * plotW; }
+
+    // baseline + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    var ticks = [0, 10, 20, 30, 40];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        var tx = xOf(ticks[i]);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillText(ticks[i] + 's', tx, baseY + 20);
+    }
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('barista (one thread)', 20, 119);
+    ctx.fillText('espresso machine', 20, 191);
+    ctx.fillText('(background)', 20, 206);
+
+    var barH = 30;
+    function bar(sec0, sec1, cy, fill, stroke, label, labelColor) {
+        var bx = xOf(sec0), bw = xOf(sec1) - xOf(sec0);
+        ctx.fillStyle = fill;
+        ctx.fillRect(bx, cy - barH / 2, bw, barH);
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, cy - barH / 2, bw, barH);
+        ctx.fillStyle = labelColor; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, bx + bw / 2, cy + 4);
+    }
+
+    // barista lane (y=115)
+    bar(0, 10, 115, 'rgba(42,120,214,0.30)', P.blue, 'take order 1', '#2c3e50');
+    bar(10, 20, 115, 'rgba(42,120,214,0.30)', P.blue, 'take order 2', '#2c3e50');
+    bar(20, 30, 115, 'rgba(42,120,214,0.30)', P.blue, 'take order 3', '#2c3e50');
+    bar(35, 40, 115, 'rgba(0,131,0,0.20)', P.green, 'serve drink 1', '#2c3e50');
+
+    // machine lane (y=195)
+    bar(10, 35, 195, 'rgba(25,158,112,0.20)', P.aqua, 'brew drink 1 (25s)', '#2c3e50');
+
+    // ding marker at 35s
+    var dx = xOf(35);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(dx, 70); ctx.lineTo(dx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ding → callback queued', dx, 52);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3 orders taken while one drink brews — the thread never blocks', 145, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('seconds illustrative', w - 14, h - 10);
+});
+
+// c2: three-queue diagram + output strip
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('log A · setTimeout(B, 0) · promise.then(C) · log D — Who Prints When?', w / 2, 24);
+
+    var boxes = [
+        { x: 55, title: 'call stack' },
+        { x: 280, title: 'microtask queue' },
+        { x: 505, title: 'task queue' }
+    ];
+    var boxTop = 80, boxBot = 195, boxW = 170;
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.title, b.x + boxW / 2, boxTop - 10);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        roundRect(ctx, b.x, boxTop, boxW, boxBot - boxTop, 8);
+        ctx.stroke();
+    }
+
+    function chip(x, y, wd, fill, text) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, wd, 28, 8);
+        ctx.fill();
+        ctx.fillStyle = '#2c3e50'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + wd / 2, y + 18);
+    }
+    chip(65, 105, 150, 'rgba(42,120,214,0.15)', 'log A — runs 1st');
+    chip(65, 150, 150, 'rgba(42,120,214,0.15)', 'log D — runs 2nd');
+    chip(290, 125, 150, 'rgba(0,131,0,0.12)', 'then → log C — 3rd');
+    chip(515, 125, 150, 'rgba(217,89,38,0.12)', 'timer → log B — 4th');
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('stack first, then ALL microtasks, then one task', w / 2, 225);
+
+    // output strip
+    var oy = 250;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('console output:', 55, oy + 4);
+    var letters = [
+        { t: 'A', c: P.blue },
+        { t: 'D', c: P.blue },
+        { t: 'C', c: P.green },
+        { t: 'B', c: P.orange }
+    ];
+    var cx = 185;
+    for (var i = 0; i < letters.length; i++) {
+        ctx.fillStyle = letters[i].c; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(letters[i].t, cx, oy + 4);
+        if (i < letters.length - 1) {
+            ctx.fillStyle = P.mute; ctx.font = '14px system-ui';
+            ctx.fillText('→', cx + 25, oy + 4);
+        }
+        cx += 50;
+    }
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same order every run — deterministic', w - 14, h - 10);
+});
+
+// c3: blocking vs chunked click handling
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('5 Clicks During 3 Seconds of Work: Blocking vs Chunked', w / 2, 24);
+
+    var x0 = 150, plotW = 530, baseY = 245;
+    function xOf(sec) { return x0 + sec / 3.5 * plotW; }
+
+    // baseline + ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x0 + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 3.5; t += 0.5) {
+        var tx = xOf(t);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx, baseY); ctx.lineTo(tx, baseY + 5); ctx.stroke();
+        ctx.fillText(t + 's', tx, baseY + 20);
+    }
+
+    // lane labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one 3s blocking loop', 20, 114);
+    ctx.fillText('chunked, 50ms slices', 20, 194);
+
+    var barH = 26;
+    var clicks = [0.5, 1.0, 1.5, 2.0, 2.5];
+
+    function clickArrow(sec, laneY) {
+        var cx = xOf(sec);
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, laneY - 40); ctx.lineTo(cx, laneY - 20); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, laneY - 16);
+        ctx.lineTo(cx - 4, laneY - 24);
+        ctx.lineTo(cx + 4, laneY - 24);
+        ctx.closePath();
+        ctx.fillStyle = P.mute; ctx.fill();
+    }
+
+    // blocking lane (y=110)
+    var y1 = 110;
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(xOf(0), y1 - barH / 2, xOf(3.0) - xOf(0), barH);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+    ctx.strokeRect(xOf(0), y1 - barH / 2, xOf(3.0) - xOf(0), barH);
+    ctx.fillStyle = '#2c3e50'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('loop runs — page frozen', xOf(1.5), y1 + 4);
+    for (var i = 0; i < clicks.length; i++) clickArrow(clicks[i], y1);
+    // handled: 5 red dots clustered at 3.0s
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(xOf(3.0) + i * 7, y1 + 24, 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('all 5 fire at 3.0s', xOf(3.0) - 8, y1 + 28);
+
+    // chunked lane (y=190)
+    var y2 = 190;
+    var slices = [[0, 0.45], [0.55, 0.95], [1.05, 1.45], [1.55, 1.95], [2.05, 2.45], [2.55, 3.1]];
+    for (var i = 0; i < slices.length; i++) {
+        ctx.fillStyle = 'rgba(25,158,112,0.20)';
+        ctx.fillRect(xOf(slices[i][0]), y2 - barH / 2, xOf(slices[i][1]) - xOf(slices[i][0]), barH);
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 1;
+        ctx.strokeRect(xOf(slices[i][0]), y2 - barH / 2, xOf(slices[i][1]) - xOf(slices[i][0]), barH);
+    }
+    for (var i = 0; i < clicks.length; i++) clickArrow(clicks[i], y2);
+    var handled = [0.55, 1.05, 1.55, 2.05, 2.55];
+    for (var i = 0; i < handled.length; i++) {
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(xOf(handled[i]), y2 + 22, 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('each click handled within 50ms', xOf(3.5), y2 + 40);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 blocked seconds = 180 skipped paint frames', 430, 55);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('click times illustrative; slice widths exaggerated; 60fps assumed', w - 14, h - 10);
+});
+
+// c4: actual firing time of a 0ms timer
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('When Does a 0ms Timer Actually Fire?', w / 2, 24);
+
+    var baseX = 250, maxW = 420, maxMs = 50, barH = 18;
+    function wOf(ms) { return ms / maxMs * maxW; }
+
+    // gridlines at 10/20/30/40 ms
+    var gridMs = [10, 20, 30, 40];
+    for (var i = 0; i < gridMs.length; i++) {
+        var gx = baseX + wOf(gridMs[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gx, 55); ctx.lineTo(gx, 240); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gridMs[i] + 'ms', gx, 254);
+    }
+
+    // vertical baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 55); ctx.lineTo(baseX, 240); ctx.stroke();
+
+    var rows = [
+        { label: 'queue empty, stack idle', ms: 1, color: P.blue, y: 90 },
+        { label: '40ms of sync code ahead', ms: 40, color: P.yellow, y: 150 },
+        { label: 'sync code + 3 microtasks (1ms each)', ms: 43, color: P.orange, y: 210 }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + barH / 2 + 4);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(baseX, r.y, Math.max(wOf(r.ms), 4), barH);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.ms + 'ms', baseX + Math.max(wOf(r.ms), 4) + 6, r.y + barH / 2 + 4);
+    }
+
+    // requested 0ms marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(baseX, 68); ctx.lineTo(baseX, 240); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('requested: 0ms', baseX, 50);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("0ms means 'as soon as you're free', never 'right now'", w - 20, 64);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('milliseconds illustrative', w - 14, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

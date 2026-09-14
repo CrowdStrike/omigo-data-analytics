@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Routing &amp; BGP</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Routing &amp; BGP</h1>
+<p class="subtitle">The internet has no central map — each network just tells its neighbors what it can reach, and packets find their way one hop at a time</p>
+
+<div class="card-section">
+    <h2>A Photo's Trip Across Three Networks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">autonomous systems</span><span class="tag orange">no central map</span></div>
+                <ul>
+                    <li><b>The upload</b> — a laptop in Denver sends a photo to a hosting server across the internet</li>
+                    <li><b>The neighborhoods</b> — the internet is 70,000+ independent networks called autonomous systems (ASes)</li>
+                    <li><b>No boss</b> — no single authority knows the whole map; each AS only talks to its direct neighbors</li>
+                    <li><b>The gossip</b> — via BGP, each AS announces "I can reach these addresses" and passes it along</li>
+                    <li><b>Path vector</b> — every announcement carries the list of ASes it crossed, so loops are spotted</li>
+                    <li><b>The trip</b> — the photo crosses home ISP AS 100, then exchange AS 400, then hosting AS 700</li>
+                </ul>
+                <p class="example">The photo never sees a master map — AS 100 heard from AS 400, which heard from AS 700, that the server's addresses live there.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> BGP (Border Gateway Protocol) is how independent networks share reachability: each announcement lists the AS path it traveled, and packets follow those learned paths hop by hop.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Router's Choice: Longest Prefix Wins</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">longest-prefix match</span></div>
+                <ul>
+                    <li><b>The packet</b> — a packet arrives at AS 100's router addressed to 203.0.113.7</li>
+                    <li><b>Route 1</b> — 203.0.0.0/16 via AS path 200 700: matches the first 16 bits, path is 2 ASes</li>
+                    <li><b>Route 2</b> — 203.0.113.0/24 via AS path 400 500 700: matches 24 bits, path is 3 ASes</li>
+                    <li><b>Route 3</b> — 0.0.0.0/0 (the default route) via AS path 200: matches everything, 0 specific bits</li>
+                    <li><b>The rule</b> — the most specific prefix wins first; the /24 beats the /16 despite its longer AS path</li>
+                    <li><b>Hand-check</b> — 203.0.113.7 starts with 203.0.113, so all 24 bits of route 2's prefix match</li>
+                </ul>
+                <p class="example">The router forwards 203.0.113.7 toward AS 400 on the 3-AS path, because the /24 route matches 24 leading bits versus the /16's 16.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Forwarding uses longest-prefix match — prefix length is compared before anything else; AS-path length only breaks ties between routes to the same prefix.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When the Map Changes, Your Metrics Move</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">latency</span><span class="tag orange">data quality</span></div>
+                <ul>
+                    <li><b>Routes shift</b> — BGP announcements are withdrawn and re-announced constantly, all day, worldwide</li>
+                    <li><b>The symptom</b> — a regional latency dashboard spikes with zero code deploys and zero server load</li>
+                    <li><b>The office</b> — median ping from the Denver office to the app server sits near 120 ms for days</li>
+                    <li><b>The reroute</b> — on day 6 the usual path is withdrawn and traffic detours over a longer AS path</li>
+                    <li><b>The jump</b> — median latency rises from 120 ms to about 190 ms for three days, then recovers</li>
+                    <li><b>The lesson</b> — geo-latency anomalies in your data are often the network's map changing, not your app</li>
+                </ul>
+                <p class="example">Days 6–8 read 191, 188, and 190 ms instead of the usual ~120 ms — the "regression" was a route change, and it fixed itself on day 9.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Anyone who monitors latency, availability, or regional user metrics inherits BGP's churn — rule out a route change before blaming the application.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>BGP Believes Whatever It's Told</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">trust</span><span class="tag blue">route hijack</span></div>
+                <ul>
+                    <li><b>The assumption</b> — people assume announced routes are verified and that BGP picks the fastest path</li>
+                    <li><b>The truth</b> — classic BGP has no built-in proof of ownership; routers accept announcements on trust</li>
+                    <li><b>Not fastest</b> — route choice follows prefix length and policy, never a live latency measurement</li>
+                    <li><b>The hijack</b> — a rogue AS announces someone else's addresses, often as a more specific prefix</li>
+                    <li><b>Why it works</b> — a bogus /25 beats the owner's /24 by longest-prefix match, where filters allow it</li>
+                    <li><b>The patch</b> — RPKI lets networks cryptographically validate origins, but adoption is still partial</li>
+                </ul>
+                <p class="example">The owner announces 203.0.113.0/24; a rogue AS announces 203.0.113.0/25, and networks that accept such small prefixes silently follow the more specific lie.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating a BGP route as verified or optimal. It is neither — it is the most specific announcement anyone claimed, and hijacks exploit exactly that trust.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBox(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x, y + r, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: AS-by-AS node diagram with announced path highlighted
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('No Central Map: the Photo Follows Announcements, AS by AS', w / 2, 24);
+
+    var nodes = {
+        laptop: { cx: 90,  cy: 160, fill: 'rgba(107,114,128,0.12)', lines: ['laptop', '(Denver)'] },
+        as100:  { cx: 240, cy: 160, fill: 'rgba(42,120,214,0.15)',  lines: ['AS 100', 'home ISP'] },
+        as400:  { cx: 400, cy: 95,  fill: 'rgba(42,120,214,0.15)',  lines: ['AS 400', 'exchange'] },
+        as200:  { cx: 400, cy: 225, fill: 'rgba(107,114,128,0.10)', lines: ['AS 200', 'carrier'] },
+        as700:  { cx: 555, cy: 160, fill: 'rgba(0,131,0,0.12)',     lines: ['AS 700', 'hosting'] },
+        server: { cx: 665, cy: 160, fill: 'rgba(0,131,0,0.12)',     lines: ['server'] }
+    };
+    var bw = 110, bh = 44;
+
+    function edge(a, b, color, lw, arrow) {
+        var n1 = nodes[a], n2 = nodes[b];
+        var dx = n2.cx - n1.cx, dy = n2.cy - n1.cy;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        var ux = dx / len, uy = dy / len;
+        // trim to box edges (approximate with half-diagonal offsets)
+        var t1 = Math.min(Math.abs((bw / 2) / (ux || 1e-9)), Math.abs((bh / 2) / (uy || 1e-9)));
+        var x1 = n1.cx + ux * t1, y1 = n1.cy + uy * t1;
+        var x2 = n2.cx - ux * t1, y2 = n2.cy - uy * t1;
+        if (arrow) {
+            arrowLine(ctx, x1, y1, x2, y2, color, lw);
+        } else {
+            ctx.strokeStyle = color; ctx.lineWidth = lw;
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        }
+    }
+
+    // unused edges first (under)
+    edge('as100', 'as200', P.grid, 2, false);
+    edge('as200', 'as700', P.grid, 2, false);
+    // chosen path edges
+    edge('laptop', 'as100', P.blue, 3, true);
+    edge('as100', 'as400', P.blue, 3, true);
+    edge('as400', 'as700', P.blue, 3, true);
+    edge('as700', 'server', P.blue, 3, true);
+
+    // announcement arrows (dashed aqua, back direction above the path edges)
+    arrowLine(ctx, 505, 118, 452, 96, P.aqua, 1.5, [4, 3]);
+    arrowLine(ctx, 352, 96, 298, 130, P.aqua, 1.5, [4, 3]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('announce: 203.0.113.0/24', 485, 88);
+    ctx.fillText('announce: 203.0.113.0/24', 300, 118);
+
+    // nodes on top
+    for (var k in nodes) {
+        var n = nodes[k];
+        roundBox(ctx, n.cx - bw / 2, n.cy - bh / 2, bw, bh, 8);
+        ctx.fillStyle = n.fill; ctx.fill();
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < n.lines.length; i++) {
+            ctx.fillText(n.lines[i], n.cx, n.cy + 4 + (i - (n.lines.length - 1) / 2) * 14);
+        }
+    }
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each AS only knows what its neighbors announced', w / 2, 52);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('AS numbers and topology illustrative', w - 12, 292);
+});
+
+// c2: routing table — three candidate routes, longest prefix wins
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Destination 203.0.113.7: Three Routes Match, the /24 Wins', w / 2, 24);
+
+    // destination box
+    roundBox(ctx, 360 - 120, 65 - 17, 240, 34, 8);
+    ctx.fillStyle = 'rgba(26,82,118,0.10)'; ctx.fill();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('packet to 203.0.113.7', 360, 70);
+
+    // winner highlight band behind row 2 (y=175)
+    roundBox(ctx, 50, 175 - 22, 640, 36, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+
+    var rows = [
+        { y: 125, prefix: '203.0.0.0/16',   path: 'path: 200 700',     bits: '16 bits match', bitsN: 16, verdict: 'runner-up',   vColor: P.mute,  vBold: false },
+        { y: 175, prefix: '203.0.113.0/24', path: 'path: 400 500 700', bits: '24 bits match', bitsN: 24, verdict: 'WINNER',      vColor: P.green, vBold: true },
+        { y: 225, prefix: '0.0.0.0/0',      path: 'path: 200',         bits: '0 bits match',  bitsN: 0,  verdict: 'last resort', vColor: P.mute,  vBold: false }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.prefix, 70, r.y - 4);
+        ctx.fillText(r.path, 300, r.y - 4);
+        ctx.fillText(r.bits, 470, r.y - 4);
+        ctx.fillStyle = r.vColor;
+        ctx.font = (r.vBold ? 'bold ' : '') + '12px system-ui';
+        ctx.fillText(r.verdict, 590, r.y - 4);
+        // match bar under the "bits match" label
+        var bwid = r.bitsN * 5;
+        if (bwid > 0) {
+            ctx.fillStyle = P.blue;
+            ctx.fillRect(470, r.y + 2, bwid, 8);
+        } else {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.strokeRect(470, r.y + 2, 40, 8);
+        }
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('24 matched bits beat a shorter AS path — specificity first, path length second', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('prefixes from documentation ranges; paths illustrative', w - 12, 292);
+});
+
+// c3: daily median latency with a three-day detour plateau
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Median Ping, Denver Office → App Server: a Route Change, Not a Bug', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    var days = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var lat = [118, 121, 119, 122, 120, 191, 188, 190, 124, 122];
+    function xOf(d) { return ox + (d - 1) / 9 * pw; }
+    function yOf(ms) { return baseY - ms / 250 * ph; }
+
+    // gridlines at 50/100/150/200 ms
+    var gl = [50, 100, 150, 200];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(gl[i])); ctx.lineTo(ox + pw, yOf(gl[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i], ox - 8, yOf(gl[i]) + 4);
+    }
+    // axes and day ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var i = 0; i < days.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('d' + days[i], xOf(days[i]), baseY + 16);
+    }
+
+    // detour band from day 5.5 to 8.5
+    ctx.fillStyle = 'rgba(217,89,38,0.10)';
+    ctx.fillRect(xOf(5.5), baseY - ph, xOf(8.5) - xOf(5.5), ph);
+    ctx.strokeStyle = P.orange; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(5.5), baseY - ph); ctx.lineTo(xOf(5.5), baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(8.5), baseY - ph); ctx.lineTo(xOf(8.5), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('detour path (5 ASes)', xOf(7), baseY - ph + 14);
+
+    // latency line + dots
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < days.length; i++) {
+        i === 0 ? ctx.moveTo(xOf(days[i]), yOf(lat[i])) : ctx.lineTo(xOf(days[i]), yOf(lat[i]));
+    }
+    ctx.stroke();
+    for (var i = 0; i < days.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(days[i]), yOf(lat[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // baseline label
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('usual path (3 ASes)', xOf(2.5), yOf(120) - 12);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+70 ms with no deploy — the map changed', xOf(7), 75);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 12, 296);
+});
+
+// c4: normal announcement vs more-specific route hijack
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The More Specific Lie Wins: Anatomy of a Route Hijack', w / 2, 24);
+
+    function box(x, cy, bw, fill, stroke, lines) {
+        var bh = 44;
+        roundBox(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], x + bw / 2, cy + 4 + (i - (lines.length - 1) / 2) * 13);
+        }
+    }
+
+    function arrowLocal(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 8, y2 - 5);
+        ctx.lineTo(x2 - 8, y2 + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // row 1: normal
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('normal', 20, 104);
+    box(150, 100, 190, 'rgba(0,131,0,0.12)', P.green, ['owner announces', '203.0.113.0/24']);
+    box(420, 100, 160, 'rgba(42,120,214,0.15)', P.blue, ['routers install /24']);
+    arrowLocal(340, 100, 418, 100, P.green);
+    arrowLocal(580, 100, 596, 100, P.mute);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ traffic', 600, 96);
+    ctx.fillText('reaches owner', 600, 110);
+
+    // row 2: hijack
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hijack', 20, 214);
+    box(150, 210, 190, 'rgba(231,76,60,0.12)', '#e74c3c', ['rogue AS announces', '203.0.113.0/25']);
+    box(420, 210, 160, 'rgba(42,120,214,0.15)', P.blue, ['/25 beats /24 —', 'longest prefix']);
+    arrowLocal(340, 210, 418, 210, '#e74c3c');
+    arrowLocal(580, 210, 596, 210, P.mute);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ traffic', 600, 206);
+    ctx.fillText('diverted', 600, 220);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no ownership check — the routers did exactly what BGP told them to', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('scenario schematic; many networks filter prefixes longer than /24', w - 12, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

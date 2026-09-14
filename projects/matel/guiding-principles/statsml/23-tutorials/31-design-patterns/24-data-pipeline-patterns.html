@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Pipeline Patterns</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Data Pipeline Patterns</h1>
+<p class="subtitle">A pipeline is the nightly route from cash register to report &mdash; the patterns decide where to clean (ETL vs ELT), how to layer the data (bronze/silver/gold), and how to rerun a job without doubling the numbers</p>
+
+<div class="card-section">
+    <h2>Three Registers, One Warehouse: ETL vs ELT</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">ETL vs ELT</span><span class="tag orange">warehouse</span></div>
+                <ul>
+                    <li><b>The chain</b> &mdash; Beanline runs 3 coffee shops; every night each register uploads its day of receipts</li>
+                    <li><b>Monday's haul</b> &mdash; shop A sends 412 rows, shop B 305, shop C 283: 1,000 raw receipt rows in total</li>
+                    <li><b>ETL</b> &mdash; clean the rows first (drop the double-scans), then load only the 962 good ones</li>
+                    <li><b>ELT</b> &mdash; load all 1,000 raw rows first, then clean them with queries inside the warehouse</li>
+                    <li><b>The trade</b> &mdash; ETL stores less; ELT keeps the raw originals so you can re-clean them later</li>
+                </ul>
+                <p class="example">On Monday the ELT route lands all 1,000 raw rows at 11pm; a query inside the warehouse at 11:10pm produces the 962 clean ones.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A data pipeline is just the nightly route from registers to report; ETL transforms before loading, ELT loads raw and transforms inside the warehouse &mdash; the pattern names say where the cleaning happens.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Bronze, Silver, Gold: Monday's 1,000 Receipts</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">medallion</span><span class="tag orange">bronze/silver/gold</span></div>
+                <ul>
+                    <li><b>Bronze</b> &mdash; the raw landing zone: all 1,000 Monday rows exactly as the registers sent them</li>
+                    <li><b>Silver</b> &mdash; cleaned and deduplicated: shop A 412&rarr;397, B 305&rarr;294, C 283&rarr;271</li>
+                    <li><b>Hand-check</b> &mdash; 15 + 11 + 12 = 38 double-scans out; 1,000 &minus; 38 = 962 clean rows land</li>
+                    <li><b>Gold</b> &mdash; business-ready summary: exactly 3 rows, one per shop, with order count and revenue</li>
+                    <li><b>The rule</b> &mdash; each layer is built only from the layer before it; nothing writes straight to gold</li>
+                </ul>
+                <p class="example">Gold's Monday table reads: shop A 397 orders / $1,867, shop B 294 / $1,378, shop C 271 / $1,267.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The medallion pattern is progressive refinement &mdash; bronze keeps raw data forever, silver holds one clean version, and gold holds the small tables the dashboards actually read.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When the Cleaning Rule Changes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">replay</span></div>
+                <ul>
+                    <li><b>The change</b> &mdash; on Wednesday the ops lead asks that voided orders be dropped from counts too</li>
+                    <li><b>Before the fix</b> &mdash; silver only dropped double-scans, so Monday's clean count stood at 962</li>
+                    <li><b>No re-asking</b> &mdash; bronze still holds every raw row, so nobody phones the shops for old files</li>
+                    <li><b>The replay</b> &mdash; one job rebuilds silver and gold for the whole week straight from stored bronze</li>
+                    <li><b>Monday redone</b> &mdash; 962 counted orders becomes 940 once Monday's 22 voids drop out</li>
+                    <li><b>Where you meet it</b> &mdash; every "restate last quarter's metric" request is exactly this replay</li>
+                </ul>
+                <p class="example">The full-week rebuild is one pass over 7 bronze files; each gold day shifts down by its void count, e.g. Saturday 1,210 &rarr; 1,183.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Keeping raw bronze turns a rule change from a data-collection crisis into a cheap recompute &mdash; this is the main reason ELT and the medallion layers travel together.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Run the Job Twice, Get the Numbers Once</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">idempotent</span><span class="tag green">backfill</span></div>
+                <ul>
+                    <li><b>The failure</b> &mdash; Monday's load dies halfway at 3am; the on-call engineer reruns the job at 7am</li>
+                    <li><b>The naive job</b> &mdash; an append-only INSERT adds Monday's 940 rows again: gold now shows 1,880</li>
+                    <li><b>Run three times</b> &mdash; 940, 1,880, 2,820: every rerun inflates Monday by another full copy</li>
+                    <li><b>Idempotent</b> &mdash; the job deletes Monday's partition first, then rewrites it: 940 on every rerun</li>
+                    <li><b>The test</b> &mdash; run any job twice on the same day; if the numbers move, it is not idempotent</li>
+                </ul>
+                <p class="example">After the 3am failure the idempotent job is rerun twice more; Monday's gold row reads 940 orders all three times.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Writing backfill jobs as pure appends. A safe job overwrites its date partition (or merges on a key), so "just run it again" is always harmless &mdash; reruns and backfills stop being scary.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, dx, dy, size) {
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ux * size - uy * size * 0.5, y - uy * size + ux * size * 0.5);
+    ctx.lineTo(x - ux * size + uy * size * 0.5, y - uy * size - ux * size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: ETL route vs ELT route flow diagram
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 1,000 Rows, Two Routes: ETL Cleans First, ELT Loads First', w / 2, 24);
+
+    function box(x, y, lab1, lab2, col, fill) {
+        var bw = 160, bh = 44;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lab2) {
+            ctx.fillText(lab1, x + bw / 2, y - 3);
+            ctx.fillText(lab2, x + bw / 2, y + 13);
+        } else {
+            ctx.fillText(lab1, x + bw / 2, y + 4);
+        }
+    }
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        arrowHead(ctx, x2, y, 1, 0, 8);
+    }
+
+    var blueFill = 'rgba(42,120,214,0.15)', greenFill = 'rgba(0,131,0,0.12)', violetFill = 'rgba(74,58,167,0.12)';
+
+    // row 1: ETL
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ETL', 20, y1 + 4);
+    box(90, y1, 'Extract', '1,000 rows', P.blue, blueFill);
+    arrow(250, 300, y1);
+    box(300, y1, 'Transform', '962 clean', P.green, greenFill);
+    arrow(460, 520, y1);
+    box(520, y1, 'Load', '962 stored', P.blue, blueFill);
+
+    // row 2: ELT
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ELT', 20, y2 + 4);
+    box(90, y2, 'Extract', '1,000 rows', P.blue, blueFill);
+    arrow(250, 300, y2);
+    box(300, y2, 'Load', '1,000 raw stored', P.violet, violetFill);
+    arrow(460, 520, y2);
+    box(520, y2, 'Transform inside', '962', P.green, greenFill);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ELT keeps the raw 1,000 on hand — re-cleaning later is a query, not a crisis', w / 2, 272);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("row counts from Monday's example, illustrative", w - 12, h - 8);
+});
+
+// c2: medallion funnel bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Medallion Funnel: 1,000 Bronze → 962 Silver → 3 Gold Rows', w / 2, 24);
+
+    var bx = 230, maxW = 460, bh = 22;
+
+    function bar(y, bw, col, fill, solid, endLab, sideLab, rowLab1) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rowLab1, 20, y + 15);
+        ctx.fillStyle = solid ? col : fill;
+        roundRect(ctx, bx, y, bw, bh, 3);
+        ctx.fill();
+        if (!solid) {
+            ctx.strokeStyle = col; ctx.lineWidth = 2;
+            roundRect(ctx, bx, y, bw, bh, 3);
+            ctx.stroke();
+        }
+        ctx.fillStyle = col; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(endLab, bx + bw + 10, y + 15);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(sideLab, bx, y + bh + 16);
+    }
+
+    bar(75, 460, P.orange, 'rgba(217,89,38,0.30)', false, '1,000 rows', 'kept forever, never edited', 'bronze — raw as sent');
+    bar(145, 442, P.blue, 'rgba(42,120,214,0.30)', false, '962 rows', '412→397, 305→294, 283→271', 'silver — dupes out');
+    bar(215, 10, P.yellow, null, true, '3 rows', 'orders + revenue per shop', 'gold — one row per shop');
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('each layer is built only from the one above it', w - 30, 260);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("Monday's counts; revenue figures illustrative", w - 12, h - 8);
+});
+
+// c3: before/after grouped bars across the week
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One New Rule, Whole Week Rebuilt from Bronze', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    var yMin = 850, yMax = 1250;
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * chH; }
+
+    var gl = [900, 1000, 1100, 1200];
+    for (var i = 0; i < 4; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gl[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    var before = [962, 918, 1004, 955, 990, 1210, 1185];
+    var after = [940, 897, 981, 930, 968, 1183, 1158];
+    var bw = 30, gap = 6;
+    var groupW = pw / 7;
+
+    for (var i = 0; i < 7; i++) {
+        var cx = ox + groupW * i + groupW / 2;
+        var bx1 = cx - bw - gap / 2, bx2 = cx + gap / 2;
+        var yB = yOf(before[i]), yA = yOf(after[i]);
+        ctx.fillStyle = 'rgba(217,89,38,0.65)';
+        ctx.fillRect(bx1, yB, bw, baseY - yB);
+        ctx.fillStyle = 'rgba(0,131,0,0.65)';
+        ctx.fillRect(bx2, yA, bw, baseY - yA);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(days[i], cx, baseY + 16);
+    }
+
+    // legend
+    ctx.fillStyle = P.orange; ctx.fillRect(ox + 10, 44, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('before fix (voids counted)', ox + 28, 54);
+    ctx.fillStyle = P.green; ctx.fillRect(ox + 200, 44, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('after replay', ox + 218, 54);
+
+    // annotation above Saturday pair
+    var satX = ox + groupW * 5 + groupW / 2;
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Sat: 1,210 → 1,183 — 27 voids out', satX - 40, yOf(1210) - 14);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('y-axis starts at 850 to make the shift visible; counts illustrative', w - 12, h - 8);
+});
+
+// c4: append vs idempotent reruns
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Rerun the Backfill: Append Multiplies, Idempotent Doesn't", w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    function yOf(v) { return baseY - v / 3000 * chH; }
+
+    var gl = [940, 1880, 2820];
+    var glabs = ['940', '1,880', '2,820'];
+    for (var i = 0; i < 3; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var runs = ['run 1', 'run 2', 'run 3'];
+    var app = [940, 1880, 2820];
+    var appLabs = ['940', '1,880', '2,820'];
+    var idem = [940, 940, 940];
+    var bw = 55, gap = 6;
+    var groupW = pw / 3;
+
+    for (var i = 0; i < 3; i++) {
+        var cx = ox + groupW * i + groupW / 2;
+        var bx1 = cx - bw - gap / 2, bx2 = cx + gap / 2;
+        var yA = yOf(app[i]), yI = yOf(idem[i]);
+        ctx.fillStyle = 'rgba(213,81,129,0.65)';
+        ctx.fillRect(bx1, yA, bw, baseY - yA);
+        ctx.fillStyle = 'rgba(0,131,0,0.65)';
+        ctx.fillRect(bx2, yI, bw, baseY - yI);
+        ctx.fillStyle = P.magenta; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(appLabs[i], bx1 + bw / 2, yA - 8);
+        ctx.fillStyle = P.green;
+        ctx.fillText('940', bx2 + bw / 2, yI - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(runs[i], cx, baseY + 16);
+    }
+
+    // legend
+    ctx.fillStyle = P.magenta; ctx.fillRect(ox + 10, 44, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('append-only job', ox + 28, 54);
+    ctx.fillStyle = P.green; ctx.fillRect(ox + 150, 44, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('overwrite-partition job', ox + 168, 54);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('three runs, triple-counted Monday', ox + groupW * 2 + groupW / 2 - bw - 14, 70);
+    var run3GreenX = ox + groupW * 2 + groupW / 2 + gap / 2 + bw / 2;
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('940 every time', run3GreenX + 20, yOf(940) - 24);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("append growth schematic; 940 is Monday's true count", w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

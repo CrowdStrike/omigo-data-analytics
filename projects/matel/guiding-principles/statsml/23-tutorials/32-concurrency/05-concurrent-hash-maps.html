@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concurrent Hash Maps</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Concurrent Hash Maps</h1>
+<p class="subtitle">Many threads updating one shared map either corrupt it or queue behind one big lock — concurrent hash maps split the lock per bucket so writers only wait when they truly collide</p>
+
+<div class="card-section">
+    <h2>Four Clerks, One Warehouse</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">shared state</span><span class="tag orange">lock striping</span></div>
+                <ul>
+                    <li><b>The warehouse</b> — 16 numbered aisles hold stock counts; the aisle for an item is picked by hashing its name</li>
+                    <li><b>The clerks</b> — 4 clerks update counts at the same time: that is 4 threads writing one shared hash map</li>
+                    <li><b>No lock</b> — two clerks adjusting the same count simultaneously lose one of the updates silently</li>
+                    <li><b>One big padlock</b> — locking the whole warehouse per update is safe, but clerks queue single-file</li>
+                    <li><b>The insight</b> — clerks in DIFFERENT aisles never interfere, so why lock the whole building?</li>
+                    <li><b>Striped locks</b> — one padlock per aisle: safe where it matters, parallel everywhere else</li>
+                </ul>
+                <p class="example">Clerk 1 restocks coffee in aisle 12 while clerk 3 counts sugar in aisle 2 — with per-aisle padlocks neither waits; with one big padlock one always does.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A concurrent hash map keeps the safety of locking but shrinks each lock's territory to one bucket — threads only wait when they hash to the same place.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Four Updates in One Time Slot (Usually)</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hand-checkable</span></div>
+                <ul>
+                    <li><b>The updates</b> — clerks 1&ndash;4 want aisles 12, 2, 7, and 7: two of them hash to the same aisle</li>
+                    <li><b>Big padlock</b> — one clerk at a time: the 4 updates take 4 time slots, always, collisions or not</li>
+                    <li><b>Striped locks</b> — clerks 1, 2, 3 work at once in slot 1; clerk 4 waits only for aisle 7 to free</li>
+                    <li><b>The count</b> — striped finishes in 2 slots (and in 1 whenever all four aisles differ)</li>
+                    <li><b>Scale it</b> — with 16 aisles and 4 clerks, most rounds have no collision at all; waits are the exception</li>
+                    <li><b>The rule</b> — waiting time tracks actual collisions, not the total number of clerks</li>
+                </ul>
+                <p class="example">Count it by hand: slots (big padlock) = 4, one per clerk; slots (striped) = 2, because only aisle 7 was wanted twice.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> With one lock the wait grows with every added thread; with striped locks it grows only with hash collisions — 4 updates, 4 slots versus 2.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counters, Caches, and Cores That Actually Help</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">throughput</span><span class="tag orange">CAS</span></div>
+                <ul>
+                    <li><b>Metrics counters</b> — request counts bumped by every worker thread land in one shared map</li>
+                    <li><b>In-memory caches</b> — many readers and writers share cached rows, sessions, and features</li>
+                    <li><b>The classic</b> — Java's ConcurrentHashMap popularized striping; most languages ship an equivalent</li>
+                    <li><b>Lock-free updates</b> — hot counters go further: compare-and-swap retries instead of locks at all</li>
+                    <li><b>The payoff</b> — throughput rises with added cores instead of flatlining behind one lock</li>
+                    <li><b>The rent</b> — a little memory per stripe and subtler code paths; worth it under real contention</li>
+                </ul>
+                <p class="example">A metrics service on 8 cores kept a global lock and got 1&times; throughput at any core count — striping let it scale to nearly 7&times;.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Whenever many threads hammer one map — counters, caches, feature stores — striped or lock-free designs turn added cores into added throughput.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Thread-Safe Map, Unsafe Recipe</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">check-then-act</span></div>
+                <ul>
+                    <li><b>The trap</b> — "the map is thread-safe, so my code is" — safety covers each CALL, not your recipe</li>
+                    <li><b>The recipe</b> — read count (40), add 1, write 41: three separate calls with gaps between them</li>
+                    <li><b>The race</b> — two clerks both read 40, both write 41 — one delivery vanished with no error</li>
+                    <li><b>The fix</b> — ask the map for ONE atomic operation: increment(key) or compute-if-present</li>
+                    <li><b>The rule</b> — any check-then-act (read, decide, write) needs a single atomic step, not three safe ones</li>
+                </ul>
+                <p class="example">Both clerks read "aisle 7: 40 boxes", both wrote 41 — the map never corrupted, yet the count is wrong by one forever.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating per-call safety as recipe safety. A thread-safe map guarantees each operation lands intact — it cannot know that your three operations were meant to be one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var CLERK = ['#2a78d6', '#199e70', '#c98500', '#4a3aa7'];
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrowHead(ctx, x, y, angle, color) {
+    var a = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - a * Math.cos(angle - 0.45), y - a * Math.sin(angle - 0.45));
+    ctx.lineTo(x - a * Math.cos(angle + 0.45), y - a * Math.sin(angle + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// draws a padlock shape: body rect + shackle arc
+function padlock(ctx, cx, cy, size, color) {
+    var bw = size, bh = size * 0.8;
+    ctx.strokeStyle = color; ctx.lineWidth = size > 14 ? 2.5 : 1.5;
+    ctx.strokeRect(cx - bw / 2, cy, bw, bh);
+    ctx.beginPath();
+    ctx.arc(cx, cy, bw * 0.32, Math.PI, 0);
+    ctx.stroke();
+}
+
+// c1: one big padlock vs per-aisle padlocks
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Padlock on the Building vs One per Aisle', w / 2, 24);
+
+    function grid(x0, y0, outline, lw, perCellLocks) {
+        var n = 1;
+        for (var r = 0; r < 4; r++) {
+            for (var c = 0; c < 4; c++) {
+                var x = x0 + c * 42, y = y0 + r * 34;
+                ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, 42, 34);
+                ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+                ctx.fillText(String(n), x + 4, y + 13);
+                if (perCellLocks) padlock(ctx, x + 33, y + 18, 9, P.green);
+                n++;
+            }
+        }
+        ctx.strokeStyle = outline; ctx.lineWidth = lw;
+        ctx.strokeRect(x0, y0, 168, 136);
+    }
+
+    grid(66, 90, P.orange, 2.5, false);
+    padlock(ctx, 150, 58, 20, P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('everyone queues here', 150, 262);
+
+    grid(426, 90, P.mute, 1.5, true);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one lock per aisle', 510, 262);
+
+    // clerks queued at the left warehouse
+    var qy = [110, 145, 180, 215];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = CLERK[i];
+        ctx.beginPath(); ctx.arc(28, qy[i], 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('clerk ' + (i + 1), 40, qy[i] + 4);
+    }
+
+    // clerks pointing at cells 12, 2, 7, 15 in the right warehouse
+    // cell centers: cell n -> row = floor((n-1)/4), col = (n-1)%4
+    function cellCenter(n) {
+        var r = Math.floor((n - 1) / 4), c = (n - 1) % 4;
+        return [426 + c * 42 + 21, 90 + r * 34 + 17];
+    }
+    var targets = [12, 2, 7, 15];
+    var starts = [[640, 120], [510, 66], [640, 200], [470, 250]];
+    for (var i = 0; i < 4; i++) {
+        var t = cellCenter(targets[i]);
+        ctx.fillStyle = CLERK[i];
+        ctx.beginPath(); ctx.arc(starts[i][0], starts[i][1], 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = CLERK[i]; ctx.lineWidth = 1.5;
+        var ang = Math.atan2(t[1] - starts[i][1], t[0] - starts[i][0]);
+        var ex = t[0] - 14 * Math.cos(ang), ey = t[1] - 14 * Math.sin(ang);
+        ctx.beginPath(); ctx.moveTo(starts[i][0], starts[i][1]); ctx.lineTo(ex, ey); ctx.stroke();
+        arrowHead(ctx, ex, ey, ang, CLERK[i]);
+    }
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same warehouse, same clerks — different waiting', 360, 45);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('aisle = hash bucket, clerk = thread', w - 12, h - 10);
+});
+
+// c2: time slots gantt
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same 4 Updates: 4 Time Slots vs 2', w / 2, 24);
+
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(390, 55); ctx.lineTo(390, 260); ctx.stroke();
+
+    var labs = ['c1 → a12', 'c2 → a2', 'c3 → a7', 'c4 → a7'];
+
+    function bar(x, y, clerkIdx) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = CLERK[clerkIdx];
+        ctx.fillRect(x, y, 50, 30);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = CLERK[clerkIdx]; ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, 50, 30);
+        ctx.fillStyle = CLERK[clerkIdx]; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labs[clerkIdx], x + 25, y + 19);
+    }
+
+    // left: one big padlock — 4 serial slots
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one big padlock', 185, 62);
+    var slotX = [90, 148, 206, 264];
+    var slotY = [85, 125, 165, 205];
+    for (var i = 0; i < 4; i++) {
+        bar(slotX[i], slotY[i], i);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('slot ' + (i + 1), slotX[i] + 25, 250);
+    }
+
+    // right: striped — 2 slots
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('striped locks', 530, 62);
+    bar(440, 85, 0);
+    bar(440, 125, 1);
+    bar(440, 165, 2);
+    bar(560, 85, 3);
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('waited for aisle 7', 585, 130);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('slot 1', 465, 250);
+    ctx.fillText('slot 2', 585, 250);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('only the true collision waited', 530, 225);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('slots idealized — equal-length updates', w - 12, h - 10);
+});
+
+// c3: throughput vs threads
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Updates per Second as Threads Are Added', w / 2, 24);
+
+    var ox = 80, baseY = 240;
+    function yOf(x) { return baseY - x / 8 * (baseY - 60); }
+
+    var glines = [2, 4, 6, 8];
+    for (var i = 0; i < glines.length; i++) {
+        var y = yOf(glines[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(640, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glines[i] + '×', ox - 6, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, 60); ctx.lineTo(ox, baseY); ctx.lineTo(640, baseY); ctx.stroke();
+
+    var xs = [150, 260, 370, 480, 590];
+    var tLabs = ['1', '2', '4', '8', '16'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 5; i++) ctx.fillText(tLabs[i], xs[i], baseY + 18);
+    ctx.fillText('threads', 360, baseY + 36);
+
+    var globalLock = [1.0, 1.1, 1.1, 1.0, 0.9];
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var y = yOf(globalLock[i]);
+        i === 0 ? ctx.moveTo(xs[i], y) : ctx.lineTo(xs[i], y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(xs[i], yOf(globalLock[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one big lock — flat, then sagging', 330, 233);
+
+    var striped = [1.0, 1.9, 3.6, 6.5, 7.4];
+    var sLabs = ['1×', '1.9×', '3.6×', '6.5×', '7.4×'];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var y = yOf(striped[i]);
+        i === 0 ? ctx.moveTo(xs[i], y) : ctx.lineTo(xs[i], y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 5; i++) {
+        var y = yOf(striped[i]);
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(xs[i], y, 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(sLabs[i], xs[i], y - 10);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('striped locks', 500, 70);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the lock, not the CPU, was the ceiling', 250, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('relative throughput — illustrative benchmark shape', w - 12, h - 10);
+});
+
+// c4: the lost update
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Lost Update: Two Safe Reads, Two Safe Writes, Wrong Answer', w / 2, 24);
+
+    var laneA = 100, laneB = 180, ribbon = 140;
+
+    ctx.fillStyle = CLERK[0]; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('clerk A', 30, laneA + 4);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('clerk B', 30, laneB + 4);
+
+    // center ribbon
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(110, ribbon); ctx.lineTo(660, ribbon); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('aisle 7 count', 110, ribbon + 16);
+
+    function step(x, lane, text, color) {
+        var y = lane - 15;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x, y, 92, 30);
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, 92, 30);
+        ctx.fillStyle = color; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(text, x + 46, y + 19);
+        // connector to ribbon
+        ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+        var fromY = lane < ribbon ? lane + 15 : lane - 15;
+        ctx.beginPath(); ctx.moveTo(x + 46, fromY); ctx.lineTo(x + 46, ribbon); ctx.stroke();
+    }
+
+    step(130, laneA, 'read: 40', CLERK[0]);
+    step(250, laneB, 'read: 40', P.violet);
+    step(390, laneA, 'write: 41', CLERK[0]);
+    step(520, laneB, 'write: 41', P.violet);
+
+    // ribbon value tags
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('40', 110, ribbon - 8);
+    ctx.fillText('41', 452, ribbon - 8);
+    ctx.fillText('41', 588, ribbon - 8);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(588, ribbon - 12, 13, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('should be 42', 588, 108);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fix: one atomic increment(key) — read+add+write in a single step', 360, 250);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('check-then-act must be one operation', 360, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('each call was thread-safe — the recipe was not', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

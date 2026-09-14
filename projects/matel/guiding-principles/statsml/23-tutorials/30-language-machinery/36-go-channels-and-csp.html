@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go Channels &amp; CSP</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Go Channels &amp; CSP</h1>
+<p class="subtitle">A channel is a hand-off point between concurrent workers — instead of two goroutines editing the same memory, one passes a value to the other, and ownership travels with it</p>
+
+<div class="card-section">
+    <h2>A Ticket Rail Between Two Workers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">hand-off</span><span class="tag orange">goroutines</span></div>
+                <ul>
+                    <li><b>The shop</b> — a sandwich shop has a cashier taking orders and a cook making them, both working at once</li>
+                    <li><b>The rail</b> — the cashier clips each order ticket to a rail; the cook pulls the next ticket when free</li>
+                    <li><b>The channel</b> — in Go the rail is a channel: one goroutine sends a value in, another receives it out</li>
+                    <li><b>Nothing shared</b> — the ticket is the only thing that moves; neither worker touches the other's notepad</li>
+                    <li><b>No rail at all</b> — an unbuffered channel is a direct hand-off: the send waits until the cook is there</li>
+                </ul>
+                <p class="example"><code>orders &lt;- ticket</code> is the cashier clipping a ticket on; <code>t := &lt;-orders</code> is the cook pulling the next one — those two moves are the entire mechanism.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A channel is a hand-off point between goroutines: a value goes in one end and out the other, and whoever received it now owns it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tracing the Rail: When the Cashier Stalls</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">buffering</span><span class="tag orange">blocking</span></div>
+                <ul>
+                    <li><b>The setup</b> — the cashier finishes an order every 10 s, the cook needs 20 s each, the rail holds 3</li>
+                    <li><b>Falling behind</b> — the cashier adds one ticket per 10 s but the cook removes one per 20 s</li>
+                    <li><b>Filling up</b> — the rail holds 1 ticket at t=20, 2 at t=40, and hits its cap of 3 at t=60</li>
+                    <li><b>The stall</b> — at t=80 the cashier has ticket #8 ready but no free clip, so the send just waits</li>
+                    <li><b>Unblocked</b> — at t=90 the cook pulls ticket #5, a clip frees, and #8 goes on 10 s late</li>
+                </ul>
+                <p class="example">Check it by hand: sends land at t=10, 20, 30, ... while the cook pulls at t=10, 30, 50, 70, 90 — one extra ticket every 20 s is exactly what fills the rail by t=60.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A buffered channel absorbs a burst up to its size; once full, the sender is paused automatically — the fast worker slows to the pace of the slow one with zero extra code.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Share by Communicating, Not by Locking</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">CSP</span><span class="tag orange">no locks</span></div>
+                <ul>
+                    <li><b>The old way</b> — with one shared whiteboard, both workers must lock it before writing or orders get lost</li>
+                    <li><b>CSP</b> — Hoare's 1978 idea: keep workers fully separate and let them interact only by passing messages</li>
+                    <li><b>Go's slogan</b> — "don't communicate by sharing memory; share memory by communicating"</li>
+                    <li><b>Free balancing</b> — point three cooks at one rail and each simply pulls the next ticket when free</li>
+                    <li><b>Where you meet it</b> — worker pools, pipelines, timeouts via <code>select</code>, fan-out/fan-in inside servers</li>
+                </ul>
+                <p class="example">Twelve lunch orders, three cooks, one rail: each cook naturally ends up making four — nobody wrote a scheduler, the rail balanced the work.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because a value lives with exactly one goroutine at a time, whole categories of bugs — races, forgotten locks, torn updates — never get a chance to happen.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Buffered Doesn't Mean Never Blocks</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">unbuffered vs buffered</span></div>
+                <ul>
+                    <li><b>The myth</b> — "buffered channels are async, so sends never block" — true only until the buffer fills</li>
+                    <li><b>Unbuffered</b> — a send on an unbuffered channel waits for a receiver: it is a meeting, not a mailbox</li>
+                    <li><b>Receives too</b> — a cook at an empty rail stands and waits; receiving blocks just like sending</li>
+                    <li><b>Deadlock</b> — if every goroutine is stuck sending or receiving, Go stops the program and says so</li>
+                    <li><b>Sizing</b> — buffer size tunes how big a burst is absorbed, not correctness; logic must survive size 0</li>
+                </ul>
+                <p class="example">With no rail, a cashier holding a ticket at t=0 stands frozen for 6 s until the cook walks up — the hand-off happens the instant both are present.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Adding a buffer to "fix" a hang. The buffer only delays the block; if receives can't keep up, a size-1 buffer stalls on the second send — the fix is a receiver, not a bigger rail.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, lw, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw;
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    var hx = x2 - 10 * Math.cos(ang), hy = y2 - 10 * Math.sin(ang);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 10 * Math.cos(ang - 0.45), y2 - 10 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 10 * Math.cos(ang + 0.45), y2 - 10 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: cashier box, three-slot rail with one ticket, cook box
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("The Ticket Rail: Values Move, Memory Doesn't", w / 2, 24);
+
+    // cashier box
+    ctx.fillStyle = 'rgba(42,120,214,0.10)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    rrect(ctx, 40, 115, 145, 85, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cashier', 112, 145);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('goroutine 1', 112, 165);
+    ctx.fillStyle = P.text;
+    ctx.fillText('sends tickets', 112, 189);
+
+    // cook box
+    ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    rrect(ctx, 535, 115, 145, 85, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('cook', 607, 145);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('goroutine 2', 607, 165);
+    ctx.fillStyle = P.text;
+    ctx.fillText('receives tickets', 607, 189);
+
+    // rail
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(225, 150); ctx.lineTo(495, 150); ctx.stroke();
+    // slots
+    var slots = [245, 330, 415];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.fillRect(slots[i] - 28, 130, 56, 40);
+        ctx.strokeRect(slots[i] - 28, 130, 56, 40);
+        ctx.setLineDash([]);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('channel (rail, holds 3)', 360, 215);
+
+    // ticket in first slot
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(245 - 22, 135, 44, 30);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('#4', 245, 154);
+
+    // arrows
+    arrow(ctx, 185, 150, 222, 150, 3, P.blue);
+    arrow(ctx, 498, 150, 535, 150, 3, P.green);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the ticket is the only shared thing —', 360, 62);
+    ctx.fillText('and only one worker holds it at a time', 360, 80);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('schematic — one send, one receive, one channel', w - 12, h - 8);
+});
+
+// c2: rail occupancy step chart over the first 100 seconds
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rail Occupancy: Cashier Every 10 s, Cook Every 20 s, Rail Holds 3', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 190;
+    function xOf(t) { return ox + t / 100 * pw; }
+    function yOf(n) { return baseY - n / 3 * ph; }
+
+    // gridlines at 1 and 2
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var g = 1; g <= 2; g++) {
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+    }
+    // y labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var g = 0; g <= 3; g++) {
+        ctx.fillText(String(g), ox - 8, yOf(g) + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    // x ticks
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 100; t += 10) {
+        ctx.fillText(String(t), xOf(t), baseY + 16);
+    }
+    ctx.fillText('seconds', ox + pw / 2, baseY + 34);
+
+    var ts = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+    var occ = [0, 0, 1, 1, 2, 2, 3, 3, 3, 3, 3];
+
+    // stall band 80-90
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(xOf(80), baseY - ph, xOf(90) - xOf(80), ph);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cashier blocked 80–90 s', xOf(85), baseY - ph - 6);
+
+    // fill under steps
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(xOf(ts[0]), baseY);
+    ctx.lineTo(xOf(ts[0]), yOf(occ[0]));
+    for (var i = 1; i < ts.length; i++) {
+        ctx.lineTo(xOf(ts[i]), yOf(occ[i - 1]));
+        ctx.lineTo(xOf(ts[i]), yOf(occ[i]));
+    }
+    ctx.lineTo(xOf(100), baseY);
+    ctx.closePath(); ctx.fill();
+
+    // step line (right-continuous)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(ts[0]), yOf(occ[0]));
+    for (var i = 1; i < ts.length; i++) {
+        ctx.lineTo(xOf(ts[i]), yOf(occ[i - 1]));
+        ctx.lineTo(xOf(ts[i]), yOf(occ[i]));
+    }
+    ctx.stroke();
+
+    // capacity line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(3)); ctx.lineTo(ox + pw, yOf(3)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('rail full (cap 3)', ox + 6, yOf(3) - 6);
+
+    // fill marker at t=60
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(60), baseY); ctx.lineTo(xOf(60), 70); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('full at t=60', xOf(60), 64);
+
+    // pull markers
+    var pulls = [10, 30, 50, 70, 90];
+    ctx.fillStyle = P.green;
+    for (var i = 0; i < pulls.length; i++) {
+        var px = xOf(pulls[i]);
+        ctx.beginPath();
+        ctx.moveTo(px - 6, baseY - 8);
+        ctx.lineTo(px + 6, baseY - 8);
+        ctx.lineTo(px, baseY - 1);
+        ctx.closePath(); ctx.fill();
+    }
+    ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cook pulls', xOf(10), baseY - 14);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ticket #8 waits for a clip —', xOf(25), 105);
+    ctx.fillText('backpressure, no code needed', xOf(25), 121);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings — 10 s vs 20 s per order', w - 12, h - 4);
+});
+
+// c3: fan-out: one cashier, one rail, three cooks pulling 12 tickets
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Rail, Three Cooks: 12 Tickets Balance Themselves', w / 2, 24);
+
+    // cashier box
+    ctx.fillStyle = 'rgba(42,120,214,0.10)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    rrect(ctx, 40, 115, 135, 80, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cashier', 107, 148);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('sends #1–#12', 107, 172);
+
+    // rail
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(210, 155); ctx.lineTo(400, 155); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one channel', 305, 180);
+    arrow(ctx, 175, 155, 208, 155, 3, P.blue);
+
+    // cook boxes
+    var cooks = [
+        { y: 55, name: 'cook A', made: 'made #1 #4 #7 #10' },
+        { y: 125, name: 'cook B', made: 'made #2 #5 #8 #11' },
+        { y: 195, name: 'cook C', made: 'made #3 #6 #9 #12' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var c = cooks[i];
+        ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        rrect(ctx, 505, c.y, 150, 60, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.name, 580, c.y + 24);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(c.made, 580, c.y + 45);
+        arrow(ctx, 400, 155, 503, c.y + 30, 2.5, P.green);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('whoever is free pulls next —', 230, 82);
+    ctx.fillText('no lock, no scheduler', 230, 100);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative split — 12 tickets, 4 per cook when speeds match', w - 12, h - 8);
+});
+
+// c4: unbuffered vs buffered(1) timelines on a shared seconds axis
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Unbuffered vs Buffered(1): Both Sends End Up Waiting', w / 2, 24);
+
+    var ax = 180, axW = 500, axY = 250;
+    function xOf(t) { return ax + t / 8 * axW; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, axY); ctx.lineTo(ax + axW, axY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 8; t++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(t), axY - 4); ctx.lineTo(xOf(t), axY + 4); ctx.stroke();
+        ctx.fillText(t + ' s', xOf(t), axY + 20);
+    }
+
+    // receiver marker at t=6
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(6), 60); ctx.lineTo(xOf(6), axY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cook arrives at t=6', xOf(6), 52);
+
+    // row 1: unbuffered
+    var y1 = 110;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('unbuffered — send #1 at t=0', 20, y1 + 4);
+    ctx.fillStyle = 'rgba(217,89,38,0.35)';
+    rrect(ctx, xOf(0), y1 - 5, xOf(6) - xOf(0), 10, 5); ctx.fill();
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('waiting', (xOf(0) + xOf(6)) / 2, y1 + 4);
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(6), y1, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('hand-off', xOf(6), y1 - 14);
+
+    // row 2: buffered(1)
+    var y2 = 190;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('buffered(1) — sends at t=0 and t=2', 20, y2 + 4);
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(0), y2, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('instant', xOf(0), y2 - 14);
+    ctx.fillStyle = 'rgba(217,89,38,0.35)';
+    rrect(ctx, xOf(2), y2 - 5, xOf(6) - xOf(2), 10, 5); ctx.fill();
+    ctx.fillStyle = P.orange; ctx.font = '11px system-ui';
+    ctx.fillText('waiting', (xOf(2) + xOf(6)) / 2, y2 + 4);
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(xOf(6), y2, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = '12px system-ui';
+    ctx.fillText('slot frees', xOf(6), y2 - 14);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the buffer bought 2 seconds, not correctness — send #2 still blocked for 4 s', 430, 285);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative timings', w - 12, 44);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

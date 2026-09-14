@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serialization</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Serialization</h1>
+<p class="subtitle">An object living in memory is full of pointers that mean nothing outside the program — serialization flattens it into bytes that can cross a wire or land on disk, and back</p>
+
+<div class="card-section">
+    <h2>The Order That Has to Leave the Register</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">structures to bytes</span><span class="tag orange">pointers</span></div>
+                <ul>
+                    <li><b>The object</b> — the register holds order #4127 in memory: a customer field and a list of two line items</li>
+                    <li><b>The pointers</b> — "list of items" is really a memory address like 0x7f3a that points somewhere in RAM</li>
+                    <li><b>The problem</b> — the payment server needs this order, but address 0x7f3a means nothing on another machine</li>
+                    <li><b>Serialize</b> — walk the object, follow every pointer, and write the values out as one flat run of bytes</li>
+                    <li><b>Deserialize</b> — the receiver reads the bytes and rebuilds an equivalent object with its own fresh pointers</li>
+                </ul>
+                <p class="example">The register serializes order #4127 (Maya: 2 lattes, 1 muffin) into a byte stream, sends it, and the payment server rebuilds the same order in its own memory.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Serialization turns a linked, pointer-filled structure into a self-contained flat sequence of bytes; deserialization is the reverse trip — the pointers never travel, only the values do.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Order, Two Encodings: 68 Bytes vs 27</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">JSON vs binary</span></div>
+                <ul>
+                    <li><b>As JSON</b> — <code>{"id":4127,"cust":"Maya","items":[["latte",2,450],["muffin",1,325]]}</code> is exactly 68 bytes</li>
+                    <li><b>The split</b> — of those 68: field labels 20 bytes, quotes/brackets/commas 21, actual values only 27</li>
+                    <li><b>As binary</b> — 2-byte id, length-prefixed strings, 1-byte counts and quantities, 2-byte prices in cents</li>
+                    <li><b>Hand-count</b> — id 2 + "Maya" 5 + count 1 + latte item 9 + muffin item 10 = 27 bytes total</li>
+                    <li><b>The ratio</b> — the binary order is 27/68 of the JSON one, about 40% of the size, carrying the same facts</li>
+                    <li><b>The trade</b> — JSON is readable in any text editor; the binary form needs its layout spec to decode</li>
+                </ul>
+                <p class="example">Order #4127 costs 68 bytes as JSON but only 27 bytes in the compact binary layout — the missing 41 bytes were labels and punctuation, not data.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Text formats spend most of their bytes naming and quoting the data; binary formats spend nearly all of them on the data — the JSON's 27 value bytes equal the size of the whole binary message (4 B framing + 23 B values).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Every Hop Is a Serialize and a Deserialize</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">pipelines</span><span class="tag orange">hidden cost</span></div>
+                <ul>
+                    <li><b>API calls</b> — every request and response is an object serialized on one side, deserialized on the other</li>
+                    <li><b>Caches</b> — storing the order in a cache serializes it; every cache hit pays a deserialize to use it</li>
+                    <li><b>Queues</b> — a message queue only moves bytes, so producers encode and every consumer decodes</li>
+                    <li><b>Files</b> — CSV, JSON, Parquet: a saved dataset is just serialization with a name and a file extension</li>
+                    <li><b>The bill</b> — reading 1M order records: parsing JSON takes 62s, decoding binary 18s, summing totals 9s</li>
+                    <li><b>The surprise</b> — the JSON pipeline spends about 7&times; longer unpacking bytes than doing the actual math</li>
+                </ul>
+                <p class="example">A nightly revenue job over 1M orders spends 62 of its 71 seconds parsing JSON and only 9 seconds adding up the money.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> In data pipelines the decode step is often the dominant cost — choosing the wire and file format is choosing how much CPU every downstream reader will burn before it does any real work.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Bytes Written Today Aren't Bytes Readable Tomorrow</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">versions</span><span class="tag blue">portability</span></div>
+                <ul>
+                    <li><b>The assumption</b> — "it's just bytes, anything can read it later" — only true if the layout is agreed on</li>
+                    <li><b>Language lock-in</b> — pickle-style formats snapshot one language's objects; other languages can't rebuild them</li>
+                    <li><b>Version drift</b> — v2 of the app renames a field or changes a type, and yesterday's bytes stop parsing</li>
+                    <li><b>Code execution</b> — some object-snapshot formats run code while loading, so decoding untrusted bytes is unsafe</li>
+                    <li><b>The fix</b> — a language-neutral format with an explicit, versioned schema that both sides check against</li>
+                </ul>
+                <p class="example">Orders archived as language-native object snapshots become unreadable when the analytics team tries to load them from a different language a year later.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating serialized bytes as self-explanatory. Bytes only mean something under a spec — pin the format and version it, or the writer's upgrade quietly breaks every reader.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, dir, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    if (dir === 'right') {
+        ctx.moveTo(x, y); ctx.lineTo(x - 9, y - 5); ctx.lineTo(x - 9, y + 5);
+    } else { // down
+        ctx.moveTo(x, y); ctx.lineTo(x - 5, y - 9); ctx.lineTo(x + 5, y - 9);
+    }
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: pointer graph -> flat bytes -> pointer graph
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Order #4127: Pointer Graph → Flat Bytes → Pointer Graph', w / 2, 24);
+
+    function drawGraph(x0, color, fill, addr1, addr2) {
+        // top box
+        roundRect(ctx, x0, 80, 180, 34, 6);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText('order 4127 · cust ● · items ●', x0 + 90, 101);
+        // child boxes
+        roundRect(ctx, x0, 160, 90, 30, 6);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.fillText('Maya', x0 + 45, 180);
+        roundRect(ctx, x0, 215, 170, 30, 6);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.fillText('latte ×2 · muffin ×1', x0 + 85, 235);
+        // pointer arrows from the top box down to children
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x0 + 70, 114); ctx.lineTo(x0 + 45, 158); ctx.stroke();
+        arrowHead(ctx, x0 + 45, 160, 'down', color);
+        ctx.beginPath(); ctx.moveTo(x0 + 140, 114); ctx.lineTo(x0 + 110, 213); ctx.stroke();
+        arrowHead(ctx, x0 + 110, 215, 'down', color);
+        // address tags
+        ctx.font = '11px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+        ctx.fillText(addr1, x0 + 8, 140);
+        ctx.fillText(addr2, x0 + 130, 175);
+    }
+
+    drawGraph(40, P.blue, 'rgba(42,120,214,0.15)', '0x7f3a', '0x91c0');
+    drawGraph(510, P.green, 'rgba(0,131,0,0.12)', '0x22b1', '0x4d08');
+
+    // middle byte stream: 10 squares at y=150
+    var sq = 18, sx = 265;
+    for (var i = 0; i < 10; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(sx + i * (sq + 1), 150, sq, sq);
+        ctx.lineWidth = 1; ctx.strokeStyle = P.mute;
+        ctx.strokeRect(sx + i * (sq + 1), 150, sq, sq);
+    }
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('flat bytes — no addresses', 360, 195);
+
+    // serialize / deserialize arrows
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(226, 159); ctx.lineTo(255, 159); ctx.stroke();
+    arrowHead(ctx, 260, 159, 'right', P.ink);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('serialize', 242, 145);
+
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(460, 159); ctx.lineTo(497, 159); ctx.stroke();
+    arrowHead(ctx, 502, 159, 'right', P.ink);
+    ctx.fillText('deserialize', 481, 145);
+
+    // section labels
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('register memory', 130, 62);
+    ctx.fillText('wire / disk', 360, 130);
+    ctx.fillText('server memory', 600, 62);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'center';
+    ctx.fillText('the values travel; the pointers are rebuilt on arrival', w / 2, 272);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('addresses illustrative', w - 15, h - 12);
+});
+
+// c2: byte budget of JSON vs binary as stacked bars, 6px per byte
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same Order: 68 Bytes of JSON, 27 Bytes of Binary', w / 2, 24);
+
+    var x0 = 140, bh = 34;
+
+    function drawStack(y, segs, total, rowLabel) {
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(rowLabel, 130, y + bh / 2 + 4);
+        var x = x0;
+        for (var i = 0; i < segs.length; i++) {
+            var g = segs[i];
+            ctx.fillStyle = g.color;
+            ctx.fillRect(x, y, g.wd, bh);
+            if (g.wd >= 60) {
+                ctx.font = '11px system-ui'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+                ctx.fillText(g.name, x + g.wd / 2, y + bh / 2 + 4);
+            }
+            x += g.wd;
+        }
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+        ctx.fillText(total, x + 8, y + bh / 2 + 4);
+        // legend under the bar
+        var lx = x0;
+        ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        for (var i = 0; i < segs.length; i++) {
+            var g = segs[i];
+            ctx.fillStyle = g.color;
+            ctx.fillText(g.name + ' ' + g.bytes + ' B', lx, y + bh + 16);
+            lx += 120;
+        }
+    }
+
+    var jsonSegs = [
+        { name: 'labels', bytes: 20, wd: 120, color: P.yellow },
+        { name: 'punctuation', bytes: 21, wd: 126, color: P.mute },
+        { name: 'values', bytes: 27, wd: 162, color: P.blue }
+    ];
+    var binSegs = [
+        { name: 'framing', bytes: 4, wd: 24, color: P.aqua },
+        { name: 'values', bytes: 23, wd: 138, color: P.green }
+    ];
+
+    drawStack(95, jsonSegs, '68 bytes', 'JSON');
+    drawStack(185, binSegs, '27 bytes', 'binary');
+
+    // dashed guide at the 27-byte mark
+    var gx = x0 + 162;
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx, 70); ctx.lineTo(gx, 240); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('27 B', gx, 62);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('binary ≈ 40% of the JSON size — same order, fewer bytes', 380, 235);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('JSON byte count exact for the string shown; binary layout illustrative', w - 15, h - 12);
+});
+
+// c3: seconds to process 1M records — parse JSON vs decode binary vs the math
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Reading 1M Orders: Unpacking the Bytes vs Doing the Math', w / 2, 24);
+
+    var ox = 70, baseY = 245, pw = 580, ph = 180, vMax = 70;
+    function yOf(v) { return baseY - v / vMax * ph; }
+
+    // gridlines
+    var gvals = [20, 40, 60];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(gvals[i])); ctx.lineTo(ox + pw, yOf(gvals[i])); ctx.stroke();
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(gvals[i] + 's', ox - 8, yOf(gvals[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 190, v: 62, label: 'parse JSON', color: P.orange },
+        { cx: 380, v: 18, label: 'decode binary', color: P.blue },
+        { cx: 570, v: 9, label: 'sum the totals', color: P.green }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var b = bars[i], bhh = b.v / vMax * ph;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.cx - 55, baseY - bhh, 110, bhh);
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillStyle = b.color;
+        ctx.fillText(b.v + 's', b.cx, baseY - bhh - 8);
+        ctx.font = '12px system-ui'; ctx.fillStyle = '#444';
+        ctx.fillText(b.label, b.cx, baseY + 18);
+    }
+
+    // dashed guide at the 9s level
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, yOf(9)); ctx.lineTo(ox + pw, yOf(9)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    ctx.fillText('the actual work', ox + pw - 4, yOf(9) - 6);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'left';
+    ctx.fillText('7× more time parsing than computing', 255, 68);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 15, h - 12);
+});
+
+// c4: who can read the bytes a year later
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Who Can Read the Bytes a Year Later?', w / 2, 24);
+
+    function box(x, y, wd, label, fill, edge, mono) {
+        roundRect(ctx, x, y, wd, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = edge; ctx.stroke();
+        ctx.font = (mono ? '12px ui-monospace, Menlo, monospace' : '12px system-ui');
+        ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(label, x + wd / 2, y + 25);
+    }
+    function arrow(x1, y1, x2, y2) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 8, y2); ctx.stroke();
+        arrowHead(ctx, x2, y2, 'right', P.mute);
+    }
+
+    // row 1: object snapshot
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('object snapshot', 20, 100);
+    box(160, 75, 200, 'order bytes (lang A objects)', 'rgba(42,120,214,0.15)', P.blue, false);
+    box(430, 60, 200, "lang B reader — can't rebuild", 'rgba(231,76,60,0.12)', '#e74c3c', false);
+    box(430, 108, 200, 'lang A v2 — field renamed, fails', 'rgba(231,76,60,0.12)', '#e74c3c', false);
+    arrow(360, 92, 428, 80);
+    arrow(360, 98, 428, 128);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('✗', 640, 85);
+    ctx.fillText('✗', 640, 133);
+
+    // row 2: versioned schema
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('versioned schema', 20, 220);
+    box(160, 195, 200, 'order bytes + schema v1', 'rgba(42,120,214,0.15)', P.blue, false);
+    box(430, 195, 210, 'any language, checks v1 — reads', 'rgba(0,131,0,0.12)', P.green, false);
+    arrow(360, 215, 428, 215);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('✓', 650, 220);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta; ctx.textAlign = 'center';
+    ctx.fillText('bytes are portable only when the spec travels with them', w / 2, 278);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('scenario illustrative', w - 15, h - 12);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
