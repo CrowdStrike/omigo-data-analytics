@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Kafka</h1>
+<p class="subtitle">Kafka stores events in an append-only log that many readers consume at their own pace — reading never deletes, so anyone can replay history</p>
+
+<div class="card-section">
+    <h2>One Orders Log, Three Independent Readers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">the log</span><span class="tag orange">event streaming</span></div>
+                <ul>
+                    <li><b>The topic</b> — every order event is appended to the end of an orders log and never edited in place</li>
+                    <li><b>Three readers</b> — the payment service, an analytics pipeline, and an email service all read the same log</li>
+                    <li><b>The offset</b> — each consumer keeps its own bookmark (an offset) marking how far into the log it has read</li>
+                    <li><b>No deletion</b> — reading an event does not remove it; the log keeps events until retention expires</li>
+                    <li><b>The rewind</b> — analytics moves its offset back to yesterday and reprocesses the same events again</li>
+                </ul>
+                <p class="example">Order #7042 lands at offset 9; payment charges the card, email sends a receipt, and analytics counts it — all three read the same log entry.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Kafka's core abstraction is an append-only log: producers append at the end, each consumer reads at its own pace via its own offset, and events leave only by retention age — never because someone read them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Offsets and Partitions by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">partitions</span><span class="tag orange">ordering</span></div>
+                <ul>
+                    <li><b>Twelve orders</b> — one morning's orders (illustrative) arrive and are spread across 3 partitions</li>
+                    <li><b>The rule</b> — partition = customer id mod 3 here; real Kafka hashes the key, but the effect is the same</li>
+                    <li><b>Hand-check</b> — customer 104: 104 mod 3 = 2 (exact), so every order from 104 lands in partition 2</li>
+                    <li><b>Per-key order</b> — 104's orders stay in arrival order inside partition 2; across partitions there is no order</li>
+                    <li><b>Consumer group</b> — three payment workers form one group; each takes one partition, tripling throughput</li>
+                </ul>
+                <p class="example">Customer 104's orders #1, #4, #7, #11 all land in partition 2 in that order, while orders #2 and #3 go to partitions 0 and 1.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Partitions buy parallelism without losing what matters — all events with the same key share one partition, so per-key order is preserved while a consumer group splits the partitions among its members.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Backbone of Event-Driven Systems</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">replay</span></div>
+                <ul>
+                    <li><b>The origin</b> — Kafka was built at LinkedIn to move activity events between systems, then open-sourced</li>
+                    <li><b>The backbone</b> — event-driven architectures use topics as the shared record of what happened, in order</li>
+                    <li><b>Stream processors</b> — tools like Kafka Streams and Flink use topics as their input feed and output sink</li>
+                    <li><b>Late arrivals</b> — a consumer added long after launch bootstraps by replaying the retained log from offset 0</li>
+                    <li><b>Decoupling</b> — producers never know how many consumers exist; adding a reader changes nothing upstream</li>
+                </ul>
+                <p class="example">A fraud team points a brand-new consumer at orders offset 0 and rebuilds its features from the retained week of history — no producer changes at all.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because the log does not delete on read, any number of independent systems — including ones built long after the events were written — can consume the same history.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not a Queue: Reading Doesn't Delete</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">consumer groups</span></div>
+                <ul>
+                    <li><b>The confusion</b> — in a classic queue a delivered message is gone; in Kafka it stays until retention</li>
+                    <li><b>The symptom</b> — separate services share one consumer group, so each event reaches only one of them</li>
+                    <li><b>What groups mean</b> — a group splits partitions among its members; it divides work, not audiences</li>
+                    <li><b>The fix</b> — payment, analytics, and email each use their own group id, so each gets every event</li>
+                    <li><b>Retention, not reads</b> — events leave the log only when the 7-day retention (illustrative) expires</li>
+                </ul>
+                <p class="example">Email joined payment's consumer group "to reuse config"; each order then went to only one of the two services, and half the receipts were silently never sent.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating Kafka as a queue where reading removes the message. Reads never delete anything — if several services must each see every event, they must consume under different group ids.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function flowArrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width || 3;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one log, three consumers, three offsets
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Log, Three Consumers, Three Offsets', w / 2, 24);
+
+    // log cells e0-e9
+    for (var i = 0; i < 10; i++) {
+        var x = 90 + i * 55;
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.fillRect(x, 100, 54, 36);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(x, 100, 54, 36);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('e' + i, x + 27, 122);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(String(i), x + 27, 148);
+    }
+
+    // producer dashed cell
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(645, 100, 54, 36);
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('producer appends here', 700, 85);
+    flowArrow(ctx, 672, 88, 672, 97, P.violet, 2);
+
+    // consumer pointers
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('payment — offset 10 (caught up)', 380, 185);
+    flowArrow(ctx, 570, 178, 637, 140, P.green, 2);
+
+    ctx.fillStyle = P.blue;
+    ctx.fillText('email — offset 7', 380, 220);
+    flowArrow(ctx, 450, 212, 527, 140, P.blue, 2);
+
+    ctx.fillStyle = P.orange;
+    ctx.fillText('analytics — offset 3', 60, 255);
+    flowArrow(ctx, 180, 247, 307, 140, P.orange, 2);
+
+    // rewind marker
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(500, 160); ctx.lineTo(316, 160); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.moveTo(310, 160); ctx.lineTo(320, 154); ctx.lineTo(320, 166); ctx.closePath(); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rewound to replay yesterday', 405, 152);
+
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('offsets illustrative', w - 20, 292);
+});
+
+// c2: 12 orders across 3 partitions, customer 104 highlighted
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('12 Orders, 3 Partitions: partition = customer id mod 3', w / 2, 24);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order ids illustrative; 104 mod 3 = 2 exact', w - 20, 44);
+
+    var lanes = [
+        { y: 85, lab: 'partition 0', orders: ['#2', '#5', '#9', '#12'], custs: ['c102', 'c105', 'c102', 'c105'], hl: [] },
+        { y: 160, lab: 'partition 1', orders: ['#3', '#6', '#10'], custs: ['c103', 'c106', 'c103'], hl: [] },
+        { y: 235, lab: 'partition 2', orders: ['#1', '#4', '#7', '#8', '#11'], custs: ['c104', 'c104', 'c104', 'c101', 'c104'], hl: [0, 1, 2, 4] }
+    ];
+    for (var l = 0; l < lanes.length; l++) {
+        var lane = lanes[l];
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(95, lane.y); ctx.lineTo(700, lane.y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(lane.lab, 12, lane.y + 4);
+        for (var i = 0; i < lane.orders.length; i++) {
+            var x = 100 + i * 56;
+            var isHl = lane.hl.indexOf(i) !== -1;
+            ctx.fillStyle = isHl ? 'rgba(0,131,0,0.15)' : 'rgba(42,120,214,0.15)';
+            ctx.fillRect(x, lane.y - 30, 46, 30);
+            ctx.strokeStyle = isHl ? P.green : P.blue;
+            ctx.lineWidth = isHl ? 2 : 1;
+            ctx.strokeRect(x, lane.y - 30, 46, 30);
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(lane.orders[i], x + 23, lane.y - 11);
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+            ctx.fillText(lane.custs[i], x + 23, lane.y + 14);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("customer 104's four orders — one partition, in order", 420, 275);
+});
+
+// c3: one retained topic fans out to four consumers
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Log Feeds Every System — Including Ones That Don't Exist Yet", w / 2, 24);
+
+    // log box
+    rrect(ctx, 60, 125, 170, 54, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders topic', 145, 147);
+    ctx.fillText('(7-day retention)', 145, 165);
+
+    var consumers = [
+        { y: 48, lab: 'payment service', fill: 'rgba(0,131,0,0.12)', color: P.green, dashed: false },
+        { y: 108, lab: 'analytics (stream processor)', fill: 'rgba(42,120,214,0.15)', color: P.blue, dashed: false },
+        { y: 168, lab: 'email service', fill: 'rgba(217,89,38,0.12)', color: P.orange, dashed: false },
+        { y: 228, lab: 'fraud model — replays from offset 0', fill: 'rgba(74,58,167,0.10)', color: P.violet, dashed: true }
+    ];
+    for (var i = 0; i < consumers.length; i++) {
+        var c = consumers[i];
+        if (c.dashed) ctx.setLineDash([5, 4]);
+        flowArrow(ctx, 230, 152, 436, c.y + 19, c.color, 2);
+        ctx.setLineDash([]);
+        rrect(ctx, 440, c.y, 230, 38, 8);
+        ctx.fillStyle = c.fill; ctx.fill();
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.lab, 555, c.y + 24);
+    }
+    ctx.fillStyle = P.violet; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('added later', 333, 195);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('adding a reader costs the log nothing', 300, 290);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('retention setting illustrative', w - 20, 292);
+});
+
+// c4: queue vs log after the first read
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Queue vs Log: What Happens After Payment Reads Order #7042', w / 2, 24);
+
+    // row 1: classic queue
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('classic queue', 15, 94);
+    rrect(ctx, 130, 70, 150, 40, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order #7042', 205, 94);
+    flowArrow(ctx, 282, 90, 346, 90, P.text, 3);
+    rrect(ctx, 350, 70, 190, 40, 8);
+    ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('payment reads — deleted', 445, 94);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ analytics and email never see it', 445, 145);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(15, 160); ctx.lineTo(705, 160); ctx.stroke();
+
+    // row 2: Kafka log
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Kafka log', 15, 209);
+    rrect(ctx, 130, 185, 190, 40, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order #7042', 225, 201);
+    ctx.fillText('stays at offset 9', 225, 217);
+
+    var readers = [
+        { y: 170, lab: 'payment ✓' },
+        { y: 205, lab: 'analytics ✓' },
+        { y: 240, lab: 'email ✓' }
+    ];
+    for (var i = 0; i < readers.length; i++) {
+        flowArrow(ctx, 322, 205, 396, readers[i].y + 16, P.green, 2);
+        rrect(ctx, 400, readers[i].y, 120, 32, 8);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(readers[i].lab, 460, readers[i].y + 20);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the log deletes by age, not by read', w / 2, 285);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

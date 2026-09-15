@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gRPC</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>gRPC</h1>
+<p class="subtitle">gRPC lets one service call another like a typed local function — the contract lives in a .proto file, code generation writes the plumbing, and Protocol Buffers put the data on the wire in binary</p>
+
+<div class="card-section">
+    <h2>The Orders Service Calls Inventory Like a Function</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">contract first</span><span class="tag orange">codegen</span></div>
+                <ul>
+                    <li><b>The two services</b> — an orders service must ask an inventory service if SKU-4471 has 3 units in stock</li>
+                    <li><b>The old way</b> — hand-rolled JSON+HTTP: build the URL, encode, parse, hope both sides spell fields the same</li>
+                    <li><b>The contract</b> — a .proto file declares <code>service Inventory { rpc CheckStock(...) }</code> with typed messages</li>
+                    <li><b>The codegen</b> — <code>protoc</code> generates a client stub for orders and a server skeleton for inventory, in any language</li>
+                    <li><b>The heritage</b> — Google open-sourced the model in 2015, based on Stubby, its internal RPC system</li>
+                </ul>
+                <p class="example">The orders team writes <code>client.CheckStock(sku, qty)</code> in Go; a typo in a field name fails at compile time, not at 2am in production.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> gRPC is contract-first — the .proto file is the single source of truth, and generated stubs turn a network call into a typed function call on both sides.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Stock Check: 84 JSON Bytes vs 24 Protobuf Bytes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">binary encoding</span></div>
+                <ul>
+                    <li><b>The request</b> — CheckStockRequest carries sku "SKU-4471" and quantity 3</li>
+                    <li><b>As JSON</b> — <code>{"sku":"SKU-4471","quantity":3}</code> is 31 bytes, field names spelled out on every call</li>
+                    <li><b>As protobuf</b> — numeric tags replace names: tag+len+8 chars (10 B) plus tag+varint (2 B) = 12 bytes</li>
+                    <li><b>The response</b> — in_stock true, available 17, warehouse "EAST-2": 53 bytes as JSON, 12 as protobuf</li>
+                    <li><b>The parse</b> — decoding reads tags and lengths, no string tokenizing, so it is faster as well as smaller</li>
+                </ul>
+                <p class="example">One stock check shrinks from 31+53 = 84 JSON bytes to 12+12 = 24 protobuf bytes — the same fields, 3.5&times; less on the wire (exact for these payloads).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Protocol Buffers replace repeated field-name strings with one-byte numeric tags, so payloads are smaller and faster to encode/decode than JSON — the byte counts here are exact encodings.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Four Call Shapes and a Deadline That Travels</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">HTTP/2</span><span class="tag orange">streaming</span></div>
+                <ul>
+                    <li><b>One connection</b> — HTTP/2 multiplexes many concurrent calls over a single TCP connection</li>
+                    <li><b>Unary</b> — one request, one response: the plain CheckStock call</li>
+                    <li><b>Streams</b> — server-streaming (price updates out), client-streaming (batch upload in), bidirectional (both)</li>
+                    <li><b>Deadlines</b> — orders sets a 200 ms deadline; inventory sees the time remaining and can give up early</li>
+                    <li><b>Cancellation</b> — if the shopper abandons checkout, the cancel propagates down the whole call chain</li>
+                    <li><b>The split</b> — gRPC is the standard between services; REST/JSON stays at the public edge</li>
+                </ul>
+                <p class="example">Orders calls inventory with 200 ms left; inventory's own call to the warehouse service inherits whatever remains of those 200 ms (deadline illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> HTTP/2 gives gRPC multiplexed streams — hence four call shapes — plus metadata that carries deadlines and cancellation through every hop, which plain REST has no standard way to do.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Browser Can't Speak Native gRPC</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">gRPC-Web</span></div>
+                <ul>
+                    <li><b>The plan</b> — a team exposes its new gRPC service directly to the web frontend</li>
+                    <li><b>The wall</b> — browser JavaScript gets no access to HTTP/2 trailers, where gRPC returns its status</li>
+                    <li><b>The symptom</b> — fetch() to the gRPC port hangs or errors; the client never sees a status code</li>
+                    <li><b>The fix</b> — gRPC-Web: a browser-friendly variant plus a proxy (commonly Envoy) translating to real gRPC</li>
+                    <li><b>The trade</b> — gRPC-Web drops client- and bidirectional streaming; unary and server-streaming survive</li>
+                    <li><b>The pattern</b> — keep gRPC service-to-service; put REST/JSON or gRPC-Web at the public edge</li>
+                </ul>
+                <p class="example">The checkout page's call to the gRPC port stalls with no error code — the trailer frame carrying the gRPC status never reaches JavaScript.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating gRPC as a drop-in for every client. Browsers cannot speak native gRPC; without gRPC-Web and a translating proxy, the public edge still belongs to REST/JSON.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedBox(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function lineArrow(ctx, x1, y1, x2, y2, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    if (dash) ctx.setLineDash(dash);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x2 - 9 * Math.cos(ang), y2 - 9 * Math.sin(ang)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 10 * Math.cos(ang - 0.4), y2 - 10 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 10 * Math.cos(ang + 0.4), y2 - 10 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one .proto contract, two generated stubs
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One .proto Contract, Two Generated Stubs, Zero Hand-Written JSON', w / 2, 24);
+
+    // contract box
+    roundedBox(ctx, 215, 45, 290, 40, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('inventory.proto', 360, 61);
+    ctx.fillText('service Inventory { rpc CheckStock }', 360, 77);
+
+    // codegen arrows
+    lineArrow(ctx, 240, 85, 180, 145, P.mute, 1.5, [4, 3]);
+    lineArrow(ctx, 480, 85, 540, 145, P.mute, 1.5, [4, 3]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('protoc codegen', 200, 118);
+    ctx.textAlign = 'left';
+    ctx.fillText('protoc codegen', 520, 118);
+
+    // service boxes
+    roundedBox(ctx, 55, 145, 240, 52, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders service', 175, 166);
+    ctx.font = '12px system-ui';
+    ctx.fillText('generated client stub (Go)', 175, 184);
+
+    roundedBox(ctx, 425, 145, 240, 52, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('inventory service', 545, 166);
+    ctx.font = '12px system-ui';
+    ctx.fillText('generated server stub (Java)', 545, 184);
+
+    // the call
+    lineArrow(ctx, 295, 171, 425, 171, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('CheckStock("SKU-4471", 3)', 360, 136);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('binary Protocol Buffers over HTTP/2', 360, 215);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the compiler checks the call — no URL strings, no field-name typos', w / 2, 245);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('open-sourced by Google in 2015 from its internal Stubby system', w - 12, h - 8);
+});
+
+// c2: same fields on the wire — JSON vs Protocol Buffers
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Fields on the Wire: JSON vs Protocol Buffers', w / 2, 24);
+
+    var baseY = 245;
+    function yOf(b) { return baseY - b * 3; }
+
+    // gridlines
+    ctx.font = '12px system-ui';
+    var grids = [15, 30, 45];
+    for (var g = 0; g < grids.length; g++) {
+        var gy = yOf(grids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText('' + grids[g], 52, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - 180); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var groups = [
+        { cx: 230, label: 'CheckStockRequest',  json: 31, pb: 12 },
+        { cx: 470, label: 'CheckStockResponse', json: 53, pb: 12 }
+    ];
+    for (var i = 0; i < groups.length; i++) {
+        var g2 = groups[i];
+        // JSON bar
+        var jh = g2.json * 3;
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(g2.cx - 78, baseY - jh, 70, jh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(g2.cx - 78, baseY - jh, 70, jh);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(g2.json + ' B', g2.cx - 43, baseY - jh - 8);
+        // protobuf bar
+        var ph = g2.pb * 3;
+        ctx.fillStyle = P.green;
+        ctx.fillRect(g2.cx + 8, baseY - ph, 70, ph);
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = P.green;
+        ctx.fillText(g2.pb + ' B', g2.cx + 43, baseY - ph - 8);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '13px system-ui';
+        ctx.fillText(g2.label, g2.cx, baseY + 20);
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.fillRect(575, 52, 12, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.strokeRect(575, 52, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('JSON', 593, 62);
+    ctx.fillStyle = P.green; ctx.fillRect(575, 70, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('protobuf', 593, 80);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('round trip: 84 B → 24 B, 3.5× smaller (exact)', 280, 55);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('byte counts are exact encodings of these two messages', w - 12, h - 8);
+});
+
+// c3: four call shapes on one HTTP/2 connection
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Call Shapes on One HTTP/2 Connection', w / 2, 24);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink;
+    ctx.fillText('orders (client)', 250, 52);
+    ctx.fillText('inventory (server)', 560, 52);
+
+    // guide lines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(220, 60); ctx.lineTo(220, 250); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(620, 60); ctx.lineTo(620, 250); ctx.stroke();
+
+    function reqArrow(x1, x2, y) { // rightward, blue
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 6, y); ctx.stroke();
+        ctx.fillStyle = P.blue;
+        ctx.beginPath();
+        ctx.moveTo(x2 - 6, y - 4); ctx.lineTo(x2, y); ctx.lineTo(x2 - 6, y + 4);
+        ctx.closePath(); ctx.fill();
+    }
+    function resArrow(x1, x2, y) { // leftward, green (x1 > x2)
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 + 6, y); ctx.stroke();
+        ctx.fillStyle = P.green;
+        ctx.beginPath();
+        ctx.moveTo(x2 + 6, y - 4); ctx.lineTo(x2, y); ctx.lineTo(x2 + 6, y + 4);
+        ctx.closePath(); ctx.fill();
+    }
+    function rowLabel(text, y) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(text, 20, y + 4);
+        ctx.textAlign = 'center';
+    }
+
+    // unary (y=85)
+    rowLabel('unary', 85);
+    reqArrow(220, 620, 78);
+    resArrow(620, 220, 92);
+
+    // server streaming (y=135)
+    rowLabel('server streaming', 135);
+    reqArrow(220, 620, 125);
+    resArrow(620, 500, 137);
+    resArrow(470, 350, 144);
+    resArrow(320, 220, 151);
+
+    // client streaming (y=185)
+    rowLabel('client streaming', 185);
+    reqArrow(220, 340, 169);
+    reqArrow(370, 490, 176);
+    reqArrow(520, 620, 183);
+    resArrow(620, 220, 195);
+
+    // bidirectional (y=235)
+    rowLabel('bidirectional', 235);
+    reqArrow(220, 310, 223);
+    resArrow(420, 330, 231);
+    reqArrow(340, 430, 239);
+    resArrow(540, 450, 247);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every call carries its deadline — 200 ms here — down the chain', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('message counts and deadline illustrative', w - 12, h - 8);
+});
+
+// c4: from the browser — direct gRPC fails, gRPC-Web translates
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('From the Browser: Direct gRPC Fails, gRPC-Web Translates', w / 2, 24);
+
+    function box(x, cy, bw, fill, stroke, lines) {
+        roundedBox(ctx, x, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            var ty = cy + (i - (lines.length - 1) / 2) * 14 + 4;
+            ctx.fillText(lines[i], x + bw / 2, ty);
+        }
+    }
+    var blueF = 'rgba(42,120,214,0.15)', redF = 'rgba(231,76,60,0.12)', greenF = 'rgba(0,131,0,0.12)';
+
+    // row 1: direct from browser
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('direct from browser', 20, y1 - 32);
+    box(160, y1, 140, blueF, P.blue, ['browser fetch()']);
+    lineArrow(ctx, 300, y1, 420, y1, P.mute, 3);
+    box(420, y1, 230, redF, '#e74c3c', ['native gRPC — status', 'lives in HTTP/2 trailers']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ trailers never reach JS', 535, y1 + 38);
+
+    // row 2: with gRPC-Web
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with gRPC-Web', 20, y2 - 32);
+    box(130, y2, 170, blueF, P.blue, ['browser + gRPC-Web client']);
+    lineArrow(ctx, 300, y2, 345, y2, P.mute, 3);
+    box(345, y2, 160, greenF, P.green, ['Envoy proxy translates']);
+    lineArrow(ctx, 505, y2, 545, y2, P.mute, 3);
+    box(545, y2, 140, greenF, P.green, ['gRPC server']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 615, y2 + 38);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('gRPC rules inside the datacenter; the public edge speaks REST/JSON or gRPC-Web', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

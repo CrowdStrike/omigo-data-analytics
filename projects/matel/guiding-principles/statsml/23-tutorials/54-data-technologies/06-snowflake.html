@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snowflake</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Snowflake</h1>
+<p class="subtitle">Snowflake stores the data once in cheap cloud storage and lets every team rent its own compute engine on top — so nobody queues behind anybody else</p>
+
+<div class="card-section">
+    <h2>One Copy of the Data, Many Engines on Top</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">storage/compute split</span><span class="tag orange">cloud warehouse</span></div>
+                <ul>
+                    <li><b>The old box</b> — a classic warehouse is one machine holding both the disks and the CPUs</li>
+                    <li><b>The queue</b> — when analytics runs a heavy query, finance's month-end job waits behind it</li>
+                    <li><b>The split</b> — Snowflake keeps all tables once in cloud object storage, compressed and shared</li>
+                    <li><b>The engines</b> — each team spins up its own "virtual warehouse", a compute cluster it alone uses</li>
+                    <li><b>No contention</b> — both teams scan the same orders table at 9am; neither slows the other down</li>
+                </ul>
+                <p class="example">Analytics hammers dashboards on ANALYTICS_WH while finance closes the books on FINANCE_WH — same 2 TB orders table, zero shared CPUs.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Storage and compute are separate products: data lives once in cheap object storage, and any number of independent compute engines read it without stepping on each other.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Monday 9am: Both Teams Hit the Orders Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">pay per second</span></div>
+                <ul>
+                    <li><b>The ladder</b> — warehouse sizes double: XS burns 1 credit/hr, S 2, M 4, L 8, XL 16</li>
+                    <li><b>The meter</b> — compute bills per second while running, with a 60-second minimum per resume</li>
+                    <li><b>Analytics</b> — dashboards keep a Medium busy 9:00–10:00: 4 credits/hr &times; 1 hr = 4.0 credits</li>
+                    <li><b>Finance</b> — a 12-minute close job on a Small, plus 5 idle minutes before auto-suspend: 17 min billed</li>
+                    <li><b>Hand-check</b> — finance pays 2 &times; 17/60 = 0.57 credits; the morning totals 4.57 credits &asymp; $13.70</li>
+                </ul>
+                <p class="example">At an illustrative $3 per credit, the whole 9am hour — a full analytics hour plus finance's close — costs $13.70, and DS_WH costs nothing because it never woke up.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You pay for seconds of compute per warehouse, not for the data sitting in storage — the size ladder doubles cost per step, so the bill is arithmetic you can do by hand.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Clones and Shares That Copy Nothing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">zero-copy</span></div>
+                <ul>
+                    <li><b>The clone</b> — <code>CREATE TABLE dev CLONE prod</code> makes a full test copy in seconds, storing no new data</li>
+                    <li><b>The trick</b> — the clone is metadata pointing at the same stored files; only edits create new bytes</li>
+                    <li><b>The share</b> — another Snowflake account can query your table live, with no export pipeline at all</li>
+                    <li><b>The payoff</b> — dev environments, experiments, and partner access stop multiplying storage bills</li>
+                    <li><b>The drift</b> — a clone only grows as it diverges: touch 3% of a 2 TB table, store ~60 GB extra</li>
+                </ul>
+                <p class="example">A full copy of the 2 TB orders table would double storage; the clone starts at ~0 GB extra and after a month of dev edits holds only 60 GB of changed data.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because data lives once in shared storage, "copies" are pointers — cloning and sharing cost nearly nothing until someone actually changes the data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Warehouse Nobody Turned Off</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cost control</span></div>
+                <ul>
+                    <li><b>The leak</b> — a warehouse bills every second it is resumed, even when zero queries are running</li>
+                    <li><b>The habit</b> — someone resizes to XL "for one big backfill" on Friday and never sizes it back</li>
+                    <li><b>The math</b> — an XL left running 24/7 burns 16 &times; 730 = 11,680 credits/month, &asymp; $35,040 at $3</li>
+                    <li><b>The fix</b> — set auto-suspend to a minute or two and let auto-resume wake it on the next query</li>
+                    <li><b>The sizing</b> — try the smaller size first: a step down halves cost, and many jobs barely slow</li>
+                </ul>
+                <p class="example">The same monthly workload costs $270 on an auto-suspending Small, $2,136 on a business-hours Medium, and $35,040 on a forgotten always-on XL.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating compute like storage. Storage is cheap and passive; a resumed warehouse is a taxi with the meter running — idle time and oversizing, not queries, produce the horror bills.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one storage layer, independent compute per team
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Storage Layer, Independent Compute Per Team', w / 2, 24);
+
+    // warehouse boxes
+    var whs = [
+        { x: 60, l1: 'ANALYTICS_WH', l2: 'Medium — running', fill: 'rgba(0,131,0,0.12)', border: P.green, dashed: false, txt: P.text },
+        { x: 275, l1: 'FINANCE_WH', l2: 'Small — running', fill: 'rgba(25,158,112,0.12)', border: P.aqua, dashed: false, txt: P.text },
+        { x: 490, l1: 'DS_WH', l2: 'suspended — costs $0', fill: '#f4f5f7', border: P.mute, dashed: true, txt: P.mute }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var b = whs[i];
+        ctx.fillStyle = b.fill; ctx.strokeStyle = b.border; ctx.lineWidth = 2;
+        if (b.dashed) ctx.setLineDash([5, 4]);
+        roundRect(ctx, b.x, 85, 170, 50, 8); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = b.txt; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.l1, b.x + 85, 105);
+        ctx.fillText(b.l2, b.x + 85, 122);
+    }
+
+    // arrows to storage
+    arrow(ctx, 145, 135, 230, 198, P.green, 3);
+    arrow(ctx, 360, 135, 360, 198, P.aqua, 3);
+    arrow(ctx, 575, 135, 500, 198, P.mute, 2, [5, 4]);
+
+    // annotation (below the storage box, clear of the arrows)
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each engine reads the same bytes — none blocks another', w / 2, 282);
+
+    // storage box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    roundRect(ctx, 160, 200, 400, 55, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('cloud object storage', 360, 222);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('orders table · 2 TB · stored exactly once', 360, 240);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('table size illustrative', w - 20, h - 6);
+});
+
+// c2: one hour, two warehouses, 4.57 credits total
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Hour, Two Warehouses: 4.57 Credits Total', w / 2, 24);
+
+    var ox = 60, baseY = 245;
+    function xOf(min) { return ox + min * 10; }
+
+    // gridlines + tick labels every 15 min
+    var labs = ['9:00', '9:15', '9:30', '9:45', '10:00'];
+    ctx.font = '12px system-ui';
+    for (var i = 0; i < 5; i++) {
+        var x = xOf(i * 15);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 70); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(labs[i], x, baseY + 16);
+    }
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + 600, baseY); ctx.stroke();
+
+    // row 1: ANALYTICS_WH — running all hour
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ANALYTICS_WH (M)', 60, 88);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.fillRect(60, 97, 600, 26);
+    ctx.strokeRect(60, 97, 600, 26);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('running 60 min — 4.0 credits', 360, 114);
+
+    // row 2: FINANCE_WH — run, idle, suspended
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('FINANCE_WH (S)', 60, 162);
+    // run segment 9:00-9:12
+    ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.fillRect(60, 177, 120, 26);
+    ctx.strokeRect(60, 177, 120, 26);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('run 12 min', 120, 220);
+    // idle segment 9:12-9:17
+    ctx.fillStyle = 'rgba(217,89,38,0.25)'; ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.fillRect(180, 177, 50, 26);
+    ctx.strokeRect(180, 177, 50, 26);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('idle 5 min — still billing', 240, 172);
+    // suspended dashed line 9:17-10:00
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(230, 190); ctx.lineTo(660, 190); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('suspended — $0', 445, 220);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0.57 credits', 660, 172);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4.57 credits × $3 ≈ $13.70 for the morning', 400, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("$3/credit illustrative; credit-per-hour rates and per-second billing are Snowflake's documented model", w - 12, h - 4);
+});
+
+// c3: extra storage for a "copy" of a 2 TB table
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Extra Storage for a 'Copy' of a 2 TB Table", w / 2, 24);
+
+    var bx = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { cy: 90, label: 'full physical copy', bw: 420, fill: 'rgba(231,76,60,0.25)', border: '#e74c3c', val: '2,000 GB' },
+        { cy: 150, label: 'zero-copy clone, day 1', bw: 4, fill: 'rgba(0,131,0,0.30)', border: null, val: '~0 GB (metadata only)' },
+        { cy: 210, label: 'clone after a month of edits', bw: 13, fill: 'rgba(42,120,214,0.30)', border: null, val: '60 GB (3% changed)' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.cy + 4);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.cy - 13, r.bw, 26);
+        if (r.border) {
+            ctx.strokeStyle = r.border; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, r.cy - 13, r.bw, 26);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.val, bx + r.bw + 8, r.cy + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('seconds to create, ~0 bytes until you write', 700, 140);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; bar widths proportional to GB', w - 20, h - 6);
+});
+
+// c4: same workload, three habits — $270 vs $35,040 a month
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Workload, Three Habits: $270 vs $35,040 a Month', w / 2, 24);
+
+    var bx = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { cy: 85, l1: 'S, auto-suspend 60s', l2: '45 active hr', bw: 40, fill: 'rgba(0,131,0,0.30)', border: null, val: '90 credits ≈ $270', vc: P.green, inside: false },
+        { cy: 150, l1: 'M, suspended nights + weekends', l2: '178 hr', bw: 130, fill: 'rgba(42,120,214,0.30)', border: null, val: '712 credits ≈ $2,136', vc: P.blue, inside: false },
+        { cy: 215, l1: 'XL, left running 24/7', l2: '730 hr', bw: 440, fill: 'rgba(231,76,60,0.25)', border: '#e74c3c', val: '11,680 credits ≈ $35,040', vc: '#e74c3c', inside: true }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.l1, 20, r.cy - 3);
+        ctx.fillText(r.l2, 20, r.cy + 13);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.cy - 13, r.bw, 26);
+        if (r.border) {
+            ctx.strokeStyle = r.border; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, r.cy - 13, r.bw, 26);
+        }
+        ctx.fillStyle = r.vc; ctx.font = 'bold 12px system-ui';
+        if (r.inside) {
+            ctx.textAlign = 'right';
+            ctx.fillText(r.val, bx + r.bw - 10, r.cy + 4);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(r.val, bx + r.bw + 8, r.cy + 4);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('130× the bill for the same queries', 300, 250);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('credit math exact for the stated hours and rates; $3/credit and hours illustrative', w - 12, h - 4);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

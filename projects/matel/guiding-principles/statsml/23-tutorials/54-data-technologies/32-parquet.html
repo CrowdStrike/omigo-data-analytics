@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parquet</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Parquet</h1>
+<p class="subtitle">Parquet stores a table column by column instead of row by row — so a query that needs 2 of 40 columns reads 5% of the bytes, and every engine from pandas to Spark opens the same file</p>
+
+<div class="card-section">
+    <h2>Forty Columns, Stored Column by Column</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">columnar layout</span><span class="tag orange">Apache</span></div>
+                <ul>
+                    <li><b>The table</b> — an <code>events</code> table: 100 million rows, 40 columns, saved as one 2 GB Parquet file</li>
+                    <li><b>Row layout</b> — a CSV writes row after row, so every column's bytes are interleaved on disk</li>
+                    <li><b>Column layout</b> — Parquet regroups values by column: all user_ids together, all dates together</li>
+                    <li><b>The structure</b> — rows split into row groups; inside each, one column chunk per column, cut into pages</li>
+                    <li><b>The origin</b> — built by Twitter and Cloudera in 2013, borrowing the columnar shredding of Google's Dremel paper</li>
+                    <li><b>Self-describing</b> — the footer stores the schema, offsets, and stats; no side metadata file needed</li>
+                </ul>
+                <p class="example">The 2 GB events file holds ten row groups of 10 million rows; each row group holds forty column chunks, and each chunk is cut into ~1 MB pages.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A Parquet file is rows chopped into row groups and regrouped by column — the unit a query reads is a column chunk, not a row.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Two-Column Query That Reads 5%</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">column pruning</span><span class="tag orange">encodings</span></div>
+                <ul>
+                    <li><b>The query</b> — <code>SELECT user_id, revenue</code> needs 2 of the 40 columns of the events table</li>
+                    <li><b>The seek</b> — the footer lists every chunk's byte offset, so the reader jumps straight to those two</li>
+                    <li><b>The math (exact)</b> — 2 of 40 columns at ~50 MB each: 100 MB read of 2,000 MB stored = 5%</li>
+                    <li><b>Dictionary encoding</b> — a country chunk stores 195 distinct strings once, then small integer codes</li>
+                    <li><b>Run-length encoding</b> — sorted dates collapse to runs: "Aug 20 &times; 3.1M" instead of 3.1M copies</li>
+                    <li><b>The payoff</b> — per row group, country shrinks 40 MB &rarr; 0.4 MB and event_date &rarr; 1 MB (illustrative)</li>
+                </ul>
+                <p class="example">On the 2 GB events file, the two-column query reads the ten user_id chunks and ten revenue chunks — 100 MB, or 5% — before any filter is even applied.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Column pruning comes free with columnar layout — bytes read scale with the columns you select, not the columns the table stores.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Min/Max Stats: Skipping Whole Row Groups</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">predicate pushdown</span><span class="tag orange">every engine</span></div>
+                <ul>
+                    <li><b>The stats</b> — the footer keeps min/max per column chunk: row group 7's event_date spans Aug 19–21</li>
+                    <li><b>The filter</b> — <code>WHERE event_date = '2026-08-20'</code>: nine of the ten row groups' ranges exclude Aug 20</li>
+                    <li><b>The skip</b> — the reader proves those nine can't match and never fetches them; only row group 7 is read</li>
+                    <li><b>The bill</b> — one row group's user_id + revenue + event_date chunks: 5 + 5 + 1 = 11 MB of 2,000 MB</li>
+                    <li><b>Sorting helps</b> — min/max prunes well only when data is sorted or clustered by the filter column</li>
+                    <li><b>Every engine</b> — Spark, DuckDB, pandas (pyarrow), Trino, and cloud warehouses read the same file; lakehouse formats like Iceberg and Delta store Parquet underneath</li>
+                </ul>
+                <p class="example">DuckDB on a laptop answers the Aug-20 revenue query by reading 11 MB of the 2 GB file — about 0.55% — because nine row groups are skipped unopened.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Min/max statistics turn a scan into targeted reads — the engine proves a row group cannot match the filter and skips it without reading a byte of its data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A File Format, Not a Database</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">immutability</span></div>
+                <ul>
+                    <li><b>The confusion</b> — columnar files are so fast for scans that people start treating Parquet like a database</li>
+                    <li><b>Point lookups</b> — fetching one event by id decodes pages from all 40 chunks: ~80 MB touched for one row</li>
+                    <li><b>No edits</b> — Parquet files are immutable; changing one value means rewriting the entire file</li>
+                    <li><b>Appends too</b> — adding rows means writing a new file; streams of tiny files drown queries in footer reads</li>
+                    <li><b>The fix</b> — put a table format or database on top; keep Parquet as bulk columnar storage, which it is</li>
+                </ul>
+                <p class="example">Correcting one customer's country in the 2 GB file rewrites all 2,000 MB — a transactional database changes that one row in place.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting row-store behavior from a column store. Parquet trades single-row reads, updates, and appends for cheap scans — engines that need mutability put a layer on top rather than edit the file.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: row layout vs Parquet row group
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 10 Million Rows: Interleaved vs Regrouped by Column', w / 2, 24);
+
+    var stripFills = ['rgba(42,120,214,0.30)', 'rgba(0,131,0,0.30)', 'rgba(217,89,38,0.30)', 'rgba(74,58,167,0.30)'];
+
+    // top band: row layout
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('row layout (CSV)', 20, 80);
+    for (var r = 0; r < 6; r++) {
+        var bx = 150 + r * 92; // 88 wide + 4 gap
+        for (var c = 0; c < 4; c++) {
+            ctx.fillStyle = stripFills[c];
+            ctx.fillRect(bx + c * 22, 62, 22, 30);
+        }
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, 62, 88, 30);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('row 1', 150 + 44, 106);
+    ctx.textAlign = 'right';
+    ctx.fillText('… 10M rows →', 698, 106);
+
+    // bottom band: Parquet row group
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Parquet row group', 20, 190);
+    var chunks = [
+        { wd: 170, fill: 'rgba(42,120,214,0.30)', edge: P.blue, lab: 'user_id 5 MB', pages: true },
+        { wd: 60, fill: 'rgba(0,131,0,0.30)', edge: P.green, lab: 'event_date 1 MB', pages: false },
+        { wd: 40, fill: 'rgba(217,89,38,0.30)', edge: P.orange, lab: 'country 0.4 MB', pages: false },
+        { wd: 170, fill: 'rgba(74,58,167,0.30)', edge: P.violet, lab: 'revenue 5 MB', pages: true }
+    ];
+    var cx = 150, cy = 172, ch = 34;
+    var labelRow = 0;
+    chunks.forEach(function(c, i) {
+        ctx.fillStyle = c.fill;
+        ctx.fillRect(cx, cy, c.wd, ch);
+        ctx.strokeStyle = c.edge; ctx.lineWidth = 1;
+        ctx.strokeRect(cx, cy, c.wd, ch);
+        if (c.pages) {
+            // dashed page dividers
+            ctx.strokeStyle = P.mute; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+            for (var d = 1; d < 4; d++) {
+                var dx = cx + c.wd * d / 4;
+                ctx.beginPath(); ctx.moveTo(dx, cy + 2); ctx.lineTo(dx, cy + ch - 2); ctx.stroke();
+            }
+            ctx.setLineDash([]);
+        }
+        // staggered label
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.lab, cx + c.wd / 2, (i % 2 === 0) ? 222 : 236);
+        cx += c.wd + 8;
+    });
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('… 36 more chunks', 716, cy + 22);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a query for 2 columns touches 2 chunks and skips the rest', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('chunk widths ∝ compressed size, sizes illustrative', w - 12, h - 6);
+});
+
+// c2: SELECT 2 of 40 columns
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('SELECT 2 of 40 Columns: Read 100 MB of 2,000 MB', w / 2, 24);
+
+    // column strip: 40 blocks
+    for (var i = 0; i < 40; i++) {
+        var bx = 60 + i * 15;
+        if (i === 0 || i === 11) {
+            ctx.fillStyle = P.green;
+            ctx.fillRect(bx, 70, 14, 36);
+        } else {
+            ctx.fillStyle = 'rgba(107,114,128,0.25)';
+            ctx.fillRect(bx, 70, 14, 36);
+            ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+            ctx.strokeRect(bx, 70, 14, 36);
+        }
+    }
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('user_id', 60 + 7, 62);
+    ctx.fillText('revenue', 60 + 11 * 15 + 7, 62);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('40 column chunks (one row group shown)', 60, 122);
+
+    // bar 1: bytes stored
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(60, 170, 600, 22);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+    ctx.strokeRect(60, 170, 600, 22);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bytes stored: 2,000 MB', 654, 185);
+
+    // bar 2: bytes read
+    ctx.fillStyle = P.green;
+    ctx.fillRect(60, 210, 30, 22);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('bytes read: 100 MB', 98, 225);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('2 / 40 = 5% — the fraction is exact, the sizes illustrative', 300, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('equal ~50 MB per column assumed, illustrative', w - 12, h - 6);
+});
+
+// c3: min/max row-group skipping
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('WHERE event_date = Aug 20: 9 of 10 Row Groups Skipped', w / 2, 24);
+
+    // filter marker
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('filter: event_date = Aug 20', 60, 62);
+
+    var ranges = ['1–3', '4–6', '7–9', '10–12', '13–15', '16–18', '19–21', '22–24', '25–27', '28–30'];
+    for (var i = 0; i < 10; i++) {
+        var bx = 60 + i * 60;
+        if (i === 6) {
+            ctx.fillStyle = 'rgba(0,131,0,0.25)';
+            ctx.fillRect(bx, 110, 56, 70);
+            ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, 110, 56, 70);
+            ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('read', bx + 28, 149);
+            ctx.fillText('Aug 20 ∈ [19, 21]', bx + 28, 95);
+        } else {
+            ctx.fillStyle = 'rgba(107,114,128,0.18)';
+            ctx.fillRect(bx, 110, 56, 70);
+            ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+            ctx.strokeRect(bx, 110, 56, 70);
+            ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('skip', bx + 28, 149);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ranges[i], bx + 28, 200);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('event_date min–max (Aug)', 60, 218);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('11 MB read of 2,000 MB — stats decided before any data was touched', w / 2, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('data sorted by date; ranges illustrative', w - 12, h - 6);
+});
+
+// c4: bytes touched per operation
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Bytes Touched per Operation on the 2 GB File', w / 2, 24);
+
+    var baseX = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 55); ctx.lineTo(baseX, 245); ctx.stroke();
+
+    var rows = [
+        { y: 70, lab: 'SUM(revenue), 100M rows — 50 MB', color: P.green, wd: 120, val: '50 MB', extra: null },
+        { y: 120, lab: '2 cols + date filter — 11 MB', color: P.green, wd: 60, val: '11 MB', extra: null },
+        { y: 170, lab: 'fetch 1 row by event_id — ~80 MB', color: P.orange, wd: 150, val: '~80 MB', extra: { text: 'more than the full-column scan', color: P.orange } },
+        { y: 220, lab: 'update 1 value — rewrite 2,000 MB', color: '#e74c3c', wd: 440, val: '2,000 MB', extra: { text: 'whole file', color: '#e74c3c' } }
+    ];
+    rows.forEach(function(r) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 13);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(baseX, r.y, r.wd, 16);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        if (r.wd < 430) {
+            ctx.fillText(r.val, baseX + r.wd + 6, r.y + 12);
+            if (r.extra) {
+                ctx.fillStyle = r.extra.color; ctx.font = '12px system-ui';
+                ctx.fillText(r.extra.text, baseX + r.wd + 60, r.y + 12);
+            }
+        } else {
+            // long bar: value inside, extra label above
+            ctx.fillStyle = '#fff';
+            ctx.fillText(r.val, baseX + 8, r.y + 12);
+            if (r.extra) {
+                ctx.fillStyle = r.extra.color; ctx.font = '12px system-ui';
+                ctx.fillText(r.extra.text, baseX + r.wd - 66, r.y - 5);
+            }
+        }
+    });
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('great at scanning millions of rows, terrible at touching one', w - 30, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic, MB illustrative', w - 12, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

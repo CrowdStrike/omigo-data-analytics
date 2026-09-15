@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arrow</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Arrow</h1>
+<p class="subtitle">One in-memory columnar layout every tool agrees on — data moves between systems by sharing a pointer instead of copying and converting</p>
+
+<div class="card-section">
+    <h2>The Same Table, Copied at Every Hop</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">zero copy</span><span class="tag orange">Apache Arrow</span></div>
+                <ul>
+                    <li><b>The pipeline</b> — a 2 GB orders table flows through four tools: Polars, pandas, DuckDB, an ML library</li>
+                    <li><b>The tax</b> — without Arrow, each hop converts formats: Polars frames to pandas blocks to DuckDB vectors</li>
+                    <li><b>The waste</b> — each conversion burns CPU serializing and deserializing the exact same values</li>
+                    <li><b>The fix</b> — Arrow defines one columnar memory layout that all four tools understand natively</li>
+                    <li><b>Zero copy</b> — a hop becomes a pointer handoff: the next tool reads the previous tool's memory</li>
+                </ul>
+                <p class="example">The 2 GB table crosses three hops on its way to the model; with Arrow, not a single byte is rewritten along the way.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Arrow is a standardized in-memory columnar format — once every tool lays columns out the same way, "transferring" data means sharing a buffer, not converting it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Serialization Tax</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">memory traffic</span></div>
+                <ul>
+                    <li><b>The table</b> — 50M rows &times; 5 columns, 2 GB resident in RAM (illustrative)</li>
+                    <li><b>One hop's cost</b> — copy-and-convert writes 2 GB out and reads 2 GB back in: 4 GB of memory traffic</li>
+                    <li><b>Three hops</b> — 3 hops &times; 4 GB = 12 GB moved to relocate a table whose values never changed</li>
+                    <li><b>Peak RAM</b> — mid-hop, the source and destination copies are both alive: 4 GB held for a 2 GB table</li>
+                    <li><b>Hand-check</b> — 12 GB &divide; 2 GB means the pipeline rewrites the table 6 times end to end</li>
+                    <li><b>The Arrow line</b> — every hop costs 0 bytes: all four tools point at the same buffer</li>
+                </ul>
+                <p class="example">Sending the 2 GB table through the pipeline shuffles 12 GB of memory the old way; with Arrow the running total stays at 0.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The serialization tax is hops &times; 2 &times; table size — with all four tools in one process sharing an Arrow buffer, no hop touches the data at all.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Layer Under Polars, DuckDB, and pandas 2.x</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">ecosystem</span></div>
+                <ul>
+                    <li><b>Polars</b> — the DataFrame library's native memory model is Arrow; every column is an Arrow array</li>
+                    <li><b>DuckDB</b> — queries pandas and Polars frames in place by scanning their Arrow buffers, no import step</li>
+                    <li><b>pandas 2.x</b> — <code>dtype_backend="pyarrow"</code> stores columns as Arrow arrays instead of NumPy blocks</li>
+                    <li><b>Spark</b> — <code>toPandas()</code> with the Arrow flag skips row-by-row pickling: 60 s drops to 3 s (illustrative)</li>
+                    <li><b>Arrow Flight</b> — an RPC protocol that ships Arrow buffers over the network, replacing row-based ODBC</li>
+                    <li><b>Memory maps</b> — an Arrow file on disk can be memory-mapped and read with zero parsing</li>
+                </ul>
+                <p class="example">A dashboard pulls 10M rows from a warehouse: 66 s over ODBC, 6 s over Arrow Flight — the rows were never re-encoded in flight (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Arrow won by being the layer, not the tool — Polars, DuckDB, pandas, and Spark interoperate cheaply because they all agreed on the same bytes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Arrow Is Not a File Format</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">Arrow vs Parquet</span></div>
+                <ul>
+                    <li><b>The confusion</b> — Arrow and Parquet are both "columnar", so people treat them as interchangeable</li>
+                    <li><b>Parquet</b> — an on-disk format: compressed and encoded, built to make files small</li>
+                    <li><b>Arrow</b> — an in-memory format: uncompressed, fixed layout, built to be computed on directly</li>
+                    <li><b>The cost</b> — every Parquet read pays a decompress-and-decode step; an Arrow buffer needs none</li>
+                    <li><b>The pairing</b> — the standard pipeline is Parquet for storage, Arrow the moment data reaches RAM</li>
+                </ul>
+                <p class="example">Renaming <code>orders.parquet</code> to <code>orders.arrow</code> buys nothing — the compressed pages still have to be decoded into Arrow's layout before any tool can share them.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Expecting Parquet files to be zero-copy because they are columnar. Zero-copy is a property of Arrow's in-memory layout; Parquet deliberately trades it away for compression on disk.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: copy-and-convert vs shared Arrow buffer
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Tools, One 2 GB Table: Three Copies vs Zero', w / 2, 24);
+
+    var toolX = [110, 260, 410, 560];
+    var toolLabs = ['Polars', 'pandas', 'DuckDB', 'ML lib'];
+
+    function toolBox(x, y) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        roundRect(ctx, x, y, 100, 36, 8);
+        ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // Row 1: copy-and-convert
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('copy-and-convert', 20, 60);
+    for (var i = 0; i < 4; i++) {
+        toolBox(toolX[i], 70);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(toolLabs[i], toolX[i] + 50, 92);
+    }
+    for (var i = 0; i < 3; i++) {
+        var x0 = toolX[i] + 100, x1 = toolX[i + 1];
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x0, 88); ctx.lineTo(x1 - 6, 88); ctx.stroke();
+        arrowHead(ctx, x0, 88, x1 - 2, 88, '#e74c3c');
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('convert 2 GB', (x0 + x1) / 2, 78);
+    }
+
+    // Row 2: with Arrow
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with Arrow', 20, 165);
+    for (var i = 0; i < 4; i++) {
+        toolBox(toolX[i], 175);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(toolLabs[i], toolX[i] + 50, 197);
+    }
+    // shared Arrow buffer box
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundRect(ctx, 250 - 110, 240 - 17, 220, 34, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one Arrow buffer (2 GB)', 250, 244);
+    // lines from tool boxes down to the buffer
+    for (var i = 0; i < 4; i++) {
+        var cx = toolX[i] + 50;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, 211);
+        ctx.lineTo(Math.min(Math.max(cx, 150), 350), 223);
+        ctx.stroke();
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0 bytes copied — all four read the same memory', 400, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('table size illustrative', w - 12, h - 8);
+});
+
+// c2: memory traffic per hop
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Memory Traffic per Hop: 4 GB Each vs 0 GB Each', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    function py(gb) { return baseY - gb * 15; }
+
+    // gridlines
+    [3, 6, 9].forEach(function(g) {
+        var y = py(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, y + 4);
+    });
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('0', ox - 8, baseY + 4);
+    ctx.fillText('12', ox - 8, py(12) + 4);
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var groups = [
+        { cx: 170, lab: 'Polars→pandas' },
+        { cx: 360, lab: 'pandas→DuckDB' },
+        { cx: 550, lab: 'DuckDB→ML lib' }
+    ];
+    var bw = 60;
+    groups.forEach(function(g) {
+        // convert bar (left): 4 GB = 60px
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(g.cx - bw - 5, baseY - 60, bw, 60);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('4 GB', g.cx - bw / 2 - 5, baseY - 66);
+        // Arrow bar (right): 3px stub
+        ctx.fillStyle = P.green;
+        ctx.fillRect(g.cx + 5, baseY - 3, bw, 3);
+        ctx.fillStyle = P.green; ctx.font = '12px system-ui';
+        ctx.fillText('0 GB', g.cx + bw / 2 + 5, baseY - 10);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(g.lab, g.cx, baseY + 18);
+    });
+
+    // annotations
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('12 GB of traffic to move a 2 GB table', 150, 55);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Arrow: every hop is a pointer handoff', 390, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative — each hop writes 2 GB and reads 2 GB', w - 12, h - 6);
+});
+
+// c3: transfer timings with and without Arrow
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Data, Same Wire — Skip the Re-encoding', w / 2, 24);
+
+    var baseX = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 60); ctx.lineTo(baseX, 240); ctx.stroke();
+
+    var rows = [
+        { y: 75, lab: 'Spark→pandas, Arrow off — 60 s', color: '#e74c3c', wd: 400, val: '60 s', extra: null },
+        { y: 115, lab: 'Spark→pandas, Arrow on — 3 s', color: P.green, wd: 20, val: '3 s', extra: '20× faster' },
+        { y: 175, lab: '10M-row fetch, ODBC — 66 s', color: '#e74c3c', wd: 440, val: '66 s', extra: null },
+        { y: 215, lab: '10M-row fetch, Arrow Flight — 6 s', color: P.green, wd: 40, val: '6 s', extra: '11× faster' }
+    ];
+    rows.forEach(function(r) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 12);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(baseX, r.y, r.wd, 16);
+        if (r.wd < 430) {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+            ctx.fillText(r.val, baseX + r.wd + 6, r.y + 12);
+            if (r.extra) {
+                ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+                ctx.fillText(r.extra, baseX + r.wd + 44, r.y + 12);
+            }
+        } else {
+            ctx.fillStyle = '#fff'; ctx.font = '11px system-ui';
+            ctx.fillText(r.val, baseX + 8, r.y + 12);
+        }
+    });
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('same trick both times: no serialize, no deserialize', 280, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 6);
+});
+
+// c4: Parquet read vs Arrow read
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Parquet Is for Storing, Arrow Is for Sharing', w / 2, 24);
+
+    function box(x, cy, bw, fill, edge, lines) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 12);
+        }
+    }
+
+    // Row 1: Parquet read
+    var y1 = 85;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Parquet read', 20, y1 + 4);
+    box(150, y1, 170, 'rgba(42,120,214,0.15)', P.blue, ['compressed pages', 'on disk']);
+    box(470, y1, 170, 'rgba(42,120,214,0.15)', P.blue, ['in-memory table']);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(320, y1); ctx.lineTo(464, y1); ctx.stroke();
+    arrowHead(ctx, 320, y1, 468, y1, P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('decompress + decode', 393, y1 - 12);
+    ctx.fillText('CPU work on every read', 393, y1 + 28);
+
+    // Row 2: Arrow read
+    var y2 = 195;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Arrow read', 20, y2 + 4);
+    box(150, y2, 180, 'rgba(0,131,0,0.12)', P.green, ['memory-mapped', 'Arrow file']);
+    box(470, y2, 170, 'rgba(0,131,0,0.12)', P.green, ['ready to compute']);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(330, y2); ctx.lineTo(464, y2); ctx.stroke();
+    arrowHead(ctx, 330, y2, 468, y2, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('pointer', 397, y2 - 12);
+    ctx.fillText('✓ no decode step', 397, y2 + 28);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('store as Parquet, share as Arrow — they solve different problems', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

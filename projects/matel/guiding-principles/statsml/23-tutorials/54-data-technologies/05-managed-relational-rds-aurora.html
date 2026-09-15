@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Managed Relational (RDS, Aurora)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Managed Relational (RDS, Aurora)</h1>
+<p class="subtitle">AWS RDS and Aurora run the Postgres or MySQL for you — you pay a premium and give up the server keys, and in exchange you stop being a database administrator</p>
+
+<div class="card-section">
+    <h2>Someone Else's Postgres</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">managed service</span><span class="tag orange">RDS</span></div>
+                <ul>
+                    <li><b>The team</b> — a five-person startup runs its orders database; nobody on the team is a DBA</li>
+                    <li><b>The old job</b> — self-hosting means provisioning, patching, backups, and failover are their problem</li>
+                    <li><b>The service</b> — RDS is the same Postgres or MySQL engine, but AWS handles those chores</li>
+                    <li><b>The trade</b> — no SSH, no OS access, no superuser: the box is theirs, the database is yours</li>
+                    <li><b>The bill</b> — the same-size machine costs more managed: $140/mo self-run vs $290/mo RDS Multi-AZ (illustrative)</li>
+                </ul>
+                <p class="example">The team clicks "create database", picks Postgres and an instance size, and never installs, upgrades, or backs up the server again.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A managed relational database is the stock engine with the server work subtracted — you rent the DBA role from the provider and keep only the data-side work.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Night the Primary Died</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">failover</span><span class="tag orange">backups</span></div>
+                <ul>
+                    <li><b>The setup</b> — Multi-AZ RDS keeps a synchronized standby copy in a second availability zone</li>
+                    <li><b>The failure</b> — at 2:14am the primary's host dies mid-write; nobody on the team is awake</li>
+                    <li><b>The failover</b> — RDS flips the database address to the standby with no human involved</li>
+                    <li><b>The gap</b> — orders stop for about 90 seconds (illustrative; AWS documents one to two minutes as typical)</li>
+                    <li><b>The backups</b> — daily snapshots plus 5-minute transaction logs restore to any second in the last 7 days (a few minutes behind live)</li>
+                </ul>
+                <p class="example">Orders run at ~80/min, drop to 0 at 2:14am, recover by 2:15:30, and are back at ~80/min by 2:16 — the team reads about it in the morning.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The failover the team never had to script, test, or run at 2am is the concrete thing the managed premium buys.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What Aurora Changes Under the Hood</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">Aurora</span><span class="tag green">architecture</span></div>
+                <ul>
+                    <li><b>The split</b> — Aurora separates compute from storage: your instances run queries, a shared layer holds the data</li>
+                    <li><b>Six copies</b> — the storage layer keeps 6 copies of every block across 3 availability zones (exact, AWS-documented)</li>
+                    <li><b>The tolerance</b> — writes survive losing 2 copies, reads survive losing 3 — a whole AZ can vanish</li>
+                    <li><b>Shared disks</b> — replicas read the same storage as the writer, so adding one copies no data</li>
+                    <li><b>Auto-grow</b> — storage expands on its own up to the documented 128 TB ceiling; nobody resizes a volume</li>
+                </ul>
+                <p class="example">When the team adds a read replica for reporting, it attaches to the same 6-way-replicated storage in minutes instead of restoring a full copy.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Aurora is AWS rebuilding the database's bottom half — MySQL/Postgres-compatible on top, a replicated distributed storage service underneath.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Managed Is Not the Same as Maintenance-Free</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">still your job</span></div>
+                <ul>
+                    <li><b>The confusion</b> — teams read "managed" as "nothing left to manage" and stop thinking about the database</li>
+                    <li><b>What left</b> — patching, backups, failover drills: roughly 7 of the team's 12 monthly ops hours (illustrative)</li>
+                    <li><b>What stayed</b> — slow queries, missing indexes, schema migrations, connection limits are still entirely yours</li>
+                    <li><b>No escape hatch</b> — with no SSH or superuser, you cannot install OS tools or unsupported extensions to dig yourself out</li>
+                    <li><b>The surprise</b> — a missing index takes a managed database down exactly as fast as a self-hosted one</li>
+                </ul>
+                <p class="example">Three months in, an unindexed lookup on the grown orders table times out checkout — RDS is healthy the whole time, because query design was never AWS's job.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing the premium bought a DBA for everything. It bought the server half; the data half — schema, indexes, query patterns — never left your desk.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: six DBA chores, before and after RDS
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var chores = ['provision', 'patch OS', 'back up', 'fail over', 'tune queries', 'schema'];
+    var xs = [130, 225, 320, 415, 510, 605];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Six DBA Chores: Who Owns Them Before and After RDS', w / 2, 24);
+
+    function choreBox(x, y, label, fill, border, tag, tagColor) {
+        ctx.fillStyle = fill; ctx.strokeStyle = border; ctx.lineWidth = 2;
+        roundRect(ctx, x, y, 85, 40, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + 42, y + 25);
+        ctx.fillStyle = tagColor; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(tag, x + 42, y + 56);
+    }
+
+    // row 1: self-managed
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('self-managed', 20, 118);
+    for (var i = 0; i < 6; i++) {
+        choreBox(xs[i], 95, chores[i], 'rgba(42,120,214,0.15)', P.blue, 'you', P.blue);
+    }
+
+    // row 2: on RDS
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('on RDS', 20, 218);
+    for (var i = 0; i < 6; i++) {
+        if (i < 4) {
+            choreBox(xs[i], 195, chores[i], 'rgba(0,131,0,0.12)', P.green, 'AWS', P.green);
+        } else {
+            choreBox(xs[i], 195, chores[i], 'rgba(42,120,214,0.15)', P.blue, 'you', P.blue);
+        }
+    }
+
+    // move-to-RDS arrow
+    ctx.setLineDash([4, 3]);
+    arrow(ctx, 60, 140, 60, 190, P.mute, 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('move to RDS', 70, 168);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the server chores leave; the data chores stay', w / 2, 280);
+});
+
+// c2: failover at 2:14am, 90 seconds of downtime
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var mins = [0, 1, 2, 3, 4, 4.2, 5, 5.5, 6, 7, 8, 10, 12];
+    var orders = [78, 81, 80, 79, 80, 0, 0, 62, 79, 80, 82, 79, 81];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Failover at 2:14am: 90 Seconds of Downtime, Zero Humans Paged', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, yMax = 100;
+    function xOf(m) { return ox + m / 12 * pw; }
+    function yOf(v) { return baseY - v / yMax * ph; }
+
+    // gridlines
+    ctx.font = '12px system-ui';
+    for (var g = 25; g <= 75; g += 25) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, yOf(g)); ctx.lineTo(ox + pw, yOf(g)); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 6, yOf(g) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var labs = ['2:10', '2:12', '2:14', '2:16', '2:18', '2:20', '2:22'];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < labs.length; i++) ctx.fillText(labs[i], xOf(i * 2), baseY + 16);
+
+    // failure marker
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(4), baseY - ph); ctx.lineTo(xOf(4), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('primary dies', xOf(4) - 5, baseY - ph + 12);
+
+    // recovery marker
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(5.5), baseY - ph); ctx.lineTo(xOf(5.5), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('standby promoted', xOf(5.5) + 5, baseY - ph + 12);
+
+    // orders line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < mins.length; i++) {
+        var x = xOf(mins[i]), y = yOf(orders[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('back to ~80 orders/min — nobody woke up', xOf(8) - 90, 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order counts illustrative; 60–120s failover is the AWS-documented typical range', w - 12, h - 4);
+});
+
+// c3: Aurora architecture — compute on top, shared 6-copy storage below
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Aurora: Compute on Top, One Shared 6-Copy Storage Layer Below', w / 2, 24);
+
+    // compute caption
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('compute — yours to size', 150, 58);
+
+    // compute boxes
+    var comps = [{ x: 150, lab: 'writer instance' }, { x: 400, lab: 'reader instance' }];
+    for (var i = 0; i < 2; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        roundRect(ctx, comps[i].x, 70, 180, 44, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(comps[i].lab, comps[i].x + 90, 97);
+        arrow(ctx, comps[i].x + 90, 114, comps[i].x + 90, 168, P.mute, 3);
+    }
+
+    // storage band
+    ctx.fillStyle = 'rgba(25,158,112,0.10)'; ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+    roundRect(ctx, 60, 170, 600, 95, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Aurora storage layer — auto-grows to 128 TB', 75, 190);
+
+    // AZ groups with copy boxes
+    var azs = [90, 290, 490];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        roundRect(ctx, azs[i], 200, 170, 55, 6); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('AZ ' + (i + 1), azs[i] + 6, 212);
+        for (var j = 0; j < 2; j++) {
+            var cx = azs[i] + 45 + j * 65;
+            ctx.fillStyle = 'rgba(25,158,112,0.25)';
+            roundRect(ctx, cx, 218, 55, 30, 6); ctx.fill();
+            ctx.fillStyle = P.aqua; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('copy', cx + 27, 237);
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('6 copies across 3 AZs — losing an entire AZ loses nothing', 660, 155);
+});
+
+// c4: monthly ops hours — what the premium erases and what it doesn't
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var tasks = [
+        { y: 70, label: 'patching', self: 330, selfLab: '3 h', rds: 0, rdsLab: '0 h' },
+        { y: 110, label: 'backups', self: 220, selfLab: '2 h', rds: 0, rdsLab: '0 h' },
+        { y: 150, label: 'failover drills', self: 220, selfLab: '2 h', rds: 0, rdsLab: '0 h' },
+        { y: 190, label: 'query tuning', self: 330, selfLab: '3 h', rds: 330, rdsLab: '3 h' },
+        { y: 230, label: 'schema & indexes', self: 220, selfLab: '2 h', rds: 220, rdsLab: '2 h' }
+    ];
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Monthly Ops Hours: What the Premium Erases and What It Doesn't", w / 2, 24);
+
+    var bx = 210;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 52); ctx.lineTo(bx, 252); ctx.stroke();
+
+    for (var i = 0; i < tasks.length; i++) {
+        var t = tasks[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(t.label, 20, t.y + 6);
+        // self-managed bar (top)
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(bx, t.y - 9, t.self, 12);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, t.y - 9, t.self, 12);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText(t.selfLab, bx + t.self + 6, t.y + 1);
+        // RDS bar (15px below)
+        if (t.rds > 0) {
+            ctx.fillStyle = P.green;
+            ctx.fillRect(bx, t.y + 6, t.rds, 12);
+        }
+        ctx.fillStyle = '#444';
+        ctx.fillText(t.rdsLab, bx + t.rds + 6, t.y + 16);
+    }
+
+    // legend
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.fillRect(455, 42, 14, 10);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(455, 42, 14, 10);
+    ctx.fillStyle = P.text; ctx.fillText('self-managed — 12 h/mo total', 475, 51);
+    ctx.fillStyle = P.green; ctx.fillRect(455, 58, 14, 10);
+    ctx.fillStyle = P.text; ctx.fillText('on RDS — 5 h/mo total', 475, 67);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the server work vanishes; the data work stays yours', 700, 268);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hours illustrative', w - 20, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

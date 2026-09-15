@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAP for Object Storage</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>CAP for Object Storage</h1>
+<p class="subtitle">Write a new price to an object and read it back in the same region, and you always get the new price; read the copy in another region and you can still get the old one</p>
+
+<div class="card-section">
+    <h2>Same Region: The Reader Gets What The Writer Just Wrote</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">strong in-region</span><span class="tag orange">made to wait</span></div>
+                <ul>
+                    <li><b>The setup</b> — one object holds a price; Alice writes a new price to it, Bob reads the same object</li>
+                    <li><b>What Bob gets</b> — the new price, on his first read, whether he reads a millisecond later or an hour later</li>
+                    <li><b>No retry needed</b> — he does not have to read twice, sleep, or check whether the value looks current</li>
+                    <li><b>Overwrites included</b> — this holds for replacing an existing value and for deleting it, not just new objects</li>
+                    <li><b>When the service is busy</b> — it answers with a slow-down error and asks the caller to retry the read</li>
+                    <li><b>It never answers with the old price</b> — an error you can see is the price paid for never being quietly wrong</li>
+                    <li><b>That is the CAP trade</b> — a system either always answers or always answers correctly; here, correctness wins</li>
+                </ul>
+                <p class="example">Alice writes price 42 and her write is acknowledged; Bob reads the object a heartbeat later and gets 42 — not because he was lucky with timing, but because the older value is no longer available to serve.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The guarantee is about which value you see, not how quickly you see it. Under load the service delays you with a retryable error, and a visible delay is a far cheaper failure than a silently stale number.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Another Region: The Copy Arrives Later</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">replication delay</span><span class="tag red">stale reads</span></div>
+                <ul>
+                    <li><b>The setup</b> — the bucket is copied to a second region, and that copying happens after the write is acknowledged</li>
+                    <li><b>The gap</b> — Alice's write succeeds in region A well before the new price exists in region B at all</li>
+                    <li><b>What each reader gets</b> — for a while, a reader in A gets 42 while a reader in B still gets 37</li>
+                    <li><b>Both reads succeed</b> — neither is an error, and nothing in the response marks region B's value as out of date</li>
+                    <li><b>Missing, not just old</b> — a newly created object is simply absent in region B until the copy lands</li>
+                    <li><b>How long is the gap</b> — it depends on the copy backlog; you can pay for a bound on it, never for zero</li>
+                </ul>
+                <p class="example">Alice writes 42 in region A, then a dashboard configured against region B renders 37. The dashboard is not broken — 37 is genuinely the value region B holds at that moment.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The software is identical in both regions; only which copy the read reached is different. That is the whole trade — read one region and get the current value, or spread across regions and accept disagreement.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What You Can Count On, and Where</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">rule of thumb</span><span class="tag green">same region vs another</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>Same region, all of it holds</b> — your own write, someone else's write, a delete, and the bucket's listing</li>
+                    <li><b>Another region, none of it holds</b> — each can be out of date, returned without an error and without a hint</li>
+                    <li><b>Neither does two objects at once</b> — changing two objects all-or-nothing is not offered in either arrangement</li>
+                    <li><b>So ask one question</b> — before trusting a value, ask whether the read was served from a copy in another region</li>
+                    <li><b>The rule that follows</b> — a job that must see its own writes reads from the same bucket in the same region</li>
+                    <li><b>Since December 2020</b> — the same-region guarantee is documented; guidance older than that says otherwise</li>
+                </ul>
+                <p class="example">A failover plan assumed switching reads to region B loses nothing; the copy backlog was running a minute behind, so a minute of writes were simply not there after the switch.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Two beliefs keep circulating — that a same-region read is still only <em>eventually</em> current, which stopped being true in December 2020, and that a front door routing across both regions makes them agree. Routing changes which copy answers; it does not make the copies match.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef',
+  red: '#e74c3c'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function arrow(ctx, x0, y0, x1, y1, color, width, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = width || 2;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x0, y0, x1, y1, color);
+}
+
+// c1: same-region read, three possible answers
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Region: Three Possible Answers, One That Never Happens', w / 2, 24);
+
+    // reader
+    ctx.fillStyle = 'rgba(42,120,214,0.14)';
+    roundRect(ctx, 36, 110, 160, 54, 6); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('Bob reads the', 116, 132);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('price object', 116, 150);
+
+    // service
+    ctx.fillStyle = 'rgba(26,82,118,0.10)';
+    roundRect(ctx, 250, 100, 170, 74, 6); ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('object storage', 335, 128);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('same region as the write', 335, 148);
+
+    arrow(ctx, 200, 137, 244, 137, P.mute, 2);
+
+    // answer A: the new price
+    ctx.fillStyle = 'rgba(0,131,0,0.14)';
+    roundRect(ctx, 470, 66, 224, 52, 6); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('the new price: 42', 582, 90);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('always, on the first read', 582, 108);
+
+    // answer B: slow down
+    ctx.fillStyle = 'rgba(201,133,0,0.14)';
+    roundRect(ctx, 470, 132, 224, 52, 6); ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('slow down — retry', 582, 156);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('an error, not a value', 582, 174);
+
+    // answer C: never returned
+    ctx.fillStyle = '#f4f6f9';
+    roundRect(ctx, 470, 198, 224, 52, 6); ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12.5px system-ui';
+    var neverTxt = 'the old price: 37';
+    ctx.fillText(neverTxt, 582, 222);
+    var tw = ctx.measureText(neverTxt).width;
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(582 - tw / 2, 218); ctx.lineTo(582 + tw / 2, 218); ctx.stroke();
+    ctx.font = '12px system-ui';
+    ctx.fillText('never returned in-region', 582, 240);
+
+    arrow(ctx, 420, 120, 466, 92, P.green, 2);
+    arrow(ctx, 420, 137, 466, 158, P.yellow, 2);
+    arrow(ctx, 420, 155, 466, 224, P.mute, 2, [4, 3]);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('it will make the caller wait — it will not make the caller wrong', w / 2, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('prices illustrative; same-region read-after-write and retryable throttling are documented behaviour', w - 12, h - 6);
+});
+
+// c2: the window where both prices are live
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Window Where Both Prices Are Live', w / 2, 22);
+
+    var x0 = 110, x1 = 660, tMax = 600;
+    function tx(t) { return x0 + (x1 - x0) * (t / tMax); }
+    var xLand = tx(450);   // 522.5
+    var xLook = tx(120);   // 220.0
+
+    // the window
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(x0, 80, xLand - x0, 118);
+
+    // region A
+    ctx.fillStyle = 'rgba(0,131,0,0.20)';
+    roundRect(ctx, x0, 90, x1 - x0, 34, 4); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('holds 42 from the moment the write returns', 385, 112);
+
+    // region B: old then new
+    ctx.fillStyle = 'rgba(231,76,60,0.16)';
+    roundRect(ctx, x0, 150, xLand - x0, 34, 4); ctx.fill();
+    ctx.strokeStyle = P.red; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.red; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('still holds 37', (x0 + xLand) / 2, 172);
+
+    ctx.fillStyle = 'rgba(0,131,0,0.20)';
+    roundRect(ctx, xLand, 150, x1 - xLand, 34, 4); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('42', (xLand + x1) / 2, 172);
+
+    // lane labels
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('region A', 102, 112);
+    ctx.fillText('region B', 102, 172);
+
+    // axis
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x0, 216); ctx.lineTo(x1, 216); ctx.stroke();
+    ctx.textAlign = 'center';
+    [0, 150, 300, 450, 600].forEach(function(t) {
+        var x = tx(t);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, 216); ctx.lineTo(x, 211); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(String(t), x, 236);
+    });
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('milliseconds after the write is acknowledged in region A (illustrative)', 385, 256);
+
+    // copy lands
+    ctx.strokeStyle = P.red; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(xLand, 72); ctx.lineTo(xLand, 202); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.red; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('copy lands', xLand + 4, 68);
+
+    // the instant of the reads
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xLook, 72); ctx.lineTo(xLook, 202); ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('two reads, here', xLook, 64);
+
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = P.green; ctx.fillText('reader in A → 42', xLook + 6, 108);
+    ctx.fillStyle = P.red;   ctx.fillText('reader in B → 37', xLook + 6, 168);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both reads succeed and disagree — neither response says which value is stale', w / 2, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; cross-region copying happens after the write returns, with no default bound', w - 12, h - 6);
+});
+
+// c3: what holds in the same region, and what survives the copy
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What Holds in the Same Region, and What Survives the Copy', w / 2, 22);
+
+    var colA = 470, colB = 610;
+
+    ctx.font = 'bold 12.5px system-ui'; ctx.fillStyle = P.ink;
+    ctx.fillText('same region', colA, 52);
+    ctx.fillText('another region', colB, 52);
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(400, 56); ctx.lineTo(676, 56); ctx.stroke();
+
+    var rows = [
+        { t: 'read the value you just wrote',            grp: 'ok'   },
+        { t: "read someone else's latest write",         grp: 'ok'   },
+        { t: 'read a delete you just made',              grp: 'ok'   },
+        { t: 'the bucket listing is current',            grp: 'ok'   },
+        { t: 'two objects change together, or neither',  grp: 'none' },
+        { t: 'how stale can the value be?',              grp: 'lag'  }
+    ];
+    var style = {
+        ok:   { fill: 'rgba(0,131,0,0.07)',   accent: P.green },
+        none: { fill: 'rgba(231,76,60,0.09)', accent: P.red },
+        lag:  { fill: 'rgba(201,133,0,0.10)', accent: P.yellow }
+    };
+
+    rows.forEach(function(r, i) {
+        var top = 64 + i * 28, base = top + 17, st = style[r.grp];
+
+        ctx.fillStyle = st.fill;
+        roundRect(ctx, 36, top, 640, 26, 3); ctx.fill();
+        ctx.fillStyle = st.accent;
+        ctx.fillRect(36, top, 3, 26);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.text; ctx.font = '12.5px system-ui';
+        ctx.fillText(r.t, 50, base);
+
+        ctx.textAlign = 'center';
+        if (r.grp === 'lag') {
+            ctx.font = 'bold 12px system-ui';
+            ctx.fillStyle = P.green;  ctx.fillText('never stale', colA, base);
+            ctx.fillStyle = P.yellow; ctx.fillText('no bound by default', colB, base);
+        } else {
+            ctx.font = 'bold 14px system-ui';
+            ctx.fillStyle = (r.grp === 'ok') ? P.green : P.red;
+            ctx.fillText((r.grp === 'ok') ? '✓' : '✗', colA, base);
+            ctx.fillStyle = P.red; ctx.fillText('✗', colB, base);
+        }
+    });
+
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(400, 48); ctx.lineTo(400, 234);
+    ctx.moveTo(540, 48); ctx.lineTo(540, 234);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(25,158,112,0.12)';
+    roundRect(ctx, 36, 242, 640, 30, 6); ctx.fill();
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('if the value has to be current, read the region you wrote to', 356, 261);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('every row states documented behaviour; no illustrative values here', w - 12, h - 6);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

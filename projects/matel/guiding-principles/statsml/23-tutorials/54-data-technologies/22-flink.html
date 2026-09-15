@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flink</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Flink</h1>
+<p class="subtitle">Flink processes each event the instant it arrives and uses watermarks to know when a time window has seen everything — so it can count late orders correctly</p>
+
+<div class="card-section">
+    <h2>The Store That Counts Orders as They Happen</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">streaming-first</span><span class="tag orange">event-at-a-time</span></div>
+                <ul>
+                    <li><b>The task</b> — an online store counts orders per 5-minute window; the 12:00–12:05 window is due</li>
+                    <li><b>The stream</b> — orders A–F trickle in one at a time; Flink processes each on arrival, no buffering</li>
+                    <li><b>Streaming-first</b> — Flink treats batch as a stream that happens to end, the reverse of Spark's heritage</li>
+                    <li><b>Micro-batch contrast</b> — Spark's classic streaming groups events into small batches and waits for each</li>
+                    <li><b>The payoff</b> — per-event processing means an order is in the running count milliseconds after arrival</li>
+                </ul>
+                <p class="example">Order B arrives at 12:02:30; a 2-minute micro-batch would hold it until 12:04, but Flink adds it to the count on arrival.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Flink is a true event-at-a-time streaming engine — every order updates state the moment it arrives, and bounded (batch) data is just the special case of a stream that ends.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Closing the 12:00 Window When One Order Is Late</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">event time</span><span class="tag orange">watermarks</span></div>
+                <ul>
+                    <li><b>Two clocks</b> — each order carries its checkout time (event time); arrival at Flink is processing time</li>
+                    <li><b>The late one</b> — order D is stamped 12:04 but arrives 12:07 (the phone checked out offline)</li>
+                    <li><b>The question</b> — when may the 12:00–12:05 window close? Waiting forever is not an answer</li>
+                    <li><b>The watermark</b> — Flink tracks "watermark = latest event time seen &minus; 2 min": no older events are still coming</li>
+                    <li><b>The close</b> — F (stamped 12:07:30) arrives at 12:08, watermark passes 12:05, the window fires with count 4</li>
+                    <li><b>Hand-check</b> — A (12:01), B (12:02), C (12:03), D (12:04) fall in the window; E and F belong to 12:05–12:10</li>
+                </ul>
+                <p class="example">D arrives 3 minutes late at 12:07, but the watermark is still only 12:04 — the window is open, so D is counted and the result is 4, not 3.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A watermark is the stream declaring "no events with timestamps older than T are still coming" — it lets event-time windows close correctly even when events arrive out of order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Crash at 12:06 and the Count That Survives</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">keyed state</span><span class="tag orange">exactly-once</span></div>
+                <ul>
+                    <li><b>The state</b> — the running count for window 12:00–12:05 lives in Flink's managed keyed state</li>
+                    <li><b>The barriers</b> — checkpoint barriers flow with the stream every 2 min, Chandy-Lamport-style snapshots</li>
+                    <li><b>The snapshots</b> — 12:02 saves count 1, 12:04 saves count 3, 12:06 saves count 3 (D not yet arrived)</li>
+                    <li><b>The crash</b> — a worker dies at 12:06:48; Flink restores the 12:06 snapshot and rewinds the source</li>
+                    <li><b>The replay</b> — E, D, F are re-read; only D lands here, so the window still fires with 4, never 5</li>
+                    <li><b>Who needs it</b> — fraud counters, billing, feature pipelines: any count that must survive failure exactly once</li>
+                </ul>
+                <p class="example">Without checkpointed state, the crash at 12:06:48 either loses the count of 3 or double-counts replayed orders — with it, the answer is exactly 4 either way.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Flink pairs managed keyed state with periodic distributed snapshots — on failure it restores the last snapshot and replays the source, giving exactly-once state updates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Watermark Is a Promise, Not a Timeout</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">late data</span></div>
+                <ul>
+                    <li><b>The confusion</b> — treating the watermark delay as a tuning knob with no meaning, or leaving it at 0</li>
+                    <li><b>Delay 0</b> — watermark equals the latest event time, so any out-of-order event is already "too late"</li>
+                    <li><b>The drop</b> — with delay 0, E's arrival at 12:06:30 closes the window at count 3; D is discarded</li>
+                    <li><b>The other ditch</b> — a 30-minute delay keeps every straggler but holds the 12:05 answer until ~12:36</li>
+                    <li><b>The trade</b> — the delay states how out-of-order your data really is: completeness bought with latency</li>
+                </ul>
+                <p class="example">The same six orders yield a count of 3, 4, or 4 depending only on the watermark delay — 0 min drops D, 2 min is right at 12:08, 30 min is right but ~28 minutes later.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing the watermark measures anything by itself. It is a declared assumption about lateness — declare 0 and correct data gets dropped as "late"; declare too much and every window's answer stalls.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: processed on arrival vs held for the next micro-batch
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Six Orders: Processed on Arrival vs Held for the Next Micro-Batch', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600;
+    function xOf(min) { return ox + min / 10 * plotW; }
+    var laneTop = 110, laneBot = 190;
+
+    // lane lines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, laneTop); ctx.lineTo(ox + plotW, laneTop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, laneBot); ctx.lineTo(ox + plotW, laneBot); ctx.stroke();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.green;
+    ctx.fillText('event-at-a-time', 62, laneTop - 14);
+    ctx.fillStyle = P.blue;
+    ctx.fillText('2-min micro-batch', 62, laneBot - 14);
+
+    // time axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 10; m += 2) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(m), baseY - 4); ctx.lineTo(xOf(m), baseY + 4); ctx.stroke();
+        ctx.fillText(m === 10 ? '12:10' : '12:0' + m, xOf(m), baseY + 20);
+    }
+
+    // batch boundaries (bottom lane only)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    var bMins = [2, 4, 6, 8, 10];
+    for (var i = 0; i < bMins.length; i++) {
+        ctx.beginPath(); ctx.moveTo(xOf(bMins[i]), laneBot - 20); ctx.lineTo(xOf(bMins[i]), laneBot + 20); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('batch fires', xOf(4) + 5, laneBot - 24);
+
+    var arr = [1.5, 2.5, 3.5, 6.5, 7.0, 8.0];
+    var labs = ['A', 'B', 'C', 'E', 'D', 'F'];
+
+    // wait arrows on the bottom lane
+    for (var i = 0; i < arr.length; i++) {
+        var nextB = Math.ceil(arr[i] / 2) * 2;
+        if (nextB === arr[i]) continue;
+        var x1 = xOf(arr[i]) + 8, x2 = xOf(nextB);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, laneBot); ctx.lineTo(x2 - 7, laneBot); ctx.stroke();
+        ctx.fillStyle = P.orange;
+        ctx.beginPath();
+        ctx.moveTo(x2 - 7, laneBot - 4); ctx.lineTo(x2, laneBot); ctx.lineTo(x2 - 7, laneBot + 4);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // order dots on both lanes
+    for (var i = 0; i < arr.length; i++) {
+        var x = xOf(arr[i]);
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(x, laneTop, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(x, laneBot, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labs[i], x, laneTop - 12);
+        ctx.fillText(labs[i], x, laneBot - 12);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('B waits 90s for its batch; the top lane counted it instantly', xOf(3) + 100, 225);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('arrival times illustrative', w - 12, h - 6);
+});
+
+// c2: event time vs processing time — the watermark trails by 2 minutes
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Event Time vs Processing Time: the Watermark Trails by 2 Minutes', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    function xOf(p) { return ox + p / 9 * plotW; }
+    function yOf(e) { return baseY - e / 8 * plotH; }
+
+    // gridlines and y labels
+    ctx.font = '12px system-ui';
+    var eGrids = [2, 4, 6];
+    var eLabs = ['12:02', '12:04', '12:06'];
+    for (var g = 0; g < eGrids.length; g++) {
+        var gy = yOf(eGrids[g]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(eLabs[g], ox - 6, gy + 4);
+    }
+    // axes and x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    var pTicks = [0, 3, 6, 9];
+    var pLabs = ['12:00', '12:03', '12:06', '12:09'];
+    for (var t = 0; t < pTicks.length; t++) ctx.fillText(pLabs[t], xOf(pTicks[t]), baseY + 18);
+    ctx.fillText('processing time', ox + plotW / 2, baseY + 36);
+
+    // on-time diagonal
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(0), yOf(0)); ctx.lineTo(xOf(8), yOf(8)); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('on time', xOf(5.5) + 8, yOf(5.5) - 8);
+
+    // watermark step line
+    var wm = [[1.5, 0], [2.5, 0], [3.5, 1], [6.5, 4], [7, 4], [8, 5.5]];
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(xOf(wm[0][0]), yOf(wm[0][1]));
+    for (var i = 1; i < wm.length; i++) {
+        ctx.lineTo(xOf(wm[i][0]), yOf(wm[i - 1][1]));
+        ctx.lineTo(xOf(wm[i][0]), yOf(wm[i][1]));
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('watermark', xOf(8) + 6, yOf(5.5) + 4);
+
+    // window-end line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(5)); ctx.lineTo(ox + plotW, yOf(5)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('window end 12:05', 65, yOf(5) - 6);
+
+    // order dots
+    var orders = [
+        { p: 1.5, e: 1,   lab: 'A', late: false },
+        { p: 2.5, e: 2,   lab: 'B', late: false },
+        { p: 3.5, e: 3,   lab: 'C', late: false },
+        { p: 6.5, e: 6,   lab: 'E', late: false },
+        { p: 7,   e: 4,   lab: 'D', late: true },
+        { p: 8,   e: 7.5, lab: 'F', late: false }
+    ];
+    for (var i = 0; i < orders.length; i++) {
+        var o = orders[i];
+        var x = xOf(o.p), y = yOf(o.e);
+        ctx.fillStyle = o.late ? P.magenta : P.blue;
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.fill();
+        if (o.late) {
+            ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('D — 3 min late', x + 12, y + 4);
+        } else {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(o.lab, x, y - 12);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('watermark passes 12:05 at 12:08 — window fires, count = 4', w - 15, 85);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timestamps illustrative; watermark rule exact', w - 15, h - 6);
+});
+
+// c3: checkpoint, crash, restore — the count ends at exactly 4
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Checkpoint, Crash, Restore: the Count Ends at Exactly 4', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    function xOf(min) { return ox + min / 10 * plotW; }
+    function yOf(c) { return baseY - c / 5 * plotH; }
+
+    // gridlines
+    ctx.font = '12px system-ui';
+    for (var g = 1; g <= 4; g++) {
+        var gy = yOf(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText('' + g, ox - 8, gy + 4);
+    }
+    // axes and x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 10; m += 2) {
+        ctx.fillText(m === 10 ? '12:10' : '12:0' + m, xOf(m), baseY + 18);
+    }
+
+    // checkpoint markers
+    var ckpts = [
+        { m: 2, lab: 'ckpt: count 1', ly: 62 },
+        { m: 4, lab: 'ckpt: count 3', ly: 76 },
+        { m: 6, lab: 'ckpt: count 3', ly: 62 }
+    ];
+    for (var i = 0; i < ckpts.length; i++) {
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(xOf(ckpts[i].m), baseY); ctx.lineTo(xOf(ckpts[i].m), baseY - plotH); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ckpts[i].lab, xOf(ckpts[i].m), ckpts[i].ly);
+    }
+
+    // crash marker
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xOf(6.8), baseY); ctx.lineTo(xOf(6.8), baseY - plotH); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crash', xOf(6.8) + 22, 50);
+
+    // count step line (solid to 6.8, dashed 6.8-7.0, solid after)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(0));
+    ctx.lineTo(xOf(1.5), yOf(0)); ctx.lineTo(xOf(1.5), yOf(1));
+    ctx.lineTo(xOf(2.5), yOf(1)); ctx.lineTo(xOf(2.5), yOf(2));
+    ctx.lineTo(xOf(3.5), yOf(2)); ctx.lineTo(xOf(3.5), yOf(3));
+    ctx.lineTo(xOf(6.8), yOf(3));
+    ctx.stroke();
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(xOf(6.8), yOf(3));
+    ctx.lineTo(xOf(7), yOf(3)); ctx.lineTo(xOf(7), yOf(4));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(xOf(7), yOf(4)); ctx.lineTo(xOf(10), yOf(4));
+    ctx.stroke();
+
+    // restore arrow back to the minute-6 checkpoint
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xOf(6.8), 120);
+    ctx.quadraticCurveTo(xOf(6.4), 100, xOf(6) + 8, 118);
+    ctx.stroke();
+    ctx.fillStyle = P.violet;
+    ctx.beginPath();
+    ctx.moveTo(xOf(6), 122); ctx.lineTo(xOf(6) + 12, 112); ctx.lineTo(xOf(6) + 13, 125);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('restore + replay', xOf(4.6), 100);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replayed D counted once — final count 4', xOf(8) - 30, 130);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts and timings illustrative; exactly-once refers to state updates', w - 12, h - 6);
+});
+
+// c4: same orders, three watermark delays
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Orders, Three Watermark Delays: What Gets Counted, and When', w / 2, 24);
+
+    var bx = 250;
+    // vertical gridlines at 1..4 orders
+    ctx.font = '11px system-ui';
+    for (var o = 1; o <= 4; o++) {
+        var gx = bx + o * 100;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gx, 60); ctx.lineTo(gx, 240); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText('' + o, gx, 52);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 240); ctx.stroke();
+
+    var rows = [
+        { y: 80,  l1: 'delay 0 min',  l2: 'result at 12:06:30', fill: 'rgba(231,76,60,0.30)', edge: '#e74c3c', wpx: 300, note: 'D dropped',              noteColor: '#e74c3c', noteX: null },
+        { y: 150, l1: 'delay 2 min',  l2: 'result at 12:08',    fill: 'rgba(0,131,0,0.25)',   edge: P.green,   wpx: 400, note: 'complete',               noteColor: P.green,   noteX: null },
+        { y: 220, l1: 'delay 30 min', l2: 'result at ~12:36',   fill: 'rgba(217,89,38,0.25)', edge: P.orange,  wpx: 400, note: 'complete, 28 min late',  noteColor: P.orange,  noteX: null }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.l1, 20, r.y - 2);
+        ctx.fillText(r.l2, 20, r.y + 14);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y - 11, r.wpx, 22);
+        ctx.strokeStyle = r.edge; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y - 11, r.wpx, 22);
+        ctx.fillStyle = r.noteColor; ctx.font = 'bold 12px system-ui';
+        if (i === 2) {
+            ctx.textAlign = 'right';
+            ctx.fillText(r.note, bx + r.wpx, r.y + 28);
+            ctx.textAlign = 'left';
+        } else {
+            ctx.fillText(r.note, bx + r.wpx + 8, r.y + 4);
+        }
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the delay is your claim about lateness — 2 min fits this stream', w / 2, 268);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts follow the worked example; emit times illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

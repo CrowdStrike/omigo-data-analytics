@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGBoost &amp; LightGBM</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>XGBoost &amp; LightGBM</h1>
+<p class="subtitle">Gradient boosting builds a team of small trees where each new tree trains on the errors of the trees before it &mdash; for a decade the default winner on tabular data</p>
+
+<div class="card-section">
+    <h2>A Team of Trees That Fix Each Other's Mistakes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">boosting</span><span class="tag orange">residuals</span></div>
+                <ul>
+                    <li><b>The task</b> — predict sale prices for houses from size, age, and neighborhood</li>
+                    <li><b>The start</b> — the first guess is just the mean price: $300k for every house</li>
+                    <li><b>The residual</b> — house C actually sold for $190k, so the guess is off by &minus;$110k</li>
+                    <li><b>The next tree</b> — tree 1 trains on those errors themselves, not on the original prices</li>
+                    <li><b>The step</b> — add half of tree 1's correction: house C's guess moves from $300k to $245k</li>
+                    <li><b>The loop</b> — repeat; every new tree fits whatever error the whole team still makes</li>
+                </ul>
+                <p class="example">After five trees, house C's prediction has walked from $300k down to $193.4k against a true price of $190k (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Gradient boosting builds trees one after another; each tree's training target is the current ensemble's leftover error, so the team improves exactly where it is still worst.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Five Houses, Three Rounds: Watching the Error Halve</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">learning rate</span></div>
+                <ul>
+                    <li><b>The data</b> — five sold houses: $250k, $310k, $190k, $420k, $330k; the mean is $300k</li>
+                    <li><b>Round 0</b> — predict $300k for all; residuals &minus;50, +10, &minus;110, +120, +30 ($k); MAE $64k</li>
+                    <li><b>Tree 1</b> — fits those five residuals; add half its output, so every residual halves</li>
+                    <li><b>Round 1</b> — residuals become &minus;25, +5, &minus;55, +60, +15 ($k); MAE drops to $32k</li>
+                    <li><b>Round 2</b> — halve again: &minus;12.5, +2.5, &minus;27.5, +30, +7.5; MAE $16k, then $8k after round 3</li>
+                    <li><b>Hand-check</b> — house D ($420k): guesses go 300 → 360 → 390 → 405, always half the gap</li>
+                </ul>
+                <p class="example">Three rounds cut the mean absolute error from $64k to $8k — with a 0.5 learning rate, each round halves whatever error is left.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The learning rate scales each tree's correction; a smaller rate takes smaller, safer steps and needs more trees — XGBoost and LightGBM both ship it as the key dial.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Boosted Trees Owned Tabular Data for a Decade</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">XGBoost 2014</span><span class="tag orange">LightGBM</span></div>
+                <ul>
+                    <li><b>XGBoost (2014)</b> — added regularization and second-order gradients; became the Kaggle-winning workhorse</li>
+                    <li><b>LightGBM (Microsoft)</b> — bins features into histograms and grows trees leaf-wise, much faster on large data</li>
+                    <li><b>Mixed types</b> — trees split on raw columns directly; no feature scaling or normalization needed</li>
+                    <li><b>Missing values</b> — XGBoost learns a default direction for missing values at every split</li>
+                    <li><b>Modest data</b> — strong with thousands of rows, where deep nets typically want far more</li>
+                </ul>
+                <p class="example">On a typical 20-column customer table with numbers, categories, and holes, a boosted tree trains on the raw frame while a neural net first needs encoding, imputation, and scaling.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Boosted trees stay the tabular default because they eat messy real-world tables as-is — mixed types, missing cells, unscaled columns, modest row counts — and still fit accurately.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>More Trees Is Not Always Better</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">early stopping</span></div>
+                <ul>
+                    <li><b>The dial</b> — the number of boosting rounds; every extra tree keeps cutting training error</li>
+                    <li><b>The trap</b> — training error falls forever, but validation error bottoms out and turns back up</li>
+                    <li><b>The memorizer</b> — late trees fit noise: they learn which houses, not which features</li>
+                    <li><b>Early stopping</b> — hold out data; stop when validation error hasn't improved for ~50 rounds</li>
+                    <li><b>The pair</b> — a lower learning rate needs more rounds; tune the two together, never separately</li>
+                </ul>
+                <p class="example">Train MAE glides from $64k to $3k over 500 rounds, but validation MAE bottoms at $25k near round 200 and climbs back to $34k (illustrative).</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading falling training error as progress. Past the validation minimum, every new tree is memorizing the training set — both libraries ship early stopping precisely because "more rounds" quietly becomes "more overfitting".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: house C prediction walking toward truth
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('House C: Each New Tree Closes Half the Remaining Gap', w / 2, 24);
+
+    var px = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(r) { return px + r / 5 * pw; }
+    function yOf(p) { return baseY - (p - 180) / (310 - 180) * chH; }
+
+    // gridlines at 200/240/280
+    var gv = [[200, '$200k'], [240, '$240k'], [280, '$280k']];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i][0])); ctx.lineTo(px + pw, yOf(gv[i][0])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < gv.length; i++) {
+        ctx.fillText(gv[i][1], px - 6, yOf(gv[i][0]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var r = 0; r <= 5; r++) {
+        ctx.fillText('round ' + r, xOf(r), baseY + 18);
+    }
+
+    // truth line at 190
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(px, yOf(190)); ctx.lineTo(px + pw, yOf(190)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('true price $190k', px + pw - 4, yOf(190) - 8);
+
+    // prediction line
+    var rounds = [0, 1, 2, 3, 4, 5];
+    var prices = [300, 245, 217.5, 203.8, 196.9, 193.4];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < rounds.length; i++) {
+        var cx = xOf(rounds[i]), cy = yOf(prices[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    for (var i = 0; i < rounds.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(rounds[i]), yOf(prices[i]), 5, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('$300k', xOf(0) + 20, yOf(300) - 10);
+    ctx.fillText('$193.4k', xOf(5) - 20, yOf(193.4) - 12);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('tree 2 trains on what tree 1 left behind', xOf(2.5), 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('prices illustrative; halving exact for learning rate 0.5', px + pw, h - 8);
+});
+
+// c2: MAE halving bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Five Houses: Mean Absolute Error Halves Every Round', w / 2, 24);
+
+    var px = 60, baseY = 245, pw = 600, chH = 180;
+    function yOf(v) { return baseY - v / 70 * chH; }
+
+    // gridlines
+    var gv = [[20, '$20k'], [40, '$40k'], [60, '$60k']];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i][0])); ctx.lineTo(px + pw, yOf(gv[i][0])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < gv.length; i++) {
+        ctx.fillText(gv[i][1], px - 6, yOf(gv[i][0]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+
+    // bars
+    var mae = [64, 32, 16, 8, 4];
+    var labs = ['$64k', '$32k', '$16k', '$8k', '$4k'];
+    var centers = [130, 245, 360, 475, 590];
+    var bw = 70;
+    for (var i = 0; i < 5; i++) {
+        var bh = baseY - yOf(mae[i]);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(centers[i] - bw / 2, yOf(mae[i]), bw, bh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(centers[i] - bw / 2, yOf(mae[i]), bw, bh);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labs[i], centers[i], yOf(mae[i]) - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText('round ' + i, centers[i], baseY + 18);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each tree fixes half of what remains', 420, 95);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('house prices illustrative; the halving is exact arithmetic for this setup', px + pw, h - 8);
+});
+
+// c3: trees vs nets readiness table
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What a Real Table Throws at You — Trees vs Nets', w / 2, 24);
+
+    // column headers
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('boosted trees', 330, 55);
+    ctx.fillText('neural net', 575, 55);
+
+    var rows = [
+        { y: 90, hurdle: 'mixed types', tree: '✓ splits raw columns', net: 'needs encoding' },
+        { y: 140, hurdle: 'missing values', tree: '✓ default split direction', net: 'needs imputation' },
+        { y: 190, hurdle: 'unscaled columns', tree: '✓ splits ignore scale', net: 'needs normalization' },
+        { y: 240, hurdle: '10k rows', tree: '✓ fits well', net: 'wants far more data' }
+    ];
+    var bw = 190, bh = 34;
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.hurdle, 20, r.y + 4);
+        // tree box
+        roundRect(ctx, 330 - bw / 2, r.y - bh / 2, bw, bh, 8);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.tree, 330, r.y + 4);
+        // net box
+        roundRect(ctx, 575 - bw / 2, r.y - bh / 2, bw, bh, 8);
+        ctx.fillStyle = 'rgba(217,89,38,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.net, 575, r.y + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the preprocessing the net needs is where tabular projects stall', w / 2, 278);
+});
+
+// c4: train vs validation error curves
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Train Error Falls Forever — Validation Error Turns Back Up', w / 2, 24);
+
+    var px = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(r) { return px + r / 500 * pw; }
+    function yOf(v) { return baseY - v / 70 * chH; }
+
+    // gridlines
+    var gv = [20, 40, 60];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i])); ctx.lineTo(px + pw, yOf(gv[i])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < gv.length; i++) {
+        ctx.fillText('$' + gv[i] + 'k', px - 6, yOf(gv[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var r = 0; r <= 500; r += 100) {
+        ctx.fillText(String(r), xOf(r), baseY + 18);
+    }
+
+    var rounds = [0, 25, 50, 100, 150, 200, 250, 300, 400, 500];
+    var train = [64, 42, 30, 22, 17, 13, 10, 8, 5, 3];
+    var valid = [64, 46, 36, 29, 26, 25, 25.5, 27, 30, 34];
+
+    // early stop marker at round 200
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(200), baseY); ctx.lineTo(xOf(200), baseY - chH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('early stop here — valid MAE $25k', xOf(200), baseY - chH + 12);
+
+    // train line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < rounds.length; i++) {
+        var cx = xOf(rounds[i]), cy = yOf(train[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('train', xOf(500) + 4, yOf(3) + 4);
+
+    // validation line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < rounds.length; i++) {
+        var cx = xOf(rounds[i]), cy = yOf(valid[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('validation', xOf(500) + 4, yOf(34) + 4);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('300 extra trees make it worse', xOf(380) - 40, 120);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('error curves illustrative', px + pw, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

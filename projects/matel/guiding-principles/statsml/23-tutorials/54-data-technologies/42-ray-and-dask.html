@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ray &amp; Dask</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Ray &amp; Dask</h1>
+<p class="subtitle">When one machine runs out of memory or cores, Dask and Ray split the same Python work into pieces that run across many &mdash; often with barely any code change</p>
+
+<div class="card-section">
+    <h2>The 40 GB File That Killed a 16 GB Laptop</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">Dask</span><span class="tag orange">partitions</span></div>
+                <ul>
+                    <li><b>The job</b> — a year of order logs sits in one 40 GB CSV; the analyst's laptop has 16 GB of RAM</li>
+                    <li><b>The crash</b> — <code>pd.read_csv</code> tries to load all 40 GB at once and the process dies out of memory</li>
+                    <li><b>The switch</b> — <code>dd.read_csv</code> in Dask reads the file as 320 partitions with blocksize set to 128 MB</li>
+                    <li><b>Lazy graphs</b> — Dask builds a task graph of per-partition steps and runs nothing until <code>.compute()</code></li>
+                    <li><b>The payoff</b> — only a few partitions are in RAM at any moment, so 40 GB flows through 16 GB</li>
+                </ul>
+                <p class="example">The same <code>df.groupby("store").amount.sum()</code> line runs unchanged on Dask — it just executes as 320 small groupbys plus one merge instead of one giant one.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Dask mirrors the pandas and NumPy APIs but cuts the data into partitions and executes a lazy task graph across them — the code stays the same while the data no longer has to fit in memory.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Fanning Out 48 Trials with @ray.remote</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">Ray tasks</span></div>
+                <ul>
+                    <li><b>The sweep</b> — the analyst tunes a model over 48 hyperparameter configs; one trial takes 10 minutes</li>
+                    <li><b>Serial cost</b> — run in a plain loop, 48 trials &times; 10 min = 480 minutes, an entire working day</li>
+                    <li><b>One decorator</b> — <code>@ray.remote</code> on the train function turns each call into a task Ray schedules</li>
+                    <li><b>On the laptop</b> — 8 cores run 8 trials at once: 48 / 8 = 6 waves &times; 10 min = 60 minutes</li>
+                    <li><b>On a cluster</b> — 4 workers &times; 8 cores = 32 slots: 48 / 32 rounds up to 2 waves = 20 minutes</li>
+                    <li><b>Actors too</b> — <code>@ray.remote</code> on a class makes an actor: a stateful worker holding data between calls</li>
+                </ul>
+                <p class="example">The loop body barely changes — <code>train(cfg)</code> becomes <code>train.remote(cfg)</code> and one <code>ray.get()</code> collects all 48 results.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Ray turns ordinary functions into distributed tasks and classes into actors with one decorator — the sweep's shape stays a plain Python loop while the work fans out across every core it can find.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Layer Under the PyData and ML Stack</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">ML infrastructure</span></div>
+                <ul>
+                    <li><b>Dask's lane</b> — parallel pandas, NumPy and scikit-learn workflows: dataframes, arrays, delayed graphs</li>
+                    <li><b>Ray's lane</b> — general distributed Python from Berkeley's RISELab, grown into ML infrastructure</li>
+                    <li><b>The libraries</b> — Ray Tune sweeps hyperparameters, Ray Train scales training, Ray Serve deploys models</li>
+                    <li><b>LLM era</b> — Ray is the scheduling layer under many large-model training and serving stacks</li>
+                    <li><b>Same laptop start</b> — both run locally first, so the cluster is an upgrade, not a rewrite</li>
+                </ul>
+                <p class="example">A team prototypes a sweep with Ray Tune on one desktop, then points the same script at a 32-node cluster by changing only the <code>ray.init</code> address.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Dask scales the analysis stack you already write (pandas/NumPy-shaped code); Ray scales arbitrary Python and carries the ML libraries — together they are how Python work outgrows one machine.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Distributing a Job That Fit All Along</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">overhead</span></div>
+                <ul>
+                    <li><b>The temptation</b> — the cluster exists, so every job gets sent to it, even a 200 MB dataframe</li>
+                    <li><b>The overhead</b> — scheduling, serializing and shipping partitions has a fixed cost per task</li>
+                    <li><b>The flip</b> — on small data that fixed cost dominates: the distributed run is slower than pandas</li>
+                    <li><b>The check</b> — if the data fits in RAM and pandas finishes in seconds, distribution buys nothing</li>
+                    <li><b>The rule</b> — reach for Dask or Ray when memory or hours run out, not by default</li>
+                </ul>
+                <p class="example">A 200 MB groupby takes 0.8 s in pandas and 4 s on the cluster — the cluster spends more time moving the work than doing it.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Distributing work that fits comfortably on one machine. Task-graph and network overhead is roughly constant, so below a few GB it eats the speedup — both projects' own docs say to stay local when local works.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: RAM profile — pandas OOM vs Dask sawtooth
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Groupby, 40 GB File: Pandas Hits the RAM Wall, Dask Streams Past It', w / 2, 24);
+
+    var px = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(m) { return px + m / 10 * pw; }
+    function yOf(gb) { return baseY - gb / 20 * chH; }
+
+    // gridlines
+    var gv = [5, 10, 15];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i])); ctx.lineTo(px + pw, yOf(gv[i])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < gv.length; i++) {
+        ctx.fillText(String(gv[i]), px - 6, yOf(gv[i]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var m = 0; m <= 10; m += 2) {
+        ctx.fillText(String(m), xOf(m), baseY + 18);
+    }
+
+    // 16 GB limit
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, yOf(16)); ctx.lineTo(px + pw, yOf(16)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('16 GB RAM limit', px + pw - 4, yOf(16) - 6);
+
+    // pandas line
+    var pm = [0, 1, 2, 3, 4, 4.5];
+    var pg = [1, 5, 9, 13, 15.8, 16];
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < pm.length; i++) {
+        var cx = xOf(pm[i]), cy = yOf(pg[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ OOM', xOf(4.5) + 8, yOf(16) + 6);
+
+    // dask sawtooth
+    var dm = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    var dg = [1, 2.4, 1.6, 2.5, 1.7, 2.4, 1.6, 2.5, 1.7, 2.3, 1.8];
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.beginPath();
+    for (var i = 0; i < dm.length; i++) {
+        var cx = xOf(dm[i]), cy = yOf(dg[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('320 partitions, a few in RAM at a time', xOf(6), 110);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('memory profile illustrative; 40 GB / 128 MB = 320 partitions exact', px + pw, h - 8);
+});
+
+// c2: sweep wall-clock bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('48 Trials × 10 Minutes Each: Same Loop, Three Speeds', w / 2, 24);
+
+    var bx = 230;
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 245); ctx.stroke();
+
+    var rows = [
+        { y: 70, lab: 'serial loop — 1 core', width: 440, fill: 'rgba(231,76,60,0.30)', border: '#e74c3c', t: '480 min' },
+        { y: 140, lab: 'Ray on laptop — 8 cores', width: 55, fill: 'rgba(42,120,214,0.30)', border: P.blue, t: '60 min (6 waves)' },
+        { y: 210, lab: 'Ray cluster — 32 cores', width: 18, fill: 'rgba(0,131,0,0.30)', border: P.green, t: '20 min (2 waves)' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 17);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.width, 26);
+        ctx.strokeStyle = r.border; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y, r.width, 26);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(r.t, bx + r.width + 10, r.y + 17);
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('24× fewer minutes from one decorator', w - 20, 260);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10-min trial time illustrative; wave counts 48/8=6 and ⌈48/32⌉=2 exact', w - 20, h - 8);
+});
+
+// c3: Dask stack and Ray stack
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Stacks, One Idea: Familiar Code on Top, a Cluster Underneath', w / 2, 24);
+
+    var bw = 250, bh = 40;
+
+    function stackBox(cx, topY, fill, border, lab) {
+        roundRect(ctx, cx - bw / 2, topY, bw, bh, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, cx, topY + 25);
+    }
+    function downArrow(cx, y1, y2) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, y1); ctx.lineTo(cx, y2 - 6); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, y2); ctx.lineTo(cx - 5, y2 - 8); ctx.lineTo(cx + 5, y2 - 8);
+        ctx.closePath(); ctx.fillStyle = P.mute; ctx.fill();
+    }
+
+    var bFill = 'rgba(42,120,214,0.15)', vFill = 'rgba(74,58,167,0.12)', gFill = 'rgba(0,131,0,0.12)';
+
+    // headers
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Dask — scale the PyData stack', 190, 40);
+    ctx.fillText('Ray — scale any Python', 530, 40);
+
+    // left stack (Dask)
+    stackBox(190, 60, bFill, P.blue, 'dask.dataframe / dask.array');
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('mirrors pandas / NumPy APIs', 190, 114);
+    downArrow(190, 100, 125);
+    stackBox(190, 125, vFill, P.violet, 'lazy task graph');
+    downArrow(190, 165, 190);
+    stackBox(190, 190, gFill, P.green, 'cores or cluster');
+
+    // right stack (Ray)
+    stackBox(530, 60, bFill, P.blue, 'Ray Tune / Train / Serve');
+    downArrow(530, 100, 125);
+    stackBox(530, 125, vFill, P.violet, 'Ray core: tasks + actors');
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('@ray.remote', 530 + bw / 2 + 6, 150);
+    downArrow(530, 165, 190);
+    stackBox(530, 190, gFill, P.green, 'cores or cluster');
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("the bottom layer changes; the code on top mostly doesn't", w / 2, 265);
+});
+
+// c4: pandas vs cluster grouped bars at four sizes
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Small Data on a Cluster: Overhead Eats the Speedup', w / 2, 24);
+
+    var baseY = 245;
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - 180); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var groups = [
+        { x: 135, lab: '200 MB', ph: 18, pt: '0.8s', dh: 65, dt: '4s' },
+        { x: 285, lab: '1 GB', ph: 45, pt: '6s', dh: 80, dt: '9s' },
+        { x: 435, lab: '10 GB', ph: 110, pt: '70s', dh: 95, dt: '30s' },
+        { x: 585, lab: '40 GB', ph: 0, pt: 'OOM', dh: 130, dt: '95s' }
+    ];
+    var bw = 40, gap = 6;
+
+    // crossover marker
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 55); ctx.lineTo(360, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crossover', 360, 48);
+
+    for (var g = 0; g < groups.length; g++) {
+        var gr = groups[g];
+        var pxl = gr.x - bw - gap / 2, dxl = gr.x + gap / 2;
+        // pandas bar
+        if (gr.ph > 0) {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(pxl, baseY - gr.ph, bw, gr.ph);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(pxl, baseY - gr.ph, bw, gr.ph);
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(gr.pt, pxl + bw / 2, baseY - gr.ph - 5);
+        } else {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('✗ OOM', pxl + bw / 2, baseY - 8);
+        }
+        // dask bar
+        ctx.fillStyle = 'rgba(217,89,38,0.25)';
+        ctx.fillRect(dxl, baseY - gr.dh, bw, gr.dh);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        ctx.strokeRect(dxl, baseY - gr.dh, bw, gr.dh);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gr.dt, dxl + bw / 2, baseY - gr.dh - 5);
+        // group label
+        ctx.font = '12px system-ui';
+        ctx.fillText(gr.lab, gr.x, baseY + 18);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('5× slower on the cluster', 135, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('all runtimes illustrative', 660, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

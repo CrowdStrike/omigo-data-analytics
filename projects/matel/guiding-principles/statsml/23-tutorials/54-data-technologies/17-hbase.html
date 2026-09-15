@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HBase</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>HBase</h1>
+<p class="subtitle">The open-source Bigtable — one giant table kept sorted by row key, sliced into regions across many servers, built for billions of tiny timestamped rows</p>
+
+<div class="card-section">
+    <h2>One Giant Sorted Table, Cut Into Regions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">wide column</span><span class="tag orange">Bigtable</span></div>
+                <ul>
+                    <li><b>The table</b> — a utility stores readings from 1,000 smart meters, one row per meter per minute</li>
+                    <li><b>The row key</b> — each row is named <code>meterId#timestamp</code>, like <code>0042#202608261407</code></li>
+                    <li><b>Always sorted</b> — HBase keeps every row in lexicographic row-key order, like a phone book</li>
+                    <li><b>Regions</b> — the sorted key space is cut into ranges called regions, each served by one server</li>
+                    <li><b>Sparse</b> — a row stores only the columns it has; a missing column costs zero bytes</li>
+                </ul>
+                <p class="example">Meter 0042's 2:07pm reading lands in the region covering keys <code>0250</code> down to <code>0000</code> — the server holding that slice of the alphabet writes it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> HBase is one huge sorted map from row key to columns; sorting is what makes range scans cheap, and cutting the sort order into regions is what makes it scale.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Scanning One Meter's Day by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">range scan</span></div>
+                <ul>
+                    <li><b>The ask</b> — plot meter 0042's usage for Aug 26: every reading whose key starts <code>0042#20260826</code></li>
+                    <li><b>The scan</b> — start at row <code>0042#20260826...</code>, read forward, stop at <code>0042#20260827</code> — one range</li>
+                    <li><b>The count</b> — one reading per minute &times; 24 hours = 1,440 rows, all contiguous, all in one region</li>
+                    <li><b>Sparse cells</b> — every row has <code>m:kwh</code>; only 3 of the 1,440 carry an <code>a:alert</code> column</li>
+                    <li><b>Versions</b> — with the table set to VERSIONS=3, each cell keeps its last 3 timestamped copies</li>
+                    <li><b>Padding matters</b> — unpadded <code>42#...</code> would sort after <code>100#...</code>; zero-padding keeps meters together</li>
+                </ul>
+                <p class="example">The day's chart needs exactly 1,440 rows (exact: 60 &times; 24), fetched as a single sorted scan instead of 1,440 separate lookups.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because rows are sorted, all of one meter's history sits shoulder to shoulder — a whole day is one cheap sequential read, not thousands of scattered ones.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Messenger and Time-Series Systems Picked It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">scale out</span></div>
+                <ul>
+                    <li><b>The paper</b> — HBase is the Hadoop ecosystem's open-source build of Google's Bigtable design, on HDFS</li>
+                    <li><b>Messenger</b> — early Facebook Messenger stored its message history in HBase (publicly documented)</li>
+                    <li><b>Time series</b> — meters, metrics, and logs fit naturally: entity-prefixed keys, time-ordered scans</li>
+                    <li><b>Per-row consistency</b> — a read of one row always sees its latest write; no cross-row transactions</li>
+                    <li><b>Auto-split</b> — a region that grows too big splits in two; the new region can move to another server</li>
+                </ul>
+                <p class="example">As the meter table grows from 12 GB to 96 GB over four months, regions split from 2 to 12 with no manual resharding.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> HBase trades SQL joins and cross-row transactions for a simpler promise — strongly consistent single rows, sorted scans, and tables that keep splitting as they grow.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Hotspot: When Sorted Keys Backfire</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">row-key design</span></div>
+                <ul>
+                    <li><b>The trap</b> — key the table <code>timestamp#meterId</code> and every new row has the largest key so far</li>
+                    <li><b>One region</b> — sorted order sends all 60,000 writes/min to the tail region on one server</li>
+                    <li><b>Idle fleet</b> — the other servers hold cold history and do nothing; adding servers doesn't help</li>
+                    <li><b>The fix</b> — lead with the meter: <code>meterId#timestamp</code> spreads live writes across all regions</li>
+                    <li><b>Other fixes</b> — a salt prefix or a reversed timestamp does the same for purely time-keyed data</li>
+                    <li><b>The cost</b> — meter-first keys give up one global "latest everything" scan; queries go per meter</li>
+                </ul>
+                <p class="example">Timestamp-first, region server 1 absorbs all 60,000 writes/min; meter-first, the four servers take 15,200 / 14,900 / 15,100 / 14,800.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Choosing a row key that grows monotonically. Sorted storage turns "newest keys" into "one server" — the row key, not the cluster size, decides whether writes spread.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), ah = 8;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - 0.45), y2 - ah * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - ah * Math.cos(ang + 0.45), y2 - ah * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: sorted key space cut into regions
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Sorted Key Space, Cut Into 4 Regions on 3 Servers', w / 2, 24);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('row keys sorted lexicographically →', 60, 70);
+
+    // key-space bar
+    var fills = ['rgba(42,120,214,0.25)', 'rgba(0,131,0,0.20)', 'rgba(217,89,38,0.20)', 'rgba(74,58,167,0.18)'];
+    for (var i = 0; i < 4; i++) {
+        var sx = 60 + i * 150;
+        ctx.fillStyle = fills[i];
+        ctx.fillRect(sx, 80, 150, 40);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+        ctx.strokeRect(sx, 80, 150, 40);
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('region ' + (i + 1), sx + 75, 104);
+    }
+
+    // boundary keys
+    var bounds = ['0000', '0250', '0500', '0750', 'end'];
+    var bx = [60, 210, 360, 510, 660];
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bounds[i], bx[i], 138);
+    }
+
+    // server boxes
+    var servers = [
+        { x: 90,  label: 'region server A' },
+        { x: 300, label: 'region server B' },
+        { x: 510, label: 'region server C' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        roundRect(ctx, servers[i].x, 210, 150, 40, 8);
+        ctx.fillStyle = 'rgba(26,82,118,0.10)'; ctx.fill();
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(servers[i].label, servers[i].x + 75, 235);
+    }
+
+    // region → server arrows
+    arrow(ctx, 135, 122, 160, 205, P.mute, 2);
+    arrow(ctx, 285, 122, 372, 205, P.mute, 2);
+    arrow(ctx, 435, 122, 565, 205, P.mute, 2);
+    arrow(ctx, 585, 122, 600, 205, P.mute, 2);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('regions move between servers to balance load', 700, 185);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('boundaries illustrative', w - 15, h - 10);
+});
+
+// c2: sorted rows and the contiguous scan band
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8 Sorted Rows: the Scan Grabs a Contiguous Band', w / 2, 24);
+
+    // headers
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('row key', 70, 68);
+    ctx.fillText('m:kwh', 360, 68);
+    ctx.fillText('m:volt', 470, 68);
+    ctx.fillText('a:alert', 580, 68);
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, 76); ctx.lineTo(660, 76); ctx.stroke();
+
+    // rows (20px apart to fit the ellipsis row within the canvas)
+    var rows = [
+        ['0041#202608262358', '0.42', '239', ''],
+        ['0041#202608262359', '0.41', '240', ''],
+        ['0042#202608260000', '0.55', '241', ''],
+        ['0042#202608260001', '0.54', '',    ''],
+        ['0042#202608260002', '1.92', '',    'spike'],
+        ['0042#202608262359', '0.60', '238', ''],
+        ['0043#202608260000', '0.33', '',    ''],
+        ['0043#202608260001', '0.35', '237', '']
+    ];
+    var ys = [100, 120, 140, 160, 180, 220, 240, 260]; // ellipsis row occupies y=200
+    var ellipsisY = 200;
+
+    // scan band behind the 0042 rows (rows 3-6, including the ellipsis line)
+    ctx.fillStyle = 'rgba(0,131,0,0.10)';
+    ctx.fillRect(60, 128, 600, 100);
+    ctx.strokeStyle = '#008300'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(66, 128); ctx.lineTo(60, 128); ctx.lineTo(60, 228); ctx.lineTo(66, 228);
+    ctx.stroke();
+
+    for (var i = 0; i < 8; i++) {
+        ctx.fillStyle = P.text; ctx.textAlign = 'left';
+        ctx.font = '12px ui-monospace, Menlo, monospace';
+        ctx.fillText(rows[i][0], 70, ys[i]);
+        ctx.font = '12px system-ui';
+        ctx.fillText(rows[i][1], 360, ys[i]);
+        if (rows[i][2]) ctx.fillText(rows[i][2], 470, ys[i]);
+        if (rows[i][3]) ctx.fillText(rows[i][3], 580, ys[i]);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('... 1,436 more 0042 rows ...', 360, ellipsisY);
+
+    // band label at the level of the 4th data row
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('scan: 1,440 rows', 540, 160);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('blank cells are truly absent — sparse rows store nothing for them', 330, 282);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('kwh values illustrative', w - 15, h - 4);
+});
+
+// c3: table growth absorbed by region splits
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Table Grows 8×; Regions Split to Absorb It', w / 2, 24);
+
+    var baseY = 245, ph = 180, maxY = 100;
+    for (var g = 25; g <= 75; g += 25) {
+        var gy = baseY - g / maxY * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), 52, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var xs = [150, 290, 430, 570];
+    var months = ['May', 'Jun', 'Jul', 'Aug'];
+    var gbs = [12, 25, 48, 96];
+    var hgts = [22, 45, 86, 173];
+    var regions = ['2 regions', '4 regions', '8 regions', '12 regions'];
+    for (var i = 0; i < 4; i++) {
+        var topY = baseY - hgts[i];
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(xs[i] - 45, topY, 90, hgts[i]);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(xs[i] - 45, topY, 90, hgts[i]);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gbs[i] + ' GB', xs[i], topY - 6);
+        ctx.fillStyle = '#008300'; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(regions[i], xs[i], topY - 22);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(months[i], xs[i], baseY + 18);
+    }
+
+    // split markers between consecutive bars
+    var splitX = [220, 360, 500];
+    var splitY = [205, 180, 130];
+    for (var i = 0; i < 3; i++) {
+        arrow(ctx, splitX[i], splitY[i] - 14, splitX[i], splitY[i], '#008300', 2);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('split', splitX[i], splitY[i] + 14);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no manual resharding — regions split and rebalance on their own', 80, 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes and region counts illustrative', w - 15, h - 10);
+});
+
+// c4: hotspot — timestamp-first vs meter-first keys
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('60,000 Writes/min: One Hot Server vs Four Warm Ones', w / 2, 24);
+
+    var baseY = 245, ph = 180;
+    var glabs = ['15k', '30k', '45k'];
+    var gvals = [15000, 30000, 45000];
+    for (var i = 0; i < 3; i++) {
+        var gy = baseY - gvals[i] / 60000 * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], 52, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var xs = [150, 290, 430, 570];
+    var tsHgts = [180, 0, 0, 0];
+    var tsLabs = ['60,000', '', '', ''];
+    var mHgts = [46, 45, 45, 44];
+    var mLabs = ['15,200', '14,900', '15,100', '14,800'];
+    for (var i = 0; i < 4; i++) {
+        // timestamp-first (left)
+        if (tsHgts[i] > 0) {
+            ctx.fillStyle = 'rgba(231,76,60,0.35)';
+            ctx.fillRect(xs[i] - 42, baseY - tsHgts[i], 40, tsHgts[i]);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+            ctx.strokeRect(xs[i] - 42, baseY - tsHgts[i], 40, tsHgts[i]);
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(tsLabs[i], xs[i] - 22, baseY - tsHgts[i] - 6);
+        } else {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(xs[i] - 42, baseY - 2, 40, 2);
+        }
+        // meter-first (right)
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(xs[i] + 2, baseY - mHgts[i], 40, mHgts[i]);
+        ctx.strokeStyle = '#008300'; ctx.lineWidth = 2;
+        ctx.strokeRect(xs[i] + 2, baseY - mHgts[i], 40, mHgts[i]);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(mLabs[i], xs[i] + 22, baseY - mHgts[i] - 6);
+
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText('RS ' + (i + 1), xs[i], baseY + 18);
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(231,76,60,0.35)'; ctx.fillRect(500, 46, 14, 10);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.strokeRect(500, 46, 14, 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('timestamp#meter', 520, 55);
+    ctx.fillStyle = 'rgba(0,131,0,0.30)'; ctx.fillRect(500, 62, 14, 10);
+    ctx.strokeStyle = '#008300'; ctx.strokeRect(500, 62, 14, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('meter#timestamp', 520, 71);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('sequential keys: RS 1 takes 100% of the load', 200, 80);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('write rates illustrative; both key schemes total 60,000/min', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

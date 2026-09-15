@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presigned URLs</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+.footnote {
+    color: #6b7280;
+    font-size: 0.8rem;
+    border-top: 1px solid #e5e9ef;
+    padding-top: 10px;
+    margin-top: 8px;
+}
+</style>
+</head>
+<body>
+
+<h1>Presigned URLs</h1>
+<p class="subtitle">Anyone holding a presigned link acts as whoever signed it until it expires — and the link can never outlive the credentials that signed it</p>
+
+<div class="card-section">
+    <h2>The App Hands Out a Link, Not the File</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">download and upload</span><span class="tag orange">no proxying</span></div>
+                <ul>
+                    <li><b>The setup</b> — Alice signs in to a reporting app and asks for one private file</li>
+                    <li><b>No streaming</b> — the app holds the credentials but sends back a link, not the bytes</li>
+                    <li><b>The signing step</b> — the app signs the one exact request it is willing to allow</li>
+                    <li><b>The link</b> — the signature travels inside the link, so it states its own permission</li>
+                    <li><b>Straight to storage</b> — Alice's browser sends a plain request to S3 with that link</li>
+                    <li><b>Nothing is stored</b> — S3 keeps no record of the link and recomputes the signature</li>
+                    <li><b>Uploads work too</b> — a link signed for a write lets Alice send a file straight in</li>
+                    <li><b>No login at S3</b> — whoever holds the link acts as the app that signed it, until expiry</li>
+                </ul>
+                <p class="example">The app's answer to "send me my report" is a short link; the 40 MB file then travels from S3 to Alice's browser, never through the app server.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A presigned link sends the permission through the app and the file around it. The app decides who may read one object; S3 does the reading.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What the Signed Link Pins Down, and What It Leaves Open</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">mechanism</span><span class="tag green">signed conditions</span><span class="tag red">false assumption</span></div>
+                <ul>
+                    <li><b>What gets signed</b> — the action, the one file, and the expiry are all hashed together</li>
+                    <li><b>One action only</b> — a link signed for a download cannot be turned into an upload</li>
+                    <li><b>One file only</b> — the signature covers one exact key, so it cannot reach another</li>
+                    <li><b>Any change breaks it</b> — alter one character of the link and the check simply fails</li>
+                    <li><b>No size limit</b> — a signed upload link accepts a far bigger file than you meant</li>
+                    <li><b>The gap is big</b> — one upload request accepts up to 5 GiB, or 1,024 times 5 MiB</li>
+                    <li><b>The fix is a form upload</b> — its policy can cap the size before the write is allowed</li>
+                    <li><b>Other conditions</b> — the same policy can require an exact file type or encryption</li>
+                </ul>
+                <p class="example">An upload link meant for a 5 MiB receipt would accept a 5 GiB file, so the app caps the size at 5,242,880 bytes with a form upload instead.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The signature fixes <em>which</em> request is allowed, not <em>how big</em> it is. A size limit is only possible with the form-upload style of signed link.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Clocks: the Expiry You Ask For and the One You Inherit</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">worked example</span><span class="tag orange">two limits</span></div>
+                <ul>
+                    <li><b>Clock one</b> — the lifetime you ask for, in seconds; seven days is the maximum</li>
+                    <li><b>Clock two</b> — how long the credentials that signed the link stay valid themselves</li>
+                    <li><b>Nobody passes it in</b> — the second clock is never part of the link you hand out</li>
+                    <li><b>Where it bites</b> — code on a server or in a function signs with a short session</li>
+                    <li><b>The worked case</b> — the app asks for 12 hours while its session lasts only 1 hour</li>
+                    <li><b>The shorter one wins</b> — 43,200 s asked for, 3,600 s available, so 3,600 s it is</li>
+                    <li><b>The symptom</b> — the link works in testing, then fails the next morning untouched</li>
+                    <li><b>The fix</b> — ask for no more than the session has left, or sign a fresh one on demand</li>
+                </ul>
+                <p class="example">Alice bookmarks a link the app called good for 12 hours; the signing session ends after 1 hour, so the bookmark fails at hour 1.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading seven days as a promise. The real life of a link is the smaller of the two clocks, and with a short session that is almost always the second one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<p class="footnote">Every link on this page is drawn schematically as named parts — no element of the page contains a key, secret, signature or account identifier.</p>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// thousands separators, independent of the browser locale
+function commas(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// c1: three-party flow — the link goes through the app, the file goes around it
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15.5px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Who Talks to Whom: the Link Goes Through the App, the File Does Not', w / 2, 24);
+
+    var BW = 170, BY = 78, BH = 62;
+    var boxes = [
+        { x: 30,  label: 'Browser (Alice)', sub: 'holds no credentials',   col: P.blue },
+        { x: 275, label: 'App server',      sub: 'holds the credentials',  col: P.violet },
+        { x: 520, label: 'S3',              sub: 'checks the signature',   col: P.green }
+    ];
+    boxes.forEach(function(b) {
+        b.cx = b.x + BW / 2;
+        ctx.fillStyle = rgba(b.col, 0.12);
+        roundRect(ctx, b.x, BY, BW, BH, 8); ctx.fill();
+        ctx.strokeStyle = b.col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = b.col; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(b.label, b.cx, 104);
+        ctx.fillStyle = P.text; ctx.font = '11.5px system-ui';
+        ctx.fillText(b.sub, b.cx, 124);
+    });
+
+    var browser = boxes[0], app = boxes[1], s3 = boxes[2];
+    var bRight = browser.x + BW;          // 200
+    var aRight = app.x + BW;              // 445
+    var boxBottom = BY + BH;              // 140
+
+    // 1. ask for a link (browser -> app)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bRight, 96); ctx.lineTo(app.x - 7, 96); ctx.stroke();
+    arrowHead(ctx, bRight, 96, app.x, 96, P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1. ask for a link', (bRight + app.x) / 2, 88);
+
+    // 2. the signed link (app -> browser)
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(app.x, 126); ctx.lineTo(bRight + 7, 126); ctx.stroke();
+    arrowHead(ctx, app.x, 126, bRight, 126, P.violet);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2. the signed link', (bRight + app.x) / 2, 146);
+
+    // the path the file does not take (app -> S3)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(aRight, 110); ctx.lineTo(s3.x, 110); ctx.stroke();
+    ctx.setLineDash([]);
+    var midAS = (aRight + s3.x) / 2;      // 482.5
+    ctx.fillStyle = RED; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', midAS, 106);
+    ctx.font = 'bold 11.5px system-ui';
+    ctx.fillText('no bytes', midAS, 132);
+
+    // 3. the request goes straight to S3
+    var upX = 100, downY = 200;
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(upX, boxBottom); ctx.lineTo(upX, downY);
+    ctx.lineTo(s3.cx - 30, downY); ctx.lineTo(s3.cx - 30, boxBottom + 8);
+    ctx.stroke();
+    arrowHead(ctx, s3.cx - 30, downY, s3.cx - 30, boxBottom + 2, P.aqua);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3. request goes straight to S3', (upX + s3.cx - 30) / 2, downY - 8);
+
+    // 4. the file comes straight back — returns left of upX so the two paths never cross
+    var backY = 236, backX = browser.x + 30;   // 60
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(s3.cx + 30, boxBottom); ctx.lineTo(s3.cx + 30, backY);
+    ctx.lineTo(backX, backY); ctx.lineTo(backX, boxBottom + 8);
+    ctx.stroke();
+    arrowHead(ctx, backX, backY, backX, boxBottom + 2, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4. the file comes straight back', (backX + s3.cx + 30) / 2, backY + 18);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the file never passes through the app server', w / 2, 274);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('flow illustrative; the self-describing signed request is documented', w - 12, 294);
+});
+
+// c2: the signed link drawn as named parts — no realistic URL text anywhere
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15.5px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What the Signed Link Pins Down', w / 2, 22);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('the signed link, in parts', 40, 48);
+
+    var PX = 40, PW = 300, PH = 32, PITCH = 40, TOP = 60;
+    var parts = [
+        { t: "the file's address",      col: P.blue,    lw: 1.5, a: 0.10 },
+        { t: 'the action allowed',      col: P.blue,    lw: 1.5, a: 0.10 },
+        { t: 'how long it stays valid', col: P.yellow,  lw: 1.5, a: 0.14 },
+        { t: 'the signature',           col: P.magenta, lw: 2.5, a: 0.14 }
+    ];
+    parts.forEach(function(p, i) {
+        p.y = TOP + i * PITCH;
+        ctx.fillStyle = rgba(p.col, p.a);
+        roundRect(ctx, PX, p.y, PW, PH, 5); ctx.fill();
+        ctx.strokeStyle = p.col; ctx.lineWidth = p.lw; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12.5px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(p.t, PX + 12, p.y + 21);
+    });
+
+    // bracket over the three hashed parts
+    var bx = PX + PW + 12;                       // 352
+    var hTop = parts[0].y + 2, hBot = parts[2].y + PH - 2;
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + 8, hTop); ctx.lineTo(bx, hTop);
+    ctx.lineTo(bx, hBot); ctx.lineTo(bx + 8, hBot);
+    ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hashed', bx + 10, (hTop + hBot) / 2 + 4);
+
+    // the signature is the result
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx, parts[3].y + 2); ctx.lineTo(bx, parts[3].y + PH);
+    ctx.stroke();
+    ctx.fillStyle = P.magenta;
+    ctx.fillText('result', bx + 6, parts[3].y + 21);
+
+    // right column: what the signature pins
+    var RX = 430;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('the signature pins:', RX, 70);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('· one action — download only', RX, 92);
+    ctx.fillText('· one file — that file alone', RX, 112);
+    ctx.fillText('· the expiry, in seconds', RX, 132);
+
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('it does not pin:', RX, 170);
+    ctx.font = '12px system-ui';
+    ctx.fillText('the size of an upload — one', RX, 192);
+    ctx.fillText('request accepts up to 5 GiB', RX, 212);
+
+    ctx.fillStyle = rgba(P.green, 0.10);
+    roundRect(ctx, RX, 234, 250, 30, 6); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a form upload can cap the size', RX + 125, 253);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the link is drawn as placeholder parts; the 5 GiB request limit is documented', w - 12, 294);
+});
+
+// c3: effective expiry = the smaller of the two clocks
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15.5px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Effective Expiry Is the Smaller of Two Clocks (illustrative session length)', w / 2, 24);
+
+    var x0 = 110, x1 = 680, hMax = 12, base = 240;
+    function x(hrs) { return x0 + (x1 - x0) * (hrs / hMax); }
+
+    var askedSec = 12 * 3600;      // 43,200
+    var sessionSec = 1 * 3600;     // 3,600
+    var effSec = Math.min(askedSec, sessionSec);
+    var pct = (effSec / askedSec) * 100;
+
+    // grid every two hours
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var t = 0; t <= hMax; t += 2) {
+        ctx.beginPath(); ctx.moveTo(x(t), 68); ctx.lineTo(x(t), base); ctx.stroke();
+    }
+
+    // baseline and tick labels
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, base); ctx.lineTo(x1, base); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t2 = 0; t2 <= hMax; t2 += 2) {
+        ctx.fillText(t2 + 'h', x(t2), 256);
+    }
+
+    var bars = [
+        { y: 76,  lab: 'you asked for',  sec: askedSec,   col: P.blue,   alpha: 0.85,
+          note: commas(askedSec) + ' s asked for', inside: true },
+        { y: 128, lab: 'session left',   sec: sessionSec, col: P.yellow, alpha: 0.9,
+          note: commas(sessionSec) + ' s of session left', inside: false },
+        { y: 180, lab: 'actually valid', sec: effSec,     col: P.green,  alpha: 0.9,
+          note: commas(effSec) + ' s = ' + (effSec / 3600) + ' hour', inside: false }
+    ];
+    bars.forEach(function(b) {
+        var bw = x(b.sec / 3600) - x0;
+        ctx.globalAlpha = b.alpha;
+        ctx.fillStyle = b.col;
+        roundRect(ctx, x0, b.y, bw, 30, 5); ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(b.lab, x0 - 10, b.y + 20);
+
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        if (b.inside) {
+            ctx.fillStyle = '#fff';
+            ctx.fillText(b.note, x0 + 12, b.y + 20);
+        } else {
+            ctx.fillStyle = b.col;
+            ctx.fillText(b.note, x0 + bw + 16, b.y + 20);
+        }
+    });
+
+    // the link dies where the shorter clock ends
+    var cut = x(effSec / 3600);
+    ctx.strokeStyle = RED; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(cut, 68); ctx.lineTo(cut, base); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = RED; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('link dies here', cut + 6, 62);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('min(' + commas(askedSec) + ' s, ' + commas(sessionSec) + ' s) = '
+        + commas(effSec) + ' s — ' + pct.toFixed(1) + '% of what was advertised', x0, 222);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the number you ask for cannot exceed seven days, or '
+        + commas(7 * 24 * 3600) + ' s', x0, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('session length illustrative; the minimum is computed', w - 12, 294);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

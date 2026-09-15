@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prometheus</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Prometheus</h1>
+<p class="subtitle">Prometheus stores every metric as a set of labeled time series it pulls from your services &mdash; PromQL turns the raw counters into rates, sums, and alerts</p>
+
+<div class="card-section">
+    <h2>Four Series From One Metric Name</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">pull model</span><span class="tag orange">labels</span></div>
+                <ul>
+                    <li><b>The setup</b> &mdash; a shop runs two services, checkout and search; each exposes a plain-text /metrics page</li>
+                    <li><b>The pull</b> &mdash; Prometheus scrapes each /metrics endpoint on a schedule (every 15s); services never push</li>
+                    <li><b>The metric</b> &mdash; one name, <code>http_requests_total</code>, plus a label set: service and status</li>
+                    <li><b>The series</b> &mdash; each unique label combination is its own time series: 2 services &times; 2 statuses = 4 series</li>
+                    <li><b>The sample</b> &mdash; every scrape appends one timestamped value per series to Prometheus's local store</li>
+                </ul>
+                <p class="example">At 2:00:00pm the checkout scrape returns <code>http_requests_total{service="checkout",status="200"} 184203</code> &mdash; one sample landing in one of the 4 series.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A Prometheus metric is a name plus a label set &mdash; and the label set, not the name, defines the series. Four label combinations means four independent streams of samples.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Turning a Counter Into Requests per Second</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">PromQL</span></div>
+                <ul>
+                    <li><b>The counter</b> &mdash; <code>http_requests_total</code> only ever goes up; the raw value (1,290) means nothing by itself</li>
+                    <li><b>The window</b> &mdash; <code>rate(http_requests_total[5m])</code> looks at the last 5 minutes of samples per series</li>
+                    <li><b>The math</b> &mdash; checkout's 500s rose 1,200 &rarr; 1,290 over 5 min: 90 / 300s = 0.3 req/s (exact)</li>
+                    <li><b>Per series</b> &mdash; the same query gives search's 500s: 3,400 &rarr; 3,430, so 30 / 300s = 0.1 req/s</li>
+                    <li><b>The aggregation</b> &mdash; <code>sum by (status)</code>: 200s (illustrative) 30 + 50 = 80, 500s 0.3 + 0.1 = 0.4 req/s</li>
+                </ul>
+                <p class="example"><code>rate(http_requests_total{status="500"}[5m])</code> returns two values &mdash; 0.3 for checkout and 0.1 for search &mdash; because rate() works on each series separately.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> rate() turns an ever-growing counter into a per-second speed (a slope), and <code>sum by (label)</code> collapses the series along whichever labels you leave out.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From Borgmon to the Pager</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">alerting</span><span class="tag orange">history</span></div>
+                <ul>
+                    <li><b>The origin</b> &mdash; built at SoundCloud starting in 2012, openly inspired by Google's internal Borgmon</li>
+                    <li><b>The pedigree</b> &mdash; the second project accepted into the CNCF, right after Kubernetes</li>
+                    <li><b>The rule</b> &mdash; an alerting rule is just PromQL: checkout's error ratio &gt; 5% sustained "for 10m"</li>
+                    <li><b>The handoff</b> &mdash; firing alerts go to Alertmanager, which groups, silences, and routes them to a pager</li>
+                    <li><b>The habit</b> &mdash; dashboards and alerts watch rate() and ratios, never raw counter values</li>
+                </ul>
+                <p class="example">Checkout's error ratio crosses 5% at 2:22pm; it stays above for the full 10-minute hold, so at 2:32pm Alertmanager pages on-call (times illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One query language drives both graphs and alerts &mdash; an alert is a PromQL expression that has been true for long enough, handed to Alertmanager for delivery.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The user_id Label That Melts the Server</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">cardinality</span></div>
+                <ul>
+                    <li><b>The temptation</b> &mdash; "let's add a user_id label so we can graph one customer's requests"</li>
+                    <li><b>The multiplication</b> &mdash; labels multiply: every new label value spawns a series per existing series</li>
+                    <li><b>The math</b> &mdash; 800 series &times; 500,000 users = 400,000,000 series (exact, given those counts)</li>
+                    <li><b>The cost</b> &mdash; each series is its own stream in memory and in the index; millions melt the server</li>
+                    <li><b>The fix</b> &mdash; keep labels low-cardinality (service, status, endpoint); per-user detail belongs in logs</li>
+                </ul>
+                <p class="example">One engineer's one-line label change takes the shop from 800 series to 400 million &mdash; Prometheus runs out of memory before the next deploy (counts illustrative).</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating labels as free annotation. Every distinct label value creates a whole new time series &mdash; unbounded values like user IDs, emails, or request IDs belong in logs or traces, never in labels.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, dx, dy, size) {
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ux * size - uy * size * 0.5, y - uy * size + ux * size * 0.5);
+    ctx.lineTo(x - ux * size + uy * size * 0.5, y - uy * size - ux * size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: pull model and four series
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Scrape Loop, Four Time Series', w / 2, 24);
+
+    // Prometheus box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 490, 80, 180, 70, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Prometheus', 580, 108);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('scrapes + stores', 580, 128);
+
+    // target boxes
+    var targets = [{ y: 68, lab: 'checkout :8080/metrics' }, { y: 132, lab: 'search :8080/metrics' }];
+    for (var i = 0; i < 2; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        roundRect(ctx, 70, targets[i].y, 180, 44, 8);
+        ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(targets[i].lab, 160, targets[i].y + 27);
+
+        // pull arrows: from Prometheus TO the target
+        var ty = targets[i].y + 22;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(490, 115); ctx.lineTo(258, ty); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        arrowHead(ctx, 252, ty, 258 - 490, ty - 115, 9);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('GET /metrics every 15s', 370, 105);
+
+    // series lines
+    var series = [
+        { col: P.blue, txt: '{service="checkout",status="200"} 184203' },
+        { col: P.magenta, txt: '{service="checkout",status="500"} 1290' },
+        { col: P.green, txt: '{service="search",status="200"} 412876' },
+        { col: P.orange, txt: '{service="search",status="500"} 3430' }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var y = 210 + i * 20;
+        ctx.fillStyle = series[i].col;
+        ctx.fillRect(70, y - 9, 10, 10);
+        ctx.fillStyle = P.text; ctx.font = '12px ui-monospace, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(series[i].txt, 88, y);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 label combos → 4 series', 470, 240);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counter values illustrative', w - 12, h - 8);
+});
+
+// c2: rate() as a slope
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('rate() Is a Slope: 90 More Errors in 5 Minutes = 0.3/s', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    var yMin = 1150, yMax = 1350;
+    function xOf(min) { return ox + min / 5 * pw; }
+    function yOf(v) { return baseY - (v - yMin) / (yMax - yMin) * chH; }
+
+    var gl = [1200, 1250, 1300];
+    var glabs = ['1,200', '1,250', '1,300'];
+    for (var i = 0; i < 3; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var m = 0; m <= 5; m++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('2:0' + m, xOf(m), baseY + 16);
+    }
+
+    // slope triangle
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(0), yOf(1200)); ctx.lineTo(xOf(5), yOf(1200)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xOf(5), yOf(1200)); ctx.lineTo(xOf(5), yOf(1290)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('300 s', xOf(2.5), yOf(1200) + 16);
+    ctx.textAlign = 'left';
+    ctx.fillText('Δ 90', xOf(5) - 40, (yOf(1200) + yOf(1290)) / 2);
+
+    // counter line
+    var mins = [0, 1, 2, 3, 4, 5];
+    var vals = [1200, 1218, 1236, 1254, 1272, 1290];
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 6; i++) {
+        var x = xOf(mins[i]), y = yOf(vals[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < 6; i++) {
+        ctx.fillStyle = P.magenta;
+        ctx.beginPath(); ctx.arc(xOf(mins[i]), yOf(vals[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('rate = 90 / 300s = 0.3 req/s (exact)', xOf(1.5) - 60, 95);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counter values illustrative; the division is exact', w - 12, h - 8);
+});
+
+// c3: alert timeline with pending band and firing marker
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Alert Rule: error ratio > 5% for 10m → page', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, chH = 180;
+    function xOf(min) { return ox + min / 60 * pw; }
+    function yOf(pct) { return baseY - pct / 10 * chH; }
+
+    var gl = [2.5, 5, 7.5];
+    var glabs = ['2.5%', '5%', '7.5%'];
+    for (var i = 0; i < 3; i++) {
+        var y = yOf(gl[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + pw, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], ox - 8, y + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - chH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    var tlabs = ['2:00', '2:10', '2:20', '2:30', '2:40', '2:50', '3:00'];
+    for (var i = 0; i < 7; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tlabs[i], xOf(i * 10), baseY + 16);
+    }
+
+    // pending band minute 22-32
+    ctx.fillStyle = 'rgba(201,133,0,0.15)';
+    ctx.fillRect(xOf(22), baseY - chH, xOf(32) - xOf(22), chH);
+    ctx.fillStyle = P.yellow; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('pending (for 10m)', xOf(27), baseY - chH - 4);
+
+    // threshold at 5%
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(5)); ctx.lineTo(ox + pw, yOf(5)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('threshold 5%', ox + 6, yOf(5) - 8);
+
+    // ratio line
+    var mins = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
+    var ratio = [1.0, 1.1, 0.9, 1.2, 3.3, 7.5, 9.2, 8.8, 6.1, 3.0, 1.4, 1.0, 0.9];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 13; i++) {
+        var x = xOf(mins[i]), y = yOf(ratio[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // firing marker
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xOf(32), baseY - chH); ctx.lineTo(xOf(32), baseY); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('FIRING → Alertmanager pages', xOf(32) + 8, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('error ratios illustrative', w - 12, h - 8);
+});
+
+// c4: cardinality trap bars
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Cardinality Trap: One user_id Label, 500,000× the Series', w / 2, 24);
+
+    var bx = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 245); ctx.stroke();
+
+    var rows = [
+        { lab: 'service × status (2×2) — 4 series', y: 70, wpx: 30, red: false },
+        { lab: '+ endpoint (×20) — 80 series', y: 120, wpx: 95, red: false },
+        { lab: '+ instance (×10) — 800 series', y: 170, wpx: 145, red: false },
+        { lab: '+ user_id (×500,000) — 400,000,000 series', y: 220, wpx: 430, red: true }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        // wrap the long last label
+        if (i === 3) {
+            ctx.fillText('+ user_id (×500,000)', 20, r.y + 4);
+            ctx.fillText('— 400,000,000 series', 20, r.y + 18);
+        } else {
+            ctx.fillText(r.lab, 20, r.y + 11);
+        }
+        if (r.red) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(bx, r.y, r.wpx, 14);
+            ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText('server runs out of memory', bx + r.wpx, r.y - 6);
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(bx, r.y, r.wpx, 14);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, r.y, r.wpx, 14);
+        }
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("cardinality is the product of every label's values", w / 2, 265);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths log-feel schematic; multiplications exact, label counts illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

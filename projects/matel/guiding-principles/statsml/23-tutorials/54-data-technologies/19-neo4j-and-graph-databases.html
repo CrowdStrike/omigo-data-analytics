@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neo4j &amp; Graph Databases</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Neo4j &amp; Graph Databases</h1>
+<p class="subtitle">When the question is about connections — who knows whom, what links to what — a graph database stores the joins up front instead of recomputing them on every query</p>
+
+<div class="card-section">
+    <h2>The Party List That Broke the Database</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">property graph</span><span class="tag orange">Cypher</span></div>
+                <ul>
+                    <li><b>The party</b> — Ana invites her friends, their friends, and their friends: everyone within 3 hops</li>
+                    <li><b>The graph</b> — each member is a node labeled <code>:Person</code> carrying properties like <code>name</code> and <code>city</code></li>
+                    <li><b>The relationship</b> — <code>KNOWS</code> is a typed, directed edge that holds its own properties (<code>since: 2019</code>)</li>
+                    <li><b>The model</b> — nodes, typed relationships, and properties on both: the property-graph model</li>
+                    <li><b>The query</b> — Cypher draws the pattern as ASCII art: <code>(a)-[:KNOWS]-&gt;(b)</code> reads "a knows b"</li>
+                </ul>
+                <p class="example"><code>MATCH (a:Person {name:'Ana'})-[:KNOWS*1..3]-&gt;(b) RETURN DISTINCT b</code> — Ana's whole 3-hop invite list in one line.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> In a graph database the relationship is a first-class record — it has a type, a direction, and properties of its own, not just a foreign-key number sitting in someone else's row.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Hops by Hand: Self-Joins vs Pointer Chasing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">index-free adjacency</span></div>
+                <ul>
+                    <li><b>The setup</b> — 1,000,000 members, each knowing 50 people on average (network sizes illustrative)</li>
+                    <li><b>The counting</b> — 50 friends, 50&times;50 = 2,500 two-hop paths, 50&sup3; = 125,000 three-hop paths (exact)</li>
+                    <li><b>The relational way</b> — a <code>friendships</code> table of 50,000,000 rows, self-joined once per hop</li>
+                    <li><b>The join cost</b> — every hop re-searches the whole table's index, once per path being extended</li>
+                    <li><b>The graph way</b> — each node stores direct pointers to its neighbors; a hop is a pointer dereference</li>
+                    <li><b>Index-free adjacency</b> — traversal cost scales with paths visited, not with total table size</li>
+                </ul>
+                <p class="example">On the illustrative benchmark, Ana's 3-hop invite list takes 30s as three self-joins but 0.4s as a graph traversal.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A join recomputes "who is connected" through a global index at query time; a graph stores the connection as a pointer at write time — so multi-hop queries don't degrade the way stacked self-joins do.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Joins Are the Point</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">fraud &amp; recommendations</span></div>
+                <ul>
+                    <li><b>Fraud rings</b> — accounts tied by shared phones and addresses form cycles visible only over many hops</li>
+                    <li><b>Recommendations</b> — "people you may know" is exactly the 2-hop friends-of-friends query</li>
+                    <li><b>Knowledge graphs</b> — entities plus typed facts, <code>(aspirin)-[:TREATS]-&gt;(headache)</code>, queried by pattern</li>
+                    <li><b>The common thread</b> — all three ask about paths and shapes, not sums over columns</li>
+                    <li><b>Depth scales</b> — hop 4 grows with the paths visited, not table size; the same depth kills a self-join</li>
+                </ul>
+                <p class="example">"Do these two accounts connect within a few hops of shared identifiers?" is one Cypher pattern — the same question as Ana's party list, wearing a fraud badge.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Reach for a graph database when the connections themselves are the product — ring detection, recommendations, and knowledge graphs are all "find this shape in the network" questions.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not a Faster Table for Everything</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">right tool</span></div>
+                <ul>
+                    <li><b>The mistake</b> — treating a graph database as a faster drop-in for every relational workload</li>
+                    <li><b>Start nodes need indexes</b> — index-free adjacency covers the hops; finding Ana still uses an index</li>
+                    <li><b>Aggregates don't care</b> — "total orders per month" touches every record either way; no graph win</li>
+                    <li><b>Shallow joins are fine</b> — a 1- or 2-hop join on indexed keys is fast in any relational database</li>
+                    <li><b>The test</b> — count the hops in your slowest queries; graphs pay off at depth 3+ or variable depth</li>
+                </ul>
+                <p class="example">A team migrates its whole billing schema to a graph and finds invoice totals no faster — the one query that was slow, a 4-hop referral chain, was the only graph-shaped one.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming index-free adjacency speeds up everything. It speeds up traversals — lookups still use indexes and aggregates still scan — so port the deep-hop queries and keep the ledgers relational.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedBox(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: nodes, typed relationships, and properties on both
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Nodes, Typed Relationships, and Properties on Both', w / 2, 24);
+
+    function personNode(cx, cy, name) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        ctx.beginPath(); ctx.arc(cx, cy, 44, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(':Person', cx, cy - 4);
+        ctx.fillText(name, cx, cy + 14);
+    }
+    personNode(180, 140, 'Ana');
+    personNode(540, 140, 'Bo');
+
+    // relationship arrow
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(224, 140); ctx.lineTo(486, 140); ctx.stroke();
+    ctx.fillStyle = P.orange;
+    ctx.beginPath();
+    ctx.moveTo(496, 140); ctx.lineTo(484, 133); ctx.lineTo(484, 147);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(':KNOWS', 360, 120);
+
+    // relationship property box
+    roundedBox(ctx, 295, 159, 130, 26, 6);
+    ctx.fillStyle = 'rgba(217,89,38,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('{ since: 2019 }', 360, 176);
+
+    // node property boxes + dashed connectors
+    function propBox(cx, cy, line1, line2, nodeCx, nodeCy) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(nodeCx, nodeCy + 44); ctx.lineTo(cx, cy - 20); ctx.stroke();
+        ctx.setLineDash([]);
+        roundedBox(ctx, cx - 75, cy - 20, 150, 40, 6);
+        ctx.fillStyle = 'rgba(42,120,214,0.08)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(line1, cx, cy - 4);
+        ctx.fillText(line2, cx, cy + 11);
+    }
+    propBox(180, 232, "name: 'Ana'", "city: 'Lisbon'", 180, 140);
+    propBox(540, 232, "name: 'Bo'", "city: 'Porto'", 540, 140);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the edge is a record too — type, direction, properties', w / 2, 285);
+});
+
+// c2: query time by hop depth — self-join vs traversal
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('3-Hop Friends Query: Self-Joins Blow Up, Traversal Barely Notices', w / 2, 24);
+
+    var baseY = 245;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var centers = [135, 285, 435, 585];
+    var hopLabs = ['1 hop', '2 hops', '3 hops', '4 hops'];
+    var relH = [24, 60, 130, 180];
+    var relLabs = ['0.02s', '0.4s', '30s', '>1000s'];
+    var graphH = [16, 30, 58, 86];
+    var graphLabs = ['0.01s', '0.05s', '0.4s', '2.1s'];
+
+    for (var i = 0; i < 4; i++) {
+        var c = centers[i];
+        // relational bar
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(c - 49, baseY - relH[i], 44, relH[i]);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(relLabs[i], c - 27, baseY - relH[i] - 6);
+        if (i === 3) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+            ctx.fillText('timed out', c - 27, baseY - relH[i] - 22);
+        }
+        // graph bar
+        ctx.fillStyle = P.green;
+        ctx.fillRect(c + 5, baseY - graphH[i], 44, graphH[i]);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText(graphLabs[i], c + 27, baseY - graphH[i] - 6);
+        // tick label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(hopLabs[i], c, 263);
+    }
+
+    // legend
+    ctx.fillStyle = P.orange; ctx.fillRect(70, 44, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('relational self-join', 88, 54);
+    ctx.fillStyle = P.green; ctx.fillRect(70, 62, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('graph traversal', 88, 72);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('traversal cost follows paths, not table size', 300, 85);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('bar heights schematic (log-feel), times illustrative', w - 12, h - 6);
+});
+
+// c3: fraud ring — accounts chained by shared identifiers
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("A Fraud Ring: Four 'Strangers' Chained by Shared Phones and Addresses", w / 2, 24);
+
+    var pts = [
+        [360, 80], [417, 103], [440, 160], [417, 217],
+        [360, 240], [303, 217], [280, 160], [303, 103]
+    ];
+    var acctLabs = ['Acct A', 'Acct B', 'Acct C', 'Acct D'];
+    var idLabs = ['555-0101', '9 Elm St', '555-0177', '4 Oak Av'];
+
+    // edges (under nodes)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    for (var i = 0; i < 8; i++) {
+        var a = pts[i], b = pts[(i + 1) % 8];
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+
+    // nodes
+    var acct = 0, ident = 0;
+    for (var i = 0; i < 8; i++) {
+        var p = pts[i];
+        if (i % 2 === 0) {
+            ctx.fillStyle = 'rgba(42,120,214,0.15)';
+            ctx.beginPath(); ctx.arc(p[0], p[1], 24, 0, 2 * Math.PI); ctx.fill();
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = P.ink; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(acctLabs[acct++], p[0], p[1] + 4);
+        } else {
+            roundedBox(ctx, p[0] - 39, p[1] - 12, 78, 24, 6);
+            ctx.fillStyle = 'rgba(217,89,38,0.12)'; ctx.fill();
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(idLabs[ident++], p[0], p[1] + 4);
+        }
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    ctx.beginPath(); ctx.arc(28, 56, 8, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('account node', 44, 60);
+    roundedBox(ctx, 20, 72, 16, 12, 3);
+    ctx.fillStyle = 'rgba(217,89,38,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#444';
+    ctx.fillText('shared identifier', 44, 82);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('edges: :USES_PHONE / :USES_ADDRESS', 20, 104);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one 8-hop cycle pattern finds the whole ring', w / 2, 288);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('identifiers fictitious, ring illustrative', w - 12, 268);
+});
+
+// c4: match the query to the store
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Match the Query to the Store', w / 2, 24);
+
+    function box(cx, cy, bw, fill, stroke, label) {
+        roundedBox(ctx, cx - bw / 2, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+    }
+
+    // row 1: 3-hop invite list
+    var y1 = 105;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3-hop invite list', 20, y1 - 32);
+    box(270, y1, 200, 'rgba(217,89,38,0.12)', P.orange, 'relational: 3 self-joins — 30s');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗', 378, y1 + 4);
+    box(530, y1, 210, 'rgba(0,131,0,0.12)', P.green, 'graph: 125,000 hops — 0.4s');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓', 643, y1 + 4);
+
+    // row 2: monthly order totals
+    var y2 = 195;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('monthly order totals', 20, y2 - 32);
+    box(270, y2, 200, 'rgba(0,131,0,0.12)', P.green, 'relational: one scan — fast');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓', 378, y2 + 4);
+    box(530, y2, 210, 'rgba(107,114,128,0.12)', P.mute, 'graph: no advantage');
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('—', 643, y2 + 4);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('index-free adjacency speeds hops — not lookups, not sums', w / 2, 262);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('times illustrative, matching the hop benchmark above', w - 12, 288);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iceberg, Delta, Hudi</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Iceberg, Delta, Hudi</h1>
+<p class="subtitle">Table formats put a database layer on top of plain files in a data lake — commits, versions, and safe concurrent writes for what used to be just a folder of Parquet</p>
+
+<div class="card-section">
+    <h2>The Table That Was Just a Folder</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">data lake</span><span class="tag orange">metadata layer</span></div>
+                <ul>
+                    <li><b>The lake</b> — a retailer's <code>orders</code> table is 1,200 Parquet files in one S3 folder, and nothing more</li>
+                    <li><b>No transactions</b> — a reader listing the folder mid-write sees 3 of a job's 5 new files</li>
+                    <li><b>No safe concurrency</b> — two jobs writing at once silently overwrite or double each other's output</li>
+                    <li><b>The fix</b> — Iceberg (from Netflix), Delta Lake (Databricks) and Hudi (Uber) add a metadata layer</li>
+                    <li><b>The pointer</b> — the table is whatever the current snapshot's manifest lists; loose files mean nothing</li>
+                </ul>
+                <p class="example">An analyst's 2:00pm query used to catch half-written loads; with a table format it reads committed snapshot 510 — complete data or nothing.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A table format turns a folder of Parquet files into a real table by keeping a manifest of exactly which files belong to each committed version.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Jobs, One Table, No Corruption</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">ACID commit</span><span class="tag orange">optimistic concurrency</span></div>
+                <ul>
+                    <li><b>Two writers</b> — at 2:00pm an hourly append job and a file-compaction job both start from snapshot 510</li>
+                    <li><b>The append</b> — the append job writes 40,000 new order rows, then swaps the pointer 510 &rarr; 511 at t=45s</li>
+                    <li><b>The conflict</b> — at t=50s the compaction job tries to commit and finds the pointer already moved</li>
+                    <li><b>The retry</b> — it re-validates against 511 (no overlapping files), then swaps 511 &rarr; 512 at t=75s</li>
+                    <li><b>The guarantee</b> — every reader saw exactly 510, 511, or 512 — never a mix, never a half-commit</li>
+                </ul>
+                <p class="example">Snapshot 511 holds 1.24M rows (1.20M + 40,000 appended); compaction's snapshot 512 holds the same 1.24M rows in ~300 files instead of 1,200.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> ACID on a lake comes down to one atomic operation — swapping the current-snapshot pointer; when two writers race, one wins and the other retries against the new snapshot.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Time Travel After a Bad Load</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">snapshots</span><span class="tag orange">lakehouse</span></div>
+                <ul>
+                    <li><b>The bad load</b> — the 3:00am backfill runs twice, and snapshot 513 doubles the table to 2.48M rows</li>
+                    <li><b>Time travel</b> — <code>SELECT ... FOR VERSION AS OF 512</code> still returns yesterday's clean 1.24M rows</li>
+                    <li><b>The rollback</b> — repointing the table at snapshot 512 undoes the bad load in one metadata write</li>
+                    <li><b>Schema evolution</b> — columns tracked by ID can be added, renamed or dropped with no file rewrite</li>
+                    <li><b>Partition evolution</b> — Iceberg can switch day- to hour-partitioning; old files stay untouched</li>
+                    <li><b>The lakehouse</b> — warehouse guarantees (ACID, versions, schema) on cheap, open lake storage</li>
+                </ul>
+                <p class="example">At 9:00am the on-call sees dashboards doubled, confirms with a query AS OF 512, and rolls back — no restore from backup, no rewriting 2.48M rows.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because every snapshot is just a list of files, yesterday's table still exists after a bad load — recovery is repointing, not reloading.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Table Format Is Not a File Format</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">layers</span></div>
+                <ul>
+                    <li><b>The confusion</b> — "we store Parquet" names a file format; Parquet says nothing about commits or versions</li>
+                    <li><b>File format</b> — Parquet defines the bytes inside one file: columns, compression, encodings</li>
+                    <li><b>Table format</b> — Iceberg, Delta and Hudi define which files form the table and how versions change</li>
+                    <li><b>Not an engine</b> — the format is a spec plus libraries; Spark, Trino, Flink and Snowflake all read it</li>
+                    <li><b>The consensus</b> — Iceberg emerged as the vendor-neutral pick, supported across major warehouses</li>
+                </ul>
+                <p class="example">A team "on Parquet" still corrupted its table under concurrent writers — the missing piece was the layer above the files, not the files themselves.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating "Parquet" as the table. Parquet is one file's internal layout; a table needs the commit-and-snapshot layer that Iceberg, Delta and Hudi provide on top.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: plain folder vs table format mid-write
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Plain Folder vs Table Format: What a Mid-Write Reader Sees', w / 2, 24);
+
+    function box(x, cy, bw, fill, edge, lines) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 12);
+        }
+    }
+    function arrow(x0, x1, cy) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x1 - 6, cy); ctx.stroke();
+        arrowHead(ctx, x0, cy, x1 - 2, cy, P.mute);
+    }
+
+    // Row 1: plain folder
+    var y1 = 105;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('plain folder', 20, y1 + 4);
+    box(140, y1, 180, 'rgba(42,120,214,0.15)', P.blue, ['writer: adding 5 files']);
+    box(400, y1, 180, 'rgba(231,76,60,0.12)', '#e74c3c', ['reader lists folder', '— sees 3 of 5']);
+    arrow(320, 400, y1);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ partial table', 590, y1 + 4);
+
+    // Row 2: table format
+    var y2 = 215;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('table format', 20, y2 + 4);
+    box(140, y2, 180, 'rgba(42,120,214,0.15)', P.blue, ['writer builds', 'snapshot 511']);
+    box(350, y2, 180, 'rgba(0,131,0,0.12)', P.green, ['atomic pointer', 'swap 510→511']);
+    box(560, y2, 150, 'rgba(0,131,0,0.12)', P.green, ['reader sees', '510 or 511']);
+    arrow(320, 350, y2);
+    arrow(530, 560, y2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 635, y2 - 26);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the manifest — not the folder listing — defines the table', w / 2, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('file counts illustrative', w - 12, h - 8);
+});
+
+// c2: two-writer commit timeline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Writers, One Pointer: Commit, Conflict, Retry', w / 2, 24);
+
+    var ox = 60, plotW = 600, baseY = 250;
+    function px(t) { return ox + t / 90 * plotW; }
+    var lanes = [
+        { y: 100, lab: 'append job' },
+        { y: 160, lab: 'compaction job' },
+        { y: 220, lab: 'table pointer' }
+    ];
+
+    // baseline and x ticks
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    [0, 30, 60, 90].forEach(function(t) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + 's', px(t), baseY + 18);
+    });
+
+    // lane guides + labels
+    lanes.forEach(function(l) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, l.y); ctx.lineTo(ox + plotW, l.y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(l.lab, 20, l.y - 8);
+    });
+
+    // swap markers
+    [45, 75].forEach(function(t) {
+        ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px(t), 85); ctx.lineTo(px(t), baseY); ctx.stroke();
+        ctx.setLineDash([]);
+    });
+
+    function diamond(x, y, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y);
+        ctx.closePath(); ctx.fill();
+    }
+
+    // append lane
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(px(0), 100, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reads @510', px(0) + 10, 96);
+    diamond(px(45), 100, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('commit → 511', px(45), 84);
+
+    // compaction lane
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(px(0), 160, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reads @510', px(0) + 10, 156);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', px(50), 165);
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('conflict: pointer moved', px(50) + 12, 178);
+    diamond(px(75), 160, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('retry → 512', px(75), 144);
+
+    // pointer lane: stepped line
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(px(0), 226);
+    ctx.lineTo(px(45), 226);
+    ctx.lineTo(px(45), 214);
+    ctx.lineTo(px(75), 214);
+    ctx.lineTo(px(75), 202);
+    ctx.lineTo(px(90), 202);
+    ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('510', px(22), 240);
+    ctx.fillText('511', px(60), 228);
+    ctx.fillText('512', px(83), 216);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one winner per commit — the loser retries, never corrupts', px(62) - 40, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 6);
+});
+
+// c3: rows per snapshot, time travel
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rows per Snapshot: the 3am Backfill Ran Twice', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    function py(m) { return baseY - m / 2.5 * plotH; }
+
+    // gridlines
+    [[0.5, '0.5M'], [1.0, '1.0M'], [1.5, '1.5M'], [2.0, '2.0M']].forEach(function(g) {
+        var y = py(g[0]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g[1], ox - 8, y + 4);
+    });
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var bars = [
+        { cx: 150, v: 1.20, lab: 'snap 510', val: '1.20M', bad: false },
+        { cx: 290, v: 1.24, lab: 'snap 511', val: '1.24M', bad: false },
+        { cx: 430, v: 1.24, lab: 'snap 512', val: '1.24M', bad: false },
+        { cx: 570, v: 2.48, lab: 'snap 513', val: '2.48M', bad: true }
+    ];
+    var bw = 90;
+    bars.forEach(function(b, i) {
+        var yTop = py(b.v);
+        if (b.bad) {
+            ctx.fillStyle = 'rgba(231,76,60,0.18)';
+            ctx.fillRect(b.cx - bw / 2, yTop, bw, baseY - yTop);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+            ctx.strokeRect(b.cx - bw / 2, yTop, bw, baseY - yTop);
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(b.val, b.cx, yTop - 6);
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(b.cx - bw / 2, yTop, bw, baseY - yTop);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(b.cx - bw / 2, yTop, bw, baseY - yTop);
+            ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(b.val, b.cx, yTop - 6);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.lab, b.cx, baseY + 16);
+        // green outline for snap 512
+        if (i === 2) {
+            ctx.strokeStyle = P.green; ctx.lineWidth = 2.5;
+            ctx.strokeRect(b.cx - bw / 2 - 3, yTop - 3, bw + 6, baseY - yTop + 3);
+        }
+    });
+
+    // AS OF label with arrow to snap 512
+    var y512 = py(1.24);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('AS OF 512 → 1.24M', 380, 60);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(400, 66); ctx.lineTo(428, y512 - 10); ctx.stroke();
+    arrowHead(ctx, 400, 66, 430, y512 - 6, P.green);
+
+    // bad-load label
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('backfill ran twice', 570, 30);
+
+    // rollback arrow: dashed green curve from 513 top back to 512 top
+    var y513 = py(2.48);
+    ctx.strokeStyle = P.green; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(560, y513 - 6);
+    ctx.quadraticCurveTo(500, y513 - 26, 442, y512 - 16);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 470, y512 - 26, 440, y512 - 12, P.green);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rollback', 505, y513 - 26);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts illustrative', w - 12, h - 6);
+});
+
+// c4: four layers of a lakehouse table
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Layers of a Lakehouse Table', w / 2, 24);
+
+    var layers = [
+        { y: 55, edge: P.violet, lw: 2, fill: 'rgba(74,58,167,0.10)', text: 'query engines — Spark, Trino, Flink, Snowflake', bold: false },
+        { y: 110, edge: P.green, lw: 2.5, fill: 'rgba(0,131,0,0.12)', text: 'table format — Iceberg / Delta / Hudi: commits, snapshots, schema', bold: true },
+        { y: 165, edge: P.blue, lw: 2, fill: 'rgba(42,120,214,0.15)', text: 'file format — Parquet: bytes of one file, no notion of a table', bold: false },
+        { y: 220, edge: P.mute, lw: 2, fill: 'rgba(107,114,128,0.10)', text: 'object store — S3 / GCS / ADLS: no transactions, no safe rename', bold: false }
+    ];
+    layers.forEach(function(l) {
+        ctx.fillStyle = l.fill;
+        roundRect(ctx, 140, l.y, 440, 40, 8);
+        ctx.fill();
+        ctx.strokeStyle = l.edge; ctx.lineWidth = l.lw; ctx.stroke();
+        ctx.fillStyle = P.text;
+        ctx.font = (l.bold ? 'bold ' : '') + '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(l.text, 360, l.y + 25);
+    });
+
+    // connectors between adjacent boxes
+    for (var i = 0; i < 3; i++) {
+        var y0 = layers[i].y + 40, y1 = layers[i + 1].y;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(360, y0); ctx.lineTo(360, y1 - 4); ctx.stroke();
+        arrowHead(ctx, 360, y0, 360, y1, P.mute);
+    }
+
+    // mistake marker at the file-format layer
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('"we use Parquet"', 595, 178);
+    ctx.fillText('names only this layer', 595, 194);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(592, 185); ctx.lineTo(586, 185); ctx.stroke();
+    arrowHead(ctx, 620, 185, 584, 185, '#e74c3c');
+
+    // highlight label left of the table-format layer
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the missing', 20, 125);
+    ctx.fillText('database layer', 20, 141);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('layer diagram schematic', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

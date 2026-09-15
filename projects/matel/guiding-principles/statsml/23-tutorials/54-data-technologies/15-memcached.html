@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memcached</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Memcached</h1>
+<p class="subtitle">Memcached is a hash table you reach over the network — get, set, delete on borrowed RAM, and deliberately nothing more</p>
+
+<div class="card-section">
+    <h2>The 80 ms Query and the 1 ms Hash Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">caching</span><span class="tag orange">2003</span></div>
+                <ul>
+                    <li><b>The slow page</b> — an article page runs an 80 ms database query on every single view (illustrative)</li>
+                    <li><b>The cache server</b> — memcached holds <code>article:1042 → page data</code> in RAM and answers a get in 1 ms</li>
+                    <li><b>Three verbs</b> — the whole API is essentially get(key), set(key, value, ttl), delete(key)</li>
+                    <li><b>The origin</b> — Brad Fitzpatrick wrote it in 2003 to take load off LiveJournal's database</li>
+                    <li><b>Deliberately minimal</b> — no disk, no queries, no replication: a hash table reached over TCP</li>
+                </ul>
+                <p class="example">The app asks memcached for <code>article:1042</code> first; only when the key is missing does it run the 80 ms SQL query, then set() the result for the next visitor.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Memcached is a networked in-memory hash table, nothing more — the caching behavior is the cache-aside pattern your app writes around those three verbs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What a 90% Hit Ratio Buys You</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hit ratio math</span></div>
+                <ul>
+                    <li><b>The two costs</b> — a hit costs the 1 ms get; a miss costs the get plus the query: 1 + 80 = 81 ms</li>
+                    <li><b>The formula</b> — average latency = h &times; 1 + (1 &minus; h) &times; 81, where h is the hit ratio (exact)</li>
+                    <li><b>At 90% hits</b> — 0.9 &times; 1 + 0.1 &times; 81 = 9.0 ms average, down from 81 ms with a cold cache</li>
+                    <li><b>Database relief</b> — at 1,000 views/s, the database now runs 100 queries/s instead of 1,000</li>
+                    <li><b>The last mile</b> — pushing 90% to 99% hits cuts the average again, from 9.0 ms to 1.8 ms</li>
+                    <li><b>The TTL</b> — set(key, value, 60) caps staleness at 60 s; expiry is just a miss you scheduled</li>
+                </ul>
+                <p class="example">At a 90% hit ratio, 9 of every 10 visitors get the article in 1 ms and 1 pays the full 81 ms — averaging 9.0 ms per view.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Misses dominate the math — average latency &asymp; miss ratio &times; query cost — so each extra point of hit ratio near the top cuts a larger fraction of the remaining latency.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Spreading Keys Across a Fleet</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">consistent hashing</span><span class="tag orange">scale</span></div>
+                <ul>
+                    <li><b>Dumb servers</b> — a memcached node knows nothing about the others; there is no cluster protocol</li>
+                    <li><b>Client-side sharding</b> — the client library hashes each key to pick which node stores it</li>
+                    <li><b>Consistent hashing</b> — keys sit on a hash ring, so removing a node remaps only that node's share</li>
+                    <li><b>The naive trap</b> — hash(key) % N remaps nearly every key when N changes, emptying the cache at once</li>
+                    <li><b>Facebook's fleet</b> — its published 2013 paper describes memcached serving over a billion reads/s</li>
+                    <li><b>Why it scales</b> — servers that never talk to each other have no coordination cost; add RAM by adding boxes</li>
+                </ul>
+                <p class="example">With 4 nodes, <code>article:1042</code> hashes to node C; when C dies, only C's quarter of the keys spread over A, B, and D — the other three quarters never move.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Memcached scales by staying dumb — nodes are independent, the client's consistent hash spreads the keys, and losing a node costs only that node's share of hits.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Cache Is Not a Database</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">vs Redis</span></div>
+                <ul>
+                    <li><b>The mistake</b> — storing shopping carts only in memcached, treating a set() like a database write</li>
+                    <li><b>LRU eviction</b> — when RAM fills, the least-recently-used entries are silently deleted to make room</li>
+                    <li><b>No persistence</b> — a restart or crash empties the node; there is no disk to reload from</li>
+                    <li><b>No replication</b> — no second copy exists; a lost node is only safe if the database holds the truth</li>
+                    <li><b>The Redis contrast</b> — Redis adds data structures, persistence, and replication; memcached refuses them</li>
+                    <li><b>Neither is wrong</b> — a pure look-aside cache suits memcached; a data-structure server is Redis's job</li>
+                </ul>
+                <p class="example">A user's cart written only to memcached vanishes during a traffic spike when LRU evicts it to make room for hot article keys.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Putting the only copy of data in memcached. Eviction and restarts delete keys without warning — every key must be rebuildable from the database, or it does not belong there.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), ah = 8;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - 0.45), y2 - ah * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - ah * Math.cos(ang + 0.45), y2 - ah * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+function fbox(ctx, x, y, w2, fill, edge, text) {
+    roundRect(ctx, x, y - 20, w2, 40, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(text, x + w2 / 2, y + 4);
+}
+
+// c1: cache-aside hit and miss paths
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Cache-Aside: Ask the Hash Table First, the Database Only on a Miss', w / 2, 24);
+
+    // Row 1: hit
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hit — 9 of 10 views', 20, y1 - 28);
+    fbox(ctx, 145, y1, 160, 'rgba(42,120,214,0.15)', P.blue, 'get(article:1042)');
+    arrow(ctx, 305, y1, 344, y1, P.mute, 3);
+    fbox(ctx, 350, y1, 170, 'rgba(0,131,0,0.12)', P.green, 'memcached: found — 1 ms');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ database never touched', 545, y1 + 4);
+
+    // Row 2: miss
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('miss — 1 of 10', 20, y2 - 28);
+    fbox(ctx, 145, y2, 160, 'rgba(42,120,214,0.15)', P.blue, 'get → (nothing)');
+    arrow(ctx, 305, y2, 324, y2, P.mute, 3);
+    fbox(ctx, 330, y2, 160, 'rgba(217,89,38,0.12)', P.orange, 'SQL query — 80 ms');
+    arrow(ctx, 490, y2, 519, y2, P.mute, 3);
+    fbox(ctx, 525, y2, 170, 'rgba(42,120,214,0.15)', P.blue, 'set(key, row, 60s)');
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the app owns the pattern — memcached only knows get, set, delete', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative', w - 15, h - 10);
+});
+
+// c2: average latency vs hit ratio
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Average Page Latency vs Hit Ratio: Misses Dominate the Math', w / 2, 24);
+
+    var baseY = 245, ph = 180, maxY = 90;
+    for (var g = 20; g <= 80; g += 20) {
+        var gy = baseY - g / maxY * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), 50, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var bars = [
+        { x: 135, hgt: 162, color: '#e74c3c', ratio: '0% hits', val: '81 ms' },
+        { x: 285, hgt: 82,  color: '#d95926', ratio: '50%',     val: '41 ms' },
+        { x: 435, hgt: 18,  color: '#2a78d6', ratio: '90%',     val: '9.0 ms' },
+        { x: 585, hgt: 4,   color: '#008300', ratio: '99%',     val: '1.8 ms' }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var b = bars[i];
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x - 40, baseY - b.hgt, 80, b.hgt);
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.val, b.x, baseY - b.hgt - 8);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.ratio, b.x, baseY + 18);
+    }
+
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('90% hits: 81 ms → 9.0 ms average', 420, 95);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('avg = h×1 + (1−h)×81 — arithmetic exact, latencies illustrative', w - 15, h - 10);
+});
+
+// c3: consistent hashing — losing node C
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Consistent Hashing: Losing Node C Moves Only Node C's Keys", w / 2, 24);
+
+    var baseY = 245, ph = 180, maxY = 40;
+    for (var g = 10; g <= 30; g += 10) {
+        var gy = baseY - g / maxY * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), 50, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var colors = ['#2a78d6', '#199e70', '#d95926', '#4a3aa7'];
+    var letters = ['A', 'B', 'C', 'D'];
+
+    // left group: healthy
+    var lx = [100, 150, 200, 250];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(lx[i], baseY - 112, 40, 112);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('25%', lx[i] + 20, baseY - 112 - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(letters[i], lx[i] + 20, baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 nodes healthy', 195, baseY + 34);
+
+    // right group: node C dies
+    var rx = [410, 460, 510, 560];
+    var shares = ['33%', '34%', '', '33%'];
+    var hgts = [148, 153, 0, 148];
+    for (var i = 0; i < 4; i++) {
+        if (i === 2) {
+            // dashed red outline where C's bar used to be
+            ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 2;
+            ctx.strokeRect(rx[i], baseY - 112, 40, 112);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('✗', rx[i] + 20, baseY - 52);
+        } else {
+            ctx.fillStyle = colors[i];
+            ctx.fillRect(rx[i], baseY - hgts[i], 40, hgts[i]);
+            ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(shares[i], rx[i] + 20, baseY - hgts[i] - 6);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(letters[i], rx[i] + 20, baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('node C dies', 505, baseY + 34);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("C's 25% redistributes — 75% of keys never move", 430, 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('shares illustrative; with modulo hashing nearly all keys would move', w - 15, h - 10);
+});
+
+// c4: memcached vs Redis comparison
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Memcached Stays a Cache; Redis Grows Into a Data-Structure Server', w / 2, 24);
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('memcached', 190, 62);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('Redis', 530, 62);
+
+    var mem = ['get / set / delete only', 'LRU eviction, TTLs', 'no disk — restart starts empty', 'no replication, no failover'];
+    var red = ['lists, sets, sorted sets, hashes', 'optional persistence to disk', 'replication and failover', 'pub/sub, scripting, streams'];
+    var ys = [80, 125, 170, 215];
+    for (var i = 0; i < 4; i++) {
+        roundRect(ctx, 60, ys[i], 260, 38, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(mem[i], 190, ys[i] + 24);
+
+        roundRect(ctx, 400, ys[i], 260, 38, 8);
+        ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text;
+        ctx.fillText(red[i], 530, ys[i] + 24);
+    }
+
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both keep data in RAM — they differ on everything promised beyond that', 360, 285);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

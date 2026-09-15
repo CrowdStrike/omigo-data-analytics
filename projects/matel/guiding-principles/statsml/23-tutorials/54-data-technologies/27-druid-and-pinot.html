@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Druid &amp; Pinot</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Druid &amp; Pinot</h1>
+<p class="subtitle">Real-time OLAP stores that answer aggregations over event streams in under a second, on data that is only seconds old — the combination a warehouse can't deliver</p>
+
+<div class="card-section">
+    <h2>The Dashboard That Shows the Last Five Minutes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">real-time OLAP</span><span class="tag orange">event streams</span></div>
+                <ul>
+                    <li><b>The dashboard</b> — an ad platform lets advertisers watch impressions and clicks live, per campaign</li>
+                    <li><b>The window</b> — every refresh asks: totals for MY campaign over the last 5 minutes, right now</li>
+                    <li><b>The stream</b> — ad events pour into a Kafka topic; Druid and Pinot ingest straight from it</li>
+                    <li><b>The freshness</b> — an impression served at 2:00:00pm is queryable on the dashboard seconds later</li>
+                    <li><b>The warehouse gap</b> — a batch-loaded warehouse would show that same impression an hour late</li>
+                </ul>
+                <p class="example">An advertiser pauses a broken ad at 2:04pm and watches its impressions fall to zero on the very next refresh — with hourly batch loads the drop would appear at 3pm.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Druid and Pinot exist for exactly one job: sub-second aggregations over event streams that are fresh to the last few seconds, ingested directly from Kafka.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Summing Five Minutes of Impressions by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">time segments</span><span class="tag orange">column indexes</span></div>
+                <ul>
+                    <li><b>The layout</b> — events land in time-partitioned segments, one per minute, columns indexed on write</li>
+                    <li><b>The query</b> — impressions and clicks for campaign 42 over the last 5 minutes = touch 5 segments only</li>
+                    <li><b>The index</b> — a pre-built index on the campaign column jumps straight to campaign 42's rows</li>
+                    <li><b>The sum</b> — per-minute impressions 12,400 + 12,900 + 13,100 + 12,700 + 13,300 = 64,400 (exact)</li>
+                    <li><b>The clicks</b> — per-minute clicks 310 + 322 + 335 + 318 + 328 = 1,613, so CTR = 1,613 / 64,400 &asymp; 2.5% (rounded)</li>
+                    <li><b>The speed</b> — five small indexed scans, no full-table pass: the answer returns in ~80 ms</li>
+                </ul>
+                <p class="example">At 2:05pm the dashboard shows campaign 42 at 64,400 impressions, 1,613 clicks, 2.5% CTR — computed from just the five 1-minute segments in the window.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Time partitioning prunes the scan to the queried window and column indexes prune it to the queried campaign — that double pruning is why the aggregation takes milliseconds, not minutes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Niche Warehouses Can't Serve</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">user-facing analytics</span></div>
+                <ul>
+                    <li><b>Druid's origin</b> — built at Metamarkets to power interactive ad-analytics dashboards</li>
+                    <li><b>Pinot's origin</b> — built at LinkedIn for "who viewed your profile", analytics shown to every member</li>
+                    <li><b>The load</b> — user-facing means every user fires queries: millions of queries, not a few analysts</li>
+                    <li><b>Two demands at once</b> — results in under a second AND data fresh to the last few seconds</li>
+                    <li><b>The warehouse miss</b> — warehouses batch-load (stale) and serve few concurrent queries (slow at scale)</li>
+                </ul>
+                <p class="example">"Who viewed your profile" runs an analytics query for each of millions of members opening the page — a load no analyst-facing warehouse is built to take.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The niche is user-facing dashboards where freshness and latency both matter at high query volume; both systems were open sourced out of companies that hit that exact wall.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not a Faster Warehouse</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">right tool</span></div>
+                <ul>
+                    <li><b>The confusion</b> — teams read "sub-second SQL" and try to replace the warehouse with Druid or Pinot</li>
+                    <li><b>The trade</b> — pre-built indexes and time segments are tuned for anticipated aggregation shapes</li>
+                    <li><b>What suffers</b> — large arbitrary joins and exploratory full-history SQL are the warehouse's job</li>
+                    <li><b>The pairing</b> — the common architecture runs both: stream to Druid/Pinot, batch to the warehouse</li>
+                    <li><b>The tell</b> — if the query has no time window and no dashboard behind it, it belongs elsewhere</li>
+                </ul>
+                <p class="example">The same team's "last 5 minutes by campaign" query takes 80 ms in Pinot, but their analyst's 6-month join against the customer table still runs in the warehouse.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating Druid or Pinot as a general-purpose warehouse. They buy sub-second latency by pre-organizing data around time-windowed aggregations — ad-hoc joins over full history is the workload they deliberately gave up.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: warehouse path vs streaming OLAP path
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Impression at 2:00:00pm: When Can the Dashboard See It?', w / 2, 24);
+
+    function box(x, cy, bw, fill, edge, lines, textColor) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = textColor || P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 12);
+        }
+        return { x0: x, x1: x + bw, cy: cy };
+    }
+    function arrow(x0, x1, cy) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x1 - 6, cy); ctx.stroke();
+        arrowHead(ctx, x0, cy, x1 - 2, cy, P.mute);
+    }
+
+    // Row 1: warehouse path
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('warehouse path', 20, y1 + 4);
+    var b1 = box(150, y1, 150, 'rgba(42,120,214,0.15)', P.blue, ['impression', '2:00:00pm']);
+    var b2 = box(340, y1, 150, 'rgba(107,114,128,0.12)', P.mute, ['batch file (waits)']);
+    var b3 = box(530, y1, 150, 'rgba(217,89,38,0.12)', P.orange, ['hourly load 3:00pm']);
+    arrow(b1.x1, 340, y1);
+    arrow(b2.x1, 530, y1);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('visible ~60 min later', 605, y1 + 36);
+
+    // Row 2: Druid / Pinot path
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Druid / Pinot path', 20, y2 + 4);
+    var d1 = box(130, y2, 130, 'rgba(42,120,214,0.15)', P.blue, ['impression', '2:00:00pm']);
+    var d2 = box(310, y2, 130, 'rgba(42,120,214,0.15)', P.blue, ['Kafka topic', '+0.2s']);
+    var d3 = box(480, y2, 110, 'rgba(0,131,0,0.12)', P.green, ['ingested +2s']);
+    var d4 = box(620, y2, 95, 'rgba(0,131,0,0.12)', P.green, ['queryable', '+3s']);
+    arrow(d1.x1, 310, y2);
+    arrow(d2.x1, 480, y2);
+    arrow(d3.x1, 620, y2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 667, y2 + 36);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fresh to the last few seconds — that is the whole point', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c2: five segments bar chart
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Campaign 42, Last 5 Minutes: Five Segments, One Sum', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    function py(v) { return baseY - v / 15000 * plotH; }
+
+    // gridlines
+    [[5000, '5k'], [10000, '10k']].forEach(function(g) {
+        var y = py(g[0]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g[1], ox - 8, y + 4);
+    });
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var centers = [130, 250, 370, 490, 610];
+    var vals = [12400, 12900, 13100, 12700, 13300];
+    var labs = ['12,400', '12,900', '13,100', '12,700', '13,300'];
+    var ticks = ['2:00', '2:01', '2:02', '2:03', '2:04'];
+    var bw = 80;
+    for (var i = 0; i < 5; i++) {
+        var yTop = py(vals[i]);
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.fillRect(centers[i] - bw / 2, yTop, bw, baseY - yTop);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(centers[i] - bw / 2, yTop, bw, baseY - yTop);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labs[i], centers[i], yTop - 6);
+        ctx.fillText(ticks[i], centers[i], baseY + 16);
+    }
+
+    // segment note
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each bar = one 1-minute segment; the query touches only these five', ox + plotW / 2, baseY + 32);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sum = 64,400 impressions · 1,613 clicks · CTR 2.5%', 470, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; sums exact, CTR rounded', w - 12, h - 6);
+});
+
+// c3: freshness vs latency quadrant
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fresh AND Fast: Where Each System Sits', w / 2, 24);
+
+    var ox = 70, baseY = 245, plotW = 580, plotH = 180;
+
+    // quadrant shading: fresh-and-fast corner
+    ctx.fillStyle = 'rgba(0,131,0,0.06)';
+    ctx.fillRect(70, 190, 190, 55);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    // x labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('seconds', 150, baseY + 18);
+    ctx.fillText('minutes', 360, baseY + 18);
+    ctx.fillText('hours', 570, baseY + 18);
+    // y labels
+    ctx.textAlign = 'right';
+    ctx.fillText('ms', ox - 8, 224);
+    ctx.fillText('seconds', ox - 8, 154);
+    ctx.fillText('minutes', ox - 8, 84);
+    // axis titles
+    ctx.textAlign = 'center'; ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('staleness of newest row →', ox + plotW / 2, baseY + 34);
+    ctx.textAlign = 'left';
+    ctx.fillText('↑ query latency', 14, 52);
+
+    // points
+    function pt(x, y, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 10, 0, 2 * Math.PI); ctx.fill();
+    }
+    pt(150, 215, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Druid / Pinot', 168, 219);
+
+    pt(150, 105, P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('OLTP DB — fresh but slow to aggregate billions of rows', 168, 109);
+
+    pt(540, 160, P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('warehouse — fast enough, hours stale', 524, 164);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('user-facing analytics lives here', 90, 185);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('positions schematic, illustrative', w - 12, h - 8);
+});
+
+// c4: two queries, two right answers
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Queries, Two Right Answers', w / 2, 24);
+
+    var baseX = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 60); ctx.lineTo(baseX, 240); ctx.stroke();
+
+    // Group 1
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('last-5-min aggregation by campaign', 20, 70);
+    // row 1: Druid / Pinot 0.08s
+    ctx.textAlign = 'right';
+    ctx.fillText('Druid / Pinot', 240, 91);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(baseX, 80, 12, 14);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0.08 s', baseX + 12 + 6, 91);
+    // row 2: warehouse 8s
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('warehouse', 240, 126);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(baseX, 115, 220, 14);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('8 s', baseX + 220 + 6, 126);
+
+    // Group 2
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('6-month ad-hoc join to customer table', 20, 175);
+    // row 1: warehouse 40s
+    ctx.textAlign = 'right';
+    ctx.fillText('warehouse', 240, 196);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(baseX, 185, 300, 14);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('40 s', baseX + 300 + 6, 196);
+    // row 2: Druid / Pinot — no bar
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Druid / Pinot', 240, 231);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('not the workload it is built for', 260, 231);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('run both: stream for the dashboard, warehouse for the analyst', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

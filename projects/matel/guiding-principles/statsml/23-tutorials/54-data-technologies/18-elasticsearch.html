@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elasticsearch</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Elasticsearch</h1>
+<p class="subtitle">A distributed search engine built on Lucene — it answers "which documents contain this word?" instantly because it stores the index backwards: term → documents, not document → terms</p>
+
+<div class="card-section">
+    <h2>Finding "battery life" in a Million Reviews</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">inverted index</span><span class="tag orange">Lucene</span></div>
+                <ul>
+                    <li><b>The store</b> — an electronics shop holds 1,000,000 product reviews and wants every one mentioning "battery life"</li>
+                    <li><b>The slow way</b> — a database scan opens each review and reads it word by word: a million reads per search</li>
+                    <li><b>The flip</b> — an inverted index is built once: for every word, the list of review IDs that contain it</li>
+                    <li><b>The lookup</b> — "battery" and "life" are two dictionary lookups; intersect the two ID lists and you're done</li>
+                    <li><b>The engine</b> — Elasticsearch wraps Lucene's inverted index in a distributed, JSON-over-HTTP service</li>
+                </ul>
+                <p class="example">The scan touches all 1,000,000 reviews; the inverted index touches 2 posting lists — the search returns in milliseconds either way you grow the data.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An inverted index stores term → documents instead of document → terms, so search cost depends on the query's words, not on how many documents exist.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Indexing Five Reviews by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">relevance scoring</span></div>
+                <ul>
+                    <li><b>The corpus</b> — five reviews: R1 "battery life is great, battery lasts", R2 "screen is sharp", R3 "battery dies by noon", R4 "camera is decent", R5 "long battery life, best battery life"</li>
+                    <li><b>Posting lists</b> — battery → [R1, R3, R5] (df=3); life → [R1, R5] (df=2); "battery life" hits R1 and R5</li>
+                    <li><b>Rarity weight</b> — idf = ln(5/df): battery ln(5/3)=0.51, life ln(5/2)=0.92 — rarer words count more</li>
+                    <li><b>The scores</b> — tf&times;idf summed: R5 = 2(0.51)+2(0.92) = 2.86; R1 = 2(0.51)+1(0.92) = 1.94; R3 = 1(0.51) = 0.51</li>
+                    <li><b>The ranking</b> — R5 first, R1 second, R3 last; Elasticsearch's default BM25 refines this same tf/idf idea</li>
+                </ul>
+                <p class="example">R5 says "battery life" twice and outscores R1 (2.86 vs 1.94); the ranking is match-any (OR), so battery-only R3 trails at 0.51 instead of dropping out as in the intersection.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Relevance scoring rewards documents where the query's words are frequent (tf) and the words themselves are rare across the corpus (idf) — you can rank five reviews by hand.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From Log Search to Analytics Store</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">ELK stack</span><span class="tag orange">aggregations</span></div>
+                <ul>
+                    <li><b>The ELK stack</b> — Elasticsearch + Logstash + Kibana made "grep across every server" a dashboard, not a shell loop</li>
+                    <li><b>Log scale</b> — a mid-size service emits millions of log lines a day; full-text search over them is the native use case</li>
+                    <li><b>Near real time</b> — new documents become searchable after a refresh (default every 1s), not instantly on write</li>
+                    <li><b>Aggregations</b> — bucketing and metrics over the index (errors per hour, p95 latency) turned it into an analytics store</li>
+                    <li><b>One index, two jobs</b> — the same inverted index answers "find this stack trace" and "chart errors by hour"</li>
+                </ul>
+                <p class="example">One aggregation query buckets 2,000,000 log lines from the last 24 hours into errors-per-hour and returns the histogram in under a second.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Search made Elasticsearch popular, but aggregations made it a default analytics store — the ELK stack put both behind one query API for logs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Search Index, Not a System of Record</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">durability</span></div>
+                <ul>
+                    <li><b>The temptation</b> — it stores JSON, it queries fast, so teams quietly make it the only copy of the data</li>
+                    <li><b>The design</b> — Elasticsearch optimizes for search and analytics, not for transactional guarantees</li>
+                    <li><b>Reindexing</b> — changing a field's mapping means rebuilding the index; you need a source to rebuild from</li>
+                    <li><b>Refresh lag</b> — a document written now is searchable ~1s later; search-your-own-write logic breaks</li>
+                    <li><b>The pattern</b> — keep a database as the system of record and treat the index as a rebuildable projection</li>
+                </ul>
+                <p class="example">A mapping change forces a reindex of all 1,000,000 reviews; the team with a database of record rebuilds overnight — the team without one has nothing to rebuild from.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Using Elasticsearch as the only copy of your data. It is a rebuildable search projection — when a reindex, mapping change, or cluster incident hits, the system of record is what saves you.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), ah = 8;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - 0.45), y2 - ah * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - ah * Math.cos(ang + 0.45), y2 - ah * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+function fbox(ctx, x, y, w2, fill, edge, lines) {
+    roundRect(ctx, x, y - 20, w2, 40, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    if (lines.length === 1) {
+        ctx.fillText(lines[0], x + w2 / 2, y + 4);
+    } else {
+        ctx.fillText(lines[0], x + w2 / 2, y - 4);
+        ctx.fillText(lines[1], x + w2 / 2, y + 12);
+    }
+}
+
+// c1: forward scan vs inverted index
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Forward Scan vs Inverted Index: Same Question, Opposite Direction', w / 2, 24);
+
+    // Row 1: forward scan
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('forward scan', 20, y1 + 4);
+    fbox(ctx, 160, y1, 170, 'rgba(42,120,214,0.15)', P.blue, ['1,000,000 reviews']);
+    arrow(ctx, 330, y1, 394, y1, P.mute, 3);
+    fbox(ctx, 400, y1, 160, 'rgba(231,76,60,0.12)', '#e74c3c', ['read every word']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ 1,000,000 reads per search', 400, 140);
+
+    // Row 2: inverted index
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('inverted index', 20, y2 + 4);
+    fbox(ctx, 160, y2, 180, 'rgba(0,131,0,0.12)', P.green, ['battery → [R1, R3, R5, ...]']);
+    fbox(ctx, 400, y2, 150, 'rgba(0,131,0,0.12)', P.green, ['life → [R1, R5, ...]']);
+    arrow(ctx, 340, y2, 394, y2, P.mute, 3);
+    arrow(ctx, 550, y2, 584, y2, P.mute, 3);
+    fbox(ctx, 590, y2, 120, 'rgba(42,120,214,0.15)', P.blue, ['intersect: R1, R5']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ 2 lookups', 590, 250);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the index answers word-first, so document count stops mattering', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('review counts illustrative', w - 15, h - 10);
+});
+
+// c2: tf-idf ranking of "battery life"
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Ranking the Query 'battery life': tf × idf per Review", w / 2, 24);
+
+    var ax = 170;
+    // gridlines at scores 0 / 1 / 2 / 3 (153.3 px per unit)
+    var scoreTicks = [0, 1, 2, 3];
+    for (var i = 0; i < 4; i++) {
+        var tx = ax + scoreTicks[i] * 153.3;
+        if (i > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(tx, 60); ctx.lineTo(tx, 240); ctx.stroke();
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(scoreTicks[i].toFixed(1), tx, 254);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, 60); ctx.lineTo(ax, 240); ctx.stroke();
+
+    var rows = [
+        { y: 80,  label: 'R5 — battery×2, life×2', width: 438, color: '#008300', fill: 'rgba(0,131,0,0.30)',    score: '2.86' },
+        { y: 145, label: 'R1 — battery×2, life×1', width: 297, color: '#2a78d6', fill: 'rgba(42,120,214,0.30)', score: '1.94' },
+        { y: 210, label: 'R3 — battery×1, life×0', width: 78,  color: '#d95926', fill: 'rgba(217,89,38,0.30)',  score: '0.51' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 17);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(ax, r.y, r.width, 26);
+        ctx.strokeStyle = r.color; ctx.lineWidth = 2;
+        ctx.strokeRect(ax, r.y, r.width, 26);
+        ctx.fillStyle = r.color; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(r.score, ax + r.width + 8, r.y + 17);
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('life (idf 0.92) outweighs battery (idf 0.51) — rare words rank harder', 360, 274);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('reviews illustrative; tf-idf arithmetic exact for these counts', w - 15, h - 4);
+});
+
+// c3: errors-per-hour aggregation histogram
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Aggregation Query: Errors per Hour over 2,000,000 Log Lines', w / 2, 24);
+
+    var baseY = 245, ph = 180, maxY = 800;
+    for (var g = 200; g <= 600; g += 200) {
+        var gy = baseY - g / maxY * ph;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), 52, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var counts = [120, 95, 80, 70, 60, 75, 110, 180, 240, 260, 250, 230, 245, 255, 740, 690, 310, 280, 260, 230, 200, 170, 150, 130];
+    for (var i = 0; i < 24; i++) {
+        var bx = 62 + i * 25;
+        var bh = counts[i] / maxY * ph;
+        var spike = (i === 14 || i === 15);
+        ctx.fillStyle = spike ? 'rgba(231,76,60,0.35)' : 'rgba(42,120,214,0.35)';
+        ctx.fillRect(bx, baseY - bh, 20, bh);
+        ctx.strokeStyle = spike ? '#e74c3c' : '#2a78d6'; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, baseY - bh, 20, bh);
+    }
+    var hourTicks = [0, 6, 12, 18, 23];
+    for (var i = 0; i < hourTicks.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(hourTicks[i]), 72 + hourTicks[i] * 25, baseY + 16);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hour of day', 360, baseY + 34);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('14:00 deploy — errors spike to 740/hr', 407, 72);
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('found by aggregation, not by reading logs', 90, 150);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('error counts illustrative', w - 15, h - 4);
+});
+
+// c4: system of record vs search projection
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('System of Record vs Search Projection', w / 2, 24);
+
+    // Row 1: index only
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('index only', 20, y1 + 4);
+    fbox(ctx, 180, y1, 180, 'rgba(42,120,214,0.15)', P.blue, ['reviews live only', 'in the index']);
+    arrow(ctx, 360, y1, 434, y1, P.mute, 3);
+    fbox(ctx, 440, y1, 180, 'rgba(231,76,60,0.12)', '#e74c3c', ['mapping change →', 'full reindex']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ nothing to rebuild from', 440, 140);
+
+    // Row 2: record + projection
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('record + projection', 20, y2 + 4);
+    fbox(ctx, 180, y2, 150, 'rgba(42,120,214,0.15)', P.blue, ['database of record']);
+    arrow(ctx, 330, y2, 374, y2, P.mute, 3);
+    fbox(ctx, 380, y2, 150, 'rgba(0,131,0,0.12)', P.green, ['reindex from source']);
+    arrow(ctx, 530, y2, 564, y2, P.mute, 3);
+    fbox(ctx, 570, y2, 140, 'rgba(0,131,0,0.12)', P.green, ['fresh index']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ rebuilt overnight', 570, 250);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the index is a view of your data, not the home of it', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

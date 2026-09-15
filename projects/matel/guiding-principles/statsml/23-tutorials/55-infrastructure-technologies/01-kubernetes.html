@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Kubernetes</h1>
+<p class="subtitle">Google open-sourced the ideas behind Borg so a whole cluster behaves like one computer — you declare what should be running, and controllers push reality toward it forever</p>
+
+<div class="card-section">
+    <h2>The Node That Died at 2am and Nobody Was Paged</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">declarative state</span><span class="tag orange">self-healing</span></div>
+                <ul>
+                    <li><b>The declaration</b> — a team declares "run 3 replicas of this web-app container" and walks away</li>
+                    <li><b>The loop</b> — a controller compares desired (3) to actual, forever; equal means do nothing</li>
+                    <li><b>The failure</b> — at 2:00am a node dies, taking one replica with it; actual drops to 2</li>
+                    <li><b>The reaction</b> — the controller sees 2 ≠ 3 and asks the scheduler to place a replacement pod</li>
+                    <li><b>The recovery</b> — by 2:01am a new replica runs on a healthy node; real detection can take minutes</li>
+                    <li><b>The silence</b> — nobody was paged; the fix was the loop doing its only job</li>
+                </ul>
+                <p class="example">The 2:00am node failure drops replicas from 3 to 2; the reconciliation loop restores 3 by 2:01am while the on-call engineer sleeps.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Kubernetes is declarative — you state the desired end state ("3 replicas"), not the steps to get there, and controllers reconcile actual toward desired every time they drift apart.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Pods, Deployments, Services: Who Does What</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">reconciliation loop</span></div>
+                <ul>
+                    <li><b>The pod</b> — the unit of running: one web-app container wrapped with its own IP, e.g. pod-a</li>
+                    <li><b>The deployment</b> — the desired-state record: "image web-app v1, replicas: 3" — nothing more</li>
+                    <li><b>The service</b> — one stable address that load-balances across whichever 3 pods exist right now</li>
+                    <li><b>Hand-check</b> — node-2 dies with pod-b; observe 2, desired 3, diff = 1, so schedule 1 new pod</li>
+                    <li><b>The placement</b> — the scheduler picks node-4 (it has free CPU and memory) and starts pod-d</li>
+                    <li><b>The re-check</b> — next loop pass observes 3 = 3 and does nothing; that is the steady state</li>
+                </ul>
+                <p class="example">Pods a/b/c sit on nodes 1/2/3; node-2 dies, the diff says "need 1 more", pod-d lands on node-4, and the service quietly starts routing to a, c, d.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The loop is just observe → diff → act: count running pods, subtract from the declared count, and schedule (or delete) exactly the difference — repeated forever.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From Borg to the Industry's Substrate</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">Borg lineage</span><span class="tag green">scheduling</span></div>
+                <ul>
+                    <li><b>The ancestor</b> — Kubernetes descends from Borg, the cluster manager Google ran internally for years</li>
+                    <li><b>The release</b> — Google open-sourced Kubernetes in 2014 and donated it to the CNCF in 2015</li>
+                    <li><b>One computer</b> — the scheduler packs pods onto nodes by resource fit, so the cluster acts as one big machine</li>
+                    <li><b>The packing</b> — a pod asks for CPU and memory; the scheduler finds a node with room, like fitting boxes in trucks</li>
+                    <li><b>The substrate</b> — every major cloud now sells managed Kubernetes; it became the common layer teams build on</li>
+                    <li><b>The payoff</b> — the same declare-and-reconcile idea now runs databases, batch jobs, and ML training, not just web apps</li>
+                </ul>
+                <p class="example">Ten pods requesting different CPU slices get packed onto 4 nodes; when a node fills up, the scheduler simply places the next pod on the emptiest one.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Scheduling is bin-packing: pods declare what they need, nodes advertise what they have, and the scheduler fits the first into the second — the cluster becomes one computer you never address by machine name.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When Two VMs Would Have Done</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">complexity</span></div>
+                <ul>
+                    <li><b>The mistake</b> — adopting Kubernetes for a small steady app that two VMs and a load balancer would serve</li>
+                    <li><b>The price</b> — control plane, etcd, kubelets, networking layer, ingress, manifests: each is a thing to learn and debug</li>
+                    <li><b>The tell</b> — traffic is flat, the team is 3 people, and deploys happen twice a week — none of it needs a scheduler</li>
+                    <li><b>The famous complaint</b> — Kubernetes is widely called overkill for small teams; its power targets fleet-scale problems</li>
+                    <li><b>The honest test</b> — count what reconciliation buys you; if desired state is "2 boxes, always", a health check does that</li>
+                    <li><b>The middle path</b> — managed platforms give the self-healing without the cluster; graduate to Kubernetes when scale demands it</li>
+                </ul>
+                <p class="example">A 3-person team spends its first month debugging cluster networking for an app whose desired state never changes — two VMs behind a load balancer needed an afternoon.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Choosing Kubernetes because it is the industry substrate, not because the workload needs reconciliation — the loop's power is wasted on a desired state that never drifts, but its operational cost is charged in full.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedBox(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function lineArrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x2 - 9 * Math.cos(ang), y2 - 9 * Math.sin(ang)); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 11 * Math.cos(ang - 0.4), y2 - 11 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 11 * Math.cos(ang + 0.4), y2 - 11 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: 2:00am node failure — the loop restores 3 replicas
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('2:00am Node Failure: the Loop Restores 3 Replicas in One Minute', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    function xOf(m) { return ox + m / 10 * plotW; }
+    function yOf(r) { return baseY - r / 4 * plotH; }
+
+    // gridlines
+    ctx.font = '12px system-ui';
+    for (var g = 1; g <= 3; g++) {
+        var gy = yOf(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + plotW, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText('' + g, ox - 8, gy + 4);
+    }
+    // axes and x ticks every 2 minutes (minute 0 = 1:56)
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+    var tickLabs = ['1:56', '1:58', '2:00', '2:02', '2:04', '2:06'];
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 5; t++) ctx.fillText(tickLabs[t], xOf(t * 2), baseY + 18);
+
+    // failure and recovery markers
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(4), baseY); ctx.lineTo(xOf(4), 60); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('node dies 2:00am', xOf(4), 52);
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(5), baseY); ctx.lineTo(xOf(5), 76); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('new pod running 2:01', xOf(5) + 6, 72);
+
+    // desired line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, yOf(3)); ctx.lineTo(ox + plotW, yOf(3)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('desired: 3', ox + 6, yOf(3) - 8);
+
+    // actual line: drop to 2 at 2:00, back to 3 at 2:01
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(3));
+    ctx.lineTo(xOf(4), yOf(3));
+    ctx.lineTo(xOf(4.05), yOf(2));
+    ctx.lineTo(xOf(5), yOf(2));
+    ctx.lineTo(xOf(5), yOf(3));
+    ctx.lineTo(xOf(10), yOf(3));
+    ctx.stroke();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('nobody paged — the controller fixed it', xOf(7), 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c2: one pass of the loop — observe, diff, act, repeat
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Pass of the Loop: Observe, Diff, Act, Repeat', w / 2, 24);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('service keeps routing to whichever pods exist', 70, 70);
+
+    function box(x, y, fill, stroke, lines) {
+        roundedBox(ctx, x, y, 160, 46, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            var ty = y + 23 + (i - (lines.length - 1) / 2) * 15 + 4;
+            ctx.fillText(lines[i], x + 80, ty);
+        }
+    }
+    var blueF = 'rgba(42,120,214,0.15)', orangeF = 'rgba(217,89,38,0.12)', greenF = 'rgba(0,131,0,0.12)';
+
+    box(70, 100, blueF, P.blue, ['DECLARED — deployment:', 'replicas 3']);
+    lineArrow(ctx, 230, 123, 290, 123, P.mute, 3);
+    box(290, 100, blueF, P.blue, ['OBSERVE — running', 'pods: 2 (pod-b lost)']);
+    lineArrow(ctx, 450, 123, 510, 123, P.mute, 3);
+    box(510, 100, orangeF, P.orange, ['DIFF — 3 − 2 =', '1 pod missing']);
+
+    // arrow from box 3 down then left into box 4
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(590, 146); ctx.lineTo(590, 228); ctx.lineTo(462, 228);
+    ctx.stroke();
+    ctx.fillStyle = P.mute;
+    ctx.beginPath();
+    ctx.moveTo(450, 228); ctx.lineTo(462, 222); ctx.lineTo(462, 234);
+    ctx.closePath(); ctx.fill();
+    box(290, 205, greenF, P.green, ['ACT — schedule', 'pod-d on node-4']);
+
+    // return arrow from box 4 back up to box 2
+    lineArrow(ctx, 340, 205, 340, 146, P.mute, 3);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('loop repeats', 348, 180);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('next pass: 3 = 3 → do nothing', 560, 250);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('diff arithmetic exact; pod names illustrative', w - 12, h - 8);
+});
+
+// c3: bin-packing pods onto nodes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Scheduler Packs Pods onto Nodes Like Boxes into Trucks', w / 2, 24);
+
+    var bx = 130, blen = 460;
+    var nodes = [
+        { y: 70,  label: 'node-1', segs: [[30, P.blue], [25, P.green], [20, P.aqua]] },
+        { y: 120, label: 'node-2', segs: [[40, P.violet], [35, P.magenta]] },
+        { y: 170, label: 'node-3', segs: [[30, P.orange], [30, P.blue], [25, P.green]] },
+        { y: 220, label: 'node-4', segs: [[20, P.aqua], [15, P.violet]] }
+    ];
+    for (var n = 0; n < nodes.length; n++) {
+        var nd = nodes[n];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(nd.label, 20, nd.y + 14);
+        var cur = 0;
+        for (var i = 0; i < nd.segs.length; i++) {
+            var segW = nd.segs[i][0] / 100 * blen;
+            ctx.fillStyle = nd.segs[i][1];
+            ctx.fillRect(bx + cur, nd.y, segW, 18);
+            ctx.fillStyle = '#fff'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('' + nd.segs[i][0], bx + cur + segW / 2, nd.y + 13);
+            cur += segW;
+        }
+        // free space
+        ctx.fillStyle = P.grid;
+        ctx.fillRect(bx + cur, nd.y, blen - cur, 18);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('free', bx + cur + (blen - cur) / 2, nd.y + 13);
+    }
+
+    // incoming pod
+    roundedBox(ctx, 545, 244, 135, 24, 6);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('next pod: 30 CPU', 612, 260);
+    lineArrow(ctx, 560, 250, 480, 240, P.ink, 2);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fits here', 470, 262);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('you address the cluster, not the machines', w - 20, 55);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('CPU percentages illustrative', w - 12, h - 6);
+});
+
+// c4: same small app, two bills
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Small App, Two Bills: Two VMs vs a Kubernetes Cluster', w / 2, 24);
+
+    var bx = 230;
+
+    // group 1: moving parts to operate
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('moving parts to operate', 20, 70);
+    ctx.font = '12px system-ui';
+    ctx.fillText('two VMs', 20, 97);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, 85, 80, 16);
+    ctx.fillStyle = '#444';
+    ctx.fillText('4', bx + 80 + 8, 97);
+    ctx.fillText('Kubernetes', 20, 127);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(bx, 115, 240, 16);
+    ctx.fillStyle = '#444';
+    ctx.fillText('12', bx + 240 + 8, 127);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('etcd · CNI · ingress · RBAC · upgrades ...', bx + 270, 127);
+
+    // group 2: setup time, days
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('setup time, days', 20, 175);
+    ctx.font = '12px system-ui';
+    ctx.fillText('two VMs', 20, 202);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, 190, 30, 16);
+    ctx.fillStyle = '#444';
+    ctx.fillText('1 day', bx + 30 + 8, 202);
+    ctx.fillText('Kubernetes', 20, 232);
+    ctx.fillStyle = P.orange;
+    ctx.fillRect(bx, 220, 450, 16);
+    ctx.fillStyle = '#444';
+    ctx.textAlign = 'right';
+    ctx.fillText('15 days', bx + 450 - 8, 232);
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the loop is free; operating the loop is not', w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('part counts and days illustrative', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

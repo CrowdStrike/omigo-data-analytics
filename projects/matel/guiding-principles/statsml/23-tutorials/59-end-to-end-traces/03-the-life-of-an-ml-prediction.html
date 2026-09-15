@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Life of an ML Prediction</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The Life of an ML Prediction</h1>
+<p class="subtitle">One card swipe traced end to end — request, features, score, decision, log, and the label that comes back days later to retrain the model</p>
+
+<div class="card-section">
+    <h2>One Swipe, Eight Milliseconds</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">serving path</span><span class="tag orange">latency budget</span></div>
+                <ul>
+                    <li><b>The request</b> — a $480 card swipe at 2:14am arrives with raw fields: card id, merchant, amount</li>
+                    <li><b>The lookup</b> — the serving layer fetches a precomputed feature from the online store: 30-day txn count = 42</li>
+                    <li><b>The fresh math</b> — one feature is computed on the spot: $480 vs the user's $62 average → ratio 7.7</li>
+                    <li><b>The score</b> — the fraud model takes the feature vector and returns 0.87 in 4ms</li>
+                    <li><b>The budget</b> — 3ms features + 4ms model + 1ms rules = 8ms of the 50ms answer-the-terminal budget</li>
+                </ul>
+                <p class="example">The card terminal needs an answer in 50ms; the whole trace — fetch, score, decide — uses 8ms and the shopper never feels it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A prediction is not one call — it is a pipeline of hops (fetch features, score, apply rules), each spending part of a hard latency budget.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From 0.87 to "Ask for a Code"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">decision layer</span></div>
+                <ul>
+                    <li><b>The threshold</b> — the risk policy splits scores into bands: below 0.80 approve, 0.80–0.95 step-up, above 0.95 block</li>
+                    <li><b>Hand-check</b> — 0.87 ≥ 0.80 is true and 0.87 &lt; 0.95 is true, so the band is step-up verification</li>
+                    <li><b>Why not block</b> — silently declining a real $480 purchase loses a customer; a text code costs 20 seconds</li>
+                    <li><b>The rules</b> — business rules run after the score: trusted-merchant allowlists can downgrade a step-up to approve</li>
+                    <li><b>The log</b> — one row records request, both feature values, score 0.87, and decision "step-up" with a timestamp</li>
+                </ul>
+                <p class="example">The shopper gets a one-time code by text, types it in 20 seconds, and the $480 purchase completes — no analyst ever touches it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The model outputs a score, not a decision — a separate decision layer maps 0.87 into an action, and every input to that mapping is logged.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Label Arrives Six Days Late</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">closing the loop</span><span class="tag green">delayed labels</span><span class="tag orange">feedback loop</span></div>
+                <ul>
+                    <li><b>The gap</b> — fraud truth arrives as a chargeback or a customer report; here it lands on day 6, not at serving time</li>
+                    <li><b>The join</b> — the day-6 label "fraud = yes" joins the day-0 log row by transaction id</li>
+                    <li><b>Censoring</b> — a day-30 retrain only sees labels old enough to have arrived; last week's txns are still unlabeled</li>
+                    <li><b>Feedback</b> — blocked txns never complete, so they never get a chargeback label; the model's own decisions shape its next training set</li>
+                    <li><b>The retrain</b> — the monthly retrain consumes joined log rows, and the new model starts scoring day-31 swipes</li>
+                </ul>
+                <p class="example">The day-0 log row plus the day-6 fraud label becomes one training example in the day-30 retrain — the loop closes in 30 days.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Retraining eats the serving logs, so the loop only closes if labels can find their log rows — and blocked traffic quietly drops out of the loop entirely.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Accuracy Looks Fine While the Features Rot</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">feature drift</span></div>
+                <ul>
+                    <li><b>The break</b> — a nightly online-store job starts writing nulls for 30-day txn count; serving imputes them as 0</li>
+                    <li><b>The skew</b> — training computed the feature from clean warehouse data, serving now feeds zeros: silent train/serve skew</li>
+                    <li><b>The mask</b> — the accuracy dashboard joins on delayed labels, so today's number describes predictions from weeks ago</li>
+                    <li><b>The symptom</b> — the step-up rate creeps from 2% to 9% of swipes before anyone opens the feature dashboard</li>
+                    <li><b>The fix</b> — monitor serving-time feature null rates and distributions directly, not just downstream accuracy</li>
+                </ul>
+                <p class="example">For five weeks the accuracy chart reads ~96% while the feature's null rate climbs past 30% — the drop only shows once the late labels catch up.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Watching only model accuracy. Label delay makes accuracy a weeks-old rearview mirror, so a silently drifting feature pipeline can degrade every live decision long before the metric moves.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x, y + r, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-size, -size * 0.5);
+    ctx.lineTo(-size, size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+// c1: serving path flow + latency budget bar
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("One Prediction's Path: 8ms Spent of a 50ms Budget", w / 2, 24);
+
+    var boxW = 120, boxH = 46, cy = 105;
+    var boxes = [
+        { x: 20, lab: 'request $480', sub: 'raw fields', fill: 'rgba(42,120,214,0.15)', border: P.blue },
+        { x: 165, lab: 'features 3ms', sub: 'online store + real-time', fill: 'rgba(25,158,112,0.15)', border: P.aqua },
+        { x: 310, lab: 'model 4ms', sub: 'score 0.87', fill: 'rgba(74,58,167,0.12)', border: P.violet },
+        { x: 455, lab: 'rules 1ms', sub: '0.87 > 0.8', fill: 'rgba(217,89,38,0.15)', border: P.orange },
+        { x: 600, lab: 'decision + log', sub: 'step-up', fill: 'rgba(26,82,118,0.12)', border: P.ink }
+    ];
+
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        roundedRect(ctx, b.x, cy - boxH / 2, boxW, boxH, 8);
+        ctx.fillStyle = b.fill; ctx.fill();
+        ctx.strokeStyle = b.border; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.lab, b.x + boxW / 2, cy + 4, boxW - 8);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(b.sub, b.x + boxW / 2, cy + boxH / 2 + 15, boxW + 20);
+        if (i < boxes.length - 1) {
+            var x1 = b.x + boxW, x2 = boxes[i + 1].x;
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(x1, cy); ctx.lineTo(x2 - 3, cy); ctx.stroke();
+            arrowHead(ctx, x2 - 3, cy, 0, 8, P.mute);
+        }
+    }
+
+    // budget bar: 600px = 50ms, 12px/ms
+    var barX = 60, barY = 210, barW = 600, barH = 22;
+    ctx.fillStyle = 'rgba(229,233,239,0.9)';
+    ctx.fillRect(barX, barY, barW, barH);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    var segs = [
+        { w: 36, col: P.aqua, lab: '3ms' },
+        { w: 48, col: P.violet, lab: '4ms' },
+        { w: 12, col: P.orange, lab: '1ms' }
+    ];
+    var x = barX;
+    for (var i = 0; i < segs.length; i++) {
+        ctx.fillStyle = segs[i].col;
+        ctx.fillRect(x, barY, segs[i].w, barH);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(segs[i].lab, x + segs[i].w / 2, barY - 6);
+        x += segs[i].w;
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('unused 42ms', x + (barX + barW - x) / 2, barY + 15);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('8ms of 50ms — latency budget respected', 660, 255);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hop latencies illustrative; 3+4+1=8 exact', 690, 292);
+});
+
+// c2: score bands and where 0.87 lands
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Score Bands: Where 0.87 Lands', w / 2, 24);
+
+    var axY = 170;
+    function px(v) { return 60 + v * 600; }
+
+    // bands
+    ctx.fillStyle = 'rgba(0,131,0,0.18)';
+    ctx.fillRect(px(0), 134, px(0.80) - px(0), 36);
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(px(0.80), 134, px(0.95) - px(0.80), 36);
+    ctx.fillStyle = 'rgba(231,76,60,0.25)';
+    ctx.fillRect(px(0.95), 134, px(1.0) - px(0.95), 36);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('approve', px(0.4), 128);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('step-up', px(0.875), 128);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('block', px(0.975), 128);
+
+    // dashed cutoffs
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px(0.80), 108); ctx.lineTo(px(0.80), 170); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px(0.95), 108); ctx.lineTo(px(0.95), 170); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0.80', px(0.80), 103);
+    ctx.fillText('0.95', px(0.95), 103);
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, axY); ctx.lineTo(660, axY); ctx.stroke();
+    var ticks = [0, 0.2, 0.4, 0.6, 0.8, 0.95, 1.0];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px(ticks[i]), axY); ctx.lineTo(px(ticks[i]), axY + 5); ctx.stroke();
+        ctx.fillText(String(ticks[i]), px(ticks[i]), axY + 19);
+    }
+
+    // other transactions
+    var others = [0.12, 0.34, 0.55, 0.79, 0.97];
+    for (var i = 0; i < others.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(px(others[i]), axY, 4, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(others[i]), px(others[i]), axY + 35);
+    }
+
+    // this transaction: 0.87
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px(0.87), axY); ctx.lineTo(px(0.87), 90); ctx.stroke();
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(px(0.87), axY, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('this swipe: 0.87 → step-up', px(0.87) - 40, 82);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0.79 approves, 0.87 steps up — the threshold is policy, not math', 440, 225);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('scores illustrative; band checks exact', 690, 292);
+});
+
+// c3: the serve -> log -> label -> retrain -> serve loop
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Loop: Serve → Log → Label → Retrain → Serve', w / 2, 24);
+
+    var boxW = 110, boxH = 42;
+    var nodes = [
+        { cx: 360, cy: 70, lab: 'score + decide', border: P.blue, stamp: 'day 0', stampDx: -95, stampDy: 0 },
+        { cx: 570, cy: 130, lab: 'log row written', border: P.ink, stamp: 'day 0', stampDx: 0, stampDy: 34 },
+        { cx: 500, cy: 235, lab: 'label joins day 6', border: P.green, stamp: 'day 6', stampDx: 90, stampDy: 0 },
+        { cx: 200, cy: 235, lab: 'retrain day 30', border: P.violet, stamp: 'day 30', stampDx: -90, stampDy: 0 },
+        { cx: 120, cy: 130, lab: 'new model day 31', border: P.aqua, stamp: 'day 31', stampDx: 0, stampDy: 34 }
+    ];
+
+    for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        roundedRect(ctx, n.cx - boxW / 2, n.cy - boxH / 2, boxW, boxH, 8);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = n.border; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(n.lab, n.cx, n.cy + 4, boxW - 8);
+        ctx.fillStyle = P.mute; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(n.stamp, n.cx + n.stampDx, n.cy + (n.stampDy || 4));
+    }
+
+    // clockwise arrows
+    function loopArrow(x1, y1, cx, cyq, x2, y2) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx, cyq, x2, y2); ctx.stroke();
+        arrowHead(ctx, x2, y2, Math.atan2(y2 - cyq, x2 - cx), 8, P.mute);
+    }
+    loopArrow(415, 82, 500, 90, 545, 106);     // score -> log
+    loopArrow(578, 152, 590, 190, 535, 212);   // log -> label
+    // label -> retrain (straight left)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(445, 235); ctx.lineTo(258, 235); ctx.stroke();
+    arrowHead(ctx, 258, 235, Math.PI, 8, P.mute);
+    loopArrow(168, 212, 120, 190, 128, 152);   // retrain -> new model
+    loopArrow(148, 108, 220, 80, 303, 74);     // new model -> score
+
+    // blocked branch
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(415, 62); ctx.lineTo(578, 55); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 578, 55, Math.atan2(-7, 163), 8, '#e74c3c');
+    roundedRect(ctx, 583, 40, 128, 32, 8);
+    ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('blocked — no label ever', 647, 60, 122);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('exits the loop', 647, 88);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('retraining sees only what came back around', 360, 160);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('day counts illustrative', 690, 292);
+});
+
+// c4: null rate climbs while accuracy stays flat then dips
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Feature Breaks in Week 2 — Accuracy Notices in Week 7', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180;
+    function px(wk) { return ox + wk / 8 * pw; }
+    function pyN(v) { return baseY - v / 50 * ph; }          // null rate 0-50%
+    function pyA(v) { return baseY - (v - 90) / 10 * ph; }   // accuracy 90-100%
+
+    // gridlines at null 25% and 50%
+    var gl = [25, 50];
+    for (var i = 0; i < gl.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, pyN(gl[i])); ctx.lineTo(ox + pw, pyN(gl[i])); ctx.stroke();
+    }
+
+    // left axis labels (null rate, red) at 0/25/50
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('0', 54, pyN(0) + 4);
+    ctx.fillText('25', 54, pyN(25) + 4);
+    ctx.fillText('50', 54, pyN(50) + 4);
+    ctx.textAlign = 'left';
+    ctx.fillText('null %', ox + 4, pyN(50) - 6);
+
+    // right axis labels (accuracy, blue) at 90/95/100
+    ctx.fillStyle = P.blue; ctx.textAlign = 'left';
+    ctx.fillText('90', 664, pyA(90) + 4);
+    ctx.fillText('95', 664, pyA(95) + 4);
+    ctx.fillText('100', 664, pyA(100) + 4);
+    ctx.textAlign = 'right';
+    ctx.fillText('acc %', ox + pw - 4, pyA(100) - 6);
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // x ticks every week
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var wk = 0; wk <= 8; wk++) {
+        ctx.fillText(String(wk), px(wk), baseY + 18);
+    }
+    ctx.fillText('weeks', px(4), baseY + 34);
+
+    // break marker at week 2
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px(2), baseY - ph); ctx.lineTo(px(2), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('store job breaks', px(2), baseY - ph - 4);
+
+    var weeks = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    var nulls = [0, 0, 1, 8, 16, 24, 31, 37, 40];
+    var acc = [96.1, 96.0, 96.2, 96.1, 95.9, 96.0, 95.4, 93.8, 91.9];
+
+    // null-rate line (red)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < weeks.length; i++) {
+        i === 0 ? ctx.moveTo(px(weeks[i]), pyN(nulls[i])) : ctx.lineTo(px(weeks[i]), pyN(nulls[i]));
+    }
+    ctx.stroke();
+
+    // accuracy line (blue)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < weeks.length; i++) {
+        i === 0 ? ctx.moveTo(px(weeks[i]), pyA(acc[i])) : ctx.lineTo(px(weeks[i]), pyA(acc[i]));
+    }
+    ctx.stroke();
+
+    // annotations
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('features rot for 5 weeks before accuracy moves', px(5) - 60, 75);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('late labels finally catch up', 655, pyA(93.8) - 14);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('null rates and accuracy illustrative', 690, 292);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

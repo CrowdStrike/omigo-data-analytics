@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RabbitMQ</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>RabbitMQ</h1>
+<p class="subtitle">An open-source message broker (AMQP) where the broker is the smart part — it routes each message to the right queues, tracks delivery, and deletes it once a consumer acknowledges it</p>
+
+<div class="card-section">
+    <h2>One Order, Two Copies</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">smart broker</span><span class="tag orange">AMQP</span></div>
+                <ul>
+                    <li><b>The shop</b> — an online store's checkout finishes an order and needs email and warehouse to act</li>
+                    <li><b>The publish</b> — checkout sends ONE message with routing key <code>order.placed</code> to the <code>orders</code> exchange</li>
+                    <li><b>The exchange</b> — a topic exchange holds bindings; the producer never names a queue</li>
+                    <li><b>The bindings</b> — email queue is bound to <code>order.*</code>; warehouse queue is bound to <code>order.placed</code></li>
+                    <li><b>The copies</b> — both bindings match, so the broker puts an independent copy in each queue</li>
+                    <li><b>The consumers</b> — the email worker and the warehouse worker each drain their own queue</li>
+                </ul>
+                <p class="example">Checkout publishes order #4712 once at 2:00pm; the exchange fans it into the email queue and the warehouse queue, and neither worker knows the other exists.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> In RabbitMQ the broker does the routing: producers publish to exchanges, bindings decide which queues get a copy, and consumers only ever see their own queue.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Following Order #4712 Through Ack and Nack</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">ack &amp; nack</span></div>
+                <ul>
+                    <li><b>Publish</b> — order #4712 hits the exchange at t=0.0s; copies land in both queues by t=0.1s</li>
+                    <li><b>Warehouse copy</b> — the warehouse worker picks it up at 0.1s and acks at 0.8s; the broker deletes it</li>
+                    <li><b>Email copy</b> — the email worker picks it up at 0.1s but crashes mid-send at 2.0s</li>
+                    <li><b>The nack</b> — the broker gets a nack with requeue=true, so the message goes back on the queue</li>
+                    <li><b>Redelivery</b> — a second email worker gets it at 2.1s and acks at 3.5s; only then is it deleted</li>
+                    <li><b>Hand-check</b> — 2 copies, 3 deliveries (one redelivery), 2 acks, 1 nack, 0 messages lost</li>
+                </ul>
+                <p class="example">The email copy of order #4712 is delivered twice — crash at 2.0s, nack, redelivery at 2.1s, ack at 3.5s — while the warehouse copy was acked and deleted back at 0.8s.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every message must be acknowledged per-message; an unacked or nack'd message is requeued and redelivered, so a crashing worker loses no work — the ack is what deletes it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Task Queues Still Pick It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">task queues</span></div>
+                <ul>
+                    <li><b>Work queues</b> — one queue, many workers; the broker deals each job to exactly one worker at a time</li>
+                    <li><b>Safety</b> — per-message acks mean a dead worker's job is simply redelivered to a live one</li>
+                    <li><b>Knobs</b> — message priorities jump the line; per-message TTLs expire stale jobs automatically</li>
+                    <li><b>RPC style</b> — a request message carries a reply-to queue; the answer comes back the same way</li>
+                    <li><b>Scaling math</b> — 120 queued emails at 2s each: 1 worker drains in 240s, 3 workers in 80s</li>
+                </ul>
+                <p class="example">Adding a fourth email worker at the 2:00pm rush cuts the 120-email backlog drain from 80s to 60s — no code change, just one more consumer on the queue.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> RabbitMQ is still the right fit when messages are tasks to be done once — routed to the right queue, spread across workers, retried on failure, and deleted when done.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Deletes What You Might Need Back</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">replay</span></div>
+                <ul>
+                    <li><b>Ack means gone</b> — an acked message is deleted from the queue; RabbitMQ keeps no history of it</li>
+                    <li><b>The mistake</b> — a team builds analytics off the orders queue, then needs last month's orders back</li>
+                    <li><b>The Kafka contrast</b> — Kafka is a dumb log with smart consumers: it retains, consumers track offsets</li>
+                    <li><b>Replay</b> — a new Kafka consumer can reread from offset 0; a new RabbitMQ consumer sees only new work</li>
+                    <li><b>The rule</b> — RabbitMQ for tasks to do once; Kafka (or a store) when history must be rereadable</li>
+                </ul>
+                <p class="example">Six months of order messages flowed through the queue, every one acked and deleted — the new analytics consumer joins and finds nothing to replay.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Using a delete-on-ack broker where you needed replayable history. RabbitMQ routes and deletes; Kafka retains and replays — pick by whether anyone will ever need to reread.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, width, dashed) {
+    var dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy);
+    var ux = dx / len, uy = dy / len;
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    if (dashed) ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 9 * ux, y2 - 9 * uy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * ux - 5 * uy, y2 - 9 * uy + 5 * ux);
+    ctx.lineTo(x2 - 9 * ux + 5 * uy, y2 - 9 * uy - 5 * ux);
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: one publish, two queues — the exchange does the routing
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Publish, Two Queues: the Exchange Does the Routing', w / 2, 24);
+
+    // producer box
+    roundRectPath(ctx, 30, 130, 110, 44, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('checkout', 85, 148);
+    ctx.fillText('(producer)', 85, 164);
+
+    // exchange box
+    roundRectPath(ctx, 210, 130, 160, 44, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders exchange', 290, 148);
+    ctx.fillText('(topic)', 290, 164);
+
+    // publish arrow
+    arrowLine(ctx, 140, 152, 210, 152, P.text, 3);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('key: order.placed', 175, 138);
+
+    // fan-out arrows
+    arrowLine(ctx, 370, 145, 440, 90, P.text, 3);
+    arrowLine(ctx, 370, 159, 440, 214, P.text, 3);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('binding: order.*', 380, 95);
+    ctx.fillText('binding: order.placed', 380, 215);
+
+    // queue boxes
+    roundRectPath(ctx, 440, 70, 140, 40, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('email queue', 510, 95);
+    roundRectPath(ctx, 440, 194, 140, 40, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.fillText('warehouse queue', 510, 219);
+
+    // worker boxes
+    roundRectPath(ctx, 615, 70, 90, 40, 8);
+    ctx.fillStyle = 'rgba(217,89,38,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.fillText('email', 660, 88);
+    ctx.fillText('worker', 660, 102);
+    roundRectPath(ctx, 615, 194, 90, 40, 8);
+    ctx.fillStyle = 'rgba(217,89,38,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.fillText('wh worker', 660, 219);
+
+    // queue -> worker arrows
+    arrowLine(ctx, 580, 90, 615, 90, P.text, 2);
+    arrowLine(ctx, 580, 214, 615, 214, P.text, 2);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one publish → two independent copies; the producer never names a queue', w / 2, 275);
+});
+
+// c2: ack fast vs nack'd and redelivered
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Order #4712: One Copy Acks Fast, One Gets Nack'd and Redelivered", w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600;
+    function xOf(t) { return ox + t / 4 * pw; }
+
+    // vertical gridlines + axis
+    ctx.font = '12px system-ui';
+    for (var t = 0; t <= 4; t++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(t), 60); ctx.lineTo(xOf(t), baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+        ctx.fillText(t + 's', xOf(t), baseY + 16);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+
+    // lanes
+    var yW = 110, yE = 180;
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, yW); ctx.lineTo(ox + pw, yW); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, yE); ctx.lineTo(ox + pw, yE); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('warehouse copy', 62, yW - 10);
+    ctx.fillText('email copy', 62, yE - 10);
+
+    function dot(t, y, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(xOf(t), y, 6, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // warehouse events
+    dot(0.1, yW, P.blue);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('delivered', xOf(0.1) + 14, yW - 14);
+    dot(0.8, yW, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ack → deleted', xOf(0.8) + 12, yW + 4);
+
+    // email events
+    dot(0.1, yE, P.blue);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('delivered', xOf(0.1) + 14, yE + 22);
+    // crash X at t=2.0
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', xOf(2.0), yE + 6);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('crash → nack (requeue)', xOf(2.0), yE + 28);
+    dot(2.1, yE, P.blue);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('redelivered', xOf(2.1) + 10, yE - 12);
+    dot(3.5, yE, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ack → deleted', xOf(3.5) + 10, yE + 4);
+
+    // requeue arc from crash X to the redeliver dot
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(xOf(2.0), yE - 10);
+    ctx.quadraticCurveTo(xOf(2.05), yE - 34, xOf(2.1), yE - 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('nack put it back — nothing was lost', xOf(2.6), 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c3: draining 120 queued emails
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Draining 120 Queued Emails: Add Workers, Not Code', w / 2, 24);
+
+    var bx = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 250); ctx.stroke();
+
+    var rows = [
+        { y: 70, label: '1 worker', width: 440, fill: 'rgba(42,120,214,0.30)', edge: null, end: '240 s', endBold: false, endColor: '#444' },
+        { y: 120, label: '2 workers', width: 220, fill: 'rgba(42,120,214,0.30)', edge: null, end: '120 s', endBold: false, endColor: '#444' },
+        { y: 170, label: '3 workers', width: 147, fill: 'rgba(0,131,0,0.30)', edge: P.green, end: '80 s', endBold: true, endColor: P.green },
+        { y: 220, label: '4 workers', width: 110, fill: 'rgba(42,120,214,0.30)', edge: null, end: '60 s', endBold: false, endColor: '#444' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 13);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.width, 18);
+        if (r.edge) {
+            ctx.strokeStyle = r.edge; ctx.lineWidth = 2;
+            ctx.strokeRect(bx, r.y, r.width, 18);
+        }
+        ctx.fillStyle = r.endColor;
+        ctx.font = (r.endBold ? 'bold 12px' : '12px') + ' system-ui';
+        ctx.fillText(r.end, bx + r.width + 8, r.y + 13);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('drain time = 120 × 2 s ÷ workers', w - 20, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('email volume and 2 s handling illustrative; the division is exact', w - 12, h - 8);
+});
+
+// c4: routes-and-deletes vs retains-and-replays
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Routes and Deletes vs Retains and Replays', w / 2, 24);
+
+    // Row 1: RabbitMQ queue after acks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('RabbitMQ queue', 20, 100);
+    ctx.fillText('after acks', 20, 114);
+    var slotX = [230, 285, 340, 395, 450, 505];
+    for (var i = 0; i < 6; i++) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+        ctx.strokeRect(slotX[i], 85, 44, 36);
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(slotX[i] + 8, 91); ctx.lineTo(slotX[i] + 36, 115);
+        ctx.moveTo(slotX[i] + 36, 91); ctx.lineTo(slotX[i] + 8, 115);
+        ctx.stroke();
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('deleted on ack — nothing to replay', 230, 145);
+
+    // replay arc (drawn before the boxes' labels but above them visually is fine)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(690, 180);
+    ctx.quadraticCurveTo(470, 150, 254, 178);
+    ctx.stroke();
+    ctx.fillStyle = P.green;
+    ctx.beginPath();
+    ctx.moveTo(250, 180);
+    ctx.lineTo(262, 174); ctx.lineTo(261, 185);
+    ctx.closePath(); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('new consumer replays from offset 0', 470, 160);
+
+    // Row 2: Kafka log (retained)
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Kafka log (retained)', 20, 212);
+    for (var i = 0; i < 10; i++) {
+        var x = 230 + i * 46;
+        ctx.fillStyle = 'rgba(42,120,214,0.25)';
+        ctx.fillRect(x, 190, 40, 36);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, 190, 40, 36);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(i), x + 20, 212);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('RabbitMQ routes and deletes; Kafka retains and replays', w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

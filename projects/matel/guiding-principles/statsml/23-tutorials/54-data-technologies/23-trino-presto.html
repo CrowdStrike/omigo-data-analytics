@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trino / Presto</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Trino / Presto</h1>
+<p class="subtitle">Trino is a SQL engine with no storage of its own — connectors let one query join tables that live in completely different systems</p>
+
+<div class="card-section">
+    <h2>One Query Over Data It Doesn't Own</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">federated SQL</span><span class="tag orange">no storage</span></div>
+                <ul>
+                    <li><b>The setup</b> — an orders table lives as Parquet files in a data lake; customers live in Postgres</li>
+                    <li><b>The old answer</b> — copy one table into the other system overnight, then query the copy</li>
+                    <li><b>The engine</b> — Trino, born as Presto at Facebook for interactive SQL on HDFS, stores nothing itself</li>
+                    <li><b>Connectors</b> — each connector teaches Trino to read one system: lake files, Postgres, MySQL, Kafka</li>
+                    <li><b>The trick</b> — one <code>SELECT ... JOIN</code> names tables by catalog, and Trino fetches from both live</li>
+                </ul>
+                <p class="example"><code>SELECT ... FROM lake.sales.orders o JOIN pg.public.customers c ON o.customer_id = c.id</code> runs as one statement — no copy ever made.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Trino is a pure query engine: it owns no data, only connectors — so one SQL statement can join tables that live in different systems.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Joining the Lake to Postgres by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">cross-system join</span></div>
+                <ul>
+                    <li><b>Orders (lake)</b> — 6 rows of (order, customer, amount): 101/c1/$40, 102/c2/$25, 103/c1/$60, 104/c3/$80, 105/c2/$35, 106/c4/$20</li>
+                    <li><b>Customers (Postgres)</b> — 4 rows: c1 East, c2 West, c3 East, c4 West</li>
+                    <li><b>The query</b> — join on customer id, group by region, sum the amounts</li>
+                    <li><b>Hand-check East</b> — c1 and c3 are East: 40 + 60 + 80 = $180</li>
+                    <li><b>Hand-check West</b> — c2 and c4 are West: 25 + 35 + 20 = $80</li>
+                    <li><b>The run</b> — Trino scans Parquet for orders, asks Postgres for customers, joins in its own memory</li>
+                </ul>
+                <p class="example">One statement returns East $180 and West $80 (totalling $260) even though no single database holds both tables.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The join happens inside Trino's workers, in memory — each source system only ships its own rows, and the result exists nowhere but the query output.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why an Engine Without Storage Took Over</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">interactive speed</span></div>
+                <ul>
+                    <li><b>The origin</b> — Presto replaced batch MapReduce at Facebook so analysts could query HDFS interactively</li>
+                    <li><b>The execution</b> — in-memory, pipelined MPP: stages stream rows to each other, nothing hits disk between steps</li>
+                    <li><b>The payoff</b> — exploratory joins across systems return in seconds, not as tomorrow's ETL output</li>
+                    <li><b>The fork</b> — Presto's creators left Facebook in 2018 and their fork was renamed Trino in 2020</li>
+                    <li><b>In the wild</b> — Amazon Athena runs on this engine; many lakehouse stacks use Trino as the SQL front door</li>
+                </ul>
+                <p class="example">The same lake-to-Postgres join answered by a nightly ETL copy is 24 hours stale; Trino answers it against live data in about 9 seconds (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Pipelined in-memory execution plus federation means the freshest possible answer at interactive speed — the two things batch ETL pipelines give up.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Query Engine Is Not a Database</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">no storage</span></div>
+                <ul>
+                    <li><b>The confusion</b> — Trino shows tables and runs SQL, so people assume it stores and protects the data</li>
+                    <li><b>Who reads</b> — every scan is executed by the source system; Trino has no files and no indexes of its own</li>
+                    <li><b>The blast radius</b> — a heavy federated join can hammer the production Postgres that serves your app</li>
+                    <li><b>Pushdown helps</b> — connectors push filters down so Postgres returns 4 customer rows, not the whole table</li>
+                    <li><b>The mistake</b> — pointing an unfiltered scan at a live operational database and stalling it for everyone</li>
+                </ul>
+                <p class="example">Without pushdown a 2,000,000-row customers table (illustrative) ships over the network to Trino just to keep 4 rows.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating Trino as a database. It owns no storage — dropping the lake files breaks the table, and every query's cost lands on the source systems doing the reading.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function boxTL(ctx, x, y, w, h, fill, stroke, lw, lines, font) {
+    rrPath(ctx, x, y, w, h, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = font || '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * 15 + 4);
+    }
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: hub-and-spoke federation diagram
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One SQL Statement, Four Systems, Zero Copies', w / 2, 24);
+
+    // query box
+    boxTL(ctx, 250, 48, 220, 32, 'rgba(74,58,167,0.12)', P.violet, 2, ['SELECT ... JOIN ... (one statement)']);
+    // arrow query -> engine
+    drawArrow(ctx, 360, 80, 360, 108, P.violet, 3);
+    // engine box
+    rrPath(ctx, 230, 110, 260, 52, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Trino query engine', 360, 132);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('no storage of its own', 360, 150);
+
+    // source boxes
+    var sources = [
+        { x: 25, label: 'data lake (Parquet)', fill: 'rgba(0,131,0,0.12)', edge: P.green },
+        { x: 200, label: 'PostgreSQL', fill: 'rgba(42,120,214,0.15)', edge: P.blue },
+        { x: 375, label: 'MySQL', fill: 'rgba(201,133,0,0.15)', edge: P.yellow },
+        { x: 550, label: 'Kafka', fill: 'rgba(217,89,38,0.15)', edge: P.orange }
+    ];
+    for (var i = 0; i < sources.length; i++) {
+        var src = sources[i];
+        // connector line from engine bottom to source top
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(360, 162); ctx.lineTo(src.x + 75, 215); ctx.stroke();
+        boxTL(ctx, src.x, 215, 150, 46, src.fill, src.edge, 2, [src.label]);
+    }
+    // connector label on the leftmost arrow
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('connector', (360 + 100) / 2 - 20, 192);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the data never moves in advance', 500, 178);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('systems shown are typical connectors', w - 16, h - 8);
+});
+
+// c2: two source tables -> join -> revenue by region
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Lake Orders + Postgres Customers → Revenue by Region', w / 2, 24);
+
+    // orders box
+    rrPath(ctx, 25, 62, 195, 100, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.10)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lake.sales.orders', 37, 80);
+    ctx.fillStyle = P.text; ctx.font = '11px monospace';
+    var ordCol1 = ['101 c1 $40', '102 c2 $25', '103 c1 $60'];
+    var ordCol2 = ['104 c3 $80', '105 c2 $35', '106 c4 $20'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillText(ordCol1[i], 37, 100 + i * 18);
+        ctx.fillText(ordCol2[i], 130, 100 + i * 18);
+    }
+
+    // customers box
+    rrPath(ctx, 25, 182, 195, 82, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('pg.public.customers', 37, 200);
+    ctx.fillStyle = P.text; ctx.font = '11px monospace';
+    ctx.fillText('c1 East', 37, 220); ctx.fillText('c3 East', 130, 220);
+    ctx.fillText('c2 West', 37, 238); ctx.fillText('c4 West', 130, 238);
+
+    // join node
+    rrPath(ctx, 265, 140, 110, 40, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('JOIN in Trino', 320, 164);
+    // arrows into join
+    drawArrow(ctx, 220, 112, 262, 150, P.mute, 2);
+    drawArrow(ctx, 220, 223, 262, 170, P.mute, 2);
+    // arrow join -> chart
+    drawArrow(ctx, 375, 160, 430, 160, P.violet, 2);
+
+    // bar chart, right
+    var baseY = 245, scale = 160 / 180; // px per $
+    // gridlines
+    var grids = [60, 120, 180];
+    for (var i = 0; i < grids.length; i++) {
+        var gy = baseY - grids[i] * scale;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(430, gy); ctx.lineTo(690, gy); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + grids[i], 425, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(430, baseY); ctx.lineTo(690, baseY); ctx.stroke();
+    // East bar
+    ctx.fillStyle = 'rgba(42,120,214,0.35)';
+    ctx.fillRect(460, baseY - 160, 80, 160);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(460, baseY - 160, 80, 160);
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('$180', 500, baseY - 160 - 7);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('East', 500, baseY + 16);
+    // West bar
+    ctx.fillStyle = 'rgba(0,131,0,0.30)';
+    ctx.fillRect(585, baseY - 71, 80, 71);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(585, baseY - 71, 80, 71);
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('$80', 625, baseY - 71 - 7);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('West', 625, baseY + 16);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('result lives only in the query output', 430, 70);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('amounts illustrative; sums exact', w - 16, h - 8);
+});
+
+// c3: three ways to wait
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Join Question, Three Ways to Wait', w / 2, 24);
+
+    var bx = 250;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 65); ctx.lineTo(bx, 245); ctx.stroke();
+
+    var rows = [
+        { y: 85, label: 'nightly ETL copy — 24 h stale', color: '#e74c3c', width: 430, endLab: 'answer uses yesterday\'s data', endBold: false, endColor: '#e74c3c', inside: true },
+        { y: 150, label: 'batch MapReduce job — 12 min', color: P.orange, width: 230, endLab: '12 min', endBold: false, endColor: '#444', inside: false },
+        { y: 215, label: 'Trino federated query — 9 s', color: P.green, width: 40, endLab: '9 s, live data', endBold: true, endColor: P.green, inside: false }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 15);
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = r.color;
+        ctx.fillRect(bx, r.y, r.width, 22);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = r.color; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, r.y, r.width, 22);
+        ctx.fillStyle = r.endColor;
+        ctx.font = (r.endBold ? 'bold ' : '') + '11px system-ui';
+        if (r.inside) {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(r.endLab, bx + r.width - 8, r.y + 15);
+        } else {
+            ctx.textAlign = 'left';
+            ctx.fillText(r.endLab, bx + r.width + 8, r.y + 15);
+        }
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('federation removes the copy step entirely', w - 30, 255);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic; timings illustrative', w - 16, h - 8);
+});
+
+// c4: pushdown vs no pushdown
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Pushdown Decides Who Does the Work', w / 2, 24);
+
+    // row 1: no pushdown
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no pushdown', 20, 70);
+    boxTL(ctx, 150, 75, 170, 40, 'rgba(42,120,214,0.15)', P.blue, 2, ['Postgres: full scan']);
+    boxTL(ctx, 470, 75, 160, 40, 'rgba(231,76,60,0.12)', '#e74c3c', 2, ['Trino filters to 4']);
+    drawArrow(ctx, 323, 95, 466, 95, P.text, 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2,000,000 rows over network', 395, 68);
+    ctx.fillText('✗ source hammered', 550, 132);
+
+    // row 2: filter pushed down
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('filter pushed down', 20, 180);
+    boxTL(ctx, 150, 185, 180, 40, 'rgba(0,131,0,0.12)', P.green, 2, ['Postgres: WHERE id IN (...)']);
+    boxTL(ctx, 470, 185, 160, 40, 'rgba(0,131,0,0.12)', P.green, 2, ['Trino joins 4 rows']);
+    drawArrow(ctx, 333, 205, 466, 205, P.text, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 rows over network', 400, 178);
+    ctx.fillText('✓', 550, 242);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Trino plans the query; the sources pay for the reads', w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts illustrative', w - 16, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

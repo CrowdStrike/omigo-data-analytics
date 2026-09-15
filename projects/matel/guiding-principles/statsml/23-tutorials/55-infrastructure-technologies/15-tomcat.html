@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tomcat</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Tomcat</h1>
+<p class="subtitle">Apache Tomcat has run enterprise Java since 1999 — your code sees a request and a response object, and Tomcat handles the sockets, threads, and HTTP underneath</p>
+
+<div class="card-section">
+    <h2>The Orders Servlet That Never Touches a Socket</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">servlet contract</span><span class="tag orange">since 1999</span></div>
+                <ul>
+                    <li><b>The servlet</b> — an orders servlet's <code>doGet</code> reads an order id from the request and writes JSON back</li>
+                    <li><b>The contract</b> — the code receives an <code>HttpServletRequest</code> and fills an <code>HttpServletResponse</code>; nothing else</li>
+                    <li><b>Tomcat's half</b> — accepting sockets, parsing HTTP, keep-alive, threads, and writing bytes back out</li>
+                    <li><b>The split</b> — the servlet is maybe 30 lines; the machinery it never sees is what Tomcat provides</li>
+                    <li><b>The lineage</b> — Tomcat was the original reference implementation of the servlet spec (1999) and is still the default choice</li>
+                </ul>
+                <p class="example">A browser opens a TCP socket, sends raw HTTP text, and the servlet author never sees any of it — just <code>request.getParameter("orderId")</code>.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The servlet contract is the whole deal: request object in, response object out. Tomcat owns everything between the network card and that method call.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>200 Open Connections, 8 Busy Threads</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">thread pool</span></div>
+                <ul>
+                    <li><b>The pool</b> — Tomcat's default <code>maxThreads</code> is 200: at most 200 requests execute at once</li>
+                    <li><b>The load</b> — the orders servlet gets 200 requests/sec, each taking 40ms (illustrative)</li>
+                    <li><b>The math</b> — 200 req/s &times; 0.04s = 8 threads busy on average (exact arithmetic, Little's law)</li>
+                    <li><b>Keep-alive</b> — with the NIO connector, 200 browsers hold sockets open between requests without holding any thread</li>
+                    <li><b>Hand-check</b> — a 40ms request means one thread serves 25 req/s, so 8 threads cover 200 req/s</li>
+                </ul>
+                <p class="example">At 2pm the connector shows 200 open keep-alive connections but only ~8 of the 200 pool threads mid-request — open sockets are cheap, busy threads are the scarce thing.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Connections and threads are different resources: Tomcat parks idle keep-alive sockets for free and spends a pool thread only for the milliseconds a request is actually executing.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From WAR Files to Boot Jars</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">Spring Boot</span><span class="tag orange">deployment</span></div>
+                <ul>
+                    <li><b>The old way</b> — package the app as a WAR, drop it into a shared Tomcat's <code>webapps/</code> directory</li>
+                    <li><b>Shared container</b> — one long-running Tomcat could host several teams' WARs side by side</li>
+                    <li><b>The inversion</b> — Spring Boot embeds Tomcat inside the app jar: <code>java -jar app.jar</code> starts its own</li>
+                    <li><b>What flipped</b> — the app used to live inside the container; now the container lives inside the app</li>
+                    <li><b>Still everywhere</b> — embedded or standalone, Tomcat quietly serves a huge share of enterprise Java</li>
+                </ul>
+                <p class="example">The 2005 orders app was a WAR handed to the ops team's Tomcat; the 2020 rewrite is a self-contained jar that boots its own embedded Tomcat on port 8080.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Spring Boot didn't replace Tomcat — it repackaged it. The servlet contract and thread pool are the same; only who owns the process flipped.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When the Payment Call Slows to Two Seconds</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">pool exhaustion</span></div>
+                <ul>
+                    <li><b>The dependency</b> — the orders servlet calls a payment service that normally answers in 40ms</li>
+                    <li><b>The slowdown</b> — one afternoon the payment service degrades to 2,000ms per call (illustrative)</li>
+                    <li><b>The math</b> — 200 threads &divide; 2s each = 100 req/s capacity, against 300 req/s arriving (exact arithmetic)</li>
+                    <li><b>The cliff</b> — within seconds all 200 threads sit blocked waiting; the accept queue fills, then connections are refused</li>
+                    <li><b>The trap</b> — the servlet code is fine and the CPU is idle; the pool drowned waiting on someone else</li>
+                    <li><b>The guardrails</b> — client timeouts and separate pools for slow dependencies stop one dependency taking all 200</li>
+                </ul>
+                <p class="example">At 40ms the pool needs 8 busy threads for 200 req/s; at 2,000ms the 300 req/s arriving would need 600 — three times the whole pool — so exhaustion is arithmetic, not bad luck.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Sizing the thread pool for your own handler time and forgetting that a blocked thread is a spent thread — a slow downstream converts a 4%-busy pool into a hard 100 req/s ceiling.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: browser -> Tomcat machinery -> servlet, and back
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Servlet Contract: Tomcat Owns Everything Outside One Method', w / 2, 24);
+
+    // browser box
+    ctx.fillStyle = 'rgba(107,114,128,0.12)';
+    roundRect(ctx, 20, 120, 90, 50, 8); ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+    roundRect(ctx, 20, 120, 90, 50, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('browser', 65, 149);
+
+    // Tomcat zone (dashed)
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    roundRect(ctx, 130, 60, 340, 190, 10); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Tomcat', 142, 78);
+
+    // three Tomcat boxes at y=123
+    var tboxes = [
+        { x: 145, lines: ['accept socket'] },
+        { x: 255, lines: ['parse HTTP +', 'keep-alive'] },
+        { x: 365, lines: ['thread pool'] }
+    ];
+    for (var i = 0; i < tboxes.length; i++) {
+        var t = tboxes[i];
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        roundRect(ctx, t.x, 123, 95, 44, 8); ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        roundRect(ctx, t.x, 123, 95, 44, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (t.lines.length === 1) {
+            ctx.fillText(t.lines[0], t.x + 47, 149);
+        } else {
+            ctx.fillText(t.lines[0], t.x + 47, 142);
+            ctx.fillText(t.lines[1], t.x + 47, 158);
+        }
+    }
+
+    // app box
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundRect(ctx, 500, 110, 190, 70, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    roundRect(ctx, 500, 110, 190, 70, 8); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('OrdersServlet.doGet(', 595, 140);
+    ctx.fillText('request, response)', 595, 158);
+
+    // forward arrows at y=145
+    arrow(ctx, 110, 145, 141, 145, P.text, 3);
+    arrow(ctx, 240, 145, 251, 145, P.text, 3);
+    arrow(ctx, 350, 145, 361, 145, P.text, 3);
+    arrow(ctx, 460, 145, 496, 145, P.text, 3);
+
+    // return arrow curving along y=225
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(595, 180);
+    ctx.quadraticCurveTo(595, 225, 400, 225);
+    ctx.lineTo(120, 225);
+    ctx.quadraticCurveTo(65, 225, 65, 178);
+    ctx.stroke();
+    ctx.fillStyle = P.mute;
+    ctx.beginPath();
+    ctx.moveTo(65, 174);
+    ctx.lineTo(58, 187);
+    ctx.lineTo(72, 187);
+    ctx.closePath(); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('response bytes', 360, 241);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the developer writes only the green box', w / 2, 280);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('schematic', w - 12, h - 8);
+});
+
+// c2: connections vs pool size vs busy threads at the same instant
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 230;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Instant: 200 Sockets Open, 8 Threads Working', w / 2, 24);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 235); ctx.stroke();
+
+    var rows = [
+        { y: 90,  label: 'open keep-alive connections', fill: 'rgba(42,120,214,0.30)', bw: 400, end: '200' },
+        { y: 150, label: 'thread pool (maxThreads)',    fill: 'rgba(74,58,167,0.25)',  bw: 400, end: '200 (Tomcat default)' },
+        { y: 210, label: 'threads busy right now',      fill: P.green,                 bw: 16,  end: '8' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.label, 220, r.y + 11);
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y, r.bw, 14);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.end, bx + r.bw + 8, r.y + 11);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('200 req/s × 40 ms = 8 busy threads', 300, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('load illustrative; 8 = 200 × 0.04 exact; maxThreads default 200 documented', w - 12, h - 8);
+});
+
+// c3: app in container vs container in app
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Inversion: App in Container vs Container in App', w / 2, 24);
+
+    // left panel: shared Tomcat
+    ctx.fillStyle = 'rgba(42,120,214,0.10)';
+    roundRect(ctx, 40, 70, 280, 190, 10); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    roundRect(ctx, 40, 70, 280, 190, 10); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('shared Tomcat', 180, 92);
+    var wars = ['orders.war', 'billing.war', 'reports.war'];
+    var ys = [110, 155, 200];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        roundRect(ctx, 60, ys[i], 240, 38, 8); ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+        roundRect(ctx, 60, ys[i], 240, 38, 8); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(wars[i], 180, ys[i] + 24);
+    }
+
+    // right panel: app jar with embedded Tomcat
+    ctx.fillStyle = 'rgba(0,131,0,0.10)';
+    roundRect(ctx, 400, 70, 280, 190, 10); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    roundRect(ctx, 400, 70, 280, 190, 10); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders app.jar', 540, 92);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('orders code (Spring Boot)', 540, 130);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 420, 165, 240, 50, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+    roundRect(ctx, 420, 165, 240, 50, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('embedded Tomcat', 540, 195);
+
+    // panel captions
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('classic: WARs deployed into it', 180, 285);
+    ctx.fillText('modern: it ships inside the jar', 540, 285);
+
+    // inverted arrow
+    arrow(ctx, 330, 165, 390, 165, P.orange, 3);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('inverted', 360, 152);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('same servlet contract in both', w - 20, 55);
+});
+
+// c4: pool exhaustion incident — busy threads and refused req/s over 60s
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxY = 300;
+    function X(sec) { return ox + sec / 60 * pw; }
+    function Y(v) { return baseY - v / maxY * ph; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Downstream Slows at t=10s: 8 Busy Threads Become 200 in Seconds', w / 2, 24);
+
+    // gridlines at 100/200
+    var grids = [100, 200];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, Y(grids[i])); ctx.lineTo(ox + pw, Y(grids[i])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i], ox - 8, Y(grids[i]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var t = 0; t <= 60; t += 10) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + 's', X(t), baseY + 16);
+    }
+
+    // maxThreads dashed line at 200
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, Y(200)); ctx.lineTo(ox + pw, Y(200)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('maxThreads = 200', ox + 6, Y(200) - 6);
+
+    var secs = [0, 5, 10, 11, 12, 15, 20, 30, 45, 60];
+    var busy = [8, 9, 8, 120, 200, 200, 200, 200, 200, 200];
+    var refused = [0, 0, 0, 0, 0, 150, 190, 200, 200, 200];
+
+    // busy threads line
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        i === 0 ? ctx.moveTo(X(secs[i]), Y(busy[i])) : ctx.lineTo(X(secs[i]), Y(busy[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('busy threads', X(46), Y(200) + 18);
+
+    // refused req/s line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < secs.length; i++) {
+        i === 0 ? ctx.moveTo(X(secs[i]), Y(refused[i])) : ctx.lineTo(X(secs[i]), Y(refused[i]));
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('refused req/s', X(21), Y(190) + 18);
+
+    // slowdown marker at t=10
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(10), 50); ctx.lineTo(X(10), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('payment: 40ms → 2,000ms', X(10) + 6, 48);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all 200 threads blocked waiting — CPU idle', X(35), 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; 200 ÷ 2s = 100 req/s capacity exact', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

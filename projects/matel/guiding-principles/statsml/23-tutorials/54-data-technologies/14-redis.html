@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redis</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Redis</h1>
+<p class="subtitle">Redis keeps whole data structures &mdash; lists, sets, sorted sets &mdash; in memory, so asking "who's in the top 3?" is one command, not a query plan</p>
+
+<div class="card-section">
+    <h2>The Leaderboard That Sorts Itself</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">in-memory</span><span class="tag orange">data structures</span></div>
+                <ul>
+                    <li><b>The game</b> — a mobile game shows a live leaderboard; every match finish updates a player's score</li>
+                    <li><b>The naive way</b> — a SQL table of scores needs <code>ORDER BY score DESC</code> on every leaderboard view</li>
+                    <li><b>The Redis way</b> — a sorted set keeps members ordered by score at all times; reads never sort</li>
+                    <li><b>Not just strings</b> — Redis values are structures: strings, lists, sets, sorted sets, hashes, streams</li>
+                    <li><b>In memory</b> — everything lives in RAM, so a read or write takes microseconds, not milliseconds</li>
+                </ul>
+                <p class="example"><code>ZADD leaderboard 5800 "mei"</code> files mei into her sorted position on the way in — the top-3 query afterward is just "read the first 3".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Redis is a data-structure server: instead of rows you store live structures, and the structure itself (a sorted set) does the work a SQL query would redo on every read.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Bumping a Score by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">ZADD / ZINCRBY</span></div>
+                <ul>
+                    <li><b>The setup</b> — <code>ZADD leaderboard 4200 ada 3100 raj 5800 mei 2500 leo 4900 sam</code> loads five players</li>
+                    <li><b>The bump</b> — raj wins a match worth 900 points: <code>ZINCRBY leaderboard 900 raj</code> returns 4000</li>
+                    <li><b>Hand-check</b> — 3100 + 900 = 4000 (exact); raj passes no one, since ada holds 4200</li>
+                    <li><b>The rank</b> — <code>ZREVRANK leaderboard raj</code> returns 3: three players (mei, sam, ada) score higher</li>
+                    <li><b>The read</b> — <code>ZREVRANGE leaderboard 0 2</code> returns mei, sam, ada — still the podium</li>
+                    <li><b>Atomic</b> — Redis runs commands one at a time, so two simultaneous bumps can never lose an update</li>
+                </ul>
+                <p class="example">Raj's 3100 becomes 4000 in one atomic command, and his 0-based rank comes back as 3 without anyone sorting anything.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Score updates and rank lookups are single commands (<code>ZINCRBY</code>, <code>ZREVRANK</code>); because Redis executes commands on a single thread, each one is atomic with no locks to manage.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where the Microseconds Go to Work</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">latency</span></div>
+                <ul>
+                    <li><b>Cache</b> — the classic use: park a slow database answer in Redis and serve repeats from RAM</li>
+                    <li><b>Session store</b> — a hash per logged-in user holds cart and profile bits across web servers</li>
+                    <li><b>Queue</b> — a list with <code>LPUSH</code>/<code>BRPOP</code> hands jobs to workers; streams add consumer groups</li>
+                    <li><b>Rate limiter</b> — <code>INCR</code> a per-user counter with a 60s expiry: cheap, atomic, self-cleaning</li>
+                    <li><b>The math</b> — at ~0.1 ms per Redis read vs ~120 ms for a 1M-row SQL sort, the gap is ~1200&times;</li>
+                </ul>
+                <p class="example">A leaderboard page hitting SQL's <code>ORDER BY</code> costs ~120 ms per view; the same page on <code>ZREVRANGE</code> costs ~0.1 ms — the sort was paid once, at write time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Redis shows up wherever many requests need the same small hot data fast — cache, sessions, queues, counters — because RAM plus ready-made structures beats recomputing.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Fast Because It Forgets — Unless You Tell It Not To</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">persistence</span></div>
+                <ul>
+                    <li><b>The confusion</b> — treating Redis as a durable database because writes "succeed" instantly</li>
+                    <li><b>The truth</b> — data lives in RAM; a crash without persistence configured loses everything</li>
+                    <li><b>RDB</b> — snapshots dump the whole dataset to disk on a schedule; a crash loses the gap since the last one</li>
+                    <li><b>AOF</b> — an append-only file logs every write; with <code>fsync</code> every second, a crash loses at most ~1s</li>
+                    <li><b>The mistake</b> — keeping the only copy of orders or payments in a cache-configured Redis</li>
+                </ul>
+                <p class="example">With snapshots every 5 minutes, a crash at 2:07pm rolls the leaderboard back to its 2:05pm snapshot — every score bump in those 2 minutes is gone.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming an in-memory store is durable by default. Redis offers RDB snapshots and AOF logging, but you must choose them — and each trades some speed or some window of loss.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: sorted-set leaderboard bars
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Sorted Set Is Already in Order — No Query Ever Sorts It', w / 2, 24);
+
+    var bx = 170, maxW = 460, maxScore = 5800;
+    var rows = [
+        { y: 70, lab: '#1 mei — 5800', score: 5800, top3: true },
+        { y: 110, lab: '#2 sam — 4900', score: 4900, top3: true },
+        { y: 150, lab: '#3 ada — 4200', score: 4200, top3: true },
+        { y: 190, lab: '#4 raj — 3100', score: 3100, top3: false },
+        { y: 230, lab: '#5 leo — 2500', score: 2500, top3: false }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 245); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var bw = r.score / maxScore * maxW;
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, 160, r.y + 4);
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(bx, r.y - 11, bw, 22);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y - 11, bw, 22);
+        if (r.top3) {
+            ctx.fillStyle = P.green;
+            ctx.fillRect(bx, r.y - 11, 4, 22);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(String(r.score), bx + bw + 6, r.y + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('top 3 = read the first 3 members', w - 20, 48);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('scores illustrative', w - 20, h - 8);
+});
+
+// c2: before/after ZINCRBY grouped bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('ZINCRBY leaderboard 900 raj: 3100 → 4000, Rank Stays #4', w / 2, 24);
+
+    var baseY = 245, chH = 170;
+    function yOf(v) { return baseY - v / 6000 * chH; }
+
+    // gridlines at 2000/4000 across both panels
+    var gv = [2000, 4000];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < gv.length; i++) {
+        ctx.beginPath(); ctx.moveTo(60, yOf(gv[i])); ctx.lineTo(340, yOf(gv[i])); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(400, yOf(gv[i])); ctx.lineTo(680, yOf(gv[i])); ctx.stroke();
+    }
+
+    // baselines
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(340, baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(400, baseY); ctx.lineTo(680, baseY); ctx.stroke();
+
+    // panel labels
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('before', 180, 60);
+    ctx.fillText('after', 520, 60);
+
+    var names = ['mei', 'sam', 'ada', 'raj', 'leo'];
+    var before = [5800, 4900, 4200, 3100, 2500];
+    var after = [5800, 4900, 4200, 4000, 2500];
+    var xsL = [90, 145, 200, 255, 310];
+    var bw = 40;
+
+    // left panel (before): raj orange
+    for (var i = 0; i < 5; i++) {
+        var bh = baseY - yOf(before[i]);
+        if (i === 3) {
+            ctx.fillStyle = 'rgba(217,89,38,0.30)';
+            ctx.strokeStyle = P.orange;
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.strokeStyle = P.blue;
+        }
+        ctx.fillRect(xsL[i] - bw / 2, yOf(before[i]), bw, bh);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(xsL[i] - bw / 2, yOf(before[i]), bw, bh);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(names[i], xsL[i], baseY + 14);
+        ctx.fillText(String(before[i]), xsL[i], yOf(before[i]) - 5);
+    }
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('#4', xsL[3], yOf(before[3]) - 20);
+
+    // right panel (after): raj green
+    for (var i = 0; i < 5; i++) {
+        var xr = xsL[i] + 340;
+        var bh = baseY - yOf(after[i]);
+        if (i === 3) {
+            ctx.fillStyle = 'rgba(0,131,0,0.25)';
+            ctx.strokeStyle = P.green;
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.strokeStyle = P.blue;
+        }
+        ctx.fillRect(xr - bw / 2, yOf(after[i]), bw, bh);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(xr - bw / 2, yOf(after[i]), bw, bh);
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(names[i], xr, baseY + 14);
+        ctx.fillText(String(after[i]), xr, yOf(after[i]) - 5);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+900', xsL[3] + 340, yOf(after[3]) - 20);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('#4', xsL[3] + 340, yOf(after[3]) - 34);
+
+    // annotation + caption
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one atomic command — no read-modify-write race', 300, 285);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('scores illustrative; 3100 + 900 = 4000 exact', w - 20, h - 4);
+});
+
+// c3: latency comparison bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Cost of One Top-3 Read: Sort Every Time vs Read a Sorted Structure', w / 2, 24);
+
+    var bx = 250;
+    var rows = [
+        { y: 80, lab: 'SQL ORDER BY, 1M rows — ~120 ms', width: 420, color: '#e74c3c', t: '~120 ms' },
+        { y: 130, lab: 'Redis ZREVRANGE 0 2 — ~0.1 ms', width: 42, color: P.green, t: '~0.1 ms' },
+        { y: 180, lab: 'Redis GET (cache hit) — ~0.08 ms', width: 36, color: P.blue, t: '~0.08 ms' },
+        { y: 230, lab: 'Redis INCR (rate limit) — ~0.08 ms', width: 36, color: P.aqua, t: '~0.08 ms' }
+    ];
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 62); ctx.lineTo(bx, 245); ctx.stroke();
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 4);
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = r.color;
+        ctx.fillRect(bx, r.y - 9, r.width, 18);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.t, bx + r.width + 8, r.y + 4);
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('~1200× — the sort was paid once, at write time', w - 20, 255);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; pixel widths schematic', w - 20, h - 8);
+});
+
+// c4: crash timeline, RDB vs AOF
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Crash at 2:07pm: What Each Persistence Mode Loses', w / 2, 24);
+
+    var x0 = 110, x1 = 650;
+    function xOf(min) { return x0 + min / 8 * (x1 - x0); } // 2:00 = 0min ... 2:08 = 8min
+    var crashX = xOf(7);
+
+    // crash line across both rows
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(crashX, 55); ctx.lineTo(crashX, 235); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('crash', crashX, 48);
+
+    // row 1: RDB
+    var y1 = 110;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('RDB, snapshot', 20, y1 - 6);
+    ctx.fillText('every 5 min', 20, y1 + 10);
+    // loss band 2:05-2:07
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(xOf(5), y1 - 18, crashX - xOf(5), 36);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2 min of writes lost', (xOf(5) + crashX) / 2, y1 - 26);
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+    // camera ticks at 2:00 and 2:05
+    var snaps = [0, 5];
+    for (var i = 0; i < snaps.length; i++) {
+        var sx = xOf(snaps[i]);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(sx, y1 - 12); ctx.lineTo(sx, y1 + 12); ctx.stroke();
+        ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('snapshot', sx, y1 + 28);
+    }
+
+    // row 2: AOF
+    var y2 = 210;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('AOF, fsync', 20, y2 - 6);
+    ctx.fillText('every 1s', 20, y2 + 10);
+    // thin loss band before crash
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(crashX - 12, y2 - 18, 12, 36);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('≤ 1s lost', crashX - 6, y2 - 26);
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y2); ctx.lineTo(x1, y2); ctx.stroke();
+    // continuous green ticks up to the crash
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+    for (var tx = x0; tx <= crashX - 4; tx += 8) {
+        ctx.beginPath(); ctx.moveTo(tx, y2 - 6); ctx.lineTo(tx, y2 + 6); ctx.stroke();
+    }
+
+    // shared tick labels (below row 2)
+    var tls = [['2:00', 0], ['2:05', 5], ['2:07', 7]];
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < tls.length; i++) {
+        ctx.fillText(tls[i][0], xOf(tls[i][1]), y2 + 28);
+    }
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('durability is a setting, not a default — pick your loss window', w / 2, 275);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("timeline illustrative; loss windows follow each mode's schedule", w - 20, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

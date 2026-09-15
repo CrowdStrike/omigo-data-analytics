@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S3 &amp; Object Storage Deep Dive</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f0;
+    color: #2a2a2a;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 { color: #2980b9; margin-bottom: 10px; font-size: 1.8em; }
+.subtitle { color: #666; margin-bottom: 30px; font-size: 1.05em; }
+
+.nav-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-top: 15px;
+}
+.nav-card {
+    background: #ffffff;
+    border: 1px solid #d8d8d8;
+    border-radius: 10px;
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s, transform 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.nav-card:hover {
+    border-color: #2980b9;
+    transform: translateY(-2px);
+}
+.nav-card h3 { color: #1a3a4a; margin-bottom: 6px; font-size: 1em; }
+.nav-card .card-num {
+    color: #2980b9;
+    font-size: 0.75em;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+.nav-card p { color: #555; font-size: 0.85em; }
+.nav-card .topics {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.nav-card .topic-tag {
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.7em;
+    color: #666;
+}
+@media (max-width: 1400px) { .nav-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1100px) { .nav-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .nav-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>S3 &amp; Object Storage Deep Dive</h1>
+<p class="subtitle">One name, one HTTP call, one flat map from names to bytes — and then the details that decide whether a bucket serves a huge dataset smoothly or slows to a crawl: spreading load across names, consistency, replication, and who is allowed to read a byte.</p>
+
+<div class="nav-grid">
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/01-buckets-keys-and-the-flat-namespace.html">
+        <div class="card-num">NAMESPACE</div>
+        <h3>1. Buckets, Keys &amp; the Flat Namespace</h3>
+        <p>A bucket is one flat map from a name to bytes — what makes a bucket name legal, and why the length limit on a name counts bytes rather than characters.</p>
+        <div class="topics">
+            <span class="topic-tag">name to bytes</span>
+            <span class="topic-tag">legal bucket names</span>
+            <span class="topic-tag">bytes not characters</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/02-directories-are-a-lie.html">
+        <div class="card-num">NAMESPACE</div>
+        <h3>2. Directories Are a Lie</h3>
+        <p>The slash is an ordinary character inside a name — the console rebuilds the folder tree from the sorted list every time, so an empty folder is really a zero-byte object.</p>
+        <div class="topics">
+            <span class="topic-tag">the folder illusion</span>
+            <span class="topic-tag">slash is just a character</span>
+            <span class="topic-tag">zero-byte object</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/03-listing-pagination-and-prefix-scans.html">
+        <div class="card-num">NAMESPACE</div>
+        <h3>3. Listing, Pagination &amp; Prefix Scans</h3>
+        <p>Asking which objects exist gives you a limited page of names at a time, in sorted order, so a huge prefix takes a long chain of requests one after another.</p>
+        <div class="topics">
+            <span class="topic-tag">one page at a time</span>
+            <span class="topic-tag">counting round trips</span>
+            <span class="topic-tag">split by prefix</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/04-request-rate-per-prefix.html">
+        <div class="card-num">SCALING</div>
+        <h3>4. Request Rate Per Prefix</h3>
+        <p>The request limit applies to each prefix on its own rather than the whole bucket, so how many requests a second you get is decided by how your names spread out.</p>
+        <div class="topics">
+            <span class="topic-tag">writes per second</span>
+            <span class="topic-tag">limit per prefix</span>
+            <span class="topic-tag">a slice of sorted names</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/05-hot-spots-and-key-design.html">
+        <div class="card-num">SCALING</div>
+        <h3>5. Hot Spots &amp; Key Design</h3>
+        <p>A name that starts with the time sends every write to the same place; putting something varied at the front spreads the same load across many places.</p>
+        <div class="topics">
+            <span class="topic-tag">names that start with time</span>
+            <span class="topic-tag">vary the front</span>
+            <span class="topic-tag">how many places</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/06-multipart-upload-and-byte-range-reads.html">
+        <div class="card-num">SCALING</div>
+        <h3>6. Multipart Upload &amp; Byte-Range Reads</h3>
+        <p>A large file goes up as many numbered pieces, and the same idea in reverse lets a reader take a few bytes out of the middle instead of downloading it all.</p>
+        <div class="topics">
+            <span class="topic-tag">upload in pieces</span>
+            <span class="topic-tag">choosing the piece size</span>
+            <span class="topic-tag">read part of a file</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/07-directory-buckets-and-express-one-zone.html">
+        <div class="card-num">SCALING</div>
+        <h3>7. Directory Buckets &amp; Express One Zone</h3>
+        <p>A storage class that keeps one copy in one zone and stores real folders, so reads of small objects come back very fast — and what you give up for that speed.</p>
+        <div class="topics">
+            <span class="topic-tag">wait before the first byte</span>
+            <span class="topic-tag">real folders</span>
+            <span class="topic-tag">one copy in one zone</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/08-from-eventual-to-strong-consistency.html">
+        <div class="card-num">CONSISTENCY</div>
+        <h3>8. From Eventual to Strong Consistency</h3>
+        <p>For years a file you had just written could read back as missing, so pipelines carried retries and side databases — since December 2020 the next read sees it.</p>
+        <div class="topics">
+            <span class="topic-tag">the read said nothing was there</span>
+            <span class="topic-tag">the existence check</span>
+            <span class="topic-tag">workarounds now dead weight</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/09-conditional-writes-and-compare-and-swap.html">
+        <div class="card-num">CONSISTENCY</div>
+        <h3>9. Conditional Writes &amp; Compare-and-Swap</h3>
+        <p>Two conditions you can attach to a write — only if nothing is there yet, and only if nothing changed since you read it — turn a silently lost update into a rejection.</p>
+        <div class="topics">
+            <span class="topic-tag">two writers and one lost update</span>
+            <span class="topic-tag">write only if absent</span>
+            <span class="topic-tag">write only if unchanged</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/10-versioning-and-delete-markers.html">
+        <div class="card-num">CONSISTENCY</div>
+        <h3>10. Versioning &amp; Delete Markers</h3>
+        <p>With versioning on, a write never replaces anything and a delete never frees anything — the old versions stay stored, and the stored total keeps growing.</p>
+        <div class="topics">
+            <span class="topic-tag">three versions of one name</span>
+            <span class="topic-tag">the delete that deletes nothing</span>
+            <span class="topic-tag">storage keeps growing</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/11-cross-region-replication.html">
+        <div class="card-num">REPLICATION</div>
+        <h3>11. Cross-Region Replication</h3>
+        <p>The copy into the second region starts after your write already succeeded, covers only what your rules select, and has no deadline unless you pay for one.</p>
+        <div class="topics">
+            <span class="topic-tag">async copy</span>
+            <span class="topic-tag">rules not a switch</span>
+            <span class="topic-tag">paid deadline</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/12-replication-lag-in-practice.html">
+        <div class="card-num">REPLICATION</div>
+        <h3>12. Replication Lag in Practice</h3>
+        <p>The second region is always a little behind — how to measure how far behind, and what a read over there returns while the copy is still in flight.</p>
+        <div class="topics">
+            <span class="topic-tag">measuring the delay</span>
+            <span class="topic-tag">watching the gap</span>
+            <span class="topic-tag">a wrong answer mid-batch</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/13-cap-for-object-storage.html">
+        <div class="card-num">REPLICATION</div>
+        <h3>13. CAP for Object Storage</h3>
+        <p>Write a new price to an object and read it back in the same region and you always get the new price; read the copy in another region and you can still get the old one.</p>
+        <div class="topics">
+            <span class="topic-tag">same region vs another</span>
+            <span class="topic-tag">made to wait</span>
+            <span class="topic-tag">stale reads</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/14-iam-policy-evaluation.html">
+        <div class="card-num">ACCESS CONTROL</div>
+        <h3>14. IAM Policy Evaluation</h3>
+        <p>Several separate layers judge one read of one object — everything starts denied, one explicit deny is final, and an allow you can see is never proof the read works.</p>
+        <div class="topics">
+            <span class="topic-tag">everything that gets a say</span>
+            <span class="topic-tag">start denied</span>
+            <span class="topic-tag">a deny always wins</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/15-cross-account-access.html">
+        <div class="card-num">ACCESS CONTROL</div>
+        <h3>15. Cross-Account Access</h3>
+        <p>When the reader and the bucket sit in different accounts both have to allow the call — and a file uploaded from outside can leave the bucket's owner unable to read it.</p>
+        <div class="topics">
+            <span class="topic-tag">both sides must allow</span>
+            <span class="topic-tag">three ways to hand out access</span>
+            <span class="topic-tag">who owns the file</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/16-encryption-and-kms-rate-limits.html">
+        <div class="card-num">ACCESS CONTROL</div>
+        <h3>16. Encryption &amp; KMS Rate Limits</h3>
+        <p>Every object is encrypted by default, but choosing your own key adds a call to the key service on every read — and that service has a rate limit of its own.</p>
+        <div class="topics">
+            <span class="topic-tag">who holds the key</span>
+            <span class="topic-tag">one read becomes two calls</span>
+            <span class="topic-tag">the key service slows you</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/17-presigned-urls.html">
+        <div class="card-num">ACCESS CONTROL</div>
+        <h3>17. Presigned URLs</h3>
+        <p>Anyone holding a signed link acts as whoever signed it until it expires — and the link can never outlive the credentials that signed it.</p>
+        <div class="topics">
+            <span class="topic-tag">hand out a link not the file</span>
+            <span class="topic-tag">what the link pins down</span>
+            <span class="topic-tag">two clocks on expiry</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/18-event-notifications.html">
+        <div class="card-num">OPERATIONS</div>
+        <h3>18. Event Notifications</h3>
+        <p>A file landing in a bucket can wake a queue or a function on its own, but a message may arrive twice and two messages about one file may arrive out of order.</p>
+        <div class="topics">
+            <span class="topic-tag">something wakes up</span>
+            <span class="topic-tag">may arrive twice</span>
+            <span class="topic-tag">no fixed order</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/19-cost-egress-and-data-gravity.html">
+        <div class="card-num">OPERATIONS</div>
+        <h3>19. Cost, Egress &amp; Data Gravity</h3>
+        <p>Storage per GB is the line everyone estimates and rarely the one that decides the bill — requests, reads, minimum billing periods, and the price of sending data out do.</p>
+        <div class="topics">
+            <span class="topic-tag">one month's bill</span>
+            <span class="topic-tag">deleting too early</span>
+            <span class="topic-tag">sending data out</span>
+        </div>
+    </a>
+
+    <a class="nav-card" href="65-s3-and-object-storage-deep-dive/20-object-storage-compared.html">
+        <div class="card-num">OPERATIONS</div>
+        <h3>20. Object Storage Compared</h3>
+        <p>Every object store is the same name-to-bytes map behind HTTP, so what survives as a real difference is how names are scoped and what a repeat write to one name does.</p>
+        <div class="topics">
+            <span class="topic-tag">GCS</span>
+            <span class="topic-tag">Azure Blob</span>
+            <span class="topic-tag">MinIO</span>
+            <span class="topic-tag">two levels or three</span>
+        </div>
+    </a>
+</div>
+
+<script>
+const categoryColors = {
+    "NAMESPACE": "#2980b9",
+    "SCALING": "#27ae60",
+    "CONSISTENCY": "#8e44ad",
+    "REPLICATION": "#e67e22",
+    "ACCESS CONTROL": "#c0392b",
+    "OPERATIONS": "#16a085"
+};
+document.querySelectorAll(".card-num").forEach(el => {
+    const text = el.textContent.trim();
+    if (categoryColors[text]) el.style.color = categoryColors[text];
+});
+</script>
+
+</body>
+</html>

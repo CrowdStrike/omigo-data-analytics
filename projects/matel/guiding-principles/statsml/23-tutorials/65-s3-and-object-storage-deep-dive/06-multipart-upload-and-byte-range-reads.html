@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multipart Upload &amp; Byte-Range Reads</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Multipart Upload &amp; Byte-Range Reads</h1>
+<p class="subtitle">A large file goes up as many numbered pieces, and the same idea in reverse lets a reader take a few bytes out of the middle instead of downloading the whole thing</p>
+
+<div class="card-section">
+    <h2>Why a Big File Cannot Go Up in One Write</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">three steps</span><span class="tag orange">all or nothing</span></div>
+                <ul>
+                    <li><b>The file</b> — one nightly export of 200 GiB, stored in the bucket under a single name</li>
+                    <li><b>One write is capped</b> — a single write request can carry at most 5 GB of content</li>
+                    <li><b>So you split it</b> — a big file goes up as many separately numbered pieces instead</li>
+                    <li><b>Step 1, start</b> — you open an upload and get back an ID that names this batch</li>
+                    <li><b>Step 2, send pieces</b> — the numbered pieces go up in any order, and in parallel</li>
+                    <li><b>Step 3, finish</b> — you send the list of pieces and the whole file appears at once</li>
+                    <li><b>Nothing partial shows</b> — before that final step a read of the name finds nothing</li>
+                    <li><b>Or cancel</b> — cancelling the upload throws away every piece that was already sent</li>
+                </ul>
+                <p class="example">Alice's export goes up as 6,400 pieces over half an hour, and the file does not exist until the last step returns.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> This is not a gradual write. The pieces are staged first, then one final step publishes the whole file at once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Choosing the Piece Size: 204,800 MiB Divided by 10,000</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">arithmetic</span><span class="tag orange">hard limit</span></div>
+                <ul>
+                    <li><b>Two limits</b> — an upload holds at most 10,000 pieces, each of them 5 MiB or more</li>
+                    <li><b>The file in MiB</b> — 200 GiB &times; 1,024 = 204,800 MiB of content to divide into pieces</li>
+                    <li><b>The rule</b> — the smallest piece allowed here is 204,800 &divide; 10,000 = 20.48 MiB</li>
+                    <li><b>A copied default fails</b> — 5 MiB pieces would need 40,960 of them, far too many</li>
+                    <li><b>How far over</b> — 40,960 &minus; 10,000 = 30,960 pieces more than the limit allows</li>
+                    <li><b>A working choice</b> — 32 MiB pieces give 204,800 &divide; 32 = 6,400, inside the limit</li>
+                    <li><b>Room to grow</b> — 32 MiB &times; 10,000 pieces covers any file up to 312.5 GiB in size</li>
+                    <li><b>Not a habit</b> — piece size follows the file size, so it has to scale as files grow</li>
+                </ul>
+                <p class="example">A 5 MiB piece size works for a 1 GiB file (205 pieces) and fails at 200 GiB (40,960 pieces).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Piece size is arithmetic, not habit. Divide the file size by 10,000, round up to something convenient, and the limit stops being a surprise.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Reading Back Only the Bytes You Need</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">range read</span><span class="tag green">columnar files</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>Range read</b> — you can ask for one byte range of a file instead of the whole thing</li>
+                    <li><b>You pay for the slice</b> — one request charge plus only the bytes you actually read</li>
+                    <li><b>Two reads, not one</b> — read the small index first, then only the blocks you need</li>
+                    <li><b>The index</b> — a 64 KiB read at the end of the file locates every block inside it</li>
+                    <li><b>A real query</b> — 8 MiB from each of four blocks, plus the index, is 32.06 MiB read</li>
+                    <li><b>The share read</b> — 32.06 of 204,800 MiB works out at 0.0157% of the stored file</li>
+                    <li><b>The cost gap</b> — pulling the whole file costs $18.00; the slice costs about $0.003</li>
+                    <li><b>Many readers</b> — separate workers can each read a different range at the same time</li>
+                </ul>
+                <p class="example">Bob's query over the 200 GiB export reads 32.06 MiB — a 64 KiB index plus four 8 MiB blocks — and leaves the other 1,596 blocks untouched.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Downloading a whole file to look at a few columns. If the format keeps an index, two small reads answer the question and the rest of the file never moves.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+function commas(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// the running example, in one place
+var FILE_GIB = 200;
+var FILE_MIB = FILE_GIB * 1024;      // 204,800
+var PIECE_MIB = 32;
+var PIECES = Math.round(FILE_MIB / PIECE_MIB);   // 6,400
+
+// c1: start the upload, send the pieces, finish the upload
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The File Exists Only After the Final Step', w / 2, 22);
+
+    // geometry: every fan line is derived from these
+    var startX = 36, startW = 134;
+    var pillX = 210, pillW = 250;
+    var endX = 536, endW = 148;
+    var boxY = 64, boxH = 54, mid = boxY + boxH / 2;   // 91
+
+    function stage(x, bw, fill, edge, l1, l2, cap) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, boxY, bw, boxH, 8); ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = edge; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(l1, x + bw / 2, boxY + 21);
+        ctx.fillText(l2, x + bw / 2, boxY + 39);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(cap, x + bw / 2, 136);
+    }
+    stage(startX, startW, rgba(P.blue, 0.14), P.blue, 'start the', 'upload', 'you get an upload ID');
+    stage(endX, endW, rgba(P.green, 0.16), P.green, 'finish the', 'upload', 'you send the piece list');
+
+    // the pieces
+    var pillY = [58, 88, 118, 148, 178];
+    var pillTxt = ['piece 1 · ' + PIECE_MIB + ' MiB', 'piece 2 · ' + PIECE_MIB + ' MiB',
+                   'piece 3 · ' + PIECE_MIB + ' MiB', '…',
+                   'piece ' + commas(PIECES) + ' · ' + PIECE_MIB + ' MiB'];
+    for (var i = 0; i < pillY.length; i++) {
+        ctx.fillStyle = rgba(P.yellow, 0.14);
+        roundRect(ctx, pillX, pillY[i], pillW, 22, 5); ctx.fill();
+        ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11.5px ui-monospace, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(pillTxt[i], pillX + pillW / 2, pillY[i] + 15);
+    }
+
+    // fan in from start, fan out to finish
+    var fanFrom = startX + startW;      // 170
+    var fanTo = pillX + pillW;          // 460
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+    for (var j = 0; j < pillY.length; j++) {
+        var cy = pillY[j] + 11;
+        ctx.beginPath(); ctx.moveTo(fanFrom, mid); ctx.lineTo(pillX, cy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(fanTo, cy); ctx.lineTo(endX, mid); ctx.stroke();
+        if (j === 0 || j === pillY.length - 1) {
+            arrowHead(ctx, fanFrom, mid, pillX - 1, cy, P.mute);
+            arrowHead(ctx, fanTo, cy, endX - 1, mid, P.mute);
+        }
+    }
+
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(commas(PIECES) + ' pieces, sent at the same time, each retried alone',
+                 pillX + pillW / 2, 206);
+
+    // visibility strip: not there, then there — the split is at the finish box
+    ctx.fillStyle = rgba(P.mute, 0.12);
+    roundRect(ctx, startX, 228, endX - startX, 30, 6); ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a read of this name finds no such file', (startX + endX) / 2, 248);
+
+    ctx.fillStyle = rgba(P.green, 0.18);
+    roundRect(ctx, endX, 228, endW, 30, 6); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 11.5px system-ui';
+    ctx.fillText('file visible', endX + endW / 2, 248);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one moment of publication — nothing is ever half-written', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; the pieces become one file only at the final step', w - 12, 294);
+});
+
+// c2: piece count for five candidate piece sizes, against the 10,000-piece limit
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Piece Count for a ' + commas(FILE_MIB) + ' MiB File', w / 2, 22);
+
+    var base = 246, L = 62, R = 690, SPAN = 188;
+    // two decades of log scale: 1,000 at the baseline, 100,000 at the top
+    function y(n) { return base - (Math.log(n / 1000) / Math.LN10 / 2) * SPAN; }
+
+    [1000, 10000, 100000].forEach(function(t) {
+        var gy = y(t);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(L, gy); ctx.lineTo(R, gy); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(commas(t), 56, gy + 4);
+    });
+
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(L, base); ctx.lineTo(R, base); ctx.stroke();
+
+    var sizes = [
+        { mib: 5,     lab: '5 MiB',     col: P.orange, chosen: false },
+        { mib: 10,    lab: '10 MiB',    col: P.orange, chosen: false },
+        { mib: 20.48, lab: '20.48 MiB', col: P.yellow, chosen: false },
+        { mib: 32,    lab: '32 MiB',    col: P.green,  chosen: true  },
+        { mib: 64,    lab: '64 MiB',    col: P.blue,   chosen: false }
+    ];
+    var bw = 62, pitch = 127;
+    function barX(i) { return 90 + i * pitch; }
+
+    for (var i = 0; i < sizes.length; i++) {
+        var b = sizes[i];
+        var n = Math.round(FILE_MIB / b.mib);      // computed, never hardcoded
+        var bx = barX(i), by = y(n), cx = bx + bw / 2;
+
+        ctx.fillStyle = b.col; ctx.globalAlpha = 0.85;
+        ctx.fillRect(bx, by, bw, base - by);
+        ctx.globalAlpha = 1;
+        if (b.chosen) {
+            ctx.strokeStyle = P.ink; ctx.lineWidth = 2.5;
+            ctx.strokeRect(bx, by, bw, base - by);
+        }
+
+        ctx.fillStyle = b.col; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(commas(n), cx, by - 8);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab, cx, 264);
+        if (b.chosen) {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 11.5px system-ui';
+            ctx.fillText('chosen', cx, 196);
+        }
+    }
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('piece size', 376, 280);
+
+    // the one genuine limit on this chart
+    var limY = y(10000);
+    ctx.strokeStyle = RED; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(L, limY); ctx.lineTo(R, limY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('10,000-piece limit', 686, limY - 8);
+
+    var minMib = FILE_MIB / 10000;
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(commas(FILE_MIB) + ' ÷ 10,000 = ' + minMib + ' MiB', 330, 80);
+    ctx.fillText('smaller pieces are not allowed here', 330, 97);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('200 GiB illustrative; piece counts computed, the 10,000-piece limit documented', w - 12, 294);
+});
+
+// c3: one range read against the whole file
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    var BLOCK_MIB = 128;
+    var BLOCKS = Math.round(FILE_MIB / BLOCK_MIB);     // 1,600
+    var READ_BLOCKS = [180, 520, 940, 1410];
+    var CHUNK_MIB = 8;
+    var INDEX_MIB = 64 / 1024;                          // 0.0625
+    var readMib = READ_BLOCKS.length * CHUNK_MIB + INDEX_MIB;   // 32.0625
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Range Read Takes ' + readMib.toFixed(2) + ' MiB From a ' +
+                 commas(FILE_MIB) + ' MiB File', w / 2, 22);
+
+    var bx = 44, by = 78, bwid = 632, bh = 46;
+    function fx(mib) { return bx + (mib / FILE_MIB) * bwid; }
+
+    ctx.fillStyle = rgba(P.blue, 0.10);
+    roundRect(ctx, bx, by, bwid, bh, 6); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(FILE_GIB + ' GiB file · ' + commas(BLOCKS) + ' blocks of ' + BLOCK_MIB + ' MiB',
+                 bx + bwid / 2, 68);
+
+    // 40 divisions, each standing in for 40 blocks
+    var divs = 40;
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 1; i < divs; i++) {
+        var tx = bx + i * (bwid / divs);
+        ctx.beginPath(); ctx.moveTo(tx, by + 2); ctx.lineTo(tx, by + bh - 2); ctx.stroke();
+    }
+
+    // the four blocks this query actually reads
+    ctx.globalAlpha = 0.9; ctx.fillStyle = P.green;
+    READ_BLOCKS.forEach(function(n) {
+        ctx.fillRect(fx(n * BLOCK_MIB), by, 8, bh);
+    });
+    ctx.globalAlpha = 1;
+
+    // the index, at the end of the file
+    ctx.fillStyle = P.magenta;
+    ctx.fillRect(bx + bwid - 8, by, 8, bh);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('64 KiB index', bx + bwid, 68);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('each tick = ' + (BLOCKS / divs) + ' blocks', bx, 142);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(READ_BLOCKS.length + ' blocks × ' + CHUNK_MIB + ' MiB = ' +
+                 (READ_BLOCKS.length * CHUNK_MIB) + ' MiB', bx + bwid / 2, 142);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('the rest of the file is never transferred', bx + bwid / 2, 164);
+
+    var share = (readMib / FILE_MIB) * 100;
+    ctx.fillStyle = P.violet; ctx.font = 'bold 14px system-ui';
+    ctx.fillText(readMib.toFixed(2) + ' of ' + commas(FILE_MIB) + ' MiB = ' +
+                 share.toFixed(4) + '% of the file', bx + bwid / 2, 192);
+
+    // what the two choices cost
+    var PER_GIB = 0.09;
+    var wholeCost = FILE_GIB * PER_GIB;
+    var sliceGib = readMib / 1024;
+    var sliceCost = sliceGib * PER_GIB;
+
+    function costBox(x, fill, edge, txt) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, 214, 300, 32, 6); ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = edge; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(txt, x + 150, 234);
+    }
+    costBox(52, rgba(P.orange, 0.12), P.orange,
+            'whole file: ' + FILE_GIB + ' GiB × $' + PER_GIB.toFixed(2) + ' = $' + wholeCost.toFixed(2));
+    costBox(372, rgba(P.green, 0.14), P.green,
+            'range read: ' + sliceGib.toFixed(3) + ' GiB × $' + PER_GIB.toFixed(2) +
+            ' ≈ $' + sliceCost.toFixed(3));
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one small read finds the blocks, one read fetches them', 52, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes and $0.09/GiB illustrative; the share of the file read is computed', w - 12, 292);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

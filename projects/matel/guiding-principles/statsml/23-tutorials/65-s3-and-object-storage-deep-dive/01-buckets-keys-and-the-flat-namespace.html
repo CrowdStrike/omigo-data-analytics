@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buckets, Keys &amp; the Flat Namespace</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Buckets, Keys &amp; the Flat Namespace</h1>
+<p class="subtitle">A bucket is one flat map from a key string to bytes — how a bucket name is checked, and why the 1,024-byte key limit counts bytes and not characters</p>
+
+<div class="card-section">
+    <h2>The Bucket Is One Map from Key to Bytes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">key &rarr; bytes</span><span class="tag orange">flat map</span></div>
+                <ul>
+                    <li><b>The bucket</b> — a retail shop writes all of its hourly click files into one bucket</li>
+                    <li><b>The key</b> — a file's whole name is its key, slashes and all, not just the last part</li>
+                    <li><b>One map</b> — the bucket is one map from that whole key string to the file's bytes</li>
+                    <li><b>No folders</b> — nothing named <code>clicks/</code> exists on its own — only whole keys are stored</li>
+                    <li><b>Slashes</b> — they are ordinary characters inside the key, with no special meaning</li>
+                    <li><b>Metadata</b> — size, content type and last-modified time sit beside the file's bytes</li>
+                    <li><b>The address</b> — the bucket name plus the key together name exactly one object</li>
+                    <li><b>One step</b> — you read a file by giving the whole key, never by opening a folder first</li>
+                </ul>
+                <p class="example">Reading the 2pm file means asking for the exact key <code>clicks/date=2026-08-26/hour=14.parquet</code>.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A bucket is not a small filesystem. It is one flat map whose keys happen to contain slashes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What Makes a Bucket Name Legal</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">rule of thumb</span><span class="tag green">naming rules</span><span class="tag orange">globally unique</span></div>
+                <ul>
+                    <li><b>Length</b> — a bucket name is 3 to 63 characters long, so <code>sc</code> is rejected outright</li>
+                    <li><b>Lowercase only</b> — <code>Shop-Clicks</code> is refused because capital letters are not allowed</li>
+                    <li><b>Allowed characters</b> — only letters, numbers, dots and hyphens; underscores fail</li>
+                    <li><b>Start and end</b> — it must begin and end with a letter or number, so <code>shop-clicks-</code> fails</li>
+                    <li><b>Not an IP</b> — a name shaped like an address, <code>192.168.10.5</code>, is refused as well</li>
+                    <li><b>Unique everywhere</b> — no two accounts anywhere can hold the same bucket name</li>
+                    <li><b>One region</b> — a bucket is created in one region and stays there for its whole life</li>
+                    <li><b>Dots hurt</b> — dots break the certificate match over HTTPS, so hyphens are the norm</li>
+                </ul>
+                <p class="example">The name <code>shop-clicks</code> passes every rule at 11 characters; <code>shop.clicks.data</code> is legal but its dots break the certificate match.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Bucket names are name-server shaped, unique everywhere, and permanent. Pick one plain hyphenated name — renaming means copying every object.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Key Is 1,024 Bytes, Not 1,024 Characters</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">byte budget</span><span class="tag orange">UTF-8</span></div>
+                <ul>
+                    <li><b>The limit</b> — a key can be at most 1,024 bytes long, however long it looks</li>
+                    <li><b>Bytes, not letters</b> — the cap counts bytes of UTF-8 text, not characters</li>
+                    <li><b>The plain key</b> — the hourly key is 38 characters and exactly 38 bytes of ASCII</li>
+                    <li><b>Add Japanese text</b> — inserting <code>地域=東京/</code> makes the same key 44 characters</li>
+                    <li><b>But 52 bytes</b> — each of those 4 Japanese characters costs 3 bytes, not 1</li>
+                    <li><b>Worst case</b> — a key of only 3-byte characters fits 341 characters, since 341 &times; 3 = 1,023</li>
+                    <li><b>Emoji are worse</b> — those cost 4 bytes each, so 256 characters is the hard cap</li>
+                    <li><b>Safe names</b> — keep to letters, digits, <code>/</code>, <code>=</code>, <code>-</code> and <code>.</code> to avoid surprises</li>
+                </ul>
+                <p class="example">The plain key uses 38 of 1,024 bytes (3.7%); with the Japanese part it uses 52 bytes (5.1%) — 6 more characters cost 14 more bytes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Count bytes, not characters. A key that looks short can be much closer to the limit once non-ASCII text enters the naming scheme.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// c1: the bucket is one map from key string to bytes
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Bucket Is One Map: Key String → Bytes + Metadata', w / 2, 24);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('key (one string)', 50, 68);
+    ctx.fillText('value (bytes + metadata)', 400, 68);
+
+    var rows = [
+        { k: 'clicks/date=2026-08-26/hour=13.parquet', v: '4.2 MB · 12,801 rows', hl: false },
+        { k: 'clicks/date=2026-08-26/hour=14.parquet', v: '5.1 MB · 15,470 rows', hl: true },
+        { k: 'clicks/date=2026-08-26/hour=15.parquet', v: '4.7 MB · 14,102 rows', hl: false },
+        { k: 'manifest/latest.json',                   v: '2.0 KB · 1 pointer',  hl: false }
+    ];
+    var rowH = 40, pitch = 48, y0 = 80;
+    function rowTop(i) { return y0 + i * pitch; }
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], y = rowTop(i);
+
+        // key cell
+        ctx.fillStyle = rgba(P.blue, r.hl ? 0.22 : 0.10);
+        roundRect(ctx, 50, y, 340, rowH, 6); ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = r.hl ? 2.5 : 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px ui-monospace, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(r.k, 60, y + 26);
+
+        // value cell
+        ctx.fillStyle = rgba(P.green, r.hl ? 0.18 : 0.09);
+        roundRect(ctx, 400, y, 270, rowH, 6); ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = r.hl ? 2.5 : 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.v, 410, y + 26);
+
+        // key -> value arrow
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(391, y + 20); ctx.lineTo(396, y + 20); ctx.stroke();
+        arrowHead(ctx, 391, y + 20, 399, y + 20, P.mute);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one lookup, no folder to open — the key is the whole address', w / 2, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('keys and sizes illustrative; the flat key → object model is documented', w - 12, h - 6);
+});
+
+// c2: which bucket names are accepted
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Which Bucket Names Are Accepted', w / 2, 24);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('candidate name → verdict and rule', 40, 68);
+
+    // column divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(362, 76); ctx.lineTo(362, 258); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var items = [
+        { mark: '✓', col: P.green,  name: 'shop-clicks',      why: 'valid: 11 characters, lowercase and hyphen' },
+        { mark: '✗', col: RED,      name: 'Shop-Clicks',      why: 'capital letters are not allowed' },
+        { mark: '✗', col: RED,      name: 'shop_clicks',      why: 'underscore is not an allowed character' },
+        { mark: '✗', col: RED,      name: 'sc',               why: '2 characters: the minimum is 3' },
+        { mark: '✗', col: RED,      name: '192.168.10.5',     why: 'shaped like an IP address' },
+        { mark: '✗', col: RED,      name: 'shop-clicks-',     why: 'must end in a letter or number' },
+        { mark: '✗', col: RED,      name: 'shop clicks',      why: 'spaces are not allowed' },
+        { mark: '⚠', col: P.yellow, name: 'shop.clicks.data', why: 'legal, but dots break the certificate' }
+    ];
+
+    items.forEach(function(it, i) {
+        var col = i < 4 ? 0 : 1;
+        var x = col === 0 ? 40 : 380;
+        var y = 92 + (i % 4) * 46;
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = it.col; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(it.mark, x, y);
+        ctx.fillStyle = P.text; ctx.font = '12.5px ui-monospace, monospace';
+        ctx.fillText(it.name, x + 22, y);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(it.why, x + 22, y + 17);
+    });
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3 to 63 characters, and unique across every account', w / 2, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('candidate names illustrative; every rule shown is documented policy', w - 12, h - 6);
+});
+
+// c3: the 1,024-byte key budget — every count computed from the key strings
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The 1,024-Byte Key Budget: Characters Are Not Bytes', w / 2, 24);
+
+    var LIMIT = 1024;
+    var tx = 180, tw = 480, th = 26;
+    var pxPerByte = tw / LIMIT;
+
+    function utf8len(str) {
+        var n = 0;
+        Array.from(str).forEach(function(ch) {
+            var cp = ch.codePointAt(0);
+            if (cp < 0x80) n += 1;
+            else if (cp < 0x800) n += 2;
+            else if (cp < 0x10000) n += 3;
+            else n += 4;
+        });
+        return n;
+    }
+    function comma(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+    var rows = [
+        { y: 90,  col: P.blue,   key: 'clicks/date=2026-08-26/hour=14.parquet' },
+        { y: 150, col: P.orange, key: 'clicks/地域=東京/date=2026-08-26/hour=14.parquet' }
+    ];
+
+    rows.forEach(function(r) {
+        r.chars = Array.from(r.key).length;
+        r.bytes = utf8len(r.key);
+
+        // empty track
+        ctx.fillStyle = '#f4f6f9';
+        roundRect(ctx, tx, r.y, tw, th, 4); ctx.fill();
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5; ctx.stroke();
+
+        // filled portion
+        var fw = r.bytes * pxPerByte;
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = r.col;
+        ctx.fillRect(tx, r.y, fw, th);
+        ctx.globalAlpha = 1;
+
+        // row label — computed character count
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.chars + ' characters', tx - 10, r.y + 18);
+
+        // byte label — computed bytes and share of the budget
+        var pct = (r.bytes / LIMIT * 100).toFixed(1);
+        ctx.fillStyle = r.col; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.bytes + ' bytes (' + pct + '%)', tx + fw + 12, r.y + 18);
+
+        // the key itself
+        ctx.fillStyle = P.mute; ctx.font = '11.5px ui-monospace, monospace';
+        ctx.fillText(r.key, tx, r.y + th + 18);
+    });
+
+    // right-end marker at the limit
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tx + tw, 80); ctx.lineTo(tx + tw, 190); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(comma(LIMIT) + ' bytes', tx + tw, 72);
+
+    // the difference, computed from the two rows
+    var dChars = rows[1].chars - rows[0].chars;
+    var dBytes = rows[1].bytes - rows[0].bytes;
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('+' + dChars + ' characters cost +' + dBytes + ' bytes', tx, 208);
+
+    // worst cases, products computed
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    var w3 = Math.floor(LIMIT / 3), w4 = Math.floor(LIMIT / 4);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('3-byte characters only → ' + w3 + ' characters (' + w3 + ' × 3 = ' + comma(w3 * 3) + ')', 60, 240);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('4-byte characters only → ' + w4 + ' characters (' + w4 + ' × 4 = ' + comma(w4 * 4) + ')', 60, 262);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('key strings illustrative; byte counts computed, 1,024-byte limit documented', w - 12, h - 6);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

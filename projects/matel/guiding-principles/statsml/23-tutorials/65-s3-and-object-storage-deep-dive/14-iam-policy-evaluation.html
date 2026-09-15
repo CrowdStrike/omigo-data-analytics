@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IAM Policy Evaluation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>IAM Policy Evaluation</h1>
+<p class="subtitle">Several separate layers judge one read of one object — everything starts denied, one explicit deny is final, and an allow you can see is never proof the read will work</p>
+
+<div class="card-section">
+    <h2>One Read, and Everything That Gets a Say</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">who is attached where</span><span class="tag orange">guardrails</span></div>
+                <ul>
+                    <li><b>The request</b> — a team's analytics role asks to read one object from one bucket</li>
+                    <li><b>The role's own policy</b> — lists which actions on which buckets this role may use</li>
+                    <li><b>The bucket's own policy</b> — lists who may do what to it, even callers outside your account</li>
+                    <li><b>The org-wide guardrail</b> — sits above the account and can only take permissions away</li>
+                    <li><b>The role's ceiling</b> — a cap on the role and on its session, and never a grant of its own</li>
+                    <li><b>The public-access switch</b> — an account and bucket setting that blocks public reads</li>
+                    <li><b>The old per-object grants</b> — switched off on modern buckets, so you can ignore them</li>
+                    <li><b>No single answer</b> — every one of these sees the same read, and each can stop it</li>
+                </ul>
+                <p class="example">The role's own policy allows the read, and the read can still fail — several other layers are looking at the same request.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Permission is not a property of one document. It is the result of several separately owned documents judged together against one request.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Order: Start Denied, and a Deny Always Wins</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">how it works</span><span class="tag green">evaluation order</span><span class="tag orange">deny wins</span></div>
+                <ul>
+                    <li><b>Start denied</b> — with no policy anywhere, every action on every object is refused</li>
+                    <li><b>A deny is final</b> — one explicit deny anywhere ends it, and no allow overrides it</li>
+                    <li><b>Either side may grant</b> — an allow on the role or on the bucket is enough alone</li>
+                    <li><b>The guardrail only filters</b> — it never grants, it only removes what was granted</li>
+                    <li><b>Ceilings cap the role</b> — the role's cap and its session cap each trim what it can do</li>
+                    <li><b>Every layer must agree</b> — the read has to survive the guardrail and both ceilings</li>
+                    <li><b>The public switch is last</b> — it blocks a public read after the policies have spoken</li>
+                    <li><b>A read from another account</b> — that one request is judged twice, once on each side</li>
+                </ul>
+                <p class="example">Widening the role's policy from one folder to the whole bucket changes nothing if the org-wide guardrail never allowed that read.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> What is permitted is every ceiling overlapped, minus every explicit deny. "Either side may grant" applies only between a role's policy and a bucket's policy inside one account.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Eight Combinations, One Read</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">every row checked</span><span class="tag orange">what usually fails</span></div>
+                <ul>
+                    <li><b>Nothing mentions it</b> — neither the role nor the bucket allows the read, so it fails</li>
+                    <li><b>Only the role allows</b> — the bucket's policy stays silent and the read succeeds</li>
+                    <li><b>Only the bucket allows</b> — inside one account, an allow from either side is enough</li>
+                    <li><b>Both allow</b> — the read works, and two allows are no stronger than a single one</li>
+                    <li><b>The guardrail omits it</b> — the read is gone from the whole account, role or not</li>
+                    <li><b>The bucket denies it</b> — that deny beats the role's allow, which is still visible</li>
+                    <li><b>The ceiling omits it</b> — the cap sits below the role's own policy, so the read fails</li>
+                    <li><b>A public allow, blocked</b> — with the switch on, a read by anyone at all is refused</li>
+                </ul>
+                <p class="example">Rows two and three differ only in which document holds the allow, and both succeed — the one place where two documents add up.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Five of these eight fail, and only one of those five involves an actual deny. Most failures are something missing from a ceiling, not something forbidden.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function line(ctx, x0, y0, x1, y1, color, wd, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = wd || 2;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// c1: the layers one read must pass
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Read Must Survive Every Layer', w / 2, 22);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink;
+    ctx.fillText('one read', 104, 38);
+
+    // spine
+    line(ctx, 104, 44, 104, 272, P.ink, 2.5);
+    arrowHead(ctx, 104, 260, 104, 274, P.ink);
+
+    var gates = [
+        { col: P.blue,    name: "the role's policy",   txt: 'may allow or deny this read' },
+        { col: P.green,   name: "the bucket's policy", txt: 'may allow or deny this read' },
+        { col: P.orange,  name: 'org-wide guardrail',  txt: 'can only take away, never grant' },
+        { col: P.violet,  name: "the role's ceiling",  txt: 'a cap on what the role may have' },
+        { col: P.magenta, name: 'public-access switch', txt: 'blocks a read by anyone at all' },
+        { col: P.mute,    name: 'old per-object grants', txt: 'switched off — ignore them' }
+    ];
+
+    gates.forEach(function(g, i) {
+        var y = 46 + i * 38;
+
+        ctx.fillStyle = rgba(g.col, 0.12);
+        roundRect(ctx, 120, y, 572, 30, 6);
+        ctx.fill();
+        ctx.strokeStyle = g.col; ctx.lineWidth = 2; ctx.stroke();
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = g.col; ctx.font = 'bold 12.5px system-ui';
+        ctx.fillText(g.name, 132, y + 20);
+        var nw = ctx.measureText(g.name).width;
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText('· ' + g.txt, 132 + nw + 8, y + 20);
+
+        // stub from the spine into the bar
+        line(ctx, 104, y + 15, 116, y + 15, g.col, 2);
+        arrowHead(ctx, 104, y + 15, 119, y + 15, g.col);
+    });
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the guardrail never grants — it can only take away', 406, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('illustrative names; the layers and where they attach are documented', w - 12, 294);
+});
+
+// c2: the order in which one read is judged
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Judging One Read, In Order', w / 2, 20);
+
+    function box(x, y, bw, bh, col, lines, big) {
+        ctx.fillStyle = rgba(col, 0.12);
+        roundRect(ctx, x, y, bw, bh, 6);
+        ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.font = 'bold ' + (big ? '13.5' : '12') + 'px system-ui';
+        ctx.textAlign = 'center';
+        var lh = 15;
+        var y0 = y + bh / 2 - ((lines.length - 1) * lh) / 2 + 4;
+        lines.forEach(function(t, i) { ctx.fillText(t, x + bw / 2, y0 + i * lh); });
+    }
+
+    // row A: default deny, then the deny short circuit
+    box(24, 40, 126, 44, P.mute,    ['a read of', 'one object']);
+    box(166, 40, 156, 44, P.ink,    ['start:', 'default DENY']);
+    box(338, 40, 204, 44, P.orange, ['explicit deny', 'anywhere?']);
+    box(560, 40, 132, 44, RED,      ['DENIED', '— final']);
+
+    line(ctx, 150, 62, 163, 62, P.mute, 2); arrowHead(ctx, 150, 62, 166, 62, P.mute);
+    line(ctx, 322, 62, 335, 62, P.mute, 2); arrowHead(ctx, 322, 62, 338, 62, P.mute);
+    line(ctx, 542, 62, 557, 62, RED, 2.5);  arrowHead(ctx, 542, 62, 560, 62, RED);
+    ctx.fillStyle = RED; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('yes', 551, 52);
+
+    // elbow from row A down to row B
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(440, 84); ctx.lineTo(440, 104); ctx.lineTo(115, 104); ctx.lineTo(115, 136);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 115, 122, 115, 140, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no', 452, 100);
+
+    // row B: the grant, the ceilings, the public switch
+    box(24, 140, 182, 46, P.blue,     ['role allow OR', 'bucket allow?']);
+    box(218, 140, 190, 46, P.violet,  ['inside the guardrail', 'and the ceilings?']);
+    box(420, 140, 150, 46, P.magenta, ['public-access', 'switch blocks it?']);
+    box(582, 140, 110, 46, P.green,   ['ALLOWED'], true);
+
+    line(ctx, 206, 163, 215, 163, P.mute, 2); arrowHead(ctx, 206, 163, 218, 163, P.mute);
+    line(ctx, 408, 163, 417, 163, P.mute, 2); arrowHead(ctx, 408, 163, 420, 163, P.mute);
+    line(ctx, 570, 163, 579, 163, P.green, 2.5); arrowHead(ctx, 570, 163, 582, 163, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('yes', 212, 134);
+    ctx.fillText('yes', 414, 134);
+    ctx.fillText('no', 576, 134);
+
+    // the deny bar every "no" falls into
+    ctx.fillStyle = rgba(RED, 0.12);
+    roundRect(ctx, 24, 232, 546, 34, 6);
+    ctx.fill();
+    ctx.strokeStyle = RED; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('DENIED — nothing allowed it, or a layer took it away', 297, 253);
+
+    var drops = [
+        { x: 115, lab: 'no' },
+        { x: 313, lab: 'no' },
+        { x: 495, lab: 'yes' }
+    ];
+    drops.forEach(function(d) {
+        line(ctx, d.x, 186, d.x, 228, RED, 2, [3, 3]);
+        arrowHead(ctx, d.x, 216, d.x, 232, RED);
+        ctx.fillStyle = RED; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(d.lab, d.x + 9, 212);
+    });
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('documented order; one request inside one account', w - 12, 294);
+});
+
+// c3: eight combinations of the same read
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Read, Eight Combinations', w / 2, 20);
+
+    var COLS = [
+        { x: 14,  w: 190, label: 'scenario' },
+        { x: 208, w: 62,  label: 'role' },
+        { x: 272, w: 68,  label: 'bucket' },
+        { x: 342, w: 72,  label: 'guardrail' },
+        { x: 416, w: 62,  label: 'ceiling' },
+        { x: 480, w: 56,  label: 'public' },
+        { x: 538, w: 172, label: 'verdict' }
+    ];
+
+    ctx.font = 'bold 11.5px system-ui'; ctx.fillStyle = P.ink;
+    COLS.forEach(function(c, i) {
+        if (i === 0) { ctx.textAlign = 'left'; ctx.fillText(c.label, c.x + 4, 50); }
+        else { ctx.textAlign = 'center'; ctx.fillText(c.label, c.x + c.w / 2, 50); }
+    });
+    line(ctx, 14, 56, 710, 56, P.grid, 1.5);
+
+    var MK = {
+        '—':       { col: P.mute,    bold: false },
+        'allow':   { col: P.blue,    bold: false },
+        'allow *': { col: P.blue,    bold: false },
+        'deny':    { col: RED,       bold: true  },
+        'ok':      { col: P.aqua,    bold: false },
+        'no read': { col: P.orange,  bold: true  },
+        'off':     { col: P.mute,    bold: false },
+        'n/a':     { col: P.mute,    bold: false },
+        'on':      { col: P.magenta, bold: true  }
+    };
+
+    var rows = [
+        { s: 'nothing mentions the read',    c: ['—', '—', 'ok', 'ok', 'off'],           v: 'DENIED — default deny',      ok: false },
+        { s: 'only the role allows',         c: ['allow', '—', 'ok', 'ok', 'off'],       v: 'ALLOWED',                    ok: true  },
+        { s: 'only the bucket allows',       c: ['—', 'allow', 'ok', 'ok', 'off'],       v: 'ALLOWED',                    ok: true  },
+        { s: 'both allow',                   c: ['allow', 'allow', 'ok', 'ok', 'off'],   v: 'ALLOWED',                    ok: true  },
+        { s: 'the guardrail omits the read', c: ['allow', '—', 'no read', 'ok', 'off'],  v: 'DENIED — the guardrail',     ok: false },
+        { s: 'the bucket policy denies it',  c: ['allow', 'deny', 'ok', 'ok', 'off'],    v: 'DENIED — a deny wins',       ok: false },
+        { s: "the role's ceiling omits it",  c: ['allow', '—', 'ok', 'no read', 'off'],  v: 'DENIED — the ceiling',       ok: false },
+        { s: 'a public allow, no role',      c: ['—', 'allow *', 'ok', 'n/a', 'on'],     v: 'DENIED — public blocked',    ok: false }
+    ];
+
+    rows.forEach(function(r, i) {
+        var y = 58 + i * 25;
+
+        if (i % 2 === 0) {
+            ctx.fillStyle = '#f7f9fb';
+            ctx.fillRect(14, y, 696, 25);
+        }
+
+        ctx.font = '11.5px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'left';
+        ctx.fillText(r.s, 18, y + 17);
+
+        r.c.forEach(function(v, j) {
+            var c = COLS[j + 1];
+            var m = MK[v] || { col: P.text, bold: false };
+            ctx.font = (m.bold ? 'bold ' : '') + '11.5px system-ui';
+            ctx.fillStyle = m.col; ctx.textAlign = 'center';
+            ctx.fillText(v, c.x + c.w / 2, y + 17);
+        });
+
+        var vc = COLS[6];
+        var col = r.ok ? P.green : RED;
+        ctx.fillStyle = r.ok ? rgba(P.green, 0.14) : rgba(RED, 0.12);
+        roundRect(ctx, vc.x, y + 3, vc.w, 19, 4);
+        ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = col; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.v, vc.x + vc.w / 2, y + 17);
+    });
+
+    ctx.fillStyle = P.mute; ctx.font = '11.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ok = that layer permits the read  ·  — = silent  ·  allow * = granted to anyone', 14, 272);
+
+    // both counts come from the rows above, never hardcoded
+    var failures = rows.filter(function(r) { return !r.ok; }).length;
+    var actualDeny = rows.filter(function(r) { return r.c.indexOf('deny') >= 0; }).length;
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('only ' + actualDeny + ' of the ' + failures + ' failures is an actual deny', 14, 290);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('combinations illustrative; every verdict follows the documented order', w - 12, 294);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

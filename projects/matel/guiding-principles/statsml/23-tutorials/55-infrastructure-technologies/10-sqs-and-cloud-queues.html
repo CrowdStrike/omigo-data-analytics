@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQS &amp; Cloud Queues</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>SQS &amp; Cloud Queues</h1>
+<p class="subtitle">SQS is a message queue you rent by the request — services drop jobs in, workers pull them out, and a crashed worker's job automatically reappears for someone else</p>
+
+<div class="card-section">
+    <h2>A Mailbox Between the Upload and the Work</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">decoupling</span><span class="tag orange">AWS</span></div>
+                <ul>
+                    <li><b>The service</b> — an image-upload API stores each photo, then needs a thumbnail made for it</li>
+                    <li><b>The old way</b> — the API calls the thumbnailer directly, so one slow resize makes every upload slow</li>
+                    <li><b>The queue</b> — instead the API sends a tiny message, "make a thumbnail for photo 4127", to SQS</li>
+                    <li><b>The workers</b> — a pool of thumbnail workers pulls messages and processes them at its own pace</li>
+                    <li><b>Three verbs</b> — the whole interface is send, receive, delete; SQS shipped with these in 2006</li>
+                    <li><b>No broker</b> — nobody installs, sizes, or restarts a queue server; AWS runs it as a shared utility</li>
+                </ul>
+                <p class="example">At 9:00am a user uploads photo 4127; the API answers in 40 ms and the thumbnail appears seconds later, made by whichever worker was free.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A queue decouples the producer from the consumer — the upload API's job ends at "send", and the thumbnail work happens whenever a worker gets to it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Crash, the Reappearance, and the Dead-Letter Queue</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">visibility timeout</span><span class="tag orange">dead-letter queue</span></div>
+                <ul>
+                    <li><b>The timeout</b> — receiving hides a message for a visibility timeout (30s here); it is not deleted</li>
+                    <li><b>The crash</b> — worker A receives job 4127 at t=2s and dies 12 seconds in, before calling delete</li>
+                    <li><b>The reappearance</b> — at t=32s the timeout expires and job 4127 becomes visible again, untouched</li>
+                    <li><b>The retry</b> — worker B receives it at t=33s, finishes the thumbnail, and deletes it at t=41s</li>
+                    <li><b>The poison pill</b> — job 4130 (a corrupt file) fails on every attempt and reappears each timeout</li>
+                    <li><b>The DLQ</b> — with maxReceiveCount 3, the next receive after its third failure moves it to the DLQ</li>
+                </ul>
+                <p class="example">Job 4127 survives its worker's crash with zero human action — hidden at 2s, visible again at 32s, done at 41s (timings illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Delete-after-success plus the visibility timeout gives at-least-once delivery — a message can only vanish once some consumer finished it, and repeat failures drain to the DLQ instead of looping forever.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Queue as a Utility, Not a Server</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">pay per request</span></div>
+                <ul>
+                    <li><b>No server</b> — there is no queue host to patch or page for; SQS was one of AWS's first services (2006)</li>
+                    <li><b>Pay per request</b> — the published rate is $0.40 per million requests; an idle queue costs nothing</li>
+                    <li><b>Three requests</b> — one thumbnail job = one send + one receive + one delete = 3 requests</li>
+                    <li><b>Scales without thought</b> — a 100&times; upload spike just deepens the queue; no capacity ticket is filed</li>
+                    <li><b>Where you meet it</b> — ETL fan-out, ML batch scoring, webhook buffering, any producer/consumer split</li>
+                </ul>
+                <p class="example">100M requests a month — enough for 33M thumbnails — costs $40 at the published rate, with no broker on-call rota.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The utility model is the point: the queue is an API you call, not a system you operate — cost tracks usage, and capacity is the cloud provider's problem.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>At-Least-Once Means Sometimes Twice</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">idempotency</span></div>
+                <ul>
+                    <li><b>The assumption</b> — teams assume each message arrives exactly once, in the order it was sent</li>
+                    <li><b>The reality</b> — a standard queue is at-least-once with best-effort order; duplicates are normal</li>
+                    <li><b>Where dupes come from</b> — a crash after the work but before the delete replays the whole message</li>
+                    <li><b>Idempotency</b> — a worker must make re-processing harmless: same input, same result, effects once</li>
+                    <li><b>FIFO option</b> — FIFO queues offer exactly-once processing and strict order, at lower throughput</li>
+                    <li><b>The test</b> — ask "what if this handler runs twice on the same message?" before shipping it</li>
+                </ul>
+                <p class="example">Worker A crashed after writing thumb_4127.jpg; when worker B replays the job, an existence check turns the duplicate into a no-op.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Building consumers that assume exactly-once, in-order delivery on a standard queue — the fix is idempotent handlers (or a FIFO queue), not hoping duplicates never happen.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, width, dashed) {
+    var dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy);
+    var ux = dx / len, uy = dy / len;
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    if (dashed) ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 9 * ux, y2 - 9 * uy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * ux - 5 * uy, y2 - 9 * uy + 5 * ux);
+    ctx.lineTo(x2 - 9 * ux + 5 * uy, y2 - 9 * uy - 5 * ux);
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: send -> receive -> delete flow
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Upload, Three Verbs: send → receive → delete', w / 2, 24);
+
+    // producer box
+    roundRectPath(ctx, 30, 125, 130, 50, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('upload API', 95, 154);
+
+    // send arrow
+    arrowLine(ctx, 160, 150, 235, 150, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('send', 197, 140);
+
+    // queue box
+    roundRectPath(ctx, 240, 115, 210, 70, 8);
+    ctx.fillStyle = 'rgba(26,82,118,0.06)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('SQS queue', 345, 130);
+    // message squares
+    var msgs = ['4127', '4128', '4129', '4130'];
+    var mx = [258, 292, 326, 360];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.25)';
+        ctx.fillRect(mx[i], 140, 26, 26);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(mx[i], 140, 26, 26);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(msgs[i], mx[i] + 13, 157);
+    }
+
+    // receive arrows
+    arrowLine(ctx, 455, 140, 530, 95, P.green, 3);
+    arrowLine(ctx, 455, 160, 530, 205, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('receive', 462, 156);
+
+    // worker boxes
+    roundRectPath(ctx, 535, 70, 150, 50, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('worker 1', 610, 99);
+    roundRectPath(ctx, 535, 185, 150, 50, 8);
+    ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.fillText('worker 2', 610, 214);
+
+    // delete arrow (dashed) from worker 1 bottom to queue top
+    arrowLine(ctx, 610, 120, 345, 115, P.mute, 2, true);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('delete after success', 430, 58);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the API answers in 40 ms — the resize happens whenever a worker is free', w / 2, 280);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latency illustrative', w - 12, h - 8);
+});
+
+// c2: visibility timeout timeline
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Visibility Timeout at Work: One Crash Recovered, One Poison Message Drained', w / 2, 24);
+
+    var ox = 60, baseY = 250;
+    function xOf(t) { return ox + t * 6; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 100; t += 20) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(t), baseY - 4); ctx.lineTo(xOf(t), baseY + 4); ctx.stroke();
+        ctx.fillText(t + 's', xOf(t), baseY + 18);
+    }
+
+    // legend
+    var lx = ox, ly = 46;
+    ctx.fillStyle = P.blue; ctx.fillRect(lx, ly, 12, 12);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('visible', lx + 16, ly + 10);
+    ctx.fillStyle = 'rgba(107,114,128,0.35)'; ctx.fillRect(lx + 70, ly, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('hidden (in flight)', lx + 86, ly + 10);
+
+    function band(t1, t2, y, visible) {
+        ctx.fillStyle = visible ? P.blue : 'rgba(107,114,128,0.35)';
+        ctx.fillRect(xOf(t1), y - 9, xOf(t2) - xOf(t1), 18);
+    }
+
+    // Row 1: job 4127
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('job 4127', ox, 85);
+    var y1 = 105;
+    band(0, 2, y1, true);
+    band(2, 32, y1, false);
+    band(32, 33, y1, true);
+    band(33, 41, y1, false);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ worker A crashes', xOf(14), y1 - 15);
+    ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('✓ deleted — done', xOf(41) + 6, y1 + 4);
+
+    // Row 2: job 4130 (poison)
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('job 4130 (poison)', ox, 168);
+    var y2 = 190;
+    band(0, 2, y2, true); band(2, 32, y2, false);
+    band(32, 34, y2, true); band(34, 64, y2, false);
+    band(64, 66, y2, true); band(66, 96, y2, false);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', xOf(7), y2 - 15);
+    ctx.fillText('✗', xOf(39), y2 - 15);
+    ctx.fillText('✗', xOf(71), y2 - 15);
+    // DLQ marker at t=96
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(xOf(96), y2, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('→ DLQ (receive count 3)', xOf(96) - 10, y2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no human touched job 4127', 330, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; timeout 30s, maxReceiveCount 3', w - 12, h - 8);
+});
+
+// c3: pay for requests, not for a server
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Pay for Requests, Not for a Server', w / 2, 24);
+
+    var bx = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 245); ctx.stroke();
+
+    var rows = [
+        { y: 70, label: 'SQS — 1M requests/mo: $0.40', width: 2, color: P.green, end: '$0.40' },
+        { y: 120, label: 'SQS — 10M requests/mo: $4', width: 12, color: P.green, end: '$4' },
+        { y: 170, label: 'SQS — 100M requests/mo: $40', width: 117, color: P.green, end: '$40' },
+        { y: 220, label: 'self-hosted broker — any volume: ~$150/mo', width: 440, color: 'rgba(42,120,214,0.30)', end: null }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(rows[i].label, 20, rows[i].y + 11);
+        ctx.fillStyle = rows[i].color;
+        ctx.fillRect(bx, rows[i].y, rows[i].width, 14);
+        if (rows[i].end) {
+            ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+            ctx.fillText(rows[i].end, bx + rows[i].width + 8, rows[i].y + 11);
+        }
+    }
+    // red label at the broker bar's end
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('+ patching and on-call', bx + 440 - 8, 220 + 11);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('an idle queue costs $0 — an idle broker still costs $150', w - 20, 255);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('broker cost illustrative; $0.40 per million requests is the published SQS rate', w - 12, h - 8);
+});
+
+// c4: naive vs idempotent worker on a redelivered job
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('At-Least-Once Means Your Worker Must Tolerate Twice', w / 2, 24);
+
+    function box(x, cy, bw, txt, fill, stroke) {
+        roundRectPath(ctx, x, cy - 20, bw, 40, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        var words = txt.split(' ');
+        if (txt.length > 20 && words.length > 2) {
+            var mid = Math.ceil(words.length / 2);
+            ctx.fillText(words.slice(0, mid).join(' '), x + bw / 2, cy - 2);
+            ctx.fillText(words.slice(mid).join(' '), x + bw / 2, cy + 12);
+        } else {
+            ctx.fillText(txt, x + bw / 2, cy + 4);
+        }
+    }
+
+    // Row 1: naive worker
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('naive worker', 20, y1 + 4);
+    box(170, y1, 170, 'job 4127 arrives again', 'rgba(42,120,214,0.15)', P.blue);
+    arrowLine(ctx, 340, y1, 420, y1, P.mute, 3);
+    box(420, y1, 170, 'resizes again, 2nd push alert', 'rgba(231,76,60,0.12)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ user pinged twice', 505, y1 + 38);
+
+    // Row 2: idempotent worker
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('idempotent worker', 20, y2 + 4);
+    box(170, y2, 170, 'job 4127 arrives again', 'rgba(42,120,214,0.15)', P.blue);
+    arrowLine(ctx, 340, y2, 370, y2, P.mute, 3);
+    box(370, y2, 160, 'thumb_4127.jpg exists?', 'rgba(0,131,0,0.12)', P.green);
+    arrowLine(ctx, 530, y2, 560, y2, P.mute, 3);
+    box(560, y2, 150, 'skip — no-op', 'rgba(0,131,0,0.12)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 635, y2 + 38);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('duplicates are normal — make the handler safe to re-run', w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

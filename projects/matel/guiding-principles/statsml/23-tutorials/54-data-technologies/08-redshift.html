@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redshift</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Redshift</h1>
+<p class="subtitle">Amazon's 2013 warehouse splits one giant table across many machines so a single SQL query runs on all of them at once &mdash; appliance-class power priced like a cloud service</p>
+
+<div class="card-section">
+    <h2>Four Machines Pretending to Be One Database</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">MPP</span><span class="tag orange">cloud warehouse</span></div>
+                <ul>
+                    <li><b>The table</b> &mdash; a retailer's orders table holds 800 million rows, too big for one database server</li>
+                    <li><b>The cluster</b> &mdash; Redshift spreads it over 4 compute nodes, each keeping 200 million rows on local disk</li>
+                    <li><b>The leader</b> &mdash; a leader node takes your SQL, plans it, and ships compiled steps to every compute node</li>
+                    <li><b>Columnar</b> &mdash; each node stores data by column, so a 2-column query never reads the other 18 columns</li>
+                    <li><b>The lineage</b> &mdash; AWS built it on ParAccel's MPP engine and launched the service in February 2013</li>
+                </ul>
+                <p class="example">You type one SELECT at the leader; four machines scan in parallel and the leader stitches four partial answers into one result set.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> MPP &mdash; massively parallel processing &mdash; means the table is pre-split across nodes and every query runs on all of them at once; the cluster answers as if it were one database.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Query Fans Out Across 800 Million Rows</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">parallel scan</span></div>
+                <ul>
+                    <li><b>The query</b> &mdash; total revenue by month over all 800M rows: one SELECT with a GROUP BY month</li>
+                    <li><b>The fan-out</b> &mdash; the leader sends the scan to all 4 nodes; each scans its own 200M rows simultaneously</li>
+                    <li><b>Columnar saving</b> &mdash; the query touches 2 of 20 columns, so each node reads 1/10 of its bytes (exact)</li>
+                    <li><b>The rate</b> &mdash; at an illustrative 1 million rows per second per node, each node finishes in 200 seconds</li>
+                    <li><b>The merge</b> &mdash; the leader adds 4 partial month-totals; wall time &asymp; 200s instead of 800s on one machine</li>
+                </ul>
+                <p class="example">The same scan on one server takes ~800 seconds; the 4-node cluster returns in ~200 &mdash; the speedup equals the node count when rows split evenly (4&times; exact at the stated rate).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Parallel scan time is rows-per-node divided by scan rate &mdash; the query costs one node's share of the work, and the leader's merge of 12 monthly subtotals is nearly free.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The $25,000 Terabyte Becomes a $1,000 Terabyte</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">cloud economics</span><span class="tag orange">history</span></div>
+                <ul>
+                    <li><b>The incumbent</b> &mdash; in 2012 warehousing meant on-prem MPP appliances at roughly $19,000&ndash;25,000 per TB per year</li>
+                    <li><b>The launch pitch</b> &mdash; Redshift on-demand worked out near $3,723/TB/yr, and under $1,000 with a 3-year reservation</li>
+                    <li><b>No forklift</b> &mdash; a cluster starts from a web console in minutes instead of a months-long hardware purchase</li>
+                    <li><b>The knobs</b> &mdash; you pick a distribution style (KEY, EVEN, ALL) and sort keys to control row placement and order</li>
+                    <li><b>The counter-move</b> &mdash; Snowflake's storage/compute split pressured the coupled design; RA3 nodes (2019) and Serverless (2022) moved Redshift the same way</li>
+                </ul>
+                <p class="example">AWS's launch math: a warehouse that had cost a mid-size company millions up front became a few thousand dollars a month entered on a form.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Redshift's disruption was economic as much as technical &mdash; appliance-class columnar MPP at a small fraction of appliance prices &mdash; and competition later pulled its own storage and compute apart too.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Distribution Key That Sent Everything to Node 2</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">data skew</span></div>
+                <ul>
+                    <li><b>The choice</b> &mdash; someone sets DISTKEY(country) so every row for a country lives on the same node</li>
+                    <li><b>The skew</b> &mdash; one country accounts for 440M of the 800M orders; that node holds 440M rows, the other three ~120M each</li>
+                    <li><b>The stall</b> &mdash; the revenue query now waits on the fat node: 440s, while three nodes sit idle after ~120s</li>
+                    <li><b>The rule</b> &mdash; a query finishes when its slowest node finishes; skew turns a parallel scan back into a serial one</li>
+                    <li><b>The fix</b> &mdash; distribute on a high-cardinality even key (order id, or EVEN) and save KEY distribution for join columns</li>
+                </ul>
+                <p class="example">Same cluster, same query: EVEN distribution returns in 200s, DISTKEY(country) in 440s &mdash; 2.2&times; slower with zero hardware change.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Picking the distribution key by what is convenient to filter or group on instead of how evenly it spreads rows. A lopsided or low-cardinality key piles data onto one node, and the whole cluster waits for that node.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: leader / compute architecture
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Leader, Four Compute Nodes, One Table Split Four Ways', w / 2, 24);
+
+    // client box
+    roundRect(ctx, 285, 42, 150, 34, 8);
+    ctx.fillStyle = '#f4f5f7'; ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('SQL client', 360, 63);
+
+    // arrow client -> leader
+    arrow(ctx, 360, 76, 360, 96, P.mute, 2);
+
+    // leader box
+    roundRect(ctx, 260, 100, 200, 44, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('leader node', 360, 118);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('plans + merges, stores no data', 360, 134);
+
+    // compute boxes
+    var xs = [30, 200, 370, 540];
+    for (var i = 0; i < 4; i++) {
+        arrow(ctx, 360, 144, xs[i] + 75, 186, P.blue, 3);
+    }
+    for (var i = 0; i < 4; i++) {
+        roundRect(ctx, xs[i], 190, 150, 58, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('node ' + (i + 1), xs[i] + 75, 214);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText('200M rows', xs[i] + 75, 232);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('one query → four parallel scans', w - 20, 165);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("row counts illustrative; leader/compute split is Redshift's documented architecture", w - 20, h - 8);
+});
+
+// c2: single server vs four parallel nodes (gantt)
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var x0 = 170, x1 = 650, baseY = 260;
+
+    function xOf(sec) { return x0 + sec * 0.6; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same 800M-Row Scan: One Machine vs Four in Parallel', w / 2, 24);
+
+    // gridlines + ticks
+    var ticks = [0, 200, 400, 600, 800];
+    for (var i = 0; i < ticks.length; i++) {
+        var x = xOf(ticks[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 55); ctx.lineTo(x, baseY); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('' + ticks[i], x, baseY + 16);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+
+    // single server bar
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('single server', 15, 89);
+    ctx.fillStyle = 'rgba(217,89,38,0.25)';
+    ctx.fillRect(x0, 85 - 12, 480, 24);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(x0, 85 - 12, 480, 24);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('800M rows — 800s', x0 + 240, 89);
+
+    // node bars
+    var nodeYs = [140, 175, 210, 245];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('node ' + (i + 1), 15, nodeYs[i] + 4);
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(x0, nodeYs[i] - 11, 120, 22);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(x0, nodeYs[i] - 11, 120, 22);
+        ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('200M — 200s', x0 + 116, nodeYs[i] + 4);
+    }
+
+    // finish marker at 200s
+    var fx = xOf(200);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(fx, 55); ctx.lineTo(fx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('cluster done at 200s', fx + 6, 125);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('4 nodes at once → 4× faster,', 330, 178);
+    ctx.fillText('and only 2 of 20 columns ever read', 330, 196);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1M rows/s per node illustrative; 4× speedup exact at that rate', w - 20, h - 6);
+});
+
+// c3: 2013 price-per-terabyte-year bars
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var bx = 240;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Price of a Terabyte-Year of Warehouse at Redshift's 2013 Launch", w / 2, 24);
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 245); ctx.stroke();
+
+    var rows = [
+        { y: 90, lab1: 'on-prem MPP appliance', lab2: "(AWS's 2012 comparison)", bw: 440, line: '#e74c3c', fill: 'rgba(231,76,60,0.25)', val: '$25,000/TB/yr' },
+        { y: 155, lab1: 'Redshift on-demand', lab2: '($0.85/hr XL node, 2 TB)', bw: 66, line: P.blue, fill: 'rgba(42,120,214,0.30)', val: '$3,723/TB/yr' },
+        { y: 220, lab1: 'Redshift 3-yr reserved', lab2: '', bw: 18, line: P.green, fill: 'rgba(0,131,0,0.30)', val: 'under $1,000/TB/yr' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        if (r.lab2) {
+            ctx.fillText(r.lab1, 20, r.y - 4);
+            ctx.fillText(r.lab2, 20, r.y + 12);
+        } else {
+            ctx.fillText(r.lab1, 20, r.y + 4);
+        }
+        ctx.fillStyle = r.fill;
+        ctx.fillRect(bx, r.y - 13, Math.min(r.bw, w - bx), 26);
+        ctx.strokeStyle = r.line; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y - 13, Math.min(r.bw, w - bx), 26);
+        ctx.fillStyle = r.line; ctx.font = 'bold 12px system-ui';
+        if (i === 0) { ctx.textAlign = 'right'; ctx.fillText(r.val, bx + r.bw - 8, r.y - 19); }
+        else { ctx.textAlign = 'left'; ctx.fillText(r.val, bx + r.bw + 8, r.y + 4); }
+    }
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('reserved price ≈ 1/25th of the appliance', 330, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("figures from AWS's 2012–13 launch materials; bar widths proportional to $/TB/yr", w - 20, h - 8);
+});
+
+// c4: EVEN vs skewed DISTKEY bars
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var baseY = 245;
+
+    function hOf(millions) { return millions * 0.4; }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rows per Node: EVEN vs DISTKEY(country) — the Cluster Waits for Node 2', w / 2, 24);
+
+    // gridlines
+    var gVals = [100, 200, 300, 400];
+    for (var i = 0; i < gVals.length; i++) {
+        var y = baseY - hOf(gVals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(50, y); ctx.lineTo(670, y); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(gVals[i] + 'M', 44, y + 4);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(50, baseY); ctx.lineTo(670, baseY); ctx.stroke();
+
+    // EVEN bars
+    var evenXs = [80, 125, 170, 215];
+    for (var i = 0; i < 4; i++) {
+        var bh = hOf(200);
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(evenXs[i], baseY - bh, 34, bh);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(evenXs[i], baseY - bh, 34, bh);
+        ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('200M', evenXs[i] + 17, baseY - bh - 5);
+    }
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('EVEN', 165, 268);
+
+    // skewed bars
+    var skewXs = [400, 445, 490, 535];
+    var skewVals = [120, 440, 120, 120];
+    for (var i = 0; i < 4; i++) {
+        var bh = hOf(skewVals[i]);
+        if (i === 1) {
+            ctx.fillStyle = 'rgba(231,76,60,0.25)';
+            ctx.fillRect(skewXs[i], baseY - bh, 34, bh);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+            ctx.strokeRect(skewXs[i], baseY - bh, 34, bh);
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('440M', skewXs[i] + 17, baseY - bh - 5);
+        } else {
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(skewXs[i], baseY - bh, 34, bh);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+            ctx.strokeRect(skewXs[i], baseY - bh, 34, bh);
+            ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('120M', skewXs[i] + 17, baseY - bh - 5);
+        }
+    }
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('DISTKEY(country)', 485, 268);
+
+    // time labels
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all done in 200s', 165, 140);
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('query waits 440s', 578, 80);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('query time = the tallest bar', 360, 55);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts and 1M rows/s rate illustrative; per-node math exact', w - 20, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

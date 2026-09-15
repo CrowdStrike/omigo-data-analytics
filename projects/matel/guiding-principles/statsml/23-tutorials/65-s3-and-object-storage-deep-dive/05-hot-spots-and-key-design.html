@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hot Spots &amp; Key Design</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Hot Spots &amp; Key Design</h1>
+<p class="subtitle">A key that starts with the time sends every write to the same place; putting something varied at the front spreads the same load across many places</p>
+
+<div class="card-section">
+    <h2>Why a Timestamp Key Sends Every Write to One Place</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">sorted keys</span><span class="tag orange">one busy range</span></div>
+                <ul>
+                    <li><b>The stream</b> — a fleet of sensors writes 12,000 small files a second into one bucket</li>
+                    <li><b>The key</b> — every object's name starts with the hour first, then the device id</li>
+                    <li><b>Sorted, not hashed</b> — the service splits the whole key space into sorted ranges</li>
+                    <li><b>One end only</b> — a clock-led name only ever grows, so all writes stay at one end</li>
+                    <li><b>The hot range</b> — the range holding hour 14 takes all 12,000 writes a second on its own</li>
+                    <li><b>The idle rest</b> — every one of the other seven ranges takes no writes at all</li>
+                    <li><b>It moves, never spreads</b> — at 15:00 the load shifts to the next range, alone</li>
+                    <li><b>Same trap elsewhere</b> — a key that only counts upward in a sorted database does the same</li>
+                </ul>
+                <p class="example">At 14:59 the hour-14 range is saturated while the hour-13 range beside it does nothing; at 15:00 the load simply moves one slot over.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Sorted ranges plus a name that only grows means exactly one busy range. More hours add more key space, never more places to write at once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Writes That Land on One Prefix</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">3,500 a second</span><span class="tag green">per-prefix limit</span></div>
+                <ul>
+                    <li><b>The documented limit</b> — about 3,500 writes a second on any single key prefix</li>
+                    <li><b>Hour-first</b> — all 12,000 writes hit that one prefix, which is 3.43&times; over the limit</li>
+                    <li><b>The symptom</b> — the writes above the limit come back as slow-down errors, not failures</li>
+                    <li><b>How many</b> — roughly 8,500 writes a second must be retried or buffered somewhere</li>
+                    <li><b>Spread it</b> — put one hash character of the device id first, giving 16 prefixes</li>
+                    <li><b>Now each one</b> — 12,000 / 16 = 750 writes a second, just 21.4% of the limit</li>
+                    <li><b>Headroom</b> — 3,500 / 750 = 4.67&times;, so even a 4&times; traffic spike still fits under it</li>
+                    <li><b>Hand-check</b> — 16 &times; 750 = 12,000, the whole stream accounted for and none over</li>
+                </ul>
+                <p class="example">The same 12,000 writes a second is a 3.43&times; overload on one prefix and a calm 750 each across sixteen — only the first character of the key changed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> What throttles you is the rate per prefix, which is the total rate divided by the number of active prefixes. An hour-first key holds that divisor at 1 forever.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Choosing How Many Prefixes to Spread Across</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">derive, don't guess</span><span class="tag green">rule of thumb</span><span class="tag orange">not free</span></div>
+                <ul>
+                    <li><b>The rule</b> — the total write rate divided by the prefix count must stay under 3,500</li>
+                    <li><b>Do the division</b> — 12,000 / 3,500 = 3.43, so you need at least 4 prefixes to clear it</li>
+                    <li><b>Leave room for bursts</b> — a 2&times; burst needs 6.86 prefixes, so round that up to 8</li>
+                    <li><b>One hash character</b> — gives 16 prefixes, clearing the limit with room to spare</li>
+                    <li><b>Two characters</b> — gives 256 prefixes and only 46.9 writes each, far more than needed</li>
+                    <li><b>Not free</b> — a hash at the front destroys the neat time order of the key names</li>
+                    <li><b>Often unneeded</b> — the service now splits a busy range on its own as load arrives</li>
+                    <li><b>Measure first</b> — spread only for a real sustained write rate, not as a precaution</li>
+                </ul>
+                <p class="example">At 12,000 writes a second the answer is 16 prefixes, not 256 — and 16 comes from dividing 12,000 by 3,500 and rounding up with room to spare.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Divide your measured peak write rate by 3,500, round up to the next power of two, then allow for bursts. That is the whole calculation — copying "use two hash characters" just swaps one guessed number for another.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+// the one stream rate and the one documented limit — every printed number derives from these
+var TOTAL = 12000;
+var LIMIT = 3500;
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// number formatting so every label is derived from the value it sits on
+function grp(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function fmt(v) {
+    if (v >= 100) return grp(Math.round(v));
+    if (v >= 10) return v.toFixed(1);
+    return v.toFixed(2);
+}
+
+// c1: the busy range moves across three consecutive hours, and is always exactly one
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Hot Range Moves, It Never Spreads', w / 2, 24);
+
+    var CELLS = 8;
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.violet; ctx.textAlign = 'left';
+    ctx.fillText(CELLS + ' ranges, 1 doing work — every hour', 150, 52);
+
+    var barX = 150, barW = 520, barH = 34, cellW = barW / CELLS;
+    function cellX(i) { return barX + i * cellW; }
+
+    var rows = [
+        { y: 78,  lab: '13:00' },
+        { y: 150, lab: '14:00' },
+        { y: 222, lab: '15:00' }
+    ];
+
+    rows.forEach(function(r, ri) {
+        var hot = 5 + ri;
+
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, 138, r.y + barH / 2 + 4);
+
+        for (var i = 0; i < CELLS; i++) {
+            var cx = cellX(i);
+            if (i === hot) {
+                ctx.fillStyle = RED;
+                ctx.fillRect(cx, r.y, cellW, barH);
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText(fmt(TOTAL) + '/s', cx + cellW / 2, r.y + barH / 2 + 4);
+            } else {
+                ctx.fillStyle = rgba(P.mute, 0.10);
+                ctx.fillRect(cx, r.y, cellW, barH);
+                ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText('idle', cx + cellW / 2, r.y + barH / 2 + 4);
+            }
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.strokeRect(cx, r.y, cellW, barH);
+        }
+
+        // outline the whole strip
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        roundRect(ctx, barX, r.y, barW, barH, 4); ctx.stroke();
+
+        // arrow onto the one busy range
+        var ax = cellX(hot) + cellW / 2;
+        ctx.strokeStyle = RED; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(ax, r.y - 22); ctx.lineTo(ax, r.y - 6); ctx.stroke();
+        arrowHead(ctx, ax, r.y - 22, ax, r.y - 2, RED);
+        if (ri === 0) {
+            ctx.fillStyle = RED; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('all writes', ax, r.y - 28);
+        }
+    });
+
+    // key-order axis
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(barX, 268); ctx.lineTo(barX + barW, 268); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('keys sorted low → high', barX, 284);
+    ctx.textAlign = 'right';
+    ctx.fillText('newest keys', barX + barW, 284);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('write rate illustrative; splitting the key space into sorted ranges is documented behaviour', w - 12, 296);
+});
+
+// c2: writes per prefix, hour-first vs hash-first
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    var N = 16, PER = TOTAL / N;               // 750
+    var over = TOTAL / LIMIT;                  // 3.43
+    var share = (PER / LIMIT) * 100;           // 21.4
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Writes per Prefix: ' + fmt(TOTAL) + ' on One vs ' + fmt(PER) + ' on Sixteen', w / 2, 24);
+
+    var baseY = 250, plotH = 175, yMax = 13000;
+    function py(v) { return baseY - (v / yMax) * plotH; }
+
+    var LX = 60, LW = 275, RX = 400, RW = 275;
+
+    // gridlines across both panels
+    [3000, 6000, 9000, 12000].forEach(function(g) {
+        var y = py(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(LX, y); ctx.lineTo(LX + LW, y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(RX, y); ctx.lineTo(RX + RW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText((g / 1000) + 'k', 52, y + 4);
+    });
+
+    // baselines
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(LX, baseY); ctx.lineTo(LX + LW, baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(RX, baseY); ctx.lineTo(RX + RW, baseY); ctx.stroke();
+
+    // left panel: hour-first — only the current hour's prefix is active
+    var HOT = 14, slotL = LW / N, bwL = 12;
+    for (var i = 0; i < N; i++) {
+        var cx = LX + (i + 0.5) * slotL;
+        if (i === HOT) {
+            var yt = py(TOTAL);
+            ctx.fillStyle = RED;
+            ctx.fillRect(cx - bwL / 2, yt, bwL, baseY - yt);
+            ctx.fillStyle = RED; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(fmt(TOTAL) + '/s', cx - 4, yt - 8);
+        } else {
+            ctx.fillStyle = P.grid;
+            ctx.fillRect(cx - bwL / 2, baseY - 2, bwL, 2);
+        }
+    }
+
+    // right panel: hash-first — the same stream split N ways
+    var slotR = RW / N, bwR = 12, ryt = py(PER);
+    for (var j = 0; j < N; j++) {
+        var rx = RX + (j + 0.5) * slotR;
+        ctx.fillStyle = rgba(P.blue, 0.45);
+        ctx.fillRect(rx - bwR / 2, ryt, bwR, baseY - ryt);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(rx - bwR / 2, ryt, bwR, baseY - ryt);
+    }
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(fmt(PER) + '/s each', RX + RW / 2, 205);
+
+    // the documented limit, across both panels
+    var ty = py(LIMIT);
+    ctx.strokeStyle = RED; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(LX, ty); ctx.lineTo(LX + LW, ty); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(RX, ty); ctx.lineTo(RX + RW, ty); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = RED; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(fmt(LIMIT) + ' writes/sec per prefix (documented)', 250, ty - 8);
+
+    // verdicts — both multiples computed from TOTAL, PER and LIMIT
+    ctx.fillStyle = RED; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ ' + over.toFixed(2) + '× over — throttled', 200, 90);
+    ctx.fillStyle = P.green;
+    ctx.fillText('✓ ' + share.toFixed(1) + '% of the limit', 537, 90);
+
+    // panel labels
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hour-first', LX + LW / 2, 272);
+    ctx.fillText('hash-first (one hash character, ' + N + ' prefixes)', RX + RW / 2, 272);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(352, 60); ctx.lineTo(352, baseY); ctx.stroke();
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(fmt(TOTAL) + ' writes/sec illustrative; ' + fmt(LIMIT) + ' per prefix is documented', w - 12, 296);
+});
+
+// c3: writes per prefix = TOTAL / N on a log scale
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Writes per Prefix = ' + fmt(TOTAL) + ' / N: Where the Limit Is Cleared', w / 2, 24);
+
+    var ox = 70, baseY = 248, plotW = 590, plotH = 185;
+    function py(v) { return baseY - (Math.log(v) / Math.LN10 / 5) * plotH; }
+
+    var gl = [1, 10, 100, 1000, 10000, 100000];
+    var glLab = ['1', '10', '100', '1k', '10k', '100k'];
+    gl.forEach(function(g, i) {
+        var y = py(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glLab[i], 62, y + 4);
+    });
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    // the only literals are the prefix counts and the two hex annotations
+    var Ns = [1, 2, 4, 8, 16, 256, 4096];
+    var hexLab = { 16: '1 hex', 256: '2 hex', 4096: '3 hex' };
+    var slot = plotW / Ns.length, bw = 46;
+
+    // first N whose per-prefix rate clears the limit — found, not typed
+    var firstOk = -1;
+    for (var f = 0; f < Ns.length; f++) {
+        if (TOTAL / Ns[f] < LIMIT) { firstOk = f; break; }
+    }
+    var okX = 0, okY = 0;
+
+    Ns.forEach(function(n, i) {
+        var v = TOTAL / n;
+        var cx = ox + (i + 0.5) * slot;
+        var yt = py(v);
+        var headroom = LIMIT / v;
+        var fill, edge, txt;
+        if (v > LIMIT) { fill = RED; edge = RED; txt = RED; }
+        else if (headroom < 4) { fill = rgba(P.yellow, 0.45); edge = P.yellow; txt = P.yellow; }
+        else { fill = rgba(P.blue, 0.45); edge = P.blue; txt = P.blue; }
+
+        ctx.fillStyle = fill;
+        ctx.fillRect(cx - bw / 2, yt, bw, baseY - yt);
+        ctx.strokeStyle = edge; ctx.lineWidth = 1;
+        ctx.strokeRect(cx - bw / 2, yt, bw, baseY - yt);
+
+        ctx.fillStyle = txt; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(fmt(v), cx, yt - 7);
+
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText('N=' + n, cx, 266);
+        if (hexLab[n]) {
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+            ctx.fillText(hexLab[n], cx, 282);
+        }
+        if (i === firstOk) { okX = cx; okY = yt; }
+    });
+
+    // the documented limit
+    var cy = py(LIMIT);
+    ctx.strokeStyle = RED; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, cy); ctx.lineTo(ox + plotW, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = RED; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(fmt(LIMIT) + ' writes/sec limit', ox + plotW, cy - 7);
+
+    // annotation onto the first N that clears the limit
+    var okN = Ns[firstOk], okV = TOTAL / okN;
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('N=' + okN + ' is the first that clears it (' + fmt(okV) + ')', 300, 118);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(300, 126); ctx.lineTo(okX, okY - 20); ctx.stroke();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('N=16 → ' + (LIMIT / (TOTAL / 16)).toFixed(2) + '× headroom', 470, 160);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('every bar is an exact division of ' + fmt(TOTAL) + '; the limit is documented', w - 12, 296);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

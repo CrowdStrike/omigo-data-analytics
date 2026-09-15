@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DynamoDB</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>DynamoDB</h1>
+<p class="subtitle">AWS's fully managed key-value store answers one question — "give me this customer's orders" — in single-digit milliseconds no matter how big the table gets, as long as you ask by key</p>
+
+<div class="card-section">
+    <h2>An Orders Table Filed by Customer, Sorted by Date</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">key-value</span><span class="tag orange">Dynamo paper</span></div>
+                <ul>
+                    <li><b>The table</b> — an online shop keeps every order in one DynamoDB table called <code>orders</code></li>
+                    <li><b>Partition key</b> — each item's <code>customerId</code> is hashed to pick which storage partition holds it</li>
+                    <li><b>Sort key</b> — within a customer, items are stored sorted by <code>orderDate</code>, so ranges are cheap</li>
+                    <li><b>One question</b> — "orders for customer 412 in July" is a single Query straight to one partition</li>
+                    <li><b>The lineage</b> — Amazon's 2007 Dynamo paper became the managed DynamoDB product in 2012</li>
+                    <li><b>No server</b> — AWS runs the machines; you see only a table, keys, and a request API</li>
+                </ul>
+                <p class="example"><code>Query(customerId=412, orderDate between 2026-07-01 and 2026-07-31)</code> lands on one partition and walks a sorted run of items — no other customer's data is touched.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> DynamoDB is a giant hash-of-sorted-lists: the partition key picks the bucket, the sort key orders items inside it — and every fast query must follow that shape.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting Reads and Writes in Capacity Units</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">capacity units</span></div>
+                <ul>
+                    <li><b>The units</b> — 1 RCU buys one strongly consistent read/sec of up to 4 KB; 1 WCU one 1 KB write/sec</li>
+                    <li><b>The discount</b> — an eventually consistent read costs half: 0.5 RCU per 4 KB</li>
+                    <li><b>The query</b> — customer 412 has 20 July orders at ~1 KB each, so the Query returns 20 KB</li>
+                    <li><b>Hand-check</b> — 20 KB &divide; 4 KB = 5 RCU strongly consistent, or 2.5 RCU eventually consistent</li>
+                    <li><b>The write side</b> — inserting one 1 KB order costs exactly 1 WCU</li>
+                    <li><b>Two billing modes</b> — provisioned reserves RCU/WCU per second; on-demand bills per request</li>
+                </ul>
+                <p class="example">Reading all 20 of customer 412's July orders costs 5 RCU (strong) or 2.5 RCU (eventual); writing one new order costs 1 WCU.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You pay in capacity units, not CPU time — the cost of a request is a simple function of bytes touched, which is why well-keyed queries stay cheap and predictable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Flat Latency at Any Size — If You Ask by Key</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">predictable latency</span></div>
+                <ul>
+                    <li><b>The promise</b> — a keyed Query answers in single-digit milliseconds at 1 GB or at 10 TB</li>
+                    <li><b>Why flat</b> — the hash sends the request to one partition; table growth adds partitions, not work</li>
+                    <li><b>The contrast</b> — a relational ad-hoc join re-plans over the whole dataset and slows as it grows</li>
+                    <li><b>Who needs it</b> — carts, sessions, profiles, order lookups: hot paths that must never get slower</li>
+                    <li><b>Single-table school</b> — practitioners pack many entity types into one table keyed for every access</li>
+                    <li><b>The price</b> — you give up ad-hoc joins and aggregations; those move to exports or other engines</li>
+                </ul>
+                <p class="example">The same customer-412 Query returns in ~4 ms when the table holds 1 GB and ~5 ms at 10 TB — while an illustrative SQL join drifts from 12 ms to well past 100 ms.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> DynamoDB trades query flexibility for a flat latency curve — it stays fast at any scale precisely because it refuses to answer questions that would require scanning everything.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Designing the Table Before Knowing the Queries</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">access patterns</span></div>
+                <ul>
+                    <li><b>The habit</b> — SQL lets you model tables first and invent queries later; DynamoDB does not</li>
+                    <li><b>The surprise</b> — "orders where status = shipped" has no key to use, so it becomes a Scan</li>
+                    <li><b>What Scan does</b> — it reads every item in the table and filters afterward, billing for all of it</li>
+                    <li><b>Hand-check</b> — 1,000,000 orders at 1 KB is ~1 GB scanned: ~125,000 RCU eventual vs 2.5 for the Query</li>
+                    <li><b>The fix</b> — list every access pattern first, then choose keys (and secondary indexes) to serve each</li>
+                    <li><b>The escape hatch</b> — a global secondary index on <code>status</code> re-keys the data so shipped is a Query</li>
+                </ul>
+                <p class="example">The shipped-orders dashboard scans 1,000,000 items to return 8,000 matches — 50,000&times; the capacity of the customer-412 Query — until a status index turns it back into a keyed read.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Bringing relational habits to a key-value store. In DynamoDB the queries design the table; any question you didn't key for degenerates into a full-table Scan.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), ah = 8;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - 0.45), y2 - ah * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - ah * Math.cos(ang + 0.45), y2 - ah * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: hash-and-sort layout
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Partition Key Picks the Bucket, Sort Key Orders the Items', w / 2, 24);
+
+    // key box
+    roundRect(ctx, 25, 115, 165, 46, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('PK: customer#412', 107, 142);
+
+    // hash arrow
+    arrow(ctx, 190, 138, 275, 138, P.mute, 3);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hash(PK)', 232, 128);
+
+    // partition boxes
+    var parts = [
+        { x: 285, name: 'Partition A' },
+        { x: 430, name: 'Partition B' },
+        { x: 575, name: 'Partition C' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var p = parts[i];
+        roundRect(ctx, p.x, 55, 130, 205, 8);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(p.name, p.x + 65, 75);
+    }
+
+    // Partition B contents
+    var items = ['412 | 07-03', '412 | 07-11', '412 | 07-19', '412 | 07-28'];
+    var ys = [110, 140, 170, 200];
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        ctx.fillRect(436, ys[i] - 14, 118, 22);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(items[i], 495, ys[i] + 2);
+    }
+
+    // Partitions A and C muted contents
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('088 | ...', 350, 112);
+    ctx.fillText('088 | ...', 350, 142);
+    ctx.fillText('731 | ...', 640, 112);
+    ctx.fillText('731 | ...', 640, 142);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sorted by orderDate — July is one contiguous run', 470, 282);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('customer ids and dates illustrative', 15, h - 10);
+});
+
+// c2: capacity cost per operation
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What Each Operation Costs in Capacity Units', w / 2, 24);
+
+    var ax = 250;
+    // unit gridlines at 1 / 2.5 / 5 units (60 px per unit)
+    var ticks = [{ v: '1', x: 310 }, { v: '2.5', x: 400 }, { v: '5', x: 550 }];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ticks[i].x, 65); ctx.lineTo(ticks[i].x, 245); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i].v, ticks[i].x, 262);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, 65); ctx.lineTo(ax, 245); ctx.stroke();
+
+    var rows = [
+        { y: 80,  label: 'GetItem 1 order (1 KB), strong',   width: 60,  color: '#2a78d6', end: '1 RCU' },
+        { y: 115, label: 'GetItem 1 order, eventual',        width: 30,  color: '#199e70', end: '0.5 RCU' },
+        { y: 150, label: 'Query 20 orders (20 KB), strong',  width: 300, color: '#2a78d6', end: '5 RCU' },
+        { y: 185, label: 'Query 20 orders, eventual',        width: 150, color: '#199e70', end: '2.5 RCU' },
+        { y: 220, label: 'PutItem 1 order (1 KB)',           width: 60,  color: '#d95926', end: '1 WCU' }
+    ];
+    for (var i = 0; i < 5; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 20, r.y + 13);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(ax, r.y, r.width, 18);
+        ctx.font = '11px system-ui';
+        ctx.fillText(r.end, ax + r.width + 8, r.y + 13);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('strong read cost = bytes ÷ 4 KB; eventual = half', 360, 55);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order sizes illustrative; RCU/WCU formulas exact', w - 15, h - 10);
+});
+
+// c3: flat keyed latency vs growing join latency
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Keyed Query Latency Stays Flat as the Table Grows 10,000×', w / 2, 24);
+
+    var baseY = 245, ph = 180, maxY = 120;
+    function yOf(ms) { return baseY - ms / maxY * ph; }
+    var xs = [60, 210, 360, 510, 660];
+    var sizeLabs = ['1 GB', '10 GB', '100 GB', '1 TB', '10 TB'];
+
+    var glabs = ['30 ms', '60 ms', '90 ms'];
+    var gvals = [30, 60, 90];
+    for (var i = 0; i < 3; i++) {
+        var gy = yOf(gvals[i]);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(glabs[i], 52, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+    for (var i = 0; i < 5; i++) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(sizeLabs[i], xs[i], baseY + 16);
+    }
+
+    var ddb = [4, 4, 5, 4, 5];
+    var sql = [12, 25, 48, 85, 115];
+
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var y = yOf(sql[i]);
+        i === 0 ? ctx.moveTo(xs[i], y) : ctx.lineTo(xs[i], y);
+    }
+    ctx.stroke();
+    // open arrowhead hinting the climb continues
+    var lx = xs[4], ly = yOf(sql[4]);
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(lx + 4, ly - 8);
+    ctx.lineTo(lx + 14, ly - 16);
+    ctx.moveTo(lx + 14, ly - 16);
+    ctx.lineTo(lx + 6, ly - 18);
+    ctx.moveTo(lx + 14, ly - 16);
+    ctx.lineTo(lx + 15, ly - 8);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#008300'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var y = yOf(ddb[i]);
+        i === 0 ? ctx.moveTo(xs[i], y) : ctx.lineTo(xs[i], y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('DynamoDB Query by key', 380, 215);
+    ctx.fillStyle = P.magenta;
+    ctx.fillText('relational ad-hoc join', 330, 105);
+
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('still single-digit ms at 10 TB', 480, 170);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('latencies illustrative; flat-vs-growing shape is the point', w - 15, h - 10);
+});
+
+// c4: Query vs Scan items read
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Query Reads What You Asked For — Scan Reads Everything', w / 2, 24);
+
+    var ax = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, 70); ctx.lineTo(ax, 230); ctx.stroke();
+
+    // Row 1: keyed Query
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Query: customer 412, July', 20, y1 + 8);
+    ctx.fillText('(keyed)', 20, y1 + 24);
+    ctx.fillStyle = '#008300';
+    ctx.fillRect(ax, y1, 24, 26);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('20 items — 2.5 RCU', ax + 32, y1 + 17);
+
+    // Row 2: Scan
+    var y2 = 185;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Scan: status = shipped', 20, y2 + 8);
+    ctx.fillText('(no key)', 20, y2 + 24);
+    ctx.fillStyle = 'rgba(231,76,60,0.25)';
+    ctx.fillRect(ax, y2, 440, 26);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(ax, y2, 440, 26);
+    // thin darker strip: the 8,000 matches
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(ax, y2, 4, 26);
+    ctx.font = '11px system-ui';
+    ctx.fillText('8,000 matches', ax + 12, y2 + 17);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('1,000,000 items — ~125,000 RCU', ax, y2 - 8);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('50,000× the read cost for the same-sized answer', 360, 145);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('fix: a global secondary index on status makes this a Query again', 360, 270);
+    ctx.textAlign = 'right';
+    ctx.fillText('item counts illustrative; pixel widths schematic, not to scale', w - 15, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

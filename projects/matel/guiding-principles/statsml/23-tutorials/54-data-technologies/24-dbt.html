@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dbt</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>dbt</h1>
+<p class="subtitle">dbt turns SQL SELECT statements into a versioned, tested pipeline — transformations live in files, build in dependency order, and fail loudly when the data is bad</p>
+
+<div class="card-section">
+    <h2>A SELECT Statement That Lives in a File</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">ELT</span><span class="tag orange">SQL</span></div>
+                <ul>
+                    <li><b>The load</b> — an online shop copies raw order rows into the warehouse untouched, every night</li>
+                    <li><b>ELT</b> — extract and load come first; all transformation happens later, inside the warehouse</li>
+                    <li><b>The model</b> — a dbt model is a file holding one SELECT; running it builds a table or view</li>
+                    <li><b>stg_orders</b> — a staging model renames columns, casts types, and filters raw_orders</li>
+                    <li><b>daily_revenue</b> — a second model SELECTs from stg_orders and sums revenue per day</li>
+                    <li><b>ref()</b> — daily_revenue writes <code>ref('stg_orders')</code>, not a table name; the refs form a dependency DAG</li>
+                </ul>
+                <p class="example">One command, <code>dbt run</code>, walks the graph and builds stg_orders before daily_revenue — nobody remembers the order by hand.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> dbt does not move data into the warehouse — it organizes the SELECT statements that transform data already there, and ref() tells it which SELECT must run first.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>From 1,000 Raw Rows to 7 Daily Totals</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">dependency DAG</span></div>
+                <ul>
+                    <li><b>The raw table</b> — raw_orders holds 1,000 rows for one week: order id, timestamp, amount, status</li>
+                    <li><b>The staging step</b> — stg_orders keeps only completed orders, dropping 12 cancelled test rows &rarr; 988 rows</li>
+                    <li><b>The rollup</b> — daily_revenue is <code>SELECT order_date, SUM(amount) ... GROUP BY order_date</code> &rarr; 7 rows</li>
+                    <li><b>The totals</b> — Mon $1,420, Tue $1,315, Wed $1,480, Thu $1,390, Fri $1,610, Sat $2,240, Sun $2,050</li>
+                    <li><b>Hand-check</b> — Saturday's 180 completed orders (illustrative) average $12.44 each: 180 &times; $12.44 &asymp; $2,240</li>
+                    <li><b>The rerun</b> — a fix in stg_orders? <code>dbt run</code> rebuilds both models in order, no copy-paste</li>
+                </ul>
+                <p class="example">The week's 988 completed orders collapse into 7 rows whose totals sum to $11,505 — the exact sum of the seven bars.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A dbt project is a chain of SELECTs — each model's output table is the next model's input, and one command rebuilds the whole chain in DAG order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tests, Reviews, and the Analytics Engineer</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">software discipline</span></div>
+                <ul>
+                    <li><b>Version control</b> — models are text files, so every change is a commit that can be reviewed and reverted</li>
+                    <li><b>Code review</b> — a teammate reads the diff to daily_revenue before it touches production, like any code</li>
+                    <li><b>Tests</b> — one YAML line declares <code>not_null</code> on amount; <code>dbt test</code> runs it as a query after each build</li>
+                    <li><b>The catch</b> — 3 rows arrive with NULL amounts; the test fails the build before dashboards read bad totals</li>
+                    <li><b>Built-ins</b> — dbt ships <code>not_null</code>, <code>unique</code>, and <code>relationships</code> (every order's customer must exist)</li>
+                    <li><b>The role</b> — this workflow created the "analytics engineer": SQL work run with engineering discipline</li>
+                </ul>
+                <p class="example">Without the test, Tuesday would silently undercount by 3 missing orders; with it, the run halts and someone gets paged instead.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> dbt's contribution is not new SQL — it wraps SQL in the practices software teams already trust: git, review, automated tests, and docs generated from the project itself.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Hardcoding a Table Name Deletes the Edge</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">ref()</span></div>
+                <ul>
+                    <li><b>The shortcut</b> — writing <code>FROM analytics.stg_orders</code> instead of <code>ref('stg_orders')</code> still runs today</li>
+                    <li><b>What's lost</b> — without ref(), dbt cannot see the dependency, so build order is no longer guaranteed</li>
+                    <li><b>The failure</b> — daily_revenue can build before stg_orders refreshes, quietly summing yesterday's rows</li>
+                    <li><b>Environments</b> — ref() also swaps schemas per environment; a hardcoded name points dev runs at prod</li>
+                    <li><b>The rule</b> — inside a dbt project, every model-to-model reference goes through ref(), no exceptions</li>
+                </ul>
+                <p class="example">A hardcoded daily_revenue built at 6:00am against a stg_orders refreshed at 6:05am reports the entire day one day stale.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating ref() as decoration. It is the mechanism that builds the DAG — skip it and the SQL still runs, but the ordering, lineage, and environment safety dbt exists for are gone.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function rrPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function boxTL(ctx, x, y, w, h, fill, stroke, lw, lines) {
+    rrPath(ctx, x, y, w, h, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * 15 + 4);
+    }
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lw, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: ELT flow with brackets
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('ELT in a dbt Project: Load Raw First, Transform With SELECT Files', w / 2, 24);
+
+    var bh = 46, cy = 155, by = cy - bh / 2;
+    boxTL(ctx, 50, by, 160, bh, 'rgba(107,114,128,0.15)', P.mute, 2, ['raw_orders (source)']);
+    boxTL(ctx, 290, by, 160, bh, 'rgba(42,120,214,0.15)', P.blue, 2, ['stg_orders (model)']);
+    boxTL(ctx, 530, by, 160, bh, 'rgba(0,131,0,0.12)', P.green, 2, ['daily_revenue (model)']);
+    drawArrow(ctx, 210, cy, 286, cy, P.text, 3);
+    drawArrow(ctx, 450, cy, 526, cy, P.text, 3);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("ref('stg_orders')", 488, cy - 12);
+
+    // brackets at y=90
+    function bracket(x1, x2, label) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x1, 98); ctx.lineTo(x1, 92); ctx.lineTo(x2, 92); ctx.lineTo(x2, 98);
+        ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, (x1 + x2) / 2, 84);
+    }
+    bracket(50, 210, 'E + L — loader tool');
+    bracket(290, 690, 'T — dbt (SELECT in files)');
+
+    // sub-labels under boxes
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('loaded as-is', 130, 215);
+    ctx.fillText('rename, cast, filter', 370, 215);
+    ctx.fillText('SUM(amount) per day', 610, 215);
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every arrow dbt knows about comes from a ref() call', w / 2, 260);
+});
+
+// c2: daily_revenue bar chart
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('daily_revenue Output: 988 Orders Become 7 Rows', w / 2, 24);
+
+    var baseY = 245, chH = 180, maxV = 2400;
+    function yOf(v) { return baseY - v / maxV * chH; }
+
+    var grids = [[800, '$800'], [1600, '$1,600'], [2400, '$2,400']];
+    for (var i = 0; i < grids.length; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, yOf(grids[i][0])); ctx.lineTo(660, yOf(grids[i][0])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(grids[i][1], 56, yOf(grids[i][0]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - chH); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    var vals = [1420, 1315, 1480, 1390, 1610, 2240, 2050];
+    var labs = ['$1,420', '$1,315', '$1,480', '$1,390', '$1,610', '$2,240', '$2,050'];
+    for (var i = 0; i < 7; i++) {
+        var x = 80 + i * 82, bh2 = vals[i] / maxV * chH;
+        var weekend = (i >= 5);
+        ctx.fillStyle = weekend ? 'rgba(0,131,0,0.25)' : 'rgba(42,120,214,0.30)';
+        ctx.fillRect(x, baseY - bh2, 56, bh2);
+        ctx.strokeStyle = weekend ? P.green : P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(x, baseY - bh2, 56, bh2);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labs[i], x + 28, baseY - bh2 - 6);
+        ctx.fillStyle = '#444';
+        ctx.fillText(days[i], x + 28, 262);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('weekend peak — Sat $2,240', 430, 60);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('daily amounts illustrative; week total $11,505 is the exact sum of the bars', w - 16, h - 8);
+});
+
+// c3: not_null test flow
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The not_null Test: 3 Bad Rows Stop the Build, Not the Dashboard', w / 2, 24);
+
+    // row 1: no test
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no test', 20, 70);
+    boxTL(ctx, 140, 75, 170, 40, 'rgba(42,120,214,0.15)', P.blue, 2, ['3 rows, amount = NULL']);
+    boxTL(ctx, 400, 75, 190, 40, 'rgba(231,76,60,0.12)', '#e74c3c', 2, ['daily_revenue undercounts']);
+    drawArrow(ctx, 313, 95, 396, 95, P.text, 3);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ dashboard shows wrong Tuesday', 495, 132);
+
+    // row 2: not_null test
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('not_null test', 20, 180);
+    boxTL(ctx, 140, 185, 170, 40, 'rgba(42,120,214,0.15)', P.blue, 2, ['3 rows, amount = NULL']);
+    boxTL(ctx, 360, 185, 155, 40, 'rgba(0,131,0,0.12)', P.green, 2, ['dbt test fails the run']);
+    boxTL(ctx, 565, 185, 150, 40, 'rgba(0,131,0,0.12)', P.green, 2, ['dashboard keeps', 'last good data']);
+    drawArrow(ctx, 313, 205, 356, 205, P.text, 3);
+    drawArrow(ctx, 517, 205, 561, 205, P.text, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 640, 242);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('a failing test is the pipeline saying no before the report does', w / 2, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('row counts illustrative', w - 16, h - 8);
+});
+
+// c4: ref() edge vs hardcoded name
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('ref() Builds the Graph; a Hardcoded Name Hides the Edge', w / 2, 24);
+
+    var bw = 150, bh = 40;
+    var labels = ['raw_orders', 'stg_orders', 'daily_revenue'];
+    var xs = [140, 330, 520];
+
+    // row 1: with ref()
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with ref()', 20, 90);
+    for (var i = 0; i < 3; i++) {
+        boxTL(ctx, xs[i], 100 - bh / 2, bw, bh, 'rgba(42,120,214,0.15)', P.blue, 2, [labels[i]]);
+    }
+    drawArrow(ctx, xs[0] + bw + 3, 100, xs[1] - 3, 100, P.green, 3);
+    drawArrow(ctx, xs[1] + bw + 3, 100, xs[2] - 3, 100, P.green, 3);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓ always builds in order', 530, 68);
+
+    // row 2: hardcoded name
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('hardcoded name', 20, 200);
+    for (var i = 0; i < 3; i++) {
+        boxTL(ctx, xs[i], 210 - bh / 2, bw, bh, 'rgba(42,120,214,0.15)', P.blue, 2, [labels[i]]);
+    }
+    drawArrow(ctx, xs[0] + bw + 3, 210, xs[1] - 3, 210, P.text, 3);
+    // dashed invisible edge
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(xs[1] + bw + 3, 210); ctx.lineTo(xs[2] - 3, 210); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('edge invisible to dbt', (xs[1] + bw + xs[2]) / 2, 198);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ may sum yesterday\'s rows', 520, 178);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same SQL, same tables — only the graph knowledge differs', w / 2, 272);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZooKeeper</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>ZooKeeper</h1>
+<p class="subtitle">A tiny replicated filesystem with three tricks — ordering, watches, and nodes that vanish with their owner — from which distributed systems build locks, leaders, and discovery</p>
+
+<div class="card-section">
+    <h2>A Tiny Filesystem Everyone Can Watch</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">znodes</span><span class="tag orange">from Yahoo</span></div>
+                <ul>
+                    <li><b>The tree</b> — ZooKeeper (built at Yahoo, now Apache) stores a small tree of named nodes called znodes</li>
+                    <li><b>Like files</b> — each znode has a path (<code>/config/db-url</code>), a few bytes of data, and children</li>
+                    <li><b>Replicated</b> — every server holds the whole tree; the ZAB protocol keeps all copies in one agreed order</li>
+                    <li><b>Watches</b> — a client can ask "tell me once when this znode changes" instead of polling it</li>
+                    <li><b>Ephemeral</b> — a znode created as ephemeral is auto-deleted the moment its creator's session dies</li>
+                    <li><b>Sequential</b> — a znode can get a server-assigned, ever-increasing sequence number stapled to its name</li>
+                </ul>
+                <p class="example">Worker B crashes at 2:03pm; six seconds later its ephemeral znode <code>/workers/w-02</code> vanishes and every client watching it is notified — no heartbeat code written.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> ZooKeeper is not a database — it is a small, strongly-ordered, watchable tree whose ephemeral nodes turn "this process is alive" into a fact the whole cluster can see.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Leader Election With Numbered Ephemeral Znodes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">leader election</span></div>
+                <ul>
+                    <li><b>The setup</b> — three replicas A, B, C each create an ephemeral sequential znode under <code>/election</code></li>
+                    <li><b>The names</b> — the server assigns numbers in arrival order: <code>n_0000000041</code>, <code>n_0000000042</code>, <code>n_0000000043</code></li>
+                    <li><b>The rule</b> — whoever holds the lowest number is leader, so A (41) leads; B and C just wait</li>
+                    <li><b>The watch</b> — B watches znode 41 and C watches znode 42: each watches only its predecessor</li>
+                    <li><b>The failover</b> — A's session dies at t=0; by t=+6s znode 41 is gone, B's watch fires, B sees it is lowest</li>
+                    <li><b>Hand-check</b> — C's predecessor (42) still exists, so C never wakes; exactly one client is notified</li>
+                </ul>
+                <p class="example">A crashes at 2:03:00pm with a 6-second session timeout; at 2:03:06pm znode <code>n_0000000041</code> vanishes and B (holding <code>n_0000000042</code>) becomes leader — C sleeps through the whole thing.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> No election message is ever sent — leadership is just "lowest surviving sequence number", and the ephemeral-node-plus-watch combination makes failover automatic and orderly.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Coordination Layer Under Half of Big Data</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">Kafka, HBase, Hadoop</span></div>
+                <ul>
+                    <li><b>Recipes</b> — the same primitives compose into locks, leader election, service discovery, config push</li>
+                    <li><b>Kafka (pre-KRaft)</b> — brokers registered as ephemeral znodes; the controller was elected through ZooKeeper</li>
+                    <li><b>HBase</b> — master election and live region-server tracking both ride on ephemeral znodes</li>
+                    <li><b>Hadoop HA</b> — the standby NameNode takes over via a ZooKeeper-based failover controller</li>
+                    <li><b>SolrCloud</b> — cluster state and shared config live in the znode tree, watched by every node</li>
+                    <li><b>The quorum</b> — a 5-server ensemble commits once 3 of 5 agree, so it survives 2 failures (exact)</li>
+                </ul>
+                <p class="example">Four different systems — a message log, a key-value store, a filesystem, a search engine — all outsourced the same hard problem, "who is alive and who is in charge", to one small tree.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> ZooKeeper's product insight is that consensus is hard and rare skills shouldn't be rebuilt per system — ship the agreed-upon tree once, and let everyone compose their coordination from it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Watch Your Neighbor, Not the Leader</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">herd effect</span></div>
+                <ul>
+                    <li><b>The naive plan</b> — every candidate watches the leader's znode so all learn instantly when it dies</li>
+                    <li><b>The herd</b> — with 500 clients (illustrative), one leader death fires 499 watches at the same instant</li>
+                    <li><b>The stampede</b> — all 499 re-read <code>/election</code> and re-check at once, hammering the ensemble it relies on</li>
+                    <li><b>The fix</b> — each client watches only the znode one sequence number below its own, so 1 watch fires</li>
+                    <li><b>The trend</b> — newer systems internalize consensus (Kafka's KRaft, Raft libraries) and drop ZooKeeper</li>
+                </ul>
+                <p class="example">With 500 candidates, watch-the-leader wakes 499 clients on a single death; watch-your-predecessor wakes exactly 1 — same failover, 499× less load at the worst moment.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Watching the leader directly. The official leader-election recipe watches the predecessor precisely to avoid the herd effect — and mistaking ZooKeeper for a general database, then hammering it, kills the coordination layer everything else stands on.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundBoxC(ctx, cx, cy, w, h, r, fill, stroke, dashed, lw) {
+    var x = cx - w / 2, y = cy - h / 2;
+    if (dashed) ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw || 2; ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.45), y - size * Math.sin(angle - 0.45));
+    ctx.lineTo(x - size * Math.cos(angle + 0.45), y - size * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function crossOut(ctx, cx, cy, w, h, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx - w / 2 + 6, cy - h / 2 + 4); ctx.lineTo(cx + w / 2 - 6, cy + h / 2 - 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + w / 2 - 6, cy - h / 2 + 4); ctx.lineTo(cx - w / 2 + 6, cy + h / 2 - 4); ctx.stroke();
+}
+
+// c1: znode tree — persistent config on the left, ephemeral workers on the right
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Znode Tree: Config That Stays, Workers That Vanish', w / 2, 24);
+
+    // connector lines first (root -> level 2)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    var lvl2 = [140, 360, 580];
+    for (var i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.moveTo(360, 65); ctx.lineTo(lvl2[i], 100); ctx.stroke();
+    }
+    // /config -> db-url, /workers -> w-01, w-02
+    ctx.beginPath(); ctx.moveTo(140, 130); ctx.lineTo(140, 170); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(580, 130); ctx.lineTo(520, 170); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(580, 130); ctx.lineTo(655, 170); ctx.stroke();
+
+    // root
+    roundBoxC(ctx, 360, 52, 44, 26, 6, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('/', 360, 57);
+
+    // level 2
+    var lvl2Labels = ['/config', '/election', '/workers'];
+    for (var i = 0; i < 3; i++) {
+        roundBoxC(ctx, lvl2[i], 115, 110, 30, 6, 'rgba(42,120,214,0.15)', P.blue);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(lvl2Labels[i], lvl2[i], 120);
+    }
+
+    // persistent config node
+    roundBoxC(ctx, 140, 185, 130, 30, 6, 'rgba(42,120,214,0.35)', P.blue);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('db-url = pg-7', 140, 190);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('persistent', 140, 214);
+
+    // ephemeral workers (dashed borders)
+    roundBoxC(ctx, 520, 185, 120, 30, 6, 'rgba(0,131,0,0.12)', P.green, true);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('w-01', 520, 190);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('ephemeral', 520, 214);
+
+    roundBoxC(ctx, 655, 185, 120, 30, 6, 'rgba(231,76,60,0.12)', '#e74c3c', true);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('w-02', 655, 190);
+    crossOut(ctx, 655, 185, 120, 30, '#e74c3c');
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('ephemeral', 655, 214);
+
+    // watch arrow from w-02 down-left to the notification label
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(620, 200); ctx.lineTo(475, 245); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 470, 247, Math.atan2(45, -145), 9, P.orange);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('watch fires → client A notified', 430, 262);
+
+    // annotation
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('session died — node auto-deleted', 620, 237);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('znode names illustrative', w - 12, h - 10);
+});
+
+// c2: leader election before/after — lowest sequence number leads
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Lowest Number Leads: One Death, One Watch, One New Leader', w / 2, 24);
+
+    var bw = 155, bh = 40;
+    var xs = [180, 385, 590];
+
+    function watchArrow(fromX, toX, y, label) {
+        // dashed orange arrow from one box's left edge to the previous box's right edge
+        var x1 = fromX - bw / 2, x2 = toX + bw / 2 + 6;
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+        ctx.setLineDash([]);
+        arrowHead(ctx, x2 - 4, y, Math.PI, 9, P.orange);
+        ctx.font = '11px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+        ctx.fillText(label, (x1 + x2) / 2, y - 8);
+    }
+
+    // row 1: t=0
+    var y1 = 105;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('t=0', 15, y1 + 4);
+    roundBoxC(ctx, xs[0], y1, bw, bh, 8, 'rgba(0,131,0,0.12)', P.green);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('n_0000000041 · A — LEADER', xs[0], y1 + 4);
+    roundBoxC(ctx, xs[1], y1, bw, bh, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('n_0000000042 · B', xs[1], y1 + 4);
+    roundBoxC(ctx, xs[2], y1, bw, bh, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.text;
+    ctx.fillText('n_0000000043 · C', xs[2], y1 + 4);
+    watchArrow(xs[1], xs[0], y1 - 28, 'watch');
+    watchArrow(xs[2], xs[1], y1 - 28, 'watch');
+
+    // row 2: t=+6s
+    var y2 = 215;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('t=+6s', 15, y2 + 4);
+    roundBoxC(ctx, xs[0], y2, bw, bh, 8, 'rgba(231,76,60,0.12)', '#e74c3c', true);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('n_0000000041 gone', xs[0], y2 + 4);
+    crossOut(ctx, xs[0], y2, bw, bh, '#e74c3c');
+    roundBoxC(ctx, xs[1], y2, bw, bh, 8, 'rgba(0,131,0,0.12)', P.green);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('n_0000000042 · B — LEADER', xs[1], y2 + 4);
+    roundBoxC(ctx, xs[2], y2, bw, bh, 8, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('n_0000000043 · C', xs[2], y2 + 4);
+    watchArrow(xs[2], xs[1], y2 - 28, 'watch');
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText("only B's watch fires — C never wakes", 385, 268);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('sequence numbers and 6s session timeout illustrative', w - 12, h - 10);
+});
+
+// c3: primitives -> recipes -> systems, three columns
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Primitives → Four Recipes → Real Systems', w / 2, 24);
+
+    // column headers
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('primitives', 115, 52);
+    ctx.fillText('recipes', 360, 52);
+    ctx.fillText('systems', 605, 52);
+
+    var ys = [80, 135, 190, 245];
+    var col1 = ['ordered znode tree', 'watches', 'ephemeral nodes', 'sequence numbers'];
+    var col2 = ['leader election', 'distributed lock', 'service discovery', 'config distribution'];
+    var col3 = ['Kafka (pre-KRaft)', 'HBase', 'Hadoop HA NameNode', 'SolrCloud'];
+
+    for (var i = 0; i < 4; i++) {
+        // col 1
+        roundBoxC(ctx, 115, ys[i], 150, 30, 6, 'rgba(42,120,214,0.15)', P.blue);
+        ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.fillText(col1[i], 115, ys[i] + 4);
+        // col 2
+        roundBoxC(ctx, 360, ys[i], 150, 30, 6, 'rgba(0,131,0,0.12)', P.green);
+        ctx.fillStyle = P.text;
+        ctx.fillText(col2[i], 360, ys[i] + 4);
+        // col 3
+        var isKafka = (i === 0);
+        roundBoxC(ctx, 605, ys[i], 170, 30, 6,
+            isKafka ? 'rgba(217,89,38,0.12)' : 'rgba(42,120,214,0.15)',
+            isKafka ? P.orange : P.blue);
+        ctx.fillStyle = P.text;
+        ctx.fillText(col3[i], 605, ys[i] + 4);
+
+        // arrows
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(192, ys[i]); ctx.lineTo(278, ys[i]); ctx.stroke();
+        arrowHead(ctx, 284, ys[i], 0, 8, P.mute);
+        ctx.beginPath(); ctx.moveTo(437, ys[i]); ctx.lineTo(512, ys[i]); ctx.stroke();
+        arrowHead(ctx, 518, ys[i], 0, 8, P.mute);
+    }
+
+    // Kafka annotation
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('→ KRaft moved consensus in-broker', 605, 62);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('recipe-to-system pairing simplified — most systems use several recipes', w - 12, h - 10);
+});
+
+// c4: herd effect — clients woken by one leader death, two watch patterns
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Leader Dies With 500 Clients: Who Gets Woken Up?', w / 2, 24);
+
+    var ox = 250, barH = 26;
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, 70); ctx.lineTo(ox, 235); ctx.stroke();
+
+    // row 1: everyone watches the leader — 499 woken
+    var y1 = 115;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('everyone watches the leader', 20, y1 + 4);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(ox, y1 - barH / 2, 440, barH);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'right';
+    ctx.fillText('499 woken', ox + 440 - 8, y1 - barH / 2 - 6);
+
+    // row 2: each watches its predecessor — 1 woken
+    var y2 = 195;
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+    ctx.fillText('each watches its predecessor', 20, y2 + 4);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(ox, y2 - barH / 2, 4, barH);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('1 woken', ox + 12, y2 + 4);
+
+    // annotation
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.magenta; ctx.textAlign = 'center';
+    ctx.fillText('499 simultaneous re-reads vs one — same failover either way', 470, 250);
+
+    // caption
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('500 clients illustrative; 499 vs 1 follows exactly from the watch pattern', w - 12, h - 10);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BookKeeper &amp; Distributed Logs</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>BookKeeper &amp; Distributed Logs</h1>
+<p class="subtitle">Apache BookKeeper does one job — keep an append-only log alive on several machines at once — because the replicated log turns out to be the part every distributed system needs</p>
+
+<div class="card-section">
+    <h2>A Service Whose Only Job Is the Log</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">append-only</span><span class="tag orange">BookKeeper</span></div>
+                <ul>
+                    <li><b>The ledger</b> — a payments service appends events to ledger 42: entry 514, 515, 516... never edited</li>
+                    <li><b>The bookies</b> — storage nodes B1, B2, B3 each keep copies of entries; no node holds everything</li>
+                    <li><b>The 3-2-2 recipe</b> — ensemble of 3 bookies, each entry written to 2, confirmed after 2 acks</li>
+                    <li><b>The striping</b> — entry 514 lands on B2+B3, 515 on B3+B1, 516 on B1+B2, round-robin forever</li>
+                    <li><b>The point</b> — BookKeeper offers nothing else: no queries, no topics, just durable numbered entries</li>
+                </ul>
+                <p class="example">Six entries (514&ndash;519) striped 2-of-3 leave each bookie holding four entries — every entry survives any single machine dying.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A ledger is a replicated, append-only sequence of numbered entries; bookies are dumb storage for ledger fragments, and the 3-2-2 quorum recipe decides who stores and who must ack.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Entry 517 Survives a Bookie Crash</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">quorum acks</span></div>
+                <ul>
+                    <li><b>The write</b> — at t=0ms the client sends entry 517 to its two assigned bookies, B2 and B3</li>
+                    <li><b>First ack</b> — B3 acks at t=25ms; ack quorum is 2, so 517 is not yet confirmed to the app</li>
+                    <li><b>The crash</b> — B2 dies at t=40ms mid-write; the client stops waiting on it</li>
+                    <li><b>Ensemble change</b> — at t=80ms the client swaps B2 for a fresh bookie B4 in the ensemble</li>
+                    <li><b>Recovery</b> — 517 is resent to B4, which acks at t=140ms: two acks, entry confirmed</li>
+                    <li><b>Life goes on</b> — entry 518 appends at t=160ms against the new ensemble {B1, B3, B4}</li>
+                </ul>
+                <p class="example">The app sees entry 517 confirmed at t=140ms instead of ~30ms — a 110ms hiccup, zero data lost, and the writer never restarted.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An append is confirmed only after the ack quorum (2) of bookies acknowledge it; a crashed bookie is replaced by an ensemble change and unacked entries are rewritten — the log never lies about what is durable.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Log Is the Primitive Under Everything</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">log as primitive</span><span class="tag orange">Pulsar</span></div>
+                <ul>
+                    <li><b>Databases</b> — replicas stay in sync by replaying the primary's write-ahead log, entry by entry</li>
+                    <li><b>Consensus</b> — Raft and Paxos are, at bottom, protocols for agreeing on one shared log</li>
+                    <li><b>Messaging</b> — Kafka and Pulsar sell the log itself as the product: topics are logs consumers replay</li>
+                    <li><b>The factoring</b> — BookKeeper (from Yahoo) extracts that shared primitive into a reusable service</li>
+                    <li><b>In production</b> — Apache Pulsar stores every topic's messages as BookKeeper ledgers</li>
+                </ul>
+                <p class="example">Pulsar brokers keep no message data themselves — a broker crash loses nothing because the topic is really a chain of BookKeeper ledgers.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Most distributed systems secretly rebuild the same thing — a replicated, ordered, append-only log; BookKeeper's insight is to build it once, well, and let systems above stay stateless.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"Acked" Does Not Mean "On Every Bookie"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">read path</span></div>
+                <ul>
+                    <li><b>The confusion</b> — people picture 3 full copies; with write quorum 2, each entry is on only 2 of 3</li>
+                    <li><b>Reads roam</b> — a read goes to any bookie holding that entry's copy, not to a leader</li>
+                    <li><b>The miss</b> — asking B1 for entry 517 finds nothing: 517 was striped to B2 and B3 only</li>
+                    <li><b>The client knows</b> — the striping rule is deterministic, so clients compute who holds what</li>
+                    <li><b>The real risk</b> — with 2 copies, losing B2 and B3 together loses 517; re-replication closes that gap</li>
+                </ul>
+                <p class="example">After the crash, entry 517's two copies sit on B3 and B4 — a read sent to B1 must be redirected, and only losing both B3 and B4 before re-replication would lose it.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Assuming a quorum-acked entry is everywhere. Ack quorum 2 buys durability on exactly 2 bookies — the read path and the repair process are built around knowing which 2.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRectPath(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color, width, dashed) {
+    var dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy);
+    var ux = dx / len, uy = dy / len;
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    if (dashed) ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 9 * ux, y2 - 9 * uy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * ux - 5 * uy, y2 - 9 * uy + 5 * ux);
+    ctx.lineTo(x2 - 9 * ux + 5 * uy, y2 - 9 * uy - 5 * ux);
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: striping grid — which bookie holds which entry
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Ledger 42, Striped 2-of-3: Every Entry Lives on Exactly Two Bookies', w / 2, 24);
+
+    var entries = ['514', '515', '516', '517', '518', '519'];
+    // column headers
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    for (var c = 0; c < 6; c++) ctx.fillText(entries[c], 160 + c * 85, 70);
+    // row labels
+    var rowLabels = ['B1', 'B2', 'B3'];
+    var rowCY = [110, 165, 220];
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    for (var r = 0; r < 3; r++) ctx.fillText(rowLabels[r], 50, rowCY[r] + 4);
+
+    // filled pattern: entry e (514..519) on bookies e mod 3 and (e+1) mod 3
+    // bookie index: B1 = 0, B2 = 1, B3 = 2
+    var entryIds = [514, 515, 516, 517, 518, 519];
+    for (var r = 0; r < 3; r++) {
+        for (var c = 0; c < 6; c++) {
+            var e = entryIds[c];
+            var filled = (e % 3 === r) || ((e + 1) % 3 === r);
+            var x = 125 + c * 85, y = 90 + r * 55;
+            roundRectPath(ctx, x, y, 70, 40, 6);
+            if (filled) {
+                ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.fill();
+                ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+                ctx.fillText('●', x + 35, y + 25);
+            } else {
+                ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.stroke();
+            }
+        }
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each bookie stores 4 of 6 — lose any one, lose nothing', 460, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('entry ids illustrative; striping rule exact for ensemble 3, write quorum 2', 60, 285);
+});
+
+// c2: entry 517 survives a bookie crash
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Append, One Crash: Entry 517 Confirmed at t=140ms', w / 2, 24);
+
+    var ox = 70, baseY = 250, pw = 580;
+    function xOf(t) { return ox + t / 200 * pw; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 0; t <= 200; t += 50) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xOf(t), baseY - 4); ctx.lineTo(xOf(t), baseY + 4); ctx.stroke();
+        ctx.fillText(t + 'ms', xOf(t), baseY + 18);
+    }
+
+    // lanes
+    var lanes = [
+        { y: 90, label: 'B2' },
+        { y: 145, label: 'B3' },
+        { y: 200, label: 'B4' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, lanes[i].y); ctx.lineTo(ox + pw, lanes[i].y); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(lanes[i].label, 20, lanes[i].y + 4);
+    }
+
+    function dot(t, y, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(xOf(t), y, 10, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // confirm marker (behind events)
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xOf(140), 60); ctx.lineTo(xOf(140), baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('confirmed', xOf(140), 54);
+
+    // events
+    dot(0, 90, P.blue);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('517 sent', xOf(0) + 14, 84);
+    dot(0, 145, P.blue);
+    ctx.fillText('517 sent', xOf(0) + 14, 139);
+    dot(25, 145, P.green);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui';
+    ctx.fillText('ack 1/2', xOf(25) + 14, 160);
+    // crash on B2
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗', xOf(40), 96);
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('B2 dies', xOf(40) + 12, 84);
+    // ensemble-change diamond on B4 at t=80
+    ctx.fillStyle = P.orange;
+    ctx.beginPath();
+    ctx.moveTo(xOf(80), 190); ctx.lineTo(xOf(80) + 10, 200); ctx.lineTo(xOf(80), 210); ctx.lineTo(xOf(80) - 10, 200);
+    ctx.closePath(); ctx.fill();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('B4 joins', xOf(80) + 14, 194);
+    dot(110, 200, P.blue);
+    ctx.fillStyle = '#444';
+    ctx.fillText('517 resent', xOf(110) + 14, 220);
+    dot(140, 200, P.green);
+    ctx.fillStyle = P.green;
+    ctx.fillText('ack 2/2', xOf(140) + 14, 196);
+
+    // continuation arrow
+    arrowLine(ctx, xOf(160), 66, xOf(185), 66, P.blue, 2);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('518 appends on {B1,B3,B4}', xOf(155), 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; ack rule (2 of 2) exact', w - 12, h - 8);
+});
+
+// c3: different products, same foundation
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Different Products, Same Foundation', w / 2, 24);
+
+    // top row boxes
+    var tops = [
+        { x: 40, fill: 'rgba(42,120,214,0.15)', edge: P.blue, l1: 'database replication', l2: '(WAL shipping)' },
+        { x: 265, fill: 'rgba(74,58,167,0.12)', edge: P.violet, l1: 'consensus', l2: '(Raft: agree on a log)' },
+        { x: 490, fill: 'rgba(25,158,112,0.12)', edge: P.aqua, l1: 'messaging', l2: '(Pulsar topics)' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        roundRectPath(ctx, tops[i].x, 80, 190, 52, 8);
+        ctx.fillStyle = tops[i].fill; ctx.fill();
+        ctx.strokeStyle = tops[i].edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tops[i].l1, tops[i].x + 95, 102);
+        ctx.fillText(tops[i].l2, tops[i].x + 95, 120);
+    }
+
+    // arrows down
+    var centers = [135, 360, 585];
+    for (var i = 0; i < 3; i++) {
+        arrowLine(ctx, centers[i], 132, centers[i], 175, P.mute, 3);
+    }
+
+    // bottom layer
+    roundRectPath(ctx, 40, 180, 640, 62, 8);
+    ctx.fillStyle = 'rgba(26,82,118,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the replicated append-only log — BookKeeper ledgers on bookies', 360, 216);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('build the log once; everything above it can be stateless', w / 2, 272);
+});
+
+// c4: where entry 517 actually lives
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where Entry 517 Actually Lives', w / 2, 24);
+
+    // Row 1: assumed (wrong)
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('assumed (wrong)', 20, 110);
+    var r1x = [180, 360, 540];
+    var r1labels = ['B1: 517', 'B2: 517', 'B3: 517'];
+    for (var i = 0; i < 3; i++) {
+        roundRectPath(ctx, r1x[i], 85, 130, 44, 8);
+        ctx.fillStyle = 'rgba(231,76,60,0.12)'; ctx.fill();
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r1labels[i], r1x[i] + 65, 112);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3 copies everywhere', 180, 148);
+
+    // Row 2: actual (Qw=2)
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('actual (Qw=2)', 20, 210);
+    // B1: dashed empty
+    ctx.setLineDash([4, 3]);
+    roundRectPath(ctx, 180, 185, 130, 44, 8);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('B1: —', 245, 212);
+    // B2 and B3: filled green
+    var r2x = [360, 540];
+    var r2labels = ['B2: 517 ✓', 'B3: 517 ✓'];
+    for (var i = 0; i < 2; i++) {
+        roundRectPath(ctx, r2x[i], 185, 130, 44, 8);
+        ctx.fillStyle = 'rgba(0,131,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r2labels[i], r2x[i] + 65, 212);
+    }
+
+    // read arrow: label -> B1, then dashed redirect B1 -> B2
+    ctx.fillStyle = P.orange; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('read 517', 60, 254);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(110, 248);
+    ctx.quadraticCurveTo(150, 250, 178, 222);
+    ctx.stroke();
+    ctx.fillStyle = P.orange;
+    ctx.beginPath();
+    ctx.moveTo(181, 219);
+    ctx.lineTo(170, 224); ctx.lineTo(178, 232);
+    ctx.closePath(); ctx.fill();
+    // dashed redirect from B1 to B2
+    arrowLine(ctx, 310, 207, 360, 207, P.orange, 2, true);
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('redirect', 335, 196);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('clients compute the placement — striping is deterministic, not discovered', w / 2, 285);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

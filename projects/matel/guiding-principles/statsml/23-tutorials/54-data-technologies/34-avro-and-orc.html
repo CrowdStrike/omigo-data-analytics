@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avro &amp; ORC</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Avro &amp; ORC</h1>
+<p class="subtitle">Avro stores events row by row for streams, ORC stores them column by column for Hive — and Parquet won the lake by being welcome everywhere</p>
+
+<div class="card-section">
+    <h2>One Click Event, Two Ways to Lay It on Disk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">row vs column</span><span class="tag orange">file formats</span></div>
+                <ul>
+                    <li><b>The event</b> — a shop logs every click as (user, page, ms): u2 hits /cart and it takes 340 ms</li>
+                    <li><b>Avro (row)</b> — writes each event whole, one after another, with its schema stored as JSON up front</li>
+                    <li><b>ORC (column)</b> — groups all users together, all pages together, all ms together, like Parquet</li>
+                    <li><b>The fit</b> — streams append and read one event at a time; analytics scan one field over millions</li>
+                    <li><b>Same data</b> — the four events below carry identical values, just arranged for different readers</li>
+                </ul>
+                <p class="example">The Kafka topic carrying the click and the lake table the analysts query hold the same four events — arranged in opposite directions.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Avro is row-oriented (whole records, schema travels as JSON); ORC and Parquet are columnar (one field scans cheaply) — the layout, not the data, is the difference.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Reading the Same Million Events Two Ways</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">bytes read</span></div>
+                <ul>
+                    <li><b>The file</b> — 1M click events, ~100 bytes each: a 100 MB day of traffic (illustrative)</li>
+                    <li><b>Point read</b> — given event #4,217's offset, row layout hands you the whole record in ~100 bytes</li>
+                    <li><b>Same read in Parquet</b> — touches every column chunk of one row group: ~6 MB for one event</li>
+                    <li><b>Column scan</b> — "average ms for the day": Parquet reads only the ms column, ~4 MB compressed</li>
+                    <li><b>Same scan in Avro</b> — decodes all 1M whole records: the full 100 MB, 25&times; more than Parquet</li>
+                </ul>
+                <p class="example">One question flips the winner — the point read costs Avro 100 bytes vs Parquet 6 MB; the column scan costs Parquet 4 MB vs Avro 100 MB.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Neither layout is faster in general: row wins record-at-a-time, column wins field-at-a-time. The byte counts are illustrative, but the direction of the asymmetry is exact.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Formats, Three Home Turfs — and Why Parquet Won</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">ecosystem</span><span class="tag orange">Kafka &amp; Hive</span></div>
+                <ul>
+                    <li><b>Avro's home</b> — Kafka: the schema registry made Avro the standard for streamed records</li>
+                    <li><b>Schema evolution</b> — Avro treats add-a-field and default-value rules as a first-class contract</li>
+                    <li><b>ORC's home</b> — built for Hive at Hortonworks: ACID tables and excellent compression</li>
+                    <li><b>Parquet's edge</b> — Spark writes it by default, pandas reads it built-in, every engine speaks it</li>
+                    <li><b>The verdict</b> — ORC often compresses Hive tables better; Parquet won on breadth, not bytes</li>
+                </ul>
+                <p class="example">A team moving off Hive keeps its lake in Parquet because Spark, Trino, DuckDB, and pandas all read it without an extra library.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> All three are solid formats. Parquet became the lake default because it is at least "supported" in every lake tool, while Avro owns the stream and ORC stayed strongest inside the Hive world.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Not One Format for the Whole Pipeline</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">stream vs lake</span></div>
+                <ul>
+                    <li><b>The mistake</b> — forcing one format end to end because "we standardized on Parquet"</li>
+                    <li><b>Streamed Parquet</b> — one file per event means 86,400 tiny files a day and no record append</li>
+                    <li><b>Avro analytics</b> — a lake kept in Avro makes every dashboard decode whole records, not columns</li>
+                    <li><b>The pattern</b> — Avro on the Kafka topic, a compaction job, Parquet (or ORC) in the lake</li>
+                    <li><b>The bridge</b> — the schema registry keeps the stream schema and the lake schema evolving in step</li>
+                </ul>
+                <p class="example">The shop streams each click as an Avro message, then an hourly job rewrites the hour as one Parquet file for the analysts.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating format choice as a one-time standard. Row and column layouts answer different questions — healthy pipelines convert at the stream/lake boundary instead of forcing one format everywhere.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: row layout vs column layout of the same four events
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same Four Events: Row Layout (Avro) vs Column Layout (ORC/Parquet)', w / 2, 24);
+
+    var events = [['u1', '/home', 120], ['u2', '/cart', 340], ['u1', '/pay', 95], ['u3', '/home', 210]];
+    var fieldStyles = [
+        { fill: 'rgba(42,120,214,0.25)', edge: P.blue },
+        { fill: 'rgba(0,131,0,0.20)', edge: P.green },
+        { fill: 'rgba(217,89,38,0.20)', edge: P.orange }
+    ];
+
+    // divider
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(365, 55); ctx.lineTo(365, 270); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function cell(x, y, bw, bh, style, val) {
+        ctx.fillStyle = style.fill;
+        roundRect(ctx, x, y, bw, bh, 4);
+        ctx.fill();
+        ctx.strokeStyle = style.edge; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(val), x + bw / 2, y + bh / 2 + 4);
+    }
+
+    // left panel: Avro row by row
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Avro — row by row', 40, 62);
+    var rowY = [78, 122, 166, 210];
+    var cellX = [40, 140, 240];
+    var cellW = [96, 96, 70];
+    for (var r = 0; r < 4; r++) {
+        for (var f = 0; f < 3; f++) {
+            cell(cellX[f], rowY[r], cellW[f], 30, fieldStyles[f], events[r][f]);
+        }
+    }
+
+    // right panel: ORC / Parquet column by column
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ORC / Parquet — column by column', 400, 62);
+    var colX = [400, 500, 600];
+    var colHeads = ['user', 'page', 'ms'];
+    var colY = [78, 108, 138, 168];
+    for (var f = 0; f < 3; f++) {
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(colHeads[f], colX[f] + 42, 74);
+        for (var r = 0; r < 4; r++) {
+            cell(colX[f], colY[r], 84, 26, fieldStyles[f], events[r][f]);
+        }
+    }
+
+    // annotations
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one read = one whole event', 40, 262);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('one read = one column, not every record', 400, 225);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('events illustrative', w - 12, h - 8);
+});
+
+// c2: two questions, two winners
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Questions, Two Winners: Bytes Read from a 100 MB Day (illustrative)', w / 2, 24);
+
+    var baseX = 210;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(baseX, 55); ctx.lineTo(baseX, 235); ctx.stroke();
+
+    // group labels
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fetch one whole event', 20, 62);
+    ctx.fillText('scan one column (avg ms)', 20, 157);
+
+    var rows = [
+        { y: 80, lab: 'Avro — 100 B', color: P.green, wd: 4, val: '100 B', valColor: P.green },
+        { y: 115, lab: 'Parquet — 6 MB', color: P.orange, wd: 150, val: '6 MB', valColor: '#444' },
+        { y: 175, lab: 'Parquet — 4 MB', color: P.green, wd: 130, val: '4 MB', valColor: '#444' },
+        { y: 210, lab: 'Avro — 100 MB', color: '#e74c3c', wd: 460, val: '100 MB — reads every record', valColor: '#e74c3c' }
+    ];
+    rows.forEach(function(r) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 12);
+        ctx.fillStyle = r.color;
+        ctx.fillRect(baseX, r.y, r.wd, 16);
+        ctx.fillStyle = r.valColor; ctx.font = '11px system-ui';
+        if (r.wd < 430) {
+            ctx.fillText(r.val, baseX + r.wd + 6, r.y + 12);
+        } else {
+            ctx.fillText(r.val, baseX + r.wd - 195, r.y - 5);
+        }
+    });
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the winner flips with the question — pick the layout per workload', w / 2, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('pixel widths schematic, byte counts illustrative', w - 12, h - 6);
+});
+
+// c3: support matrix
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Why Parquet Won: At Home Somewhere, Welcome Everywhere', w / 2, 24);
+
+    var colX = [408, 518, 628];
+    var colHeads = ['Avro', 'ORC', 'Parquet'];
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    for (var i = 0; i < 3; i++) {
+        ctx.fillText(colHeads[i], colX[i], 60);
+    }
+
+    var styles = {
+        green: { fill: 'rgba(0,131,0,0.15)', edge: P.green, color: P.green, bold: true },
+        gray: { fill: 'rgba(107,114,128,0.10)', edge: '#9aa2ad', color: P.mute, bold: false },
+        red: { fill: 'rgba(231,76,60,0.10)', edge: '#e74c3c', color: '#e74c3c', bold: false }
+    };
+    var rows = [
+        { y: 78, lab: 'Kafka + schema registry', cells: [['green', 'standard'], ['red', '—'], ['red', '—']] },
+        { y: 116, lab: 'Hive tables + ACID', cells: [['gray', 'tables only'], ['green', 'native + ACID'], ['gray', 'tables only']] },
+        { y: 154, lab: 'Spark jobs', cells: [['gray', 'supported'], ['gray', 'supported'], ['green', 'default write']] },
+        { y: 192, lab: 'pandas / Arrow', cells: [['red', 'extra lib'], ['gray', 'supported'], ['green', 'built-in']] },
+        { y: 230, lab: 'Trino / DuckDB / engines', cells: [['gray', 'supported'], ['gray', 'supported'], ['green', 'first-class']] }
+    ];
+    rows.forEach(function(r) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 17);
+        for (var i = 0; i < 3; i++) {
+            var st = styles[r.cells[i][0]];
+            ctx.fillStyle = st.fill;
+            roundRect(ctx, colX[i] - 48, r.y, 96, 26, 4);
+            ctx.fill();
+            ctx.strokeStyle = st.edge; ctx.lineWidth = 1; ctx.stroke();
+            ctx.fillStyle = st.color;
+            ctx.font = (st.bold ? 'bold ' : '') + '11px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(r.cells[i][1], colX[i], r.y + 17);
+        }
+    });
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Avro owns the stream; below it, Parquet is never worse than supported — breadth won the lake', w / 2, 278);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('matrix schematic', w - 12, 295);
+});
+
+// c4: one format forced vs fit for purpose
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Pipeline, Two Formats: Convert at the Stream/Lake Boundary', w / 2, 24);
+
+    function box(x, cy, bw, fill, edge, lines) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 12);
+        }
+    }
+    function arrow(x0, x1, cy) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x1 - 6, cy); ctx.stroke();
+        arrowHead(ctx, x0, cy, x1 - 2, cy, P.mute);
+    }
+
+    // Row 1: one format forced
+    var y1 = 100;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('one format forced', 20, y1 + 4);
+    box(140, y1, 120, 'rgba(42,120,214,0.15)', P.blue, ['click event']);
+    box(330, y1, 150, 'rgba(231,76,60,0.12)', '#e74c3c', ['1 Parquet file', 'per event']);
+    box(545, y1, 150, 'rgba(231,76,60,0.12)', '#e74c3c', ['86,400 tiny', 'files/day']);
+    arrow(260, 330, y1);
+    arrow(480, 545, y1);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ scans crawl', 620, y1 + 36);
+
+    // Row 2: fit for purpose
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('fit for purpose', 20, y2 + 4);
+    box(115, y2, 120, 'rgba(42,120,214,0.15)', P.blue, ['click event']);
+    box(265, y2, 130, 'rgba(0,131,0,0.12)', P.green, ['Avro on Kafka']);
+    box(430, y2, 135, 'rgba(74,58,167,0.12)', P.violet, ['hourly', 'compaction']);
+    box(595, y2, 120, 'rgba(0,131,0,0.12)', P.green, ['1 Parquet', 'file/hour']);
+    arrow(235, 265, y2);
+    arrow(395, 430, y2);
+    arrow(565, 595, y2);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 655, y2 + 34);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rows for the stream, columns for the lake — convert once, in the middle', w / 2, 272);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('file counts illustrative (one event per second per source)', w - 12, 293);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

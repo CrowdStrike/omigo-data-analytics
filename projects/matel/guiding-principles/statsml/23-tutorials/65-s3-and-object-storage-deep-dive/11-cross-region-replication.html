@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cross-Region Replication</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Cross-Region Replication</h1>
+<p class="subtitle">The copy into the second region starts after your write already succeeded, covers only what your rules select, and has no deadline unless you pay for one</p>
+
+<div class="card-section">
+    <h2>The Copy Starts After the Write Succeeds</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">asynchronous</span><span class="tag orange">rules not a switch</span></div>
+                <ul>
+                    <li><b>The setup</b> — a bucket in region A and a second copy of it kept in region B</li>
+                    <li><b>After the fact</b> — the copying only begins once your write has already succeeded</li>
+                    <li><b>What success means</b> — region A definitely holds the object; region B may not yet</li>
+                    <li><b>Versioning first</b> — replication only starts when both buckets have versioning on</li>
+                    <li><b>A role does the copying</b> — you hand the service a role it uses to read and write</li>
+                    <li><b>Rules, not a switch</b> — each rule picks a prefix or tag, so you choose what travels</li>
+                    <li><b>Same-region works too</b> — identical machinery, just a destination that is nearer</li>
+                </ul>
+                <p class="example">The write to region A returns in 43 ms; the object shows up in region B about four seconds later.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A successful write tells you region A has the object. It says nothing at all about region B.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What Gets Copied, and What Quietly Does Not</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">coverage</span><span class="tag orange">backfill</span></div>
+                <ul>
+                    <li><b>New objects</b> — anything written after the rule is on, along with its metadata</li>
+                    <li><b>Tags and permissions</b> — these travel across together with the object's bytes</li>
+                    <li><b>Deletes</b> — a delete crosses over only if you explicitly enable that option</li>
+                    <li><b>Encrypted objects</b> — need a key configured in the destination region first</li>
+                    <li><b>Older objects</b> — anything written before the rule stays where it already is</li>
+                    <li><b>Deleting one version</b> — never crosses over, by design, so one copy survives</li>
+                    <li><b>Each bucket expires on its own</b> — cleanup rules are never shared between them</li>
+                </ul>
+                <p class="example">Turning the rule on Monday leaves every object written before Monday in region A only, until a separate backfill job copies them.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> "Replication is on" is not "the two buckets match." The default covers new objects; the older ones, the deletes, and the encrypted ones each need a deliberate step.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>How Long It Takes, and the Deadline You Can Buy</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">rule of thumb</span><span class="tag green">SLA</span><span class="tag orange">paid tier</span></div>
+                <ul>
+                    <li><b>Usually seconds</b> — most objects land in the second region within a few seconds</li>
+                    <li><b>No promise by default</b> — there is no published time limit on the copy at all</li>
+                    <li><b>Why that bites</b> — a fast median hides a slow tail that goes unnoticed for months</li>
+                    <li><b>The paid option</b> — a real deadline: 99.99% of objects inside fifteen minutes</li>
+                    <li><b>Metrics come with it</b> — pending bytes, pending object count, and copy latency</li>
+                    <li><b>You get told</b> — an event fires for any object that misses the fifteen minutes</li>
+                    <li><b>Bounded, not faster</b> — you are buying the deadline and the measurement, not speed</li>
+                    <li><b>Set it per rule</b> — buy the deadline for the audit prefix and skip it for logs</li>
+                </ul>
+                <p class="example">Without the paid option, the slowest 1 in 10,000 objects has no bound at all; with it, that object is inside 15 minutes or you get an event.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The paid tier buys a measurable deadline, not raw speed. Without it, the tail of the copy time is both unbounded and unmeasured.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// c1: region A has it immediately, region B does not until the copy lands
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Write Succeeds Before the Copy Exists', w / 2, 22);
+
+    var x0 = 110, x1 = 660, tMax = 5;
+    function tx(t) { return x0 + (x1 - x0) * (t / tMax); }
+    var xLand = tx(4);   // 550
+
+    // the gap: region A has it, region B does not
+    ctx.fillStyle = rgba(RED, 0.08);
+    ctx.fillRect(x0, 76, xLand - x0, 214 - 76);
+
+    // time axis
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, 232); ctx.lineTo(x1, 232); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [0, 1, 2, 3, 4, 5].forEach(function(t) {
+        var x = tx(t);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, 232); ctx.lineTo(x, 227); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.fillText(t, x, 250);
+    });
+    ctx.fillStyle = P.mute;
+    ctx.fillText('seconds after the write returns (illustrative)', (x0 + x1) / 2, 272);
+
+    // lane A
+    ctx.fillStyle = rgba(P.blue, 0.22);
+    roundRect(ctx, x0, 88, x1 - x0, 34, 5); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('object is here the moment the write returns', (x0 + x1) / 2, 110);
+
+    // lane B: absent, then arrived
+    ctx.fillStyle = '#f4f6f9';
+    roundRect(ctx, x0, 152, xLand - x0, 34, 5); ctx.fill();
+    ctx.strokeStyle = RED; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('object is not here yet', (x0 + xLand) / 2, 174);
+
+    ctx.fillStyle = rgba(P.aqua, 0.25);
+    roundRect(ctx, xLand, 152, x1 - xLand, 34, 5); ctx.fill();
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('here', (xLand + x1) / 2, 174);
+
+    // lane labels
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right'; ctx.fillStyle = P.ink;
+    ctx.fillText('region A', 102, 110);
+    ctx.fillText('region B', 102, 174);
+
+    // write returns
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, 88); ctx.lineTo(x0, 74); ctx.stroke();
+    arrowHead(ctx, x0, 88, x0, 70, P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('write returns', x0 + 6, 64);
+
+    // copy lands
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(xLand, 70); ctx.lineTo(xLand, 218); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.aqua; ctx.fillText('copy lands · 4 s', xLand + 4, 64);
+
+    // queued in the background
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.8; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x0 + 10, 122); ctx.lineTo(xLand - 8, 148); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x0 + 10, 122, xLand - 4, 150, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('queued in the background', 150, 142);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the caller already believes the write is done everywhere', w / 2, 204);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; copying after a successful source write is documented behaviour', w - 12, 292);
+});
+
+// c2: coverage table — what a rule actually copies
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What a Replication Rule Actually Copies', w / 2, 22);
+
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'left';
+    ctx.fillText('case', 54, 44);
+    ctx.fillText('verdict', 300, 44);
+    ctx.fillText('condition', 424, 44);
+
+    var rows = [
+        { c: 'New objects',                  v: 'COPIED',     col: P.green,  why: 'what a rule does by default' },
+        { c: 'Metadata, tags, permissions',  v: 'COPIED',     col: P.green,  why: 'they travel with the bytes' },
+        { c: 'Deletes',                      v: 'IF ENABLED', col: P.yellow, why: 'off until you turn it on' },
+        { c: 'Encrypted objects',            v: 'IF ENABLED', col: P.yellow, why: 'needs a destination key' },
+        { c: 'Objects older than the rule',  v: 'NEVER',      col: RED,      why: 'run a backfill job instead' },
+        { c: 'Deleting one version',         v: 'NEVER',      col: RED,      why: 'by design: protects the copy' },
+        { c: 'Already-copied objects',       v: 'NEVER',      col: RED,      why: 'not passed to a third bucket' }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], y = 52 + i * 28;
+
+        ctx.fillStyle = rgba(r.col, 0.07);
+        roundRect(ctx, 44, y, 632, 24, 4); ctx.fill();
+        ctx.strokeStyle = r.col; ctx.lineWidth = 1; ctx.stroke();
+
+        ctx.fillStyle = P.text; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.c, 54, y + 16);
+
+        ctx.fillStyle = rgba(r.col, 0.20);
+        roundRect(ctx, 300, y + 4, 112, 17, 8); ctx.fill();
+        ctx.strokeStyle = r.col; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = r.col; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.v, 356, y + 16);
+
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.why, 424, y + 16);
+    }
+
+    ctx.fillStyle = RED; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('only the top two rows happen on their own', w / 2, 264);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('every row is documented replication behaviour', w - 12, 288);
+});
+
+// c3: copy time by percentile, with and without the paid deadline
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Copy Time by Percentile: With and Without the Paid Deadline', w / 2, 20);
+
+    var LOG = Math.log(3600) / Math.LN10;
+    function X(sec) { return 90 + (Math.log(sec) / Math.LN10 / LOG) * 570; }
+
+    // legend
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = P.green;
+    ctx.beginPath(); ctx.moveTo(90, 38); ctx.lineTo(108, 38); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with the deadline', 114, 42);
+    ctx.strokeStyle = P.orange;
+    ctx.beginPath(); ctx.moveTo(250, 38); ctx.lineTo(268, 38); ctx.stroke();
+    ctx.fillStyle = P.orange; ctx.fillText('without it', 274, 42);
+
+    // percentile rows
+    var pr = [
+        { lab: 'p99.99', y: 96 },
+        { lab: 'p99.9',  y: 136 },
+        { lab: 'p99',    y: 176 },
+        { lab: 'p50',    y: 216 }
+    ];
+    pr.forEach(function(r) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+        ctx.beginPath(); ctx.moveTo(90, r.y); ctx.lineTo(660, r.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, 80, r.y + 4);
+    });
+
+    // x axis
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(90, 246); ctx.lineTo(660, 246); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [{ s: 1, lab: '1s' }, { s: 10, lab: '10s' }, { s: 60, lab: '60s' },
+     { s: 900, lab: '15min' }, { s: 3600, lab: '1h' }].forEach(function(t) {
+        var x = X(t.s);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, 246); ctx.lineTo(x, 251); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.fillText(t.lab, x, 264);
+    });
+
+    // the 15-minute line
+    var xr = X(900);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(xr, 66); ctx.lineTo(xr, 246); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('15 min', xr, 60);
+
+    function series(pts, col) {
+        ctx.strokeStyle = col; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        pts.forEach(function(p, i) {
+            var x = X(p.sec);
+            if (i === 0) ctx.moveTo(x, p.y); else ctx.lineTo(x, p.y);
+        });
+        ctx.stroke();
+        pts.forEach(function(p) {
+            var x = X(p.sec);
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.arc(x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.font = '11.5px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(p.lab, x, p.y - 10);
+        });
+    }
+
+    // without the deadline — no p99.99 point exists
+    series([
+        { sec: 4,    y: 216, lab: '4s' },
+        { sec: 180,  y: 176, lab: '3m' },
+        { sec: 1560, y: 136, lab: '26m' }
+    ], P.orange);
+
+    // the tail nobody measures
+    ctx.strokeStyle = RED; ctx.lineWidth = 2.5; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(X(1560), 136); ctx.lineTo(684, 98); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, X(1560), 136, 690, 96, RED);
+    ctx.fillStyle = RED; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('no bound', 692, 82);
+
+    // with the deadline
+    series([
+        { sec: 3,   y: 216, lab: '3s' },
+        { sec: 60,  y: 176, lab: '60s' },
+        { sec: 240, y: 136, lab: '4m' },
+        { sec: 780, y: 96,  lab: '13m' }
+    ], P.green);
+
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('nothing measured out here', 300, 112);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('percentiles illustrative; the 99.99%-within-15-minutes commitment is documented', w - 12, 290);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cassandra</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Cassandra</h1>
+<p class="subtitle">Cassandra has no primary node &mdash; any of its servers can accept a write, and you choose per query how many replicas must agree before "success"</p>
+
+<div class="card-section">
+    <h2>A Ring Where Every Node Takes Writes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">leaderless</span><span class="tag orange">Dynamo + Bigtable</span></div>
+                <ul>
+                    <li><b>The setup</b> — 6 servers form a ring storing readings from 5,000 temperature sensors</li>
+                    <li><b>The origin</b> — born at Facebook: Dynamo's leaderless replication plus Bigtable's table model</li>
+                    <li><b>No primary</b> — a sensor's write can land on any node; whichever receives it coordinates</li>
+                    <li><b>The walk</b> — the coordinator hashes the partition key and sends copies to 3 replica nodes</li>
+                    <li><b>No bottleneck</b> — with no single leader, no single node caps the cluster's write rate</li>
+                </ul>
+                <p class="example">Sensor s-17's 2:03pm reading arrives at node 2; node 2 hashes "s-17", finds replicas at nodes 2, 3, 4, and forwards copies — no leader was ever consulted.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Leaderless replication means every node accepts writes and forwards them to the replica set for that key — there is no primary whose failure stops writes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Losing a Node Mid-Write: ONE, QUORUM, ALL</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">tunable consistency</span></div>
+                <ul>
+                    <li><b>The failure</b> — at 2:03pm node 4 dies, so s-17's replica set {n2, n3, n4} has 2 nodes alive</li>
+                    <li><b>The knob</b> — each write names a consistency level: how many replica acks count as success</li>
+                    <li><b>ONE</b> — needs 1 ack of 3; n2 answers alone, so the write succeeds</li>
+                    <li><b>QUORUM</b> — needs floor(3/2)+1 = 2 acks (exact); n2 and n3 answer, so it still succeeds</li>
+                    <li><b>ALL</b> — needs 3 acks; n4 is dead, so the write times out and fails</li>
+                    <li><b>Hand-check</b> — 2 replicas alive &ge; 2 required, so QUORUM survives any single-node failure</li>
+                </ul>
+                <p class="example">With node 4 down, s-17's 2:03pm reading succeeds at ONE and QUORUM but fails at ALL — the same cluster, three different answers, chosen per query.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Consistency is tunable per request: ONE is fastest, ALL is strictest, and QUORUM (2 of 3) keeps both reads and writes working through a single dead replica.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Built for Write Floods</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">linear scale-out</span></div>
+                <ul>
+                    <li><b>The workload</b> — sensors, clickstreams, and message feeds write far more than they read</li>
+                    <li><b>The scaling move</b> — add nodes and the ring re-splits the key range; no leader to re-elect</li>
+                    <li><b>The numbers</b> — each node handles ~10k writes/s, so 6 nodes take 60k and 24 nodes take 240k</li>
+                    <li><b>Near-linear</b> — because writes never funnel through a primary, throughput grows with nodes</li>
+                    <li><b>The trade</b> — you give up joins and multi-row transactions to keep every write local and fast</li>
+                </ul>
+                <p class="example">Doubling the ring from 6 to 12 nodes roughly doubles capacity, 60k to 120k writes/s — no failover drill, no primary promotion, just more doors.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Leaderless design is what makes scale-out linear for write-heavy loads — every new node is another independent write path, not another follower of one leader.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Design the Table Around the Query</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">partition key</span></div>
+                <ul>
+                    <li><b>The confusion</b> — treating Cassandra like SQL: one normalized table per entity, joins later</li>
+                    <li><b>No joins</b> — there is no join engine; a query can only walk one partition efficiently</li>
+                    <li><b>The mistake</b> — partitioning readings by reading id scatters one sensor's data across all 6 nodes</li>
+                    <li><b>The fix</b> — partition key (sensor_id, day): every reading for s-17 today lives on one replica set</li>
+                    <li><b>The cost</b> — a new query pattern usually means a new table with the same data, written twice</li>
+                    <li><b>The rule</b> — list your queries first, then design one table per query, not one per entity</li>
+                </ul>
+                <p class="example">"Last 100 readings for s-17" hits 1 partition on the (sensor_id, day) table but fans out to all 6 nodes on the by-reading-id table — same data, 6&times; the work.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Modeling entities instead of queries. Cassandra tables are shaped by the partition key you will filter on — get it wrong and every read becomes a cluster-wide scatter-gather.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// c1: ring with coordinator fan-out
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Write, Any Door: the Coordinator Fans Out to 3 Replicas', w / 2, 24);
+
+    var cx0 = 400, cy0 = 170, R = 100, nr = 22;
+
+    // ring outline
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx0, cy0, R, 0, 2 * Math.PI); ctx.stroke();
+
+    // node positions at angles 90, 30, 330, 270, 210, 150 degrees (n1..n6)
+    var angles = [90, 30, 330, 270, 210, 150];
+    var nodes = [];
+    for (var i = 0; i < 6; i++) {
+        var a = angles[i] * Math.PI / 180;
+        nodes.push({ x: cx0 + R * Math.cos(a), y: cy0 - R * Math.sin(a), lab: 'n' + (i + 1) });
+    }
+
+    // replication arrows n2->n3, n2->n4 (draw before circles so they sit under)
+    function dashedArrow(from, to) {
+        var dx = to.x - from.x, dy = to.y - from.y;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        var ux = dx / len, uy = dy / len;
+        var x1 = from.x + ux * nr, y1 = from.y + uy * nr;
+        var x2 = to.x - ux * (nr + 4), y2 = to.y - uy * (nr + 4);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.beginPath();
+        ctx.moveTo(x2 + ux * 4, y2 + uy * 4);
+        ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fillStyle = P.green; ctx.fill();
+    }
+    dashedArrow(nodes[1], nodes[2]);
+    dashedArrow(nodes[1], nodes[3]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3 copies', (nodes[1].x + nodes[2].x) / 2 + 10, (nodes[1].y + nodes[2].y) / 2 + 4);
+
+    // client box + arrow to n2
+    roundRect(ctx, 30, 60, 120, 36, 8);
+    ctx.fillStyle = 'rgba(42,120,214,0.15)'; ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('sensor s-17 write', 90, 82);
+    // arrow
+    var tx = nodes[1].x - nr - 4, ty = nodes[1].y - 10;
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(150, 78); ctx.lineTo(tx, ty); ctx.stroke();
+    var ang2 = Math.atan2(ty - 78, tx - 150);
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - 10 * Math.cos(ang2 - 0.4), ty - 10 * Math.sin(ang2 - 0.4));
+    ctx.lineTo(tx - 10 * Math.cos(ang2 + 0.4), ty - 10 * Math.sin(ang2 + 0.4));
+    ctx.closePath(); ctx.fillStyle = P.blue; ctx.fill();
+
+    // node circles
+    for (var i = 0; i < 6; i++) {
+        var n = nodes[i];
+        var isReplica = (i === 1 || i === 2 || i === 3);
+        ctx.beginPath(); ctx.arc(n.x, n.y, nr, 0, 2 * Math.PI);
+        ctx.fillStyle = isReplica ? 'rgba(0,131,0,0.15)' : 'rgba(42,120,214,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = isReplica ? P.green : P.blue; ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(n.lab, n.x, n.y + 4);
+    }
+
+    // coordinator tag near n2
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('coordinator', nodes[1].x + nr + 6, nodes[1].y - 10);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no primary — any node', 30, 258);
+    ctx.fillText('could have coordinated', 30, 274);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('6-node ring, replication factor 3; sensor traffic illustrative', w - 8, h - 8);
+});
+
+// c2: consistency levels vs replicas alive
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Node 4 Is Down: Which Consistency Levels Still Succeed?', w / 2, 24);
+
+    var bx = 190, perAck = 150;
+
+    // baseline
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 65); ctx.lineTo(bx, 240); ctx.stroke();
+
+    // x tick labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var a = 1; a <= 3; a++) {
+        ctx.fillText(String(a), bx + a * perAck, 255);
+    }
+
+    var rows = [
+        { y: 85, lab: 'ONE — needs 1 ack', width: 150, ok: true, verdict: 'succeeds' },
+        { y: 145, lab: 'QUORUM — needs 2 acks', width: 300, ok: true, verdict: 'succeeds' },
+        { y: 205, lab: 'ALL — needs 3 acks', width: 450, ok: false, verdict: 'times out' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 20, r.y + 4);
+        ctx.fillStyle = r.ok ? 'rgba(0,131,0,0.30)' : 'rgba(231,76,60,0.20)';
+        ctx.fillRect(bx, r.y - 13, r.width, 26);
+        ctx.strokeStyle = r.ok ? P.green : '#e74c3c'; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, r.y - 13, r.width, 26);
+        ctx.fillStyle = r.ok ? P.green : '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.verdict, bx + r.width + 10, r.y + 4);
+    }
+
+    // threshold line at 2 acks
+    ctx.strokeStyle = P.orange; ctx.setLineDash([4, 3]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(490, 55); ctx.lineTo(490, 240); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('2 replicas alive', 490, 48);
+
+    // annotation
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('quorum of 3 = floor(3/2)+1 = 2 (exact)', 200, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('replication factor 3; ack counts exact', w - 20, h - 8);
+});
+
+// c3: linear scale-out line chart
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('More Nodes, More Doors: Writes/s Grows Linearly', w / 2, 24);
+
+    var px = 70, baseY = 245, pw = 590, chH = 180;
+    function xOf(n) { return px + n / 24 * pw; }
+    function yOf(v) { return baseY - v / 240000 * chH; }
+
+    // gridlines
+    var gv = [[60000, '60k'], [120000, '120k'], [180000, '180k'], [240000, '240k']];
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.moveTo(px, yOf(gv[i][0])); ctx.lineTo(px + pw, yOf(gv[i][0])); ctx.stroke();
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var i = 0; i < 4; i++) {
+        ctx.fillText(gv[i][1], px - 6, yOf(gv[i][0]) + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px, baseY - chH); ctx.lineTo(px, baseY); ctx.lineTo(px + pw, baseY); ctx.stroke();
+
+    // x ticks
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    var xt = [6, 12, 18, 24];
+    for (var i = 0; i < xt.length; i++) {
+        ctx.fillText(String(xt[i]), xOf(xt[i]), baseY + 18);
+    }
+
+    // highlight at 6 nodes
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xOf(6), baseY); ctx.lineTo(xOf(6), baseY - chH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText("today's 6-node ring", xOf(6), baseY - chH + 12);
+
+    // throughput line
+    var ns = [6, 12, 18, 24];
+    var ws = [60000, 120000, 180000, 240000];
+    var labs = ['60k', '120k', '180k', '240k'];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < ns.length; i++) {
+        var cx = xOf(ns[i]), cy = yOf(ws[i]);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    for (var i = 0; i < ns.length; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(xOf(ns[i]), yOf(ws[i]), 5, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labs[i], xOf(ns[i]), yOf(ws[i]) - 12);
+    }
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('≈10k writes/s per node — no leader bottleneck', xOf(16) - 100, 90);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('throughput numbers illustrative', px + pw, h - 8);
+});
+
+// c4: scatter vs one partition
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Query, Two Table Designs: Scatter vs One Partition', w / 2, 24);
+
+    var boxH = 40;
+
+    function box(cx, cy, bw, fill, border, lines) {
+        roundRect(ctx, cx - bw / 2, cy - boxH / 2, bw, boxH, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], cx, cy + 4);
+        } else {
+            ctx.fillText(lines[0], cx, cy - 3);
+            ctx.fillText(lines[1], cx, cy + 12);
+        }
+    }
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 8, y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x2, y); ctx.lineTo(x2 - 9, y - 5); ctx.lineTo(x2 - 9, y + 5);
+        ctx.closePath(); ctx.fillStyle = P.mute; ctx.fill();
+    }
+
+    var bFill = 'rgba(42,120,214,0.15)', rFill = 'rgba(231,76,60,0.12)', gFill = 'rgba(0,131,0,0.12)';
+
+    // row 1: by reading id
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('by reading id', 20, y1 - 32);
+    box(140, y1, 150, bFill, P.blue, ['last 100 for s-17']);
+    arrow(140 + 75, 390 - 80, y1);
+    box(390, y1, 160, rFill, '#e74c3c', ['asks all 6 nodes']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✗ 6-node scatter-gather', 490, y1 + 4);
+
+    // row 2: by (sensor_id, day)
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('by (sensor_id, day)', 20, y2 - 32);
+    box(140, y2, 150, bFill, P.blue, ['last 100 for s-17']);
+    arrow(140 + 75, 340 - 75, y2);
+    box(340, y2, 150, gFill, P.green, ['hash → 1 partition']);
+    arrow(340 + 75, 555 - 80, y2);
+    box(555, y2, 160, gFill, P.green, ['1 replica set', 'answers']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('✓', 645, y2 + 4);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('in Cassandra the query designs the table, not the entity', w / 2, 270);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

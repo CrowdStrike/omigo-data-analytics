@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spanner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Spanner</h1>
+<p class="subtitle">Google's Spanner runs SQL transactions across continents by admitting its clocks are uncertain — and making every transaction wait out the uncertainty before it commits</p>
+
+<div class="card-section">
+    <h2>A Transfer That Two Continents Must Agree On</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">TrueTime</span><span class="tag orange">Google 2012</span></div>
+                <ul>
+                    <li><b>The bank</b> — one account replicated in Tokyo and Virginia; writes route through the split's Paxos leader</li>
+                    <li><b>Two transfers</b> — T1 deposits $300 in Tokyo; moments later T2 withdraws $700 in Virginia</li>
+                    <li><b>The stakes</b> — order T1 then T2 clears the withdrawal; the reverse bounces it — replicas must agree</li>
+                    <li><b>The trick</b> — TrueTime: GPS receivers and atomic clocks report time as an interval [earliest, latest]</li>
+                    <li><b>The honesty</b> — the clock never claims one instant; it guarantees true time lies inside the interval</li>
+                    <li><b>The wait</b> — a transaction waits out its interval before committing, so its timestamp is safely past</li>
+                </ul>
+                <p class="example">At the same real instant, Tokyo's clock reads [10:00:00.120, 10:00:00.130] and Virginia's reads [10:00:00.118, 10:00:00.128] — neither knows the exact time, but both intervals contain it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> TrueTime replaces "what time is it?" with "time is somewhere in this small window" — and Spanner turns that bounded doubt into a global transaction ordering guarantee.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Waiting Out the Uncertainty, By Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">commit wait</span></div>
+                <ul>
+                    <li><b>The setup</b> — clock uncertainty ε = 5 ms (illustrative; the 2012 paper reports ε typically under 7 ms)</li>
+                    <li><b>T1 commits</b> — Tokyo reads TT.now() = [120, 130] and picks timestamp s1 = 130, the latest edge</li>
+                    <li><b>The wait</b> — Tokyo holds the commit until its own earliest passes 130 — about 2ε = 10 ms of waiting</li>
+                    <li><b>The release</b> — at real time 135 T1 commits; anyone who sees T1's money knows real time passed 130</li>
+                    <li><b>T2 commits</b> — Virginia starts T2 at real time 140, reads [135, 145], picks s2 = 145 — above 130 for sure</li>
+                    <li><b>The guarantee</b> — s2 &gt; s1 with no messages exchanged: the wait alone ordered the two continents</li>
+                </ul>
+                <p class="example">T1 waits 10 ms and commits with timestamp 130; T2, started after T1 finished, can never draw a timestamp below 130 — the $700 withdrawal always sorts after the $300 deposit.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Commit wait costs about twice the clock uncertainty (the rule is exact: wait until TT.now().earliest exceeds the chosen timestamp); after it, every later transaction anywhere gets a larger timestamp.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>SQL Across Continents, and What It Costs</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">Paxos</span><span class="tag orange">write latency</span></div>
+                <ul>
+                    <li><b>The paper</b> — Google published Spanner in 2012: a SQL database with ACID transactions across continents</li>
+                    <li><b>The replication</b> — every write is replicated synchronously via Paxos before it is acknowledged</li>
+                    <li><b>No boss</b> — external consistency (a global transaction order) without any single ordering server</li>
+                    <li><b>The bill</b> — cross-continent writes pay Paxos round trips plus commit wait before they return</li>
+                    <li><b>The reads</b> — snapshot reads at a past timestamp run lock-free on any replica that is caught up</li>
+                    <li><b>The echo</b> — CockroachDB and others rebuilt the design on commodity clocks, with wider uncertainty</li>
+                </ul>
+                <p class="example">An illustrative transatlantic write: 2 ms local work + 60 ms Paxos replication + 10 ms commit wait = 72 ms — the price of ACID across an ocean.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Spanner's trade is explicit — SQL semantics and globally ordered transactions everywhere, paid for in write latency; replication dominates the bill and commit wait adds a small fixed slice.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Clocks Are Still Not Synchronized</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">clock uncertainty</span></div>
+                <ul>
+                    <li><b>The confusion</b> — people hear "atomic clocks" and assume Spanner's clocks agree perfectly</li>
+                    <li><b>Still uncertain</b> — the clocks drift like any others; TrueTime only bounds how wrong they can be</li>
+                    <li><b>The real trick</b> — knowing the bound lets a transaction wait until its timestamp is safely in the past</li>
+                    <li><b>Skipping the wait</b> — commit T1 at real time 125 with s1 = 130 and the timestamp is still in the future</li>
+                    <li><b>The inversion</b> — T2 starts at real 127, Virginia reads [117, 127], picks s2 = 127 — below s1 = 130</li>
+                    <li><b>Wider windows</b> — on plain NTP the uncertainty is hundreds of ms; the same wait becomes unusably long</li>
+                </ul>
+                <p class="example">Without the wait, a snapshot read at timestamp 128 shows T2's $700 withdrawal but not the $300 deposit it depended on — history reads backwards.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing the hardware synchronizes the clocks. GPS and atomic clocks only shrink the uncertainty window; the ordering guarantee comes from waiting the window out — and with cheap clocks the window is too wide to wait out.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedBox(ctx, x, y, bw, bh, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + bw - r, y); ctx.arcTo(x + bw, y, x + bw, y + r, r);
+    ctx.lineTo(x + bw, y + bh - r); ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r);
+    ctx.lineTo(x + r, y + bh); ctx.arcTo(x, y + bh, x, y + bh - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function msAxis(ctx) {
+    // shared ms axis: x(t) = 60 + (t-110)*15, ticks .110 to .150
+    var baseY = 245;
+    for (var t = 110; t <= 150; t += 10) {
+        var x = 60 + (t - 110) * 15;
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, baseY); ctx.stroke();
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var t = 110; t <= 150; t += 10) {
+        var x = 60 + (t - 110) * 15;
+        ctx.fillText('.' + t, x, baseY + 18);
+    }
+}
+function xMs(t) { return 60 + (t - 110) * 15; }
+
+// c1: TrueTime — two clocks, two intervals, one true instant
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('TrueTime: Two Clocks, Two Intervals, One True Instant Inside Both', w / 2, 24);
+
+    msAxis(ctx);
+
+    // Tokyo bar
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(xMs(120), 110, xMs(130) - xMs(120), 22);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(xMs(120), 110, xMs(130) - xMs(120), 22);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Tokyo: [.120, .130]', 65, 104);
+
+    // Virginia bar
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(xMs(118), 180, xMs(128) - xMs(118), 22);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(xMs(118), 180, xMs(128) - xMs(118), 22);
+    ctx.fillStyle = P.green;
+    ctx.fillText('Virginia: [.118, .128]', 65, 174);
+
+    // true time marker
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xMs(125), 75); ctx.lineTo(xMs(125), 245); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('true time .125', xMs(125), 68);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('neither clock knows .125 — both bracket it', 460, 140);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('interval semantics exact; millisecond values illustrative', w - 12, h - 8);
+});
+
+// c2: commit wait — T1 holds 10 ms so T2 can never sort below it
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Commit Wait: T1 Holds 10 ms So T2 Can Never Sort Below It', w / 2, 24);
+
+    msAxis(ctx);
+
+    // T1 interval
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    ctx.fillRect(xMs(120), 100, xMs(130) - xMs(120), 22);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(xMs(120), 100, xMs(130) - xMs(120), 22);
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('T1 reads [120, 130]', 65, 95);
+
+    // commit-wait band: wait runs from real 125 (when s1 is picked) to real 135
+    ctx.fillStyle = 'rgba(217,89,38,0.20)';
+    ctx.fillRect(xMs(125), 90, xMs(135) - xMs(125), 40);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('wait 10 ms', (xMs(130) + xMs(135)) / 2 + 20, 80);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('commit at 135', xMs(135) + 6, 113);
+
+    // s1 marker
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xMs(130), 90); ctx.lineTo(xMs(130), 130); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('s1 = 130', xMs(130) - 6, 84);
+
+    // T2 interval
+    ctx.fillStyle = 'rgba(0,131,0,0.25)';
+    ctx.fillRect(xMs(135), 180, xMs(145) - xMs(135), 22);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(xMs(135), 180, xMs(145) - xMs(135), 22);
+    ctx.fillStyle = P.green; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('T2 reads [135, 145]', 65, 175);
+
+    // s2 marker
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xMs(145), 170); ctx.lineTo(xMs(145), 210); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('s2 = 145', xMs(145), 164);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('s2 = 145 > s1 = 130 — order guaranteed, no coordinator asked', 65, 285);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('wait rule exact; ε = 5 ms and all timestamps illustrative', w - 12, h - 28);
+});
+
+// c3: where a Spanner write spends its milliseconds
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Where a Spanner Write Spends Its Milliseconds', w / 2, 24);
+
+    var bx = 230;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, 55); ctx.lineTo(bx, 215); ctx.stroke();
+
+    var rows = [
+        { y: 70,  label: 'same city — 15 ms',     segs: [[10, P.blue], [15, P.violet], [50, P.green]], total: '15 ms' },
+        { y: 125, label: 'cross-country — 42 ms', segs: [[10, P.blue], [150, P.violet], [50, P.green]], total: '42 ms' },
+        { y: 180, label: 'transatlantic — 72 ms', segs: [[10, P.blue], [300, P.violet], [50, P.green]], total: '72 ms' }
+    ];
+    for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(row.label, 20, row.y + 12);
+        var cur = 0;
+        for (var i = 0; i < row.segs.length; i++) {
+            ctx.fillStyle = row.segs[i][1];
+            ctx.fillRect(bx + cur, row.y, row.segs[i][0], 16);
+            cur += row.segs[i][0];
+        }
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText(row.total, bx + cur + 8, row.y + 12);
+    }
+
+    // legend
+    var leg = [[P.blue, 'local work'], [P.violet, 'Paxos replication'], [P.green, 'commit wait']];
+    var lx = 230;
+    for (var i = 0; i < leg.length; i++) {
+        ctx.fillStyle = leg[i][0];
+        ctx.fillRect(lx, 228, 12, 12);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(leg[i][1], lx + 18, 238);
+        lx += 18 + leg[i][1].length * 7 + 24;
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('commit wait is the same 10 ms everywhere — distance drives the rest', 440, 105);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('all latencies illustrative', w - 12, h - 8);
+});
+
+// c4: skip the wait and a later transfer can sort first
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Skip the Wait and a Later Transfer Can Sort First', w / 2, 24);
+
+    function box(x, cy, bw, fill, stroke, lines) {
+        roundedBox(ctx, x, cy - 22, bw, 44, 8);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+            var ty = cy + (i - (lines.length - 1) / 2) * 15 + 4;
+            ctx.fillText(lines[i], x + bw / 2, ty);
+        }
+    }
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2 - 9, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(x2 - 9, y - 5); ctx.lineTo(x2, y); ctx.lineTo(x2 - 9, y + 5);
+        ctx.closePath(); ctx.fill();
+    }
+    var blueF = 'rgba(42,120,214,0.15)', redF = 'rgba(231,76,60,0.12)', greenF = 'rgba(0,131,0,0.12)';
+
+    // row 1: no commit wait
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('no commit wait', 20, y1 - 32);
+    box(170, y1, 210, blueF, P.blue, ['T1 commits at real 125,', 's1 = 130']);
+    arrow(380, 430, y1);
+    box(430, y1, 230, redF, '#e74c3c', ['T2 at real 127 reads', '[117, 127], s2 = 127']);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ 127 < 130 — history inverted', 545, y1 + 40);
+
+    // row 2: with commit wait
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('with commit wait', 20, y2 - 32);
+    box(170, y2, 210, blueF, P.blue, ['T1 waits to real 135,', 's1 = 130']);
+    arrow(380, 430, y2);
+    box(430, y2, 230, greenF, P.green, ['T2 at real 140 reads', '[135, 145], s2 = 145']);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ 145 > 130 — order matches reality', 545, y2 + 40);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the clocks never agree — the wait is what makes the timestamps honest', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('millisecond values illustrative; the inversion mechanism exact', w - 12, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

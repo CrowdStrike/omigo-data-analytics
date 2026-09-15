@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Shared Machinery</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>The Shared Machinery</h1>
+<p class="subtitle">Strip the branding off any chat app and the same five moving parts appear — a thin connection, a push wake-up, a mailbox per device, delivery ticks, and a fan-out loop for groups</p>
+
+<div class="card-section">
+    <h2>Staying Reachable: How the Client Holds the Line</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">connections</span><span class="tag orange">battery</span></div>
+                <ul>
+                    <li><b>The one-way street</b> — a server cannot dial your phone; the client must open and hold the line</li>
+                    <li><b>Polling</b> — early clients asked "anything new?" every few seconds, and most trips came back empty</li>
+                    <li><b>Long polling</b> — the server holds each request open and answers only when news actually arrives</li>
+                    <li><b>WebSocket</b> — one thin always-open pipe replaces the asking; tiny heartbeats prove it is still alive</li>
+                    <li><b>The OS push channel</b> — phones kill background sockets, so one shared OS connection wakes every app</li>
+                    <li><b>Wake then fetch</b> — the push only says "something arrived"; the app reconnects and fetches it itself</li>
+                </ul>
+                <p class="example">Alice's phone sleeps with the chat app's socket closed; one tiny OS push wakes the app, which reconnects and fetches her message in about a second.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The client, not the server, keeps the line open — and on phones the operating system's single shared push connection does the waiting on behalf of every app at once.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Life of One Message</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">receipts</span><span class="tag orange">store-and-forward</span></div>
+                <ul>
+                    <li><b>Optimistic send</b> — Alice's client assigns a local ID and shows the message before any server reply</li>
+                    <li><b>One tick</b> — the server acks and writes the message into Bob's per-device queue on disk: state "sent"</li>
+                    <li><b>The queue</b> — store-and-forward means the server holds the message durably until Bob's device takes it</li>
+                    <li><b>The push branch</b> — if Bob is connected the message rides his socket; if not, it waits and a push fires</li>
+                    <li><b>Two ticks</b> — Bob's device acks receipt back through the server, and the state becomes "delivered"</li>
+                    <li><b>Blue ticks + retries</b> — the read receipt is its own tiny message; retries dedup by ID, so no doubles</li>
+                </ul>
+                <p class="example">Bob's phone is dark for forty minutes; the message sits in his queue the whole time, then flips to two ticks seconds after he regains signal.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every tick is a transition in a tiny per-message state machine — sent, delivered, read — driven by small acks flowing back along the same open connections.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Presence and Typing: Traffic That Is Allowed to Die</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">ephemeral</span><span class="tag green">throttling</span></div>
+                <ul>
+                    <li><b>Two kinds of traffic</b> — messages are durable and queued; presence and "typing…" are fire-and-forget</li>
+                    <li><b>Never queued</b> — a typing event goes only to watchers connected right now and is dropped otherwise</li>
+                    <li><b>No receipts</b> — ephemera carry no ticks and no retries, because a lost typing event costs nothing</li>
+                    <li><b>Fan-out cost</b> — one status flip notifies everyone watching you, so servers batch and throttle updates</li>
+                    <li><b>Old problem</b> — this is the 1997 desktop buddy-list problem again, at a hundred times the scale</li>
+                </ul>
+                <p class="example">Bob starts typing, loses signal mid-word, and the event simply vanishes — nothing stores it, nothing retries it, and nobody misses it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The same connection carries two classes of traffic — durable messages that must arrive exactly once, and ephemera that are cheapest when allowed to die.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Groups, Devices, and the Fan-Out Loop</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">fan-out</span><span class="tag green">multi-device</span><span class="tag orange">scale</span></div>
+                <ul>
+                    <li><b>One upload</b> — a group message goes up from Alice exactly once; the server does all the copying</li>
+                    <li><b>Write amplification</b> — 200 members means 200 server-side queue writes, not 200 uploads from Alice</li>
+                    <li><b>Every device counts</b> — phone, laptop, and tablet each get their own queue and encryption session</li>
+                    <li><b>"Delivered" softens</b> — with many devices it means delivered to at least one of Bob's devices</li>
+                    <li><b>The flip</b> — huge channels stop pushing to everyone; members pull on demand from one shared log</li>
+                </ul>
+                <p class="example">Alice sends one photo to a 200-member group; her phone uploads it once and the server performs the other 199 deliveries for her.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Fan-out happens on the server, one queue write per member device — until groups grow so large that push-to-everyone flips into read-on-demand from a shared log.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x2, y2, ang, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(ang - 0.45), y2 - 8 * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - 8 * Math.cos(ang + 0.45), y2 - 8 * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), color);
+}
+
+function dashedArrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), color);
+}
+
+// c1: polling vs long polling vs always-open pipe + OS push
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Polling vs Long Polling vs Always-Open Pipe', w / 2, 24);
+
+    // panel dividers
+    ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(245, 40); ctx.lineTo(245, 262); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(485, 40); ctx.lineTo(485, 262); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var panels = [
+        { c: 60, sv: 205, head: 'polling', hc: P.orange },
+        { c: 300, sv: 445, head: 'long polling', hc: P.blue },
+        { c: 540, sv: 685, head: 'socket + OS push', hc: P.green }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var p = panels[i];
+        ctx.fillStyle = p.hc; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(p.head, (p.c + p.sv) / 2, 52);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText('client', p.c, 72);
+        ctx.fillText('server', p.sv, 72);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(p.c, 78); ctx.lineTo(p.c, 252); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p.sv, 78); ctx.lineTo(p.sv, 252); ctx.stroke();
+    }
+
+    // panel 1: polling — five request/response pairs, one carries a message
+    var p1 = panels[0];
+    var ys = [92, 124, 156, 188, 220];
+    for (var i = 0; i < 5; i++) {
+        arrow(ctx, p1.c + 4, ys[i], p1.sv - 4, ys[i], P.mute, 2);
+        var ry = ys[i] + 10;
+        if (i === 3) {
+            arrow(ctx, p1.sv - 4, ry, p1.c + 4, ry, P.green, 2.5);
+            ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('msg', (p1.c + p1.sv) / 2, ry + 12);
+        } else {
+            arrow(ctx, p1.sv - 4, ry, p1.c + 4, ry, P.mute, 2);
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('empty', (p1.c + p1.sv) / 2, ry + 12);
+        }
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('5 trips, 1 message', (p1.c + p1.sv) / 2, 248);
+
+    // panel 2: long polling — one held request
+    var p2 = panels[1];
+    arrow(ctx, p2.c + 4, 95, p2.sv - 4, 95, P.mute, 2);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ask once', (p2.c + p2.sv) / 2, 89);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(p2.sv, 100); ctx.lineTo(p2.sv, 185); ctx.stroke();
+    ctx.save();
+    ctx.translate(p2.sv - 10, 142); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('server holds the request', 0, 0);
+    ctx.restore();
+    arrow(ctx, p2.sv - 4, 192, p2.c + 4, 192, P.green, 2.5);
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('msg arrives', (p2.c + p2.sv) / 2, 186);
+    arrow(ctx, p2.c + 4, 222, p2.sv - 4, 222, P.mute, 2);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('re-ask', (p2.c + p2.sv) / 2, 216);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('quiet line, instant answer', (p2.c + p2.sv) / 2, 248);
+
+    // panel 3: websocket + OS push
+    var p3 = panels[2];
+    var mid3 = (p3.c + p3.sv) / 2;
+    ctx.strokeStyle = P.green; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(p3.c + 6, 95); ctx.lineTo(p3.sv - 6, 95); ctx.stroke();
+    arrowHead(ctx, p3.sv - 4, 95, 0, P.green);
+    arrowHead(ctx, p3.c + 4, 95, Math.PI, P.green);
+    ctx.fillStyle = P.green; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one open pipe', mid3, 89);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('· heartbeat ·', mid3, 126);
+    ctx.fillText('· heartbeat ·', mid3, 146);
+    dashedArrow(ctx, p3.sv - 4, 172, p3.c + 4, 172, P.violet, 2.5);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('OS push: wake!', mid3, 166);
+    arrow(ctx, p3.c + 4, 200, p3.sv - 4, 200, P.mute, 2);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('fetch', mid3, 194);
+    arrow(ctx, p3.sv - 4, 224, p3.c + 4, 224, P.green, 2.5);
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('msg', mid3, 218);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('idle pipe, near-zero battery', mid3, 248);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('trip counts illustrative', w - 12, h - 8);
+});
+
+// c2: ladder diagram Alice -> chat server -> Bob with tick states
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var xa = 110, xs = 360, xb = 610;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Message, Three Lifelines: Where Each Tick Is Born', w / 2, 24);
+
+    // lifelines + names
+    var names = [{ x: xa, n: 'Alice' }, { x: xs, n: 'chat server' }, { x: xb, n: 'Bob' }];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(names[i].n, names[i].x, 54);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(names[i].x, 64); ctx.lineTo(names[i].x, 268); ctx.stroke();
+    }
+
+    function lab(text, x, y, color, bold) {
+        ctx.fillStyle = color;
+        ctx.font = (bold ? 'bold ' : '') + '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, x, y);
+    }
+
+    var mAS = (xa + xs) / 2, mSB = (xs + xb) / 2;
+
+    arrow(ctx, xa + 4, 88, xs - 4, 88, P.mute, 2.5);
+    lab('send (local id 42)', mAS, 82, '#444', false);
+
+    arrow(ctx, xs - 4, 108, xa + 4, 108, P.blue, 2.5);
+    lab('ack → ✓ sent', mAS, 102, P.blue, true);
+
+    // queue-write box on the server lifeline
+    ctx.fillStyle = 'rgba(217,89,38,0.15)';
+    roundedRect(ctx, xs - 75, 116, 150, 20, 5); ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    roundedRect(ctx, xs - 75, 116, 150, 20, 5); ctx.stroke();
+    lab("write to Bob's queue (disk)", xs, 130, P.orange, true);
+
+    arrow(ctx, xs + 4, 152, xb - 4, 152, P.mute, 2.5);
+    lab('online: push down his socket', mSB, 146, '#444', false);
+
+    dashedArrow(ctx, xs + 4, 172, xb - 4, 172, P.orange, 2);
+    lab('offline: store + OS push, deliver on reconnect', mSB, 186, P.orange, true);
+
+    arrow(ctx, xb - 4, 196, xs + 4, 196, P.mute, 2.5);
+    lab('device ack', mSB, 209, '#444', false);
+
+    arrow(ctx, xs - 4, 214, xa + 4, 214, P.green, 2.5);
+    lab('✓✓ delivered', mAS, 208, P.green, true);
+
+    arrow(ctx, xb - 4, 238, xs + 4, 238, P.mute, 2.5);
+    lab('opens chat: read', mSB, 232, '#444', false);
+
+    arrow(ctx, xs - 4, 256, xa + 4, 256, P.violet, 2.5);
+    lab('blue ✓✓ read', mAS, 250, P.violet, true);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('retries + dedup on id 42 → effectively exactly-once', w / 2, 283);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative', w - 12, h - 8);
+});
+
+// c3: durable message lane vs ephemeral presence/typing lane
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    function box(x, cy, bw, line1, line2, fill, border, dashed) {
+        var y = cy - 22;
+        ctx.fillStyle = fill;
+        roundedRect(ctx, x, y, bw, 44, 8); ctx.fill();
+        ctx.strokeStyle = border; ctx.lineWidth = dashed ? 1.5 : 1.5;
+        if (dashed) ctx.setLineDash([5, 4]);
+        roundedRect(ctx, x, y, bw, 44, 8); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(line1, x + bw / 2, cy - 3);
+        ctx.fillText(line2, x + bw / 2, cy + 13);
+    }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Lanes on One Connection: Durable vs Ephemeral', w / 2, 24);
+
+    // lane divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(20, 160); ctx.lineTo(700, 160); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // lane 1: durable
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('message lane', 20, 62);
+    box(90, 100, 130, 'Alice sends', 'id 42', 'rgba(42,120,214,0.15)', P.blue, false);
+    box(260, 100, 140, 'queue on disk', 'survives crashes', 'rgba(217,89,38,0.12)', P.orange, false);
+    box(440, 100, 130, "Bob's device", 'acks', 'rgba(0,131,0,0.12)', P.green, false);
+    box(610, 100, 90, '✓✓', '+ read', 'rgba(74,58,167,0.12)', P.violet, false);
+    arrow(ctx, 220, 100, 258, 100, P.mute, 2.5);
+    arrow(ctx, 400, 100, 438, 100, P.mute, 2.5);
+    arrow(ctx, 570, 100, 608, 100, P.mute, 2.5);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('stored, retried, receipted — must arrive exactly once', 360, 145);
+
+    // lane 2: ephemeral
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ephemera lane', 20, 178);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('the 1997 buddy-list problem, at 100× scale', 700, 178);
+    box(90, 210, 130, 'Bob types…', 'event fires', 'rgba(25,158,112,0.13)', P.aqua, false);
+    box(280, 210, 170, 'connected watchers', 'see it now', 'rgba(25,158,112,0.13)', P.aqua, false);
+    box(280, 262, 170, 'offline watcher', 'dropped ✗', 'rgba(107,114,128,0.10)', P.mute, true);
+    box(520, 210, 160, 'batch + throttle', 'status floods', 'rgba(217,89,38,0.12)', P.orange, false);
+    arrow(ctx, 220, 210, 278, 210, P.mute, 2.5);
+    dashedArrow(ctx, 220, 226, 278, 254, P.mute, 2);
+    arrow(ctx, 450, 210, 518, 210, P.mute, 2.5);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no disk, no retry, no receipt', 360, 294);
+});
+
+// c4: group fan-out into per-device queues + shared-log inset for huge channels
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Upload, N Queue Writes — Until the Model Flips', w / 2, 24);
+
+    // inset divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(500, 40); ctx.lineTo(500, 280); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Alice node
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(70, 160, 14, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('A', 70, 164);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('Alice', 70, 186);
+
+    // upload arrow + server box
+    arrow(ctx, 86, 160, 150, 160, P.blue, 3);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1 upload', 118, 150);
+
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundedRect(ctx, 152, 136, 110, 48, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    roundedRect(ctx, 152, 136, 110, 48, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('chat server', 207, 156);
+    ctx.fillText('copies msg', 207, 172);
+
+    // fan of queue boxes
+    var qys = [70, 106, 142, 178, 214, 250];
+    var qLabs = ['member 1 — phone', 'member 2 — phone', 'Bob — phone', 'Bob — laptop', 'member 4 — tablet', '… 200 device queues'];
+    for (var i = 0; i < 6; i++) {
+        var cy = qys[i];
+        var isBob = (i === 2 || i === 3);
+        arrow(ctx, 262, 160, 328, cy, P.mute, 2);
+        ctx.fillStyle = isBob ? 'rgba(0,131,0,0.12)' : 'rgba(107,114,128,0.10)';
+        roundedRect(ctx, 330, cy - 13, 150, 26, 6); ctx.fill();
+        ctx.strokeStyle = isBob ? P.green : P.mute; ctx.lineWidth = 1.5;
+        roundedRect(ctx, 330, cy - 13, 150, 26, 6); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(qLabs[i], 405, cy + 4);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText("delivered = at least one of Bob's devices", 330, 284);
+
+    // inset: huge channel — one shared log, members pull
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('huge channel', 610, 58);
+    ctx.fillStyle = 'rgba(217,89,38,0.12)';
+    roundedRect(ctx, 545, 88, 130, 44, 8); ctx.fill();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    roundedRect(ctx, 545, 88, 130, 44, 8); ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one shared log', 610, 106);
+    ctx.fillText('(append only)', 610, 122);
+
+    var mxs = [570, 610, 650];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = P.mute;
+        ctx.beginPath(); ctx.arc(mxs[i], 210, 8, 0, 2 * Math.PI); ctx.fill();
+        arrow(ctx, mxs[i], 198, mxs[i] === 610 ? 610 : mxs[i] + (610 - mxs[i]) * 0.35, 138, P.mute, 2);
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('members pull', 610, 240);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('read on demand, no fan-out', 610, 262);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('member counts illustrative', w - 12, h - 8);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

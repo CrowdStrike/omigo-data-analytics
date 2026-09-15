@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Notifications</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Event Notifications</h1>
+<p class="subtitle">A file landing in a bucket can wake a queue or a function on its own, but a message may arrive twice and two messages about one file may arrive in the wrong order</p>
+
+<div class="card-section">
+    <h2>An Object Lands, Something Wakes Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">fan-out</span><span class="tag orange">folder + extension filter</span></div>
+                <ul>
+                    <li><b>The setup</b> — one file is uploaded every hour, and each one needs a job run on it</li>
+                    <li><b>The wiring</b> — you tell the bucket which changes matter and where to send them</li>
+                    <li><b>What counts as a change</b> — an object being written, overwritten, or deleted from it</li>
+                    <li><b>The filter</b> — a rule narrows it to one folder and one extension, so noise stops</li>
+                    <li><b>Where it goes</b> — a queue, a function, a fan-out topic, or a general event bus</li>
+                    <li><b>No polling</b> — no job has to keep listing the folder on a timer to find the work</li>
+                    <li><b>Faster reaction</b> — work starts within seconds of the file landing, not on the hour</li>
+                    <li><b>Only a hint</b> — the message says something changed, and nothing more than that</li>
+                </ul>
+                <p class="example">A CSV lands in the incoming folder, a message appears on a queue, and one worker picks it up and runs the job.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Writing the rule and picking the destination is the easy half. The hard half is that the delivery itself promises very little.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>At Least Once, and in No Fixed Order</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">at-least-once</span><span class="tag orange">no ordering</span></div>
+                <ul>
+                    <li><b>At least once</b> — one change can arrive as two messages; exactly once is not offered</li>
+                    <li><b>No order</b> — two messages about one file can arrive newest first, oldest second</li>
+                    <li><b>The message is old news</b> — it describes a past change, not the file right now</li>
+                    <li><b>The right pattern</b> — treat it as "go look at this file", then read the file itself</li>
+                    <li><b>Version guard</b> — compare the version in the message with the one stored right now</li>
+                    <li><b>Timing is best effort</b> — usually a few seconds, sometimes a minute or longer</li>
+                    <li><b>Messages can be lost</b> — rare, but a pipeline should not assume every one arrives</li>
+                    <li><b>So sweep as well</b> — a nightly pass over the folder fills in whatever was missed</li>
+                </ul>
+                <p class="example">The overwrite message arrives first and the original write message second, so the job publishes the older row count as the current one.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Trusting the message as the file's current state, and assuming one message per change. Both hold most of the time, which is why the failures show up as wrong numbers instead of as errors.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>40,000 Files a Day, Counted as 40,600</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">run it twice safely</span><span class="tag orange">dedupe key</span></div>
+                <ul>
+                    <li><b>The inputs</b> — 40,000 files land in a day and 1.5% of them notify twice (illustrative)</li>
+                    <li><b>The duplicates</b> — 40,000 &times; 0.015 = 600 files send a second, identical message</li>
+                    <li><b>The invocations</b> — the job therefore runs 40,000 + 600 = 40,600 times that day</li>
+                    <li><b>The naive count</b> — a counter that adds one per run reports 40,600, not 40,000</li>
+                    <li><b>The error</b> — 600 files too many: 600 &divide; 40,000 = 1.50%, and nothing looks wrong</li>
+                    <li><b>Over a month</b> — 30 days of that is 1,218,000 reported against 1,200,000 real</li>
+                    <li><b>The fix</b> — record each file name and version handled, then ignore any repeat</li>
+                    <li><b>The corrected count</b> — 40,600 arrive, 600 are rejected as repeats, 40,000 counted</li>
+                </ul>
+                <p class="example">The store already holds <code>store-7.csv</code> at version v1, so the second message for it is rejected and the counter does not move.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Make the job safe to run twice, keyed on the file's version. An ordered queue does not fix the ordering either, because the reordering happens before the queue.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// c1: one object lands, one filter gate, four kinds of destination
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15.5px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Object Lands, One Filter Gate, Four Kinds of Destination', w / 2, 24);
+
+    // the bucket
+    ctx.fillStyle = rgba(P.blue, 0.14);
+    roundRect(ctx, 30, 110, 130, 64, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('bucket', 95, 134);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('object written', 95, 154);
+    ctx.fillStyle = P.mute; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('incoming/store-7.csv', 95, 192);
+
+    // bucket -> gate
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(162, 142); ctx.lineTo(212, 142); ctx.stroke();
+    arrowHead(ctx, 162, 142, 218, 142, P.mute);
+
+    // the filter gate
+    ctx.fillStyle = rgba(P.yellow, 0.13);
+    roundRect(ctx, 220, 98, 150, 88, 8); ctx.fill();
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('filter gate', 295, 120);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('folder: incoming/', 295, 142);
+    ctx.fillText('name ends: .csv', 295, 162);
+
+    var dests = [
+        { label: 'a queue — buffered, retried',   edge: P.green },
+        { label: 'a topic — copies to many',      edge: P.magenta },
+        { label: 'a function — runs at once',     edge: P.violet },
+        { label: 'an event bus — more targets',   edge: P.aqua }
+    ];
+    var bx = 470, bw = 220, bh = 36;
+
+    dests.forEach(function(d, i) {
+        var y = 56 + i * 44;
+        var cy = y + bh / 2;
+
+        // elbow connector, head landing exactly on the box edge
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(372, 142);
+        ctx.lineTo(430, 142);
+        ctx.lineTo(430, cy);
+        ctx.lineTo(465, cy);
+        ctx.stroke();
+        arrowHead(ctx, 450, cy, bx, cy, P.mute);
+
+        ctx.fillStyle = rgba(d.edge, 0.12);
+        roundRect(ctx, bx, y, bw, bh, 6); ctx.fill();
+        ctx.strokeStyle = d.edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = d.edge; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(d.label, bx + 12, cy + 4);
+    });
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the gate decides which files notify; the destination decides who wakes up', w / 2, 252);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('labels illustrative; filtering by folder and extension is documented', w - 12, 294);
+});
+
+// c2: duplicate and reordered delivery on one time axis
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15.5px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Duplicate and Reordered Delivery on One Time Axis', w / 2, 22);
+
+    var x0 = 70, x1 = 640, tMax = 12;
+    function tx(t) { return x0 + (t / tMax) * (x1 - x0); }
+
+    // time axis
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, 250); ctx.lineTo(x1, 250); ctx.stroke();
+    [0, 3, 6, 9, 12].forEach(function(t) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(tx(t), 250); ctx.lineTo(tx(t), 256); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(t), tx(t), 270);
+    });
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('seconds after the file lands', x0, 290);
+
+    // lane labels
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('duplicate', 64, 94);
+    ctx.fillText('reordered', 64, 204);
+
+    function guide(y) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+    function marker(t, y, col) {
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(tx(t), y, 7, 0, Math.PI * 2); ctx.fill();
+    }
+    function mLabel(t, y, col, txt) {
+        ctx.fillStyle = col; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(txt, tx(t), y);
+    }
+
+    // lane 1: one write, two messages
+    guide(90);
+    marker(0, 90, P.blue);   mLabel(0, 72, P.ink,   'written (v1)');
+    marker(3, 90, P.green);  mLabel(3, 72, P.green, 'message arrives');
+    marker(9, 90, RED);      mLabel(9, 72, RED,     'same message again');
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the job ran twice → the file is counted twice', x0, 124);
+
+    // the fix, between the lanes
+    ctx.fillStyle = rgba(P.aqua, 0.12);
+    roundRect(ctx, x0, 140, 570, 28, 6); ctx.fill();
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fix: use the message as a trigger, then read the file’s current version', 355, 159);
+
+    // lane 2: written then overwritten, delivered in reverse
+    guide(200);
+    marker(0, 200, P.blue);   mLabel(0, 186, P.ink,     'written (v1)');
+    marker(2, 200, P.violet); mLabel(2, 186, P.violet,  'overwritten (v2)');
+    marker(5, 200, P.yellow); mLabel(5, 222, P.yellow,  'v2 message arrives');
+    marker(9, 200, RED);      mLabel(9, 222, RED,       'v1 message arrives');
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('last one wins downstream → the record says v1, the bucket holds v2', x0, 241);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('timings illustrative; at-least-once and unordered delivery are documented', w - 12, 294);
+});
+
+// c3: truth vs the naive count vs the repeat-safe count
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15.5px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Files Counted per Day: Truth, Naive Job, Repeat-Safe Job', w / 2, 24);
+
+    var yBase = 234, yTop = 66, vMin = 39400, vMax = 40800;
+    function yv(v) { return yBase - ((v - vMin) / (vMax - vMin)) * (yBase - yTop); }
+    function fmt(v) { return v.toLocaleString('en-US'); }
+
+    // gridlines and y labels
+    [39400, 39800, 40200, 40600, 40800].forEach(function(v) {
+        var y = yv(v);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(90, y); ctx.lineTo(660, y); ctx.stroke();
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(fmt(v), 82, y + 4);
+    });
+
+    var bars = [
+        { cx: 180, v: 40000, fill: rgba(P.blue, 0.55),  edge: P.blue,  lw: 2,   lab: 'true files' },
+        { cx: 350, v: 40600, fill: rgba(RED, 0.45),     edge: RED,     lw: 2.5, lab: 'naive count' },
+        { cx: 520, v: 40000, fill: rgba(P.green, 0.45), edge: P.green, lw: 2,   lab: 'repeat-safe count' }
+    ];
+
+    bars.forEach(function(b) {
+        var y = yv(b.v);
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(b.cx - 55, y, 110, yBase - y);
+        ctx.strokeStyle = b.edge; ctx.lineWidth = b.lw;
+        ctx.strokeRect(b.cx - 55, y, 110, yBase - y);
+
+        ctx.fillStyle = b.edge; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(fmt(b.v), b.cx, y - 8);
+
+        ctx.fillStyle = P.text; ctx.font = '12.5px system-ui';
+        ctx.fillText(b.lab, b.cx, 254);
+    });
+
+    // the truth line
+    var yTruth = yv(40000), yNaive = yv(40600);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(90, yTruth); ctx.lineTo(660, yTruth); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('truth = ' + fmt(40000), 656, yTruth - 8);
+
+    // the gap on the naive bar
+    ctx.strokeStyle = RED; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(410, yTruth); ctx.lineTo(426, yTruth);
+    ctx.moveTo(418, yTruth); ctx.lineTo(418, yNaive);
+    ctx.moveTo(410, yNaive); ctx.lineTo(426, yNaive);
+    ctx.stroke();
+    var extra = 40600 - 40000;
+    var pct = (extra / 40000) * 100;
+    ctx.fillStyle = RED; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('+' + extra + ' messages (+' + pct.toFixed(2) + '%)', 432, (yTruth + yNaive) / 2 + 4);
+
+    // the repeat-safe bar sits on the truth line
+    ctx.fillStyle = P.green; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓', 484, yTruth - 8);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('y axis starts at ' + fmt(vMin) + ' — a ' + pct.toFixed(2) + '% gap is invisible from zero', 90, 276);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; arithmetic exact — 40,000 × 0.015 = 600', w - 12, 294);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

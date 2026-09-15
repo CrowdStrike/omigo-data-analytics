@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S3 &amp; Object Storage</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>S3 &amp; Object Storage</h1>
+<p class="subtitle">Amazon S3 (2006) stores whole objects in buckets behind plain HTTP GET/PUT — cheap, extremely durable bytes that quietly became the disk under the whole modern data stack</p>
+
+<div class="card-section">
+    <h2>A Bucket of Keys, Not a Disk of Folders</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">key &rarr; bytes</span><span class="tag orange">HTTP</span></div>
+                <ul>
+                    <li><b>The shop</b> — a web shop logs every click; each hour of traffic becomes one gzipped event file</li>
+                    <li><b>The bucket</b> — instead of a server disk, each file is PUT over HTTP into a bucket named <code>shop-events</code></li>
+                    <li><b>The key</b> — an object's full name is one string: <code>events/2026/08/26/hour-14.json.gz</code></li>
+                    <li><b>No folders</b> — the slashes are just characters in the key; the bucket is a flat key &rarr; bytes map</li>
+                    <li><b>The API</b> — the whole interface is roughly PUT, GET, LIST, DELETE over HTTP (S3, launched 2006)</li>
+                </ul>
+                <p class="example">The 2pm file goes up with one HTTP PUT and comes back later with one GET on the same key — no mount, no filesystem, no server to log into.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An object store is a giant key &rarr; bytes dictionary behind HTTP: whole objects in, whole or byte-range reads out, no in-place edits — addressed by key, not a disk you mount.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Pricing Two Terabytes of Click Events</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">GB-month</span><span class="tag orange">lifecycle tiers</span></div>
+                <ul>
+                    <li><b>The pile</b> — after a year the shop holds 2,000 GB of hourly event files in the bucket</li>
+                    <li><b>Storage bill</b> — standard tier at $0.023 per GB-month makes 2,000 GB cost $46.00 a month (illustrative)</li>
+                    <li><b>Request bill</b> — operations bill too: 1 million PUTs &asymp; $5.00, 1 million GETs &asymp; $0.40 (illustrative)</li>
+                    <li><b>Lifecycle rule</b> — files older than 90 days slide to infrequent access at $0.0125/GB-mo &rarr; $25.00</li>
+                    <li><b>Cold tiers</b> — archive at $0.004/GB-mo &rarr; $8.00; deep archive at $0.00099/GB-mo &rarr; $1.98</li>
+                    <li><b>Hand-check</b> — 2,000 &times; 0.023 = 46.00 and 2,000 &times; 0.00099 = 1.98 (exact arithmetic on illustrative rates)</li>
+                </ul>
+                <p class="example">The same 2,000 GB costs $46.00 a month hot, $25.00 in infrequent access, $8.00 archived, and $1.98 in deep archive — about 23&times; cheaper cold than hot.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> You rent bytes by GB-month and pay per request; lifecycle rules slide aging data down storage classes, so the same objects get roughly 23&times; cheaper as they cool.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Substrate of the Modern Data Stack</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">durability</span><span class="tag orange">data lake</span></div>
+                <ul>
+                    <li><b>Durability</b> — S3 documents 99.999999999% (11 nines) durability, kept by copies across availability zones</li>
+                    <li><b>What that means</b> — store 10 million objects and expect to lose one about every 10,000 years (documented)</li>
+                    <li><b>Data lake</b> — the shop's Parquet event files sitting in the bucket ARE the data lake; no database needed</li>
+                    <li><b>Warehouses</b> — modern warehouses keep table storage on object stores and rent query compute separately</li>
+                    <li><b>Lakehouse</b> — table formats (Iceberg, Delta, Hudi) are metadata layers over the same bucket of files</li>
+                    <li><b>One copy</b> — several engines read the shop's same 2,000 GB in place; nothing is copied per tool</li>
+                </ul>
+                <p class="example">The shop's analysts point a SQL engine straight at the bucket and query a year of clicks — the "warehouse disk" is the bucket itself.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Once bytes were cheap, 11-nines durable, and reachable over HTTP by anything, storage stopped living inside databases — the bucket became the shared bottom layer of the data stack.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>It Looks Like a Filesystem — It Isn't</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">whole-object writes</span></div>
+                <ul>
+                    <li><b>The trap</b> — the keys look like paths, so the shop's intern treats the bucket like a mounted disk</li>
+                    <li><b>No partial writes</b> — fixing one bad row in a 1 GB object means GET 1 GB, edit, PUT 1 GB back</li>
+                    <li><b>No rename</b> — "moving" a key is a full copy to the new key plus a delete of the old one</li>
+                    <li><b>No real dirs</b> — listing a "folder" is a prefix scan over keys; an empty folder cannot even exist</li>
+                    <li><b>Design around it</b> — write many immutable objects and add new files instead of editing in place</li>
+                </ul>
+                <p class="example">Appending one 200-byte event to a 1 GB object re-uploads the whole 1 GB (sizes illustrative); appending to a local file writes just the 200 bytes.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating an object store as a filesystem. The unit of change is the whole object — tools that thrive on S3 (Parquet, Iceberg, Delta) are built around immutable files plus new-file appends, never in-place edits.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: filesystem tree vs flat bucket
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Three Files: Filesystem Tree vs Flat Bucket of Keys', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(375, 60); ctx.lineTo(375, 280); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // left half label
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('filesystem (nested folders)', 60, 65);
+
+    // folder boxes
+    function folderBox(x, y, bw, lab, fill, edge) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, bw, 30, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, x + bw / 2, y + 20);
+    }
+    folderBox(60, 80, 110, 'events/', 'rgba(42,120,214,0.15)', P.blue);
+    folderBox(95, 125, 130, '2026/08/26/', 'rgba(42,120,214,0.15)', P.blue);
+    var files = ['hour-13.json.gz', 'hour-14.json.gz', 'hour-15.json.gz'];
+    var fileY = [170, 210, 250];
+    for (var i = 0; i < 3; i++) {
+        folderBox(130, fileY[i], 170, files[i], 'rgba(0,131,0,0.12)', P.green);
+    }
+    // connector lines parent -> child
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(80, 110); ctx.lineTo(80, 140); ctx.lineTo(95, 140); ctx.stroke();
+    for (var i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.moveTo(112, 155); ctx.lineTo(112, fileY[i] + 15); ctx.lineTo(130, fileY[i] + 15); ctx.stroke();
+    }
+
+    // right half label
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('bucket shop-events (flat keys)', 400, 65);
+
+    var keys = [
+        'events/2026/08/26/hour-13.json.gz',
+        'events/2026/08/26/hour-14.json.gz',
+        'events/2026/08/26/hour-15.json.gz'
+    ];
+    var keyY = [90, 140, 190];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        roundRect(ctx, 400, keyY[i], 300, 34, 8);
+        ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px ui-monospace, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(keys[i], 550, keyY[i] + 21);
+    }
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the slashes are just characters in the key', 550, 250);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('file names illustrative; the flat-key model is how S3 is documented', w - 12, h - 6);
+});
+
+// c2: four storage classes cost bars
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same 2,000 GB, Four Storage Classes: $46.00 Down to $1.98 a Month', w / 2, 24);
+
+    var ox = 60, baseY = 245, plotW = 600, plotH = 180;
+    function py(v) { return baseY - v / 50 * plotH; }
+
+    // gridlines
+    [10, 20, 30, 40].forEach(function(g) {
+        var y = py(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText('$' + g, ox - 8, y + 4);
+    });
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var bars = [
+        { x: 110, v: 46.00, color: P.blue, val: '$46.00', lab: 'standard' },
+        { x: 260, v: 25.00, color: P.aqua, val: '$25.00', lab: 'infrequent access' },
+        { x: 410, v: 8.00, color: P.orange, val: '$8.00', lab: 'archive' },
+        { x: 560, v: 1.98, color: P.violet, val: '$1.98', lab: 'deep archive' }
+    ];
+    var bw = 90;
+    bars.forEach(function(b) {
+        var yTop = py(b.v);
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x - bw / 2, yTop, bw, baseY - yTop);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = b.color; ctx.lineWidth = 2;
+        ctx.strokeRect(b.x - bw / 2, yTop, bw, baseY - yTop);
+        ctx.fillStyle = b.color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.val, b.x, yTop - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab, b.x, baseY + 16);
+    });
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('lifecycle rules move cooling data down automatically', 300, 95);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('per-GB rates illustrative; the multiplications are exact', w - 12, h - 6);
+});
+
+// c3: layered stack diagram
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Bucket, Many Engines: Object Storage as the Bottom Layer', w / 2, 24);
+
+    // bottom substrate
+    ctx.fillStyle = 'rgba(42,120,214,0.30)';
+    roundRect(ctx, 60, 225, 600, 45, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('object storage — bucket shop-events (2,000 GB, 11-nines durability)', 360, 252);
+
+    // middle layer
+    var mids = [
+        { x: 60, lab: 'open file format — Parquet files' },
+        { x: 370, lab: 'table format — Iceberg / Delta metadata' }
+    ];
+    mids.forEach(function(m) {
+        ctx.fillStyle = 'rgba(25,158,112,0.15)';
+        roundRect(ctx, m.x, 160, 290, 42, 8);
+        ctx.fill();
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(m.lab, m.x + 145, 186);
+    });
+
+    // top layer
+    var tops = [
+        { x: 60, lab: 'SQL warehouse' },
+        { x: 268, lab: 'Spark jobs' },
+        { x: 476, lab: 'ML training' }
+    ];
+    tops.forEach(function(t) {
+        ctx.fillStyle = 'rgba(74,58,167,0.12)';
+        roundRect(ctx, t.x, 85, 185, 42, 8);
+        ctx.fill();
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t.lab, t.x + 92, 111);
+    });
+
+    // arrows top -> middle
+    tops.forEach(function(t) {
+        var cx = t.x + 92;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, 127); ctx.lineTo(cx, 154); ctx.stroke();
+        arrowHead(ctx, cx, 127, cx, 158, P.mute);
+    });
+    // arrows middle -> substrate
+    mids.forEach(function(m) {
+        var cx = m.x + 145;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, 202); ctx.lineTo(cx, 219); ctx.stroke();
+        arrowHead(ctx, cx, 202, cx, 223, P.mute);
+    });
+
+    // annotation
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one copy of the data, every engine reads it in place', w / 2, 60);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("11-nines durability is S3's documented figure; sizes illustrative", w - 12, h - 8);
+});
+
+// c4: local disk edit vs object store round trip
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fix One Row in a 1 GB File: Local Disk vs Object Store', w / 2, 24);
+
+    function box(x, cy, bw, fill, edge, lines) {
+        var bh = 40;
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, cy - bh / 2, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        if (lines.length === 1) {
+            ctx.fillText(lines[0], x + bw / 2, cy + 4);
+        } else {
+            ctx.fillText(lines[0], x + bw / 2, cy - 3);
+            ctx.fillText(lines[1], x + bw / 2, cy + 12);
+        }
+    }
+    function arrow(x0, x1, cy, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x1 - 6, cy); ctx.stroke();
+        arrowHead(ctx, x0, cy, x1 - 2, cy, color);
+    }
+
+    // Row 1: local disk
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('local disk', 20, y1 + 4);
+    box(150, y1, 155, 'rgba(42,120,214,0.15)', P.blue, ['1 GB file on disk']);
+    box(430, y1, 175, 'rgba(0,131,0,0.12)', P.green, ['seek + write', '~200 bytes']);
+    arrow(305, 430, y1, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ 200 bytes touched', 517, y1 + 38);
+
+    // Row 2: object store
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('object store', 20, y2 + 4);
+    box(150, y2, 155, 'rgba(42,120,214,0.15)', P.blue, ['1 GB object', 'in bucket']);
+    box(330, y2, 150, 'rgba(217,89,38,0.12)', P.orange, ['GET 1 GB down']);
+    box(520, y2, 170, 'rgba(231,76,60,0.12)', '#e74c3c', ['edit, PUT 1 GB back']);
+    arrow(305, 330, y2, P.mute);
+    arrow(480, 520, y2, P.mute);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✗ 2 GB moved for 200 bytes', 605, y2 + 38);
+
+    // annotation
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the object is the unit of change — so design for immutable files', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('sizes illustrative; whole-object writes are documented S3 behavior', w - 12, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

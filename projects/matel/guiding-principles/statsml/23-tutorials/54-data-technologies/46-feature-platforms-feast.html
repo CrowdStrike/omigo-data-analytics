@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Platforms (Feast)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Feature Platforms (Feast)</h1>
+<p class="subtitle">A feature store defines a feature once and serves the same value to model training and to the live app — ending the silent drift between the two code paths</p>
+
+<div class="card-section">
+    <h2>The Order Count That Meant Two Things</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">one definition</span><span class="tag orange">Feast</span></div>
+                <ul>
+                    <li><b>The feature</b> — "user's 30-day order count" feeds a churn model at a food-delivery app</li>
+                    <li><b>The training side</b> — a nightly SQL job counts orders over 30 calendar days, cancelled orders kept</li>
+                    <li><b>The serving side</b> — the app's own code counts a rolling 720 hours and drops cancelled orders</li>
+                    <li><b>The drift</b> — for user 4217 training sees 12, serving sees 9 — same name, two definitions</li>
+                    <li><b>The fix</b> — a feature platform (Feast) holds ONE definition and feeds both sides from it</li>
+                </ul>
+                <p class="example">User 4217 counts 12 orders under the SQL job's rules but 9 under the app's — the churn model was trained on numbers it never sees in production.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Training/serving skew is a feature computed one way in the offline training pipeline and a subtly different way in the online serving path; a feature platform removes it by making the definition single-sourced.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting User 4217 Both Ways</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">hand-check</span></div>
+                <ul>
+                    <li><b>The window</b> — SQL uses 30 calendar days in UTC; the app uses a rolling 720 hours in local time</li>
+                    <li><b>The filter</b> — SQL keeps cancelled orders; the app silently drops them</li>
+                    <li><b>Hand-check</b> — offline 12, minus 2 cancelled, minus 1 order outside the 720-hour window = 9 (exact)</li>
+                    <li><b>Across users</b> — of five sampled users, three get different answers offline vs online</li>
+                    <li><b>The symptom</b> — backtests look clean because both sides of the backtest use the SQL definition</li>
+                </ul>
+                <p class="example">12 &minus; 2 cancelled &minus; 1 boundary-day order = 9; the 3-order gap is pure definition drift, not bad data — and nothing in either pipeline flags it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Skew hides because each pipeline is internally consistent; only comparing the two paths for the same user at the same moment exposes the gap.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Definition, Two Stores</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">offline + online</span><span class="tag orange">point-in-time</span></div>
+                <ul>
+                    <li><b>The registry</b> — Feast declares the feature once in code: source table, 30-day window, drop cancelled</li>
+                    <li><b>The offline store</b> — materializes point-in-time-correct feature rows in the warehouse for training</li>
+                    <li><b>The online store</b> — keeps a key-value copy (Redis-style) for millisecond lookups at serving time</li>
+                    <li><b>The lineage</b> — Uber's Michelangelo popularized the pattern; Feast open-sourced it; Tecton sells a managed one</li>
+                    <li><b>The payoff</b> — training and serving now read the same 9 for user 4217, by construction</li>
+                </ul>
+                <p class="example">After moving the order-count feature into Feast, the churn model's training rows and its live inputs match value for value — the skew class of bug is gone.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A feature platform is one definition plus two stores — an offline store for historical training data and an online store for low-latency serving — both fed by the same computation.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Join That Leaks the Future</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">label leakage</span></div>
+                <ul>
+                    <li><b>The shortcut</b> — joining today's feature values onto last quarter's training labels</li>
+                    <li><b>The leak</b> — a label observed on day 40 paired with today's feature value knows the future</li>
+                    <li><b>The number</b> — user 4217's count was 4 on day 40 but is 12 today; the naive join trains on 12</li>
+                    <li><b>The result</b> — offline accuracy looks brilliant, then collapses the day the model goes live</li>
+                    <li><b>The guard</b> — Feast's point-in-time join picks the feature value as of each label's own timestamp</li>
+                </ul>
+                <p class="example">Trained on today's 12 against day 40's churn label, the model "predicts" the past using orders that had not happened yet — 8 of the 12 came after the label.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Joining the latest feature values onto historical training rows. Point-in-time joins exist precisely to pair each label with the value that was true at that moment — skipping them is label leakage, not a shortcut.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, width) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1), ah = 8;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ah * Math.cos(ang - 0.45), y2 - ah * Math.sin(ang - 0.45));
+    ctx.lineTo(x2 - ah * Math.cos(ang + 0.45), y2 - ah * Math.sin(ang + 0.45));
+    ctx.closePath(); ctx.fill();
+}
+
+function fbox(ctx, x, y, w2, fill, edge, lines, boldText) {
+    roundRect(ctx, x, y - 20, w2, 40, 8);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text;
+    ctx.font = (boldText ? 'bold 13px' : '12px') + ' system-ui';
+    ctx.textAlign = 'center';
+    if (lines.length === 1) {
+        ctx.fillText(lines[0], x + w2 / 2, y + 4);
+    } else {
+        ctx.fillText(lines[0], x + w2 / 2, y - 4);
+        ctx.fillText(lines[1], x + w2 / 2, y + 12);
+    }
+}
+
+// c1: one feature name, two pipelines, two answers
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Feature Name, Two Pipelines, Two Answers', w / 2, 24);
+
+    // Row 1: training
+    var y1 = 95;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('training (nightly SQL)', 20, y1 - 28);
+    fbox(ctx, 175, y1, 130, 'rgba(42,120,214,0.15)', P.blue, ['orders table']);
+    arrow(ctx, 305, y1, 339, y1, P.mute, 3);
+    fbox(ctx, 345, y1, 190, 'rgba(42,120,214,0.15)', P.blue, ['30 calendar days,', 'cancelled kept']);
+    arrow(ctx, 535, y1, 569, y1, P.mute, 3);
+    fbox(ctx, 575, y1, 130, 'rgba(231,76,60,0.12)', '#e74c3c', ['count = 12'], true);
+
+    // Row 2: serving
+    var y2 = 205;
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('serving (app code)', 20, y2 - 28);
+    fbox(ctx, 175, y2, 130, 'rgba(42,120,214,0.15)', P.blue, ['orders API']);
+    arrow(ctx, 305, y2, 339, y2, P.mute, 3);
+    fbox(ctx, 345, y2, 190, 'rgba(42,120,214,0.15)', P.blue, ['720 hours,', 'cancelled dropped']);
+    arrow(ctx, 535, y2, 569, y2, P.mute, 3);
+    fbox(ctx, 575, y2, 130, 'rgba(231,76,60,0.12)', '#e74c3c', ['count = 9'], true);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('user 4217: trained on 12, served 9 — the model never notices', w / 2, 270);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative', w - 15, h - 10);
+});
+
+// c2: five users, offline vs online values
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Feature, Five Users: Offline vs Online Values', w / 2, 24);
+
+    var baseY = 245, ph = 180, maxY = 24;
+    function yOf(v) { return baseY - v / maxY * ph; }
+
+    for (var g = 6; g <= 18; g += 6) {
+        var gy = yOf(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, gy); ctx.lineTo(660, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), 52, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - ph); ctx.lineTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    var xs = [120, 240, 360, 480, 600];
+    var users = ['4217', '5810', '6642', '7003', '8125'];
+    var off = [12, 5, 8, 20, 3];
+    var on  = [9, 5, 6, 17, 3];
+    var mismatch = [true, false, true, true, false];
+    for (var i = 0; i < 5; i++) {
+        var xo = xs[i] - 31, xn = xs[i] + 3;
+        var ho = off[i] / maxY * ph, hn = on[i] / maxY * ph;
+        ctx.fillStyle = 'rgba(42,120,214,0.30)';
+        ctx.fillRect(xo, baseY - ho, 28, ho);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(xo, baseY - ho, 28, ho);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(off[i]), xo + 14, baseY - ho - 6);
+
+        ctx.fillStyle = 'rgba(217,89,38,0.30)';
+        ctx.fillRect(xn, baseY - hn, 28, hn);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        ctx.strokeRect(xn, baseY - hn, 28, hn);
+        ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(String(on[i]), xn + 14, baseY - hn - 6);
+
+        if (mismatch[i]) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+            ctx.fillText('≠', xs[i], baseY - Math.max(ho, hn) - 24);
+        }
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(users[i], xs[i], baseY + 18);
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.30)'; ctx.fillRect(470, 40, 14, 10);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(470, 40, 14, 10);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('offline (SQL job)', 490, 49);
+    ctx.fillStyle = 'rgba(217,89,38,0.30)'; ctx.fillRect(590, 40, 14, 10);
+    ctx.strokeStyle = P.orange; ctx.strokeRect(590, 40, 14, 10);
+    ctx.fillStyle = '#444';
+    ctx.fillText('online (app code)', 610, 49);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('3 of 5 users disagree', 300, 70);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('user counts illustrative; 12 − 2 − 1 = 9 exact', w - 15, h - 10);
+});
+
+// c3: Feast — define once, serve twice
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Feast: Define Once, Serve Twice', w / 2, 24);
+
+    // source box
+    roundRect(ctx, 40, 130, 170, 56, 8);
+    ctx.fillStyle = 'rgba(74,58,167,0.12)'; ctx.fill();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('feature definition', 125, 152);
+    ctx.fillText('30d orders, no cancelled', 125, 170);
+
+    // fan-out arrows
+    arrow(ctx, 210, 145, 294, 85, P.mute, 3);
+    arrow(ctx, 210, 172, 294, 190, P.mute, 3);
+
+    // offline branch
+    var yo = 80;
+    fbox(ctx, 300, yo, 170, 'rgba(0,131,0,0.12)', P.green, ['offline store (warehouse)']);
+    arrow(ctx, 470, yo, 539, yo, P.mute, 3);
+    fbox(ctx, 545, yo, 150, 'rgba(42,120,214,0.15)', P.blue, ['training job']);
+    ctx.fillStyle = '#008300'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('point-in-time rows', 385, 50);
+
+    // online branch
+    var yn = 190;
+    fbox(ctx, 300, yn, 170, 'rgba(0,131,0,0.12)', P.green, ['online store (key-value)']);
+    arrow(ctx, 470, yn, 539, yn, P.mute, 3);
+    fbox(ctx, 545, yn, 150, 'rgba(42,120,214,0.15)', P.blue, ['live model']);
+    ctx.fillStyle = '#008300'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('~5 ms lookup (illustrative)', 385, 232);
+
+    // value tags at branch endpoints
+    ctx.fillStyle = '#008300'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('user 4217 → 9', 700, 50);
+    ctx.fillText('user 4217 → 9', 700, 240);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both paths compute the number the same way — skew is impossible by design', w / 2, 275);
+});
+
+// c4: point-in-time join vs naive latest join
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Point-in-Time Join: Use the Value That Was True Then', w / 2, 24);
+
+    var ox = 60, baseY = 245, pw = 600, ph = 180, maxY = 14;
+    function xOf(d) { return ox + d / 180 * pw; }
+    function yOf(v) { return baseY - v / maxY * ph; }
+
+    for (var g = 4; g <= 12; g += 4) {
+        var gy = yOf(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, gy); ctx.lineTo(ox + pw, gy); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(g), ox - 8, gy + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY); ctx.stroke();
+    for (var d = 0; d <= 180; d += 45) {
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('day ' + d, xOf(d), baseY + 16);
+    }
+
+    // label marker at day 40
+    var lx = xOf(40);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, baseY - ph); ctx.lineTo(lx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('label observed', lx, baseY - ph - 6);
+
+    // step-after line
+    var days = [0, 20, 40, 70, 100, 130, 160, 180];
+    var vals = [3, 4, 4, 6, 7, 9, 11, 12];
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(xOf(days[0]), yOf(vals[0]));
+    for (var i = 1; i < days.length; i++) {
+        ctx.lineTo(xOf(days[i]), yOf(vals[i - 1]));
+        ctx.lineTo(xOf(days[i]), yOf(vals[i]));
+    }
+    ctx.stroke();
+
+    // red dashed horizontal: future value dragged back
+    var leakY = yOf(12);
+    ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 3]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(lx, leakY); ctx.lineTo(xOf(180), leakY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // point-in-time dot
+    ctx.fillStyle = '#008300';
+    ctx.beginPath(); ctx.arc(lx, yOf(4), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('point-in-time join → 4', lx + 12, yOf(4) + 18);
+
+    // leak dot
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xOf(180), leakY, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('naive latest join → 12', xOf(180) - 10, leakY - 12);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('8 of the 12 orders happened after the label', xOf(95), 75);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('order counts illustrative', w - 15, h - 4);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

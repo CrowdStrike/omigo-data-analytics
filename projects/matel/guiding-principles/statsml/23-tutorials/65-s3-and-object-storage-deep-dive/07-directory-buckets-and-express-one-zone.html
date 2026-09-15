@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Directory Buckets &amp; Express One Zone</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Directory Buckets &amp; Express One Zone</h1>
+<p class="subtitle">A storage class that keeps one copy in one zone, and stores real folders, so that reads of small objects come back very fast</p>
+
+<div class="card-section">
+    <h2>The Wait Before the First Byte</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">latency not bandwidth</span><span class="tag orange">one zone</span></div>
+                <ul>
+                    <li><b>The workload</b> — a training job rereads the same 500 GB working set on every pass</li>
+                    <li><b>Small objects</b> — 2,000,000 shard files of about 250 KB each, not a few big ones</li>
+                    <li><b>The bottleneck</b> — the job spends far more time waiting for reads than streaming bytes</li>
+                    <li><b>What Express is</b> — a storage class built for very fast reads of small objects</li>
+                    <li><b>A new bucket type</b> — you reach the class through a bucket type called a directory bucket</li>
+                    <li><b>One zone</b> — all of the data sits in a single Availability Zone that you pick</li>
+                    <li><b>Compute nearby</b> — run the job on machines inside that same zone, not across zones</li>
+                    <li><b>The gain</b> — the first byte arrives in single-digit milliseconds, about 10x faster</li>
+                </ul>
+                <p class="example">At 30 ms per read, 1,000 reads one after another take 30 seconds; at 3 ms the same 1,000 reads take 3 seconds.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The bytes per second did not change. What shrank is the wait before the first byte arrives.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Directory Buckets Really Have Directories</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">the exception</span><span class="tag green">real folders</span><span class="tag orange">naming</span></div>
+                <ul>
+                    <li><b>Usually a fiction</b> — in an ordinary bucket the folders you see are not stored</li>
+                    <li><b>Here they are real</b> — a directory bucket stores an entry for every folder level</li>
+                    <li><b>On write</b> — a key with slashes in it creates a folder for each level of the path</li>
+                    <li><b>Listing</b> — reading a folder walks down the tree instead of scanning sorted keys</li>
+                    <li><b>Order changes</b> — results come back in tree order, not in alphabetical key order</li>
+                    <li><b>Scaling</b> — the tree spreads the load, so you do not need prefix tricks any more</li>
+                    <li><b>The name is fixed</b> — a directory bucket's name ends with the zone id and <code>--x-s3</code></li>
+                    <li><b>Zone is visible</b> — the bucket name itself tells you which zone holds the data</li>
+                </ul>
+                <p class="example">The key <code>shards/epoch=01/part-000001.arrow</code> creates a <code>shards</code> folder and an <code>epoch=01</code> folder inside it; an ordinary bucket stores only the one long key.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> This is the one place where "S3 has no folders" stops being true, and that is exactly why listing and scaling behave differently here.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What You Give Up for the Speed</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">the trade</span><span class="tag red">not a system of record</span><span class="tag green">session token</span></div>
+                <ul>
+                    <li><b>One copy only</b> — one zone holds it, so losing that zone loses the data outright</li>
+                    <li><b>Not for records</b> — use it only for data you can rebuild from somewhere durable</li>
+                    <li><b>No second region</b> — copying the bucket to another region is not available here</li>
+                    <li><b>No versions</b> — an overwrite is final, and there is no earlier copy to roll back to</li>
+                    <li><b>No colder tiers</b> — you cannot move an object into a cheaper storage class later</li>
+                    <li><b>Storage costs more</b> — per GB stored it costs several times what Standard charges</li>
+                    <li><b>Reads cost less</b> — per request it is roughly half of what Standard charges you</li>
+                    <li><b>A short-lived token</b> — you sign in once per session instead of once for every read</li>
+                </ul>
+                <p class="example">A shuffle file lost with its zone costs a job restart; a ledger lost with its zone costs the record.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The trade is honest: you hand back durability and cheap bytes, and you get low latency, cheap reads and real folders.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// ---------------------------------------------------------------
+// c1: the wait before the first byte — latency, not bandwidth
+// ---------------------------------------------------------------
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('First-Byte Latency Is What Changed, Not Bandwidth', w / 2, 24);
+
+    var base = 232, pxPerMs = 5, bw = 62, xL = 88, xR = 300;
+
+    // y ticks and gridlines
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 10, 20, 30].forEach(function(v) {
+        var y = base - v * pxPerMs;
+        ctx.fillStyle = P.mute;
+        ctx.fillText(v === 0 ? '0' : v + ' ms', 82, y + 4);
+        if (v > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(xL, y); ctx.lineTo(xR, y); ctx.stroke();
+        }
+    });
+
+    // bars: bar i sits at 104 + i * 110, height derived from ms
+    var bars = [
+        { ms: 30, col: P.blue,  lab: 'S3 Standard' },
+        { ms: 3,  col: P.green, lab: 'Express One Zone' }
+    ];
+    bars.forEach(function(b, i) {
+        var bx = 104 + i * 110;
+        var bh = b.ms * pxPerMs;
+        ctx.globalAlpha = 0.85; ctx.fillStyle = b.col;
+        ctx.fillRect(bx, base - bh, bw, bh);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = b.col; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.ms + ' ms', bx + bw / 2, base - bh - 8);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab, bx + bw / 2, 250);
+    });
+
+    // baseline
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xL, base); ctx.lineTo(xR, base); ctx.stroke();
+
+    // documented single-digit line at 9 ms; right-aligned to clear the 30 ms bar
+    var yBand = base - 9 * pxPerMs;
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(xL, yBand); ctx.lineTo(xR, yBand); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 11.5px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('single-digit ms', xR - 2, yBand - 6);
+
+    // right panel — every number computed here, not typed in
+    var objects = 2000000, kbEach = 250, reads = 1000;
+    var totalGB = objects * kbEach / 1e6;               // 500
+    var slowSec = reads * bars[0].ms / 1000;            // 30
+    var fastSec = reads * bars[1].ms / 1000;            // 3
+
+    ctx.fillStyle = '#f4f6f9';
+    roundRect(ctx, 330, 64, 360, 168, 8); ctx.fill();
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('same bytes, less waiting', 346, 90);
+    ctx.fillStyle = P.text; ctx.font = '12.5px system-ui';
+    ctx.fillText(objects.toLocaleString() + ' objects × ' + kbEach + ' KB = ' + totalGB + ' GB', 346, 118);
+    ctx.fillText(reads.toLocaleString() + ' reads in a row @ ' + bars[0].ms + ' ms = ' + slowSec.toFixed(1) + ' s', 346, 142);
+    ctx.fillText(reads.toLocaleString() + ' reads in a row @ ' + bars[1].ms + ' ms = ' + fastSec.toFixed(1) + ' s', 346, 166);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillText('bandwidth per read: unchanged', 346, 196);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('the object is the same size either way', 346, 218);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the wait shrinks about 10x; the bytes per second do not move', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('30 ms and 3 ms illustrative; single-digit ms and about 10x are documented', w - 12, 294);
+});
+
+// ---------------------------------------------------------------
+// c2: folders worked out per request vs folders stored
+// ---------------------------------------------------------------
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Four Objects: Folders Worked Out vs Folders Stored', w / 2, 22);
+
+    // panels
+    ctx.fillStyle = '#fbfcfd';
+    roundRect(ctx, 28, 44, 320, 216, 8); ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#fbfcfd';
+    roundRect(ctx, 372, 44, 320, 216, 8); ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.textAlign = 'left'; ctx.font = 'bold 12.5px system-ui';
+    ctx.fillStyle = P.blue;  ctx.fillText('ordinary bucket — flat keys', 40, 64);
+    ctx.fillStyle = P.green; ctx.fillText('directory bucket — stored tree', 384, 64);
+
+    // left: flat key list
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('four keys, sorted order', 40, 80);
+    var keys = [
+        'index/manifest.json',
+        'shards/epoch=01/part-000001.arrow',
+        'shards/epoch=01/part-000002.arrow',
+        'shards/epoch=02/part-000001.arrow'
+    ];
+    ctx.fillStyle = P.text; ctx.font = '11.5px ui-monospace, monospace';
+    keys.forEach(function(k, i) { ctx.fillText(k, 40, 102 + i * 20); });
+
+    // left: the folder view is worked out, not stored
+    ctx.fillStyle = 'rgba(107,114,128,0.07)';
+    roundRect(ctx, 40, 168, 296, 68, 6); ctx.fill();
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the folder view you see', 52, 188);
+    ctx.fillStyle = P.text; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('shards/    index/', 52, 208);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('worked out per request, stored nowhere', 52, 228);
+
+    // right: the stored tree
+    var tree = [
+        { t: 'shards/',           lvl: 0, dir: true  },
+        { t: 'epoch=01/',         lvl: 1, dir: true  },
+        { t: 'part-000001.arrow', lvl: 2, dir: false },
+        { t: 'part-000002.arrow', lvl: 2, dir: false },
+        { t: 'epoch=02/',         lvl: 1, dir: true  },
+        { t: 'part-000001.arrow', lvl: 2, dir: false },
+        { t: 'index/',            lvl: 0, dir: true  },
+        { t: 'manifest.json',     lvl: 1, dir: false }
+    ];
+    var x0 = 388, indent = 16, pitch = 20;
+    var folders = 0;
+    tree.forEach(function(n, i) {
+        var y = 88 + i * pitch, x = x0 + n.lvl * indent;
+        if (n.dir) folders++;
+        if (n.lvl > 0) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x - indent + 4, y - 14);
+            ctx.lineTo(x - indent + 4, y - 4);
+            ctx.lineTo(x - 4, y - 4);
+            ctx.stroke();
+        }
+        if (n.dir) {
+            ctx.fillStyle = P.green; ctx.font = 'bold 11.5px ui-monospace, monospace';
+        } else {
+            ctx.fillStyle = P.text; ctx.font = '11.5px ui-monospace, monospace';
+        }
+        ctx.fillText(n.t, x, y);
+    });
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(folders + ' folders stored on write', x0, 250);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('left: folders inferred from the key text · right: folders are stored rows', w / 2, 276);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('keys illustrative; the stored folder tree is documented behaviour', w - 12, 294);
+});
+
+// ---------------------------------------------------------------
+// c3: the trade, row by row
+// ---------------------------------------------------------------
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Row by Row: Where Express Wins and Where It Loses', w / 2, 22);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('upper bar = S3 Standard · lower bar = Express (green when it wins, red when it loses)', w / 2, 42);
+
+    var tx = 250, tw = 350, bh = 15, gap = 3, pitch = 44;
+
+    // ratio labels are built from the same two numbers each row plots
+    function ratio(hi, lo) {
+        var r = hi / lo;
+        return (Math.abs(r - Math.round(r)) < 0.005 ? String(Math.round(r)) : r.toFixed(2));
+    }
+
+    var rows = [
+        { lab: 'features kept (of 4)',    max: 4,    std: 4,     exp: 0,
+          stdT: '4 of 4',  expT: '0 of 4 — none of them', win: false },
+        { lab: 'first-byte latency (ms)', max: 30,   std: 30,    exp: 3,
+          stdT: '30 ms',   expT: '3 ms (' + ratio(30, 3) + 'x lower)', win: true },
+        { lab: 'read cost ($ / million)', max: 0.40, std: 0.40,  exp: 0.20,
+          stdT: '$0.40',   expT: '$0.20 (' + ratio(0.40, 0.20) + 'x lower)', win: true },
+        { lab: 'storage ($ / GB-month)',  max: 0.16, std: 0.023, exp: 0.16,
+          stdT: '$0.023',  expT: '$0.16 (' + ratio(0.16, 0.023) + 'x more)', win: false }
+    ];
+
+    // draw a value label past the bar end, or inside it when that would overflow
+    function valueLabel(text, barEnd, baseY, col) {
+        ctx.font = 'bold 12px system-ui';
+        var tWidth = ctx.measureText(text).width;
+        if (barEnd + 8 + tWidth <= w - 12) {
+            ctx.fillStyle = col; ctx.textAlign = 'left';
+            ctx.fillText(text, barEnd + 8, baseY);
+        } else {
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'right';
+            ctx.fillText(text, barEnd - 8, baseY);
+        }
+    }
+
+    rows.forEach(function(r, i) {
+        var y = 62 + i * pitch;
+        var expCol = r.win ? P.green : RED;
+
+        // row label, vertically centred on the bar pair
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, tx - 10, y + bh + gap);
+
+        // Standard bar
+        var sw = r.std / r.max * tw;
+        ctx.globalAlpha = 0.85; ctx.fillStyle = P.blue;
+        ctx.fillRect(tx, y, sw, bh);
+        ctx.globalAlpha = 1;
+        valueLabel(r.stdT, tx + sw, y + 12, P.blue);
+
+        // Express bar — a 3px stub keeps the zero-length row's label off the track
+        var ew = Math.max(r.exp / r.max * tw, 3);
+        ctx.globalAlpha = 0.85; ctx.fillStyle = expCol;
+        ctx.fillRect(tx, y + bh + gap, ew, bh);
+        ctx.globalAlpha = 1;
+        valueLabel(r.expT, tx + ew, y + bh + gap + 12, expCol);
+    });
+
+    ctx.fillStyle = P.mute; ctx.font = '11.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('counted: copies in more than one zone · copy to another region · versions · colder classes', 40, 243);
+
+    ctx.fillStyle = rgba(RED, 0.10);
+    roundRect(ctx, 40, 250, 640, 30, 6); ctx.fill();
+    ctx.strokeStyle = RED; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = RED; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one zone: lose the zone, lose the data — a cache, not a system of record', 360, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('prices and latencies illustrative; the missing features and the single zone are documented', w - 12, 294);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

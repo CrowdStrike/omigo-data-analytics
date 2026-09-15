@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Object Storage Compared</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Object Storage Compared</h1>
+<p class="subtitle">Every object store is the same key-to-bytes map behind HTTP, so what you learn once travels — the differences that survive are how names are scoped and what happens when you write the same key twice</p>
+
+<div class="card-section">
+    <h2>What Every Object Store Shares</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">the model</span><span class="tag orange">portable knowledge</span></div>
+                <ul>
+                    <li><b>Key to bytes</b> — every store is one flat map from a key string to a blob of bytes</li>
+                    <li><b>HTTP is the wire</b> — you read and write objects over HTTP, with no mount, no file handle</li>
+                    <li><b>Whole-object writes</b> — a write replaces the whole object; you cannot patch bytes in place</li>
+                    <li><b>Range reads work</b> — you can read the first 64 KB of a 5 GB object without the rest</li>
+                    <li><b>No atomic rename</b> — moving a key means copy it, then delete the old one: two steps</li>
+                    <li><b>Listing is a prefix scan</b> — keys come back in sorted order, not as a folder listing</li>
+                    <li><b>Durability by copies</b> — the bytes are kept on several machines rather than behind RAID</li>
+                    <li><b>Learn it once</b> — these come from the model, so they hold on every vendor's store</li>
+                </ul>
+                <p class="example">A 5 GB Parquet file behaves the same everywhere — one write to create it, a small range read for its footer, and a copy plus a delete to move it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Separate the model from the vendor. The flat map, the whole-object write, the sorted listing and the missing rename are inherent; nearly everything else is a product decision.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Naming: Two Levels or Three</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">naming scope</span><span class="tag orange">vendor difference</span></div>
+                <ul>
+                    <li><b>S3 buckets</b> — a bucket name must be unique across all of AWS, not just your account</li>
+                    <li><b>S3 keys are flat</b> — the bucket sits in one region and the key is a plain string</li>
+                    <li><b>GCS buckets</b> — names are globally unique here too, and the key is one flat string</li>
+                    <li><b>Azure adds a level</b> — a storage account holds containers, and a container holds blobs</li>
+                    <li><b>Azure uniqueness</b> — only the account name is global; a container is unique inside it</li>
+                    <li><b>Azure blob types</b> — block, append and page blobs are types with different write rules</li>
+                    <li><b>Append does exist</b> — Azure's append blob disproves "object storage cannot append"</li>
+                    <li><b>S3-compatible stores</b> — MinIO and others serve the S3 API over disks you run yourself</li>
+                </ul>
+                <p class="example">A container named <code>clicks</code> is free inside Alice's own Azure storage account, while the same name as an S3 or GCS bucket was claimed globally years ago.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Two names get you to an object on S3 and GCS, three on Azure. And "S3-compatible" is a range, not a yes or no: the basic calls match, the newer ones often do not.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Differences Worth Knowing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">comparison</span><span class="tag green">consistency</span><span class="tag orange">conditional writes</span></div>
+                <ul>
+                    <li><b>Consistency today</b> — every major store now lets you read back the object you just wrote</li>
+                    <li><b>What changed</b> — S3 was eventually consistent for reads until December 2020; not since</li>
+                    <li><b>Real folders</b> — regular S3 buckets have none, while S3 directory buckets do have them</li>
+                    <li><b>Optional folders</b> — GCS and Azure both offer a real hierarchy you turn on at creation</li>
+                    <li><b>Conditional writes</b> — a write that lands only if the key is absent, or has not changed</li>
+                    <li><b>Who had it first</b> — GCS and Azure had these checks years before S3 added them in 2024</li>
+                    <li><b>Why it mattered</b> — S3 table formats needed an outside lock to commit; the others did not</li>
+                    <li><b>Compatible endpoints</b> — an S3-compatible store may not support conditional writes; test</li>
+                </ul>
+                <p class="example">A commit that must not overwrite an existing key is one conditional write on GCS or Azure, and on S3 needed an outside lock table before 2024.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The differences that survive are whether a real folder hierarchy exists and how long conditional writes have been there. This surface still moves — check the current docs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// c1: the shared model — request, key, bytes; then the properties every store has
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Shared Model: One Key String → One Blob of Bytes, Over HTTP', w / 2, 24);
+
+    // flow row geometry derived from the widths and the gap, then centred
+    var boxes = [
+        { wid: 210, label: 'read · write · list over HTTP', col: P.blue,   mono: false },
+        { wid: 200, label: 'one key: a plain string',      col: P.violet, mono: true  },
+        { wid: 190, label: 'bytes + a little metadata',    col: P.green,  mono: false }
+    ];
+    var gap = 38, rowY = 60, rowH = 40;
+    var total = gap * (boxes.length - 1);
+    boxes.forEach(function(b) { total += b.wid; });
+    var cursor = (w - total) / 2;
+    boxes.forEach(function(b) {
+        b.x = cursor;
+        cursor += b.wid + gap;
+    });
+
+    boxes.forEach(function(b) {
+        ctx.fillStyle = rgba(b.col, 0.11);
+        roundRect(ctx, b.x, rowY, b.wid, rowH, 8);
+        ctx.fill();
+        ctx.strokeStyle = b.col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text;
+        ctx.font = b.mono ? '12.5px ui-monospace, monospace' : '12.5px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(b.label, b.x + b.wid / 2, rowY + rowH / 2 + 5);
+    });
+
+    var midY = rowY + rowH / 2;
+    for (var i = 0; i < boxes.length - 1; i++) {
+        var xa = boxes[i].x + boxes[i].wid;
+        var xb = boxes[i + 1].x;
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(xa, midY); ctx.lineTo(xb - 6, midY); ctx.stroke();
+        arrowHead(ctx, xa, midY, xb, midY, P.mute);
+    }
+
+    // properties that hold on every store
+    var chips = [
+        { col: P.blue,    t: 'whole-object writes, no in-place edit' },
+        { col: P.aqua,    t: 'range reads on any object' },
+        { col: P.magenta, t: 'no atomic rename: copy, then delete' },
+        { col: P.violet,  t: 'listing is a sorted prefix scan' },
+        { col: P.green,   t: 'durability by copies, not RAID' },
+        { col: P.orange,  t: 'flat keys: "/" is just a character' }
+    ];
+    var chipW = 300, chipH = 32;
+    var chipX = [45, 375], chipY = [140, 180, 220];
+    chips.forEach(function(c, i) {
+        var x = chipX[i % 2];
+        var y = chipY[Math.floor(i / 2)];
+        ctx.fillStyle = rgba(c.col, 0.10);
+        roundRect(ctx, x, y, chipW, chipH, 6);
+        ctx.fill();
+        ctx.strokeStyle = c.col; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(c.t, x + 12, y + 21);
+    });
+
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('true of all of them — this is the model, not one vendor’s choice', w / 2, 272);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('structural properties of the model; no vendor-specific claims here', w - 12, h - 6);
+});
+
+// c2: how many names it takes to reach one object
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Names Reach an Object on S3 and GCS, Three on Azure', w / 2, 22);
+
+    ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.blue;   ctx.fillText('Amazon S3 / Google Cloud Storage — 2 levels', 45, 52);
+    ctx.fillStyle = P.orange; ctx.fillText('Azure Blob Storage — 3 levels', 385, 52);
+
+    function box(x, y, bw, bh, edge) {
+        ctx.fillStyle = rgba(edge, 0.09);
+        roundRect(ctx, x, y, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // left: bucket, then the key
+    box(45, 64, 300, 176, P.blue);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12.5px system-ui'; ctx.fillText('bucket', 60, 86);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('name is global · lives in one region', 60, 104);
+
+    box(67, 124, 256, 64, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12.5px system-ui'; ctx.fillText('key', 80, 146);
+    ctx.fillStyle = P.text; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('clicks/hour=14.parquet', 80, 166);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('no middle level — the key is the rest', 60, 216);
+
+    // right: account, then container, then blob name
+    box(385, 64, 300, 176, P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12.5px system-ui'; ctx.fillText('storage account', 400, 86);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.fillText('name is global', 400, 104);
+
+    box(405, 112, 260, 128, P.yellow);
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12.5px system-ui'; ctx.fillText('container', 418, 132);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.fillText('unique inside the account only', 418, 150);
+
+    box(424, 160, 222, 64, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12.5px system-ui'; ctx.fillText('blob name', 436, 182);
+    ctx.fillStyle = P.text; ctx.font = '11.5px ui-monospace, monospace';
+    ctx.fillText('clicks/hour=14.parquet', 436, 202);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('only the Azure account name is global, so "clicks" is free inside it', w / 2, 264);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('naming levels as documented; the sample key is illustrative', w - 12, h - 6);
+});
+
+// c3: five stores, four questions
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Model, Different Behaviour: Five Stores × Four Questions', w / 2, 22);
+
+    var x0 = 200, colW = 118, nCols = 4;
+    var y0 = 96, rowH = 28;
+    var gridW = colW * nCols;
+
+    var heads = [
+        ['read back', 'what you wrote'],
+        ['real folder', 'hierarchy'],
+        ['conditional', 'writes'],
+        ['append to', 'an object']
+    ];
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    heads.forEach(function(hd, i) {
+        var cx = x0 + colW * i + colW / 2;
+        ctx.fillText(hd[0], cx, 62);
+        ctx.fillText(hd[1], cx, 78);
+    });
+
+    var rows = [
+        { lab: 'Amazon S3',            cells: ['yes', 'no',  'yes',    'no'] },
+        { lab: 'S3 directory bucket',  cells: ['yes', 'yes', 'yes',    'yes*'] },
+        { lab: 'Google Cloud Storage', cells: ['yes', 'opt', 'yes',    'check'] },
+        { lab: 'Azure Blob Storage',   cells: ['yes', 'opt', 'yes',    'yes'] },
+        { lab: 'S3-compatible stores', cells: ['yes', 'no',  'varies', 'varies'] }
+    ];
+    var nRows = rows.length;
+
+    // row stripes
+    for (var r = 0; r < nRows; r++) {
+        if (r % 2 === 1) {
+            ctx.fillStyle = '#f7f9fb';
+            ctx.fillRect(x0, y0 + r * rowH, gridW, rowH);
+        }
+    }
+
+    // grid rules
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var r2 = 0; r2 <= nRows; r2++) {
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 + r2 * rowH); ctx.lineTo(x0 + gridW, y0 + r2 * rowH);
+        ctx.stroke();
+    }
+    for (var c2 = 0; c2 <= nCols; c2++) {
+        ctx.beginPath();
+        ctx.moveTo(x0 + c2 * colW, y0); ctx.lineTo(x0 + c2 * colW, y0 + nRows * rowH);
+        ctx.stroke();
+    }
+
+    function markFor(v) {
+        if (v === 'yes') return { g: '✓', col: P.green };
+        if (v === 'no')  return { g: '–', col: P.mute };
+        if (v === 'yes*') return { g: '✓', col: P.yellow };
+        return { g: '○', col: P.yellow };
+    }
+
+    rows.forEach(function(row, ri) {
+        var cy = y0 + ri * rowH + rowH / 2 + 4;
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(row.lab, x0 - 8, cy);
+
+        row.cells.forEach(function(v, ci) {
+            var cx = x0 + colW * ci + colW / 2;
+            var m = markFor(v);
+            ctx.fillStyle = m.col; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(m.g, cx - 24, cy);
+            ctx.fillStyle = m.col === P.mute ? P.mute : P.text;
+            ctx.font = '11.5px system-ui';
+            ctx.fillText(v, cx - 8, cy);
+        });
+    });
+
+    ctx.fillStyle = P.mute; ctx.font = '11.5px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('"opt" = turned on at creation · "check" = verify in the current docs · * newer feature', 48, 258);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12.5px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('GCS and Azure had conditional writes years before S3 did', w / 2, 278);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('behaviour as documented at authoring; recheck before relying on a cell', w - 12, h - 6);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

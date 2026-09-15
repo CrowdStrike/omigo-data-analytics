@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Listing, Pagination &amp; Prefix Scans</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Listing, Pagination &amp; Prefix Scans</h1>
+<p class="subtitle">Asking which objects exist gives you at most 1,000 keys at a time, in sorted order, so a million-key prefix is a thousand requests taken one after another</p>
+
+<div class="card-section">
+    <h2>Listing Returns One Page at a Time</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">1,000 keys per reply</span><span class="tag orange">bookmark</span></div>
+                <ul>
+                    <li><b>The bucket</b> — 1,200,000 clickstream objects written under a single dated prefix</li>
+                    <li><b>The limit</b> — one request hands back at most 1,000 keys, which is also the maximum</li>
+                    <li><b>More to come</b> — the reply tells you whether more keys remain behind this page</li>
+                    <li><b>The bookmark</b> — it also returns a marker recording where the next page starts</li>
+                    <li><b>The loop</b> — send that marker back with your next request to get the next page</li>
+                    <li><b>Strictly in order</b> — page 7 cannot be asked for until page 6 has already landed</li>
+                    <li><b>No shortcut</b> — one prefix is a single chain, walked front to back page by page</li>
+                    <li><b>The only speedup</b> — run several different prefixes at the same time, side by side</li>
+                </ul>
+                <p class="example">Listing 1,200,000 keys takes 1,200 requests: the first 1,199 replies say more keys remain, the last one does not.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Listing is a walk through pages, not a query. The number of requests is set by the key count, and nothing you write makes it smaller.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting the Round Trips</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">1,200 requests</span><span class="tag orange">48 seconds</span></div>
+                <ul>
+                    <li><b>The division</b> — 1,200,000 keys &divide; 1,000 keys per page = exactly 1,200 requests</li>
+                    <li><b>The wait</b> — at 40 ms per round trip (illustrative), that adds up to 48.0 seconds</li>
+                    <li><b>One after another</b> — the waits cannot overlap, so they simply add end to end</li>
+                    <li><b>A straight line</b> — 300,000 keys is 300 requests and 12.0 seconds of waiting</li>
+                    <li><b>Half the keys</b> — 600,000 keys is 600 requests and 24.0 seconds, exactly half</li>
+                    <li><b>No data yet</b> — those 48 seconds move no object contents, only lists of names</li>
+                    <li><b>Before any work</b> — the job waits the full 48.0 s before reading its first row</li>
+                    <li><b>Every run pays</b> — a job that lists this prefix each hour waits again each time</li>
+                </ul>
+                <p class="example">Before the job reads a single row, it spends 48.0 seconds just finding out which 1,200,000 files exist.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Listing time is a straight line in key count: requests = keys &divide; 1,000, wait = requests &times; round trip. Nothing else moves it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Sorted Keys, So Split the Work Across Prefixes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">fan out</span><span class="tag green">range scan</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>Sorted order</b> — keys always come back sorted, so a prefix is a contiguous range</li>
+                    <li><b>A prefix is a slice</b> — one hour's folder can be listed entirely on its own</li>
+                    <li><b>Split the day</b> — 24 hourly prefixes hold 50,000 keys each, evenly divided</li>
+                    <li><b>Each one is short</b> — 50,000 keys is 50 requests, about 2.0 seconds of waiting</li>
+                    <li><b>Run them together</b> — all 24 chains at once finish in 2.0 s rather than 48.0 s</li>
+                    <li><b>Same total work</b> — still 24 &times; 50 = 1,200 requests; only the waiting shrinks</li>
+                    <li><b>No other index</b> — nothing lets you ask for "the objects changed yesterday"</li>
+                    <li><b>A catalog instead</b> — one catalog file names the same paths in a single read</li>
+                </ul>
+                <p class="example">Splitting the day into 24 hourly prefixes uses the same 1,200 requests but finishes in 2.0 seconds instead of 48.0.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating slow listing as something to tune at read time. It is a layout decision — the prefixes you choose when writing decide how fast the listing can ever be.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+// the running example, as literals — every printed number derives from these
+var KEYS = 1200000;      // objects under the prefix (illustrative)
+var PAGE = 1000;         // keys per reply (documented limit)
+var MS = 0.040;          // seconds per request (illustrative)
+var PREFIXES = 24;       // hourly sub-prefixes
+
+var CALLS = KEYS / PAGE;                     // 1200
+var SEQ = CALLS * MS;                        // 48.0 s
+var KEYS_PER = KEYS / PREFIXES;              // 50000
+var CALLS_PER = KEYS_PER / PAGE;             // 50
+var PAR = CALLS_PER * MS;                    // 2.0 s
+var SPEEDUP = Math.round(SEQ / PAR);         // 24
+var MS_LABEL = Math.round(MS * 1000);        // 40 (ms)
+
+function n(v) { return v.toLocaleString('en-US'); }
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// c1: one page at a time, each request carrying the bookmark from the reply before it
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Page at a Time: ' + n(KEYS) + ' Keys ÷ ' + n(PAGE) +
+                 ' = ' + n(CALLS) + ' Requests', w / 2, 22);
+
+    var PITCH = 50, BH = 30;
+    var reqX = 45, reqW = 175, resX = 350, resW = 235;
+    function rowY(i) { return 40 + i * PITCH; }
+    var lastY = rowY(2) + PITCH + 16;   // 206 — pushed below the elision gap
+
+    var rows = [
+        { y: rowY(0), req: 'request 1',              res: n(PAGE) + ' keys · more to come',      col: P.green },
+        { y: rowY(1), req: 'request 2 + bookmark',   res: n(PAGE) + ' keys · more to come',      col: P.green },
+        { y: rowY(2), req: 'request 3 + bookmark',   res: n(PAGE) + ' keys · more to come',      col: P.green },
+        { y: lastY,   req: 'request ' + n(CALLS) + ' + bookmark',
+                      res: 'last ' + n(PAGE) + ' keys · no bookmark',                            col: P.violet }
+    ];
+
+    rows.forEach(function(r) {
+        var cy = r.y + BH / 2;
+
+        ctx.fillStyle = rgba(P.blue, 0.15);
+        roundRect(ctx, reqX, r.y, reqW, BH, 8); ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.req, reqX + reqW / 2, r.y + 19);
+
+        ctx.fillStyle = rgba(r.col, 0.12);
+        roundRect(ctx, resX, r.y, resW, BH, 8); ctx.fill();
+        ctx.strokeStyle = r.col; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.res, resX + resW / 2, r.y + 19);
+
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(reqX + reqW + 4, cy); ctx.lineTo(resX - 6, cy); ctx.stroke();
+        arrowHead(ctx, reqX + reqW + 4, cy, resX, cy, P.mute);
+    });
+
+    // bookmark threads: reply i hands its marker to request i+1 (first two gaps only)
+    [0, 1].forEach(function(i) {
+        var y = rowY(i) + BH / 2;
+        var yNext = rowY(i + 1) + BH / 2;
+        var railY = rowY(i) + 40;         // 80, 130 — inside the gap between boxes
+        ctx.strokeStyle = P.magenta; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(resX + resW, y);
+        ctx.lineTo(610, y);
+        ctx.lineTo(610, railY);
+        ctx.lineTo(35, railY);
+        ctx.lineTo(35, yNext);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        arrowHead(ctx, 35, yNext, reqX, yNext, P.magenta);
+        ctx.fillStyle = P.magenta; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('bookmark', 320, railY - 4);
+    });
+
+    // the requests not drawn
+    var elided = CALLS - rows.length;
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(reqX, 190); ctx.lineTo(resX + resW, 190); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'italic 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('… ' + n(elided) + ' more requests, each waiting for the one before …',
+                 (reqX + resX + resW) / 2, 185);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each request needs the bookmark from the reply before it', w / 2, 264);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(n(PAGE) + ' keys per reply is the documented limit; object count illustrative',
+                 w - 12, 290);
+});
+
+// c2: the wait is a straight line in key count
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('More Keys, More Round Trips — the Wait Is a Straight Line', w / 2, 24);
+
+    var x0 = 90, x1 = 640, baseY = 240, topY = 62;
+    var plotH = baseY - topY, maxM = 1.3, maxSec = 52;
+    function px(m) { return x0 + (m / maxM) * (x1 - x0); }
+    function py(sec) { return baseY - (sec / maxSec) * plotH; }
+
+    var keysM = [0.1, 0.3, 0.6, 0.9, 1.2];
+    var keyLab = ['100k', '300k', '600k', '900k', '1.2M'];
+    var calls = [100, 300, 600, 900, 1200];
+    var secs = calls.map(function(c) { return c * MS; });   // 4.0 … 48.0
+
+    [0, 16, 32, 48].forEach(function(g) {
+        var y = py(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g + ' s', x0 - 8, y + 4);
+    });
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, topY); ctx.lineTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+
+    keysM.forEach(function(m, i) {
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px(m), baseY); ctx.lineTo(px(m), baseY + 5); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(keyLab[i], px(m), baseY + 20);
+    });
+
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath();
+    keysM.forEach(function(m, i) {
+        if (i === 0) ctx.moveTo(px(m), py(secs[i])); else ctx.lineTo(px(m), py(secs[i]));
+    });
+    ctx.stroke();
+    keysM.forEach(function(m, i) {
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(px(m), py(secs[i]), 5, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // both end labels printed from the computed seconds
+    var first = 0, last = keysM.length - 1;
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(n(calls[first]) + ' requests · ' + secs[first].toFixed(1) + ' s',
+                 px(keysM[first]) + 10, py(secs[first]) - 8);
+    ctx.textAlign = 'right';
+    ctx.fillText(n(calls[last]) + ' requests · ' + secs[last].toFixed(1) + ' s',
+                 px(keysM[last]) - 14, py(secs[last]) - 8);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('double the keys, double the requests, double the wait', 300, 108);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('objects under the prefix', (x0 + x1) / 2, baseY + 40);
+    ctx.save();
+    ctx.translate(26, (topY + baseY) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('seconds of listing', 0, 0);
+    ctx.restore();
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(MS_LABEL + ' ms per request illustrative; request counts exact', w - 12, 294);
+});
+
+// c3: one long chain vs many short chains running together
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Prefix Takes ' + SEQ.toFixed(1) + ' s; ' + PREFIXES +
+                 ' Prefixes Take ' + PAR.toFixed(1) + ' s', w / 2, 24);
+
+    var tx0 = 90, tx1 = 660, maxT = 50;
+    function tx(t) { return tx0 + (t / maxT) * (tx1 - tx0); }
+
+    [0, 10, 20, 30, 40, 50].forEach(function(t) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tx(t), 46); ctx.lineTo(tx(t), 258); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t + ' s', tx(t), 276);
+    });
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(tx0, 258); ctx.lineTo(tx1, 258); ctx.stroke();
+
+    // top track: one prefix, one chain
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('1 prefix', 82, 74);
+    ctx.fillText('1.2M keys', 82, 90);
+
+    var barW = tx(SEQ) - tx0;
+    ctx.fillStyle = rgba(P.blue, 0.55);
+    ctx.fillRect(tx0, 66, barW, 26);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(tx0, 66, barW, 26);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(n(CALLS) + ' requests, one after another', tx0 + barW / 2, 84);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(SEQ.toFixed(1) + ' s', tx1, 58);
+
+    // bottom track: 24 short chains at the same time
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(PREFIXES + ' prefixes', 82, 178);
+    ctx.fillText(n(KEYS_PER) + ' keys', 82, 194);
+
+    var pW = tx(PAR) - tx0;
+    ctx.fillStyle = rgba(P.aqua, 0.75);
+    for (var i = 0; i < PREFIXES; i++) {
+        ctx.fillRect(tx0, 130 + i * 5, pW, 4);
+    }
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(tx0 + pW + 10, 130); ctx.lineTo(tx0 + pW + 16, 130);
+    ctx.lineTo(tx0 + pW + 16, 249); ctx.lineTo(tx0 + pW + 10, 249);
+    ctx.stroke();
+
+    var lx = tx0 + pW + 24;
+    ctx.fillStyle = P.aqua; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(PREFIXES + ' chains running at the same time', lx, 168);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui';
+    ctx.fillText(PAR.toFixed(1) + ' s instead of ' + SEQ.toFixed(1) + ' s — ' +
+                 SPEEDUP + '× less waiting', lx, 192);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('same ' + n(CALLS) + ' requests either way, just not one after another', lx, 214);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText(MS_LABEL + ' ms per request illustrative; ' + n(KEYS) + ' ÷ ' +
+                 PREFIXES + ' = ' + n(KEYS_PER) + ' exact', w - 12, 294);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

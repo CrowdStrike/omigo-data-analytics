@@ -1,0 +1,51 @@
+# Infrastructure Technologies
+
+**Page type:** grid page (tutorials category grid: single flat 4-column nav-grid of cards with topic tags)
+**HTML title tag:** Infrastructure Technologies
+
+**Subtitle:** The systems that run modern software — containers, queues, servers, and monitoring — each explained through the one design idea that made it win.
+
+## Cards
+
+Each card links to a topic page under `tech-infra/`. The card shows a colored uppercase subcategory label (`.card-num`), a numbered title, a one-line description, and 2-4 topic tag pills. All cards sit in one flat `.nav-grid`; the colored labels carry the grouping.
+
+| # | Category | Title | Link | Description | Topic tags |
+|---|----------|-------|------|-------------|------------|
+| 1 | CONTAINERS & IAC | Kubernetes | [55-infrastructure-technologies/01-kubernetes.md](55-infrastructure-technologies/01-kubernetes.md) | Declare what should be running and controllers push reality toward it forever — Google's Borg ideas turned a whole cluster into one computer. | desired state, self-healing, orchestration |
+| 2 | CONTAINERS & IAC | Docker | [55-infrastructure-technologies/02-docker.md](55-infrastructure-technologies/02-docker.md) | Package an app with its entire environment into one image — instead of shipping your code and hoping the server matches, you ship the machine. | images, containers, works on my machine |
+| 3 | CONTAINERS & IAC | Terraform | [55-infrastructure-technologies/03-terraform.md](55-infrastructure-technologies/03-terraform.md) | Infrastructure as text files plus a diff — plan shows exactly what would change, apply makes it so. | infrastructure as code, plan & apply, declarative |
+| 4 | GOOGLE STACK | Spanner | [55-infrastructure-technologies/04-spanner.md](55-infrastructure-technologies/04-spanner.md) | SQL transactions across continents by admitting the clocks are uncertain — every commit waits out the uncertainty first. | global SQL, TrueTime, transactions |
+| 5 | GOOGLE STACK | gRPC | [55-infrastructure-technologies/05-grpc.md](55-infrastructure-technologies/05-grpc.md) | Call another service like a typed local function — the contract lives in a .proto file and Protocol Buffers put the data on the wire in binary. | RPC, protobuf, code generation |
+| 6 | GOOGLE STACK | V8 | [55-infrastructure-technologies/06-v8.md](55-infrastructure-technologies/06-v8.md) | The JavaScript engine that watches your code run, compiles the hot parts to machine code, and made JS fast enough to leave the browser. | JIT compilation, JavaScript, hot paths |
+| 7 | GOOGLE STACK | Firebase | [55-infrastructure-technologies/07-firebase.md](55-infrastructure-technologies/07-firebase.md) | Skip the backend entirely — the client SDK talks straight to managed services, and the server code you would have written simply doesn't exist. | backend-as-a-service, realtime sync, client SDK |
+| 8 | GOOGLE STACK | Flutter | [55-infrastructure-technologies/08-flutter.md](55-infrastructure-technologies/08-flutter.md) | One Dart codebase that looks identical on iOS and Android because the toolkit draws every pixel itself — by construction, not by careful testing. | cross-platform, Dart, own renderer |
+| 9 | MESSAGING | Kafka | [55-infrastructure-technologies/09-kafka.md](55-infrastructure-technologies/09-kafka.md) | Events live in an append-only log that many readers consume at their own pace — reading never deletes, so anyone can replay history. | event log, replay, consumers |
+| 10 | MESSAGING | SQS & Cloud Queues | [55-infrastructure-technologies/10-sqs-and-cloud-queues.md](55-infrastructure-technologies/10-sqs-and-cloud-queues.md) | A message queue you rent by the request — workers pull jobs out, and a crashed worker's job automatically reappears for someone else. | managed queue, visibility timeout, at-least-once |
+| 11 | MESSAGING | RabbitMQ | [55-infrastructure-technologies/11-rabbitmq.md](55-infrastructure-technologies/11-rabbitmq.md) | The broker is the smart part — it routes each message to the right queues, tracks delivery, and deletes it once a consumer acknowledges it. | AMQP, routing, acknowledgements |
+| 12 | MESSAGING | Pulsar | [55-infrastructure-technologies/12-pulsar.md](55-infrastructure-technologies/12-pulsar.md) | Messaging split into a stateless serving layer and a separate storage layer — so adding a server means no data ever has to move. | stateless brokers, layered design, streaming |
+| 13 | MESSAGING | BookKeeper & Distributed Logs | [55-infrastructure-technologies/13-bookkeeper-and-distributed-logs.md](55-infrastructure-technologies/13-bookkeeper-and-distributed-logs.md) | One job: keep an append-only log alive on several machines at once — because the replicated log is the part every distributed system needs. | replicated log, ledgers, storage layer |
+| 14 | SERVERS & TOOLS | Lucene | [55-infrastructure-technologies/14-lucene.md](55-infrastructure-technologies/14-lucene.md) | The Java library that made the inverted index practical — Elasticsearch, Solr, and OpenSearch are all servers wrapped around the same core. | inverted index, full-text search, Java library |
+| 15 | SERVERS & TOOLS | Tomcat | [55-infrastructure-technologies/15-tomcat.md](55-infrastructure-technologies/15-tomcat.md) | Enterprise Java's workhorse since 1999 — your code sees a request and a response object while Tomcat handles the sockets, threads, and HTTP. | servlets, app server, Java web |
+| 16 | SERVERS & TOOLS | Maven & Gradle | [55-infrastructure-technologies/16-maven-and-gradle.md](55-infrastructure-technologies/16-maven-and-gradle.md) | The JVM's build systems — their real job is fetching every library your libraries need, and picking a version when two of them disagree. | builds, dependencies, version conflicts |
+| 17 | SERVERS & TOOLS | Git & GitHub | [55-infrastructure-technologies/17-git-and-github.md](55-infrastructure-technologies/17-git-and-github.md) | Your project stored as a graph of snapshots named by their own hashes — GitHub put that graph on the web and made version control social. | commits, content hashes, collaboration |
+| 18 | SERVERS & TOOLS | Nginx | [55-infrastructure-technologies/18-nginx.md](55-infrastructure-technologies/18-nginx.md) | Ten thousand simultaneous connections answered by a handful of workers — each one an event loop that sleeps until a socket has something to say. | event loop, reverse proxy, C10K |
+| 19 | OBSERVABILITY | Prometheus | [55-infrastructure-technologies/19-prometheus.md](55-infrastructure-technologies/19-prometheus.md) | Every metric is a set of labeled time series pulled from your services — PromQL turns the raw counters into rates, sums, and alerts. | metrics, pull model, PromQL |
+| 20 | OBSERVABILITY | Grafana | [55-infrastructure-technologies/20-grafana.md](55-infrastructure-technologies/20-grafana.md) | The dashboard that owns no data — it queries Prometheus, logs, databases, and clouds live, and puts their answers on one shared time axis. | dashboards, data sources, shared time axis |
+| 21 | OBSERVABILITY | OpenTelemetry | [55-infrastructure-technologies/21-opentelemetry.md](55-infrastructure-technologies/21-opentelemetry.md) | One standard API for traces, metrics, and logs — instrument your service once, then point the telemetry at any backend you like. | traces, vendor-neutral, instrumentation |
+| 22 | OBSERVABILITY | ZooKeeper | [55-infrastructure-technologies/22-zookeeper.md](55-infrastructure-technologies/22-zookeeper.md) | A tiny replicated filesystem with ordering, watches, and nodes that vanish with their owner — enough to build locks, leaders, and discovery. | coordination, watches, ephemeral nodes |
+| 23 | OBSERVABILITY | Who Open-Sourced What | [55-infrastructure-technologies/23-who-open-sourced-what.md](55-infrastructure-technologies/23-who-open-sourced-what.md) | Most of the modern data stack was born inside one company solving its own scale problem — a map of who gave away which piece, and why. | open source, origin stories, papers to code |
+
+## Regeneration instructions
+
+To rebuild the HTML from this spec:
+
+- **Template:** tutorials category grid. Single page: h1, `.subtitle` paragraph, then one flat `.nav-grid` of `.nav-card` anchors (no h2 section headings).
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, 15px top margin; responsive: 3 columns below 1400px, 2 below 1100px, 1 below 600px.
+- **Links:** the tables above link to the `.md` versions for markdown navigation; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
+- **Card structure:** `<a class="nav-card" href="...">` containing `<div class="card-num">SUBCATEGORY LABEL</div>`, `<h3>N. Topic Title</h3>` (unpadded index number matching the 2-digit zero-padded file index), `<p>description</p>`, then `<div class="topics">` of `<span class="topic-tag">` pills.
+- **Card order:** within each section, cards appear in ascending file-index order, and numbering runs sequentially 1..23 across the sections.
+- **Category label colors:** applied by a small script mapping `.card-num` text to color — "CONTAINERS & IAC" `#2980b9`, "GOOGLE STACK" `#27ae60`, "MESSAGING" `#8e44ad`, "SERVERS & TOOLS" `#e67e22`, "OBSERVABILITY" `#c0392b`; the CSS default for `.card-num` is `#2980b9`, 0.75em bold, 4px bottom margin.
+- **Card style:** background `#ffffff`, border `1px solid #d8d8d8`, radius 10px, padding 20px, shadow `0 2px 4px rgba(0,0,0,0.05)`, transition on border-color/transform; hover: border `#2980b9`, `translateY(-2px)`. h3 `#1a3a4a` 1em with 6px bottom margin; description `#555` 0.85em. Topic tags: background `#f0f0f0`, border `1px solid #ccc`, radius 4px, padding 2px 6px, 0.7em `#666`, in a flex-wrap row with 4px gap and 8px top margin.
+- **Page style:** body system sans-serif, background `#f5f5f0`, text `#2a2a2a`, padding 40px, line-height 1.6; universal `* { margin:0; padding:0; box-sizing:border-box }` reset; h1 1.8em `#2980b9` with 10px bottom margin; subtitle `#666` 1.05em with 30px bottom margin. No nav bar, no back/home links.
+- **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22` (page accents here use `#2980b9`, `#27ae60`, `#8e44ad`, `#e67e22`, `#c0392b`).
+- **Canvases:** none on this page; any canvases elsewhere in this series use `window.devicePixelRatio` scaling.

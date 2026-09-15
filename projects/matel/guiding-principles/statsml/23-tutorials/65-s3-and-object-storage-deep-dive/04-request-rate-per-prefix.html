@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Request Rate Per Prefix</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Request Rate Per Prefix</h1>
+<p class="subtitle">The request limit applies to each prefix on its own, not to the whole bucket — so how many requests a second you can make is decided by how your key names spread out</p>
+
+<div class="card-section">
+    <h2>One Bucket, 20,000 Writes a Second</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">per prefix</span><span class="tag orange">documented limits</span></div>
+                <ul>
+                    <li><b>The setup</b> — one bucket must take 20,000 writes a second from an ingest service</li>
+                    <li><b>Write limit</b> — about 3,500 writes a second for each prefix, documented by the store</li>
+                    <li><b>Read limit</b> — about 5,500 reads a second for each prefix, on the same documented list</li>
+                    <li><b>Per prefix</b> — the limit is per prefix, not for the whole bucket, so one cannot carry it</li>
+                    <li><b>The shortfall</b> — one prefix serves 3,500 and leaves 16,500 a second refused</li>
+                    <li><b>No cap on prefixes</b> — a bucket may hold as many prefixes as your keys create</li>
+                    <li><b>No bucket limit</b> — nothing caps the bucket on top; it grows by adding prefixes</li>
+                    <li><b>Decided early</b> — the ceiling follows from key names, chosen before any data lands</li>
+                </ul>
+                <p class="example">One prefix serves 3,500 of the 20,000 writes a second; the other 16,500 are refused.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The limit belongs to the prefix, not to the bucket. You buy throughput by spreading keys across more prefixes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A Prefix Is a Slice of the Sorted Keys, Not a Folder</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">key names</span><span class="tag orange">the store decides</span></div>
+                <ul>
+                    <li><b>Not a folder</b> — the folder view is only drawn from the slashes in your key names</li>
+                    <li><b>Keys are sorted</b> — every key in the bucket sits in one long sorted list</li>
+                    <li><b>A prefix is a slice</b> — one continuous stretch of that list, served together</li>
+                    <li><b>The store decides</b> — it picks where one slice ends and the next one begins</li>
+                    <li><b>Splits on load</b> — a slice under heavy load gets cut in two, on its own</li>
+                    <li><b>Your lever</b> — keys spread across the list give it clean places to cut</li>
+                    <li><b>Common error</b> — reading the folder view as though it were the real slice</li>
+                    <li><b>In practice</b> — put a character that varies early in the key, before the date</li>
+                </ul>
+                <p class="example">Keys starting <code>00a7-</code> and <code>e7d5-</code> sit far apart in the sorted list, while two date folders under one busy path can sit in the same slice.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> You do not create these slices. Your key names only decide whether the store can split them easily.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Dividing 20,000 Writes Across Prefixes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">round up</span><span class="tag orange">take the larger</span></div>
+                <ul>
+                    <li><b>The division</b> — 20,000 &divide; 3,500 = 5.71, so one prefix is nowhere near enough</li>
+                    <li><b>Round up</b> — you cannot have 0.71 of a prefix, so the answer is 6 of them</li>
+                    <li><b>Check it</b> — 6 &times; 3,500 = 21,000 a second, just above the 20,000 being asked for</li>
+                    <li><b>Each prefix</b> — 20,000 &divide; 6 = 3,333.3 a second each, sitting under the limit</li>
+                    <li><b>Spare room</b> — 3,500 &minus; 3,333.3 = 166.7 a second left over on every prefix</li>
+                    <li><b>Four is short</b> — 20,000 &divide; 4 = 5,000 each, which is 1,500 over the limit</li>
+                    <li><b>Reads too</b> — 40,000 &divide; 5,500 = 7.27, so the reads want 8 prefixes, not 6</li>
+                    <li><b>Take the larger</b> — 8 beats 6, so the key names have to give you 8 slices</li>
+                </ul>
+                <p class="example">At 6 prefixes each one carries 3,333.3 writes a second and fits; at 4 prefixes each carries 5,000 and every one hits the limit.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Divide the demand by the per-prefix limit and round up. Do it once for writes and once for reads, then take the larger of the two answers.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+var RED = '#e74c3c';
+
+// documented per-prefix limits
+var WRITE_LIMIT = 3500, READ_LIMIT = 5500;
+// illustrative demand
+var WRITE_DEMAND = 20000, READ_DEMAND = 40000;
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 7;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function rgba(hex, a) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// format a rate with thousands separators and at most one decimal
+function num(v) {
+    return v.toLocaleString('en-US', { maximumFractionDigits: 1 });
+}
+
+// c1: per-prefix limits against the demand
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Prefix vs the Demand: Limits Against 20,000 Writes / 40,000 Reads', w / 2, 24);
+
+    var ox = 170, plotW = 500, xMax = 44000;
+    function px(v) { return ox + v / xMax * plotW; }
+
+    [10000, 20000, 30000, 40000].forEach(function(g) {
+        var x = px(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, 258); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText((g / 1000) + 'k', x, 272);
+    });
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, 60); ctx.lineTo(ox, 258); ctx.lineTo(ox + plotW, 258); ctx.stroke();
+
+    var rows = [
+        { cy: 90,  v: WRITE_LIMIT,  color: P.blue,   lab: 'write limit / prefix' },
+        { cy: 128, v: WRITE_DEMAND, color: P.orange, lab: 'write demand' },
+        { cy: 190, v: READ_LIMIT,   color: P.aqua,   lab: 'read limit / prefix' },
+        { cy: 228, v: READ_DEMAND,  color: P.violet, lab: 'read demand' }
+    ];
+    var bh = 26;
+    rows.forEach(function(r) {
+        var bwid = px(r.v) - ox;
+        ctx.fillStyle = rgba(r.color, 0.85);
+        ctx.fillRect(ox, r.cy - bh / 2, bwid, bh);
+        ctx.strokeStyle = r.color; ctx.lineWidth = 2;
+        ctx.strokeRect(ox, r.cy - bh / 2, bwid, bh);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, ox - 10, r.cy + 4);
+        ctx.fillStyle = r.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(num(r.v) + '/s', ox + bwid + 8, r.cy + 4);
+    });
+
+    // the demand each pair of bars is measured against
+    ctx.strokeStyle = RED; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px(WRITE_DEMAND), 70); ctx.lineTo(px(WRITE_DEMAND), 150); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px(READ_DEMAND), 170); ctx.lineTo(px(READ_DEMAND), 250); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // both counts computed from the plotted values
+    function need(demand, limit) {
+        return num(demand) + ' ÷ ' + num(limit) + ' = ' +
+               (demand / limit).toFixed(2) + ' → ' + Math.ceil(demand / limit) + ' prefixes';
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = P.orange;
+    ctx.fillText(need(WRITE_DEMAND, WRITE_LIMIT), 300, 56);
+    ctx.fillStyle = P.violet;
+    ctx.fillText(need(READ_DEMAND, READ_LIMIT), 300, 166);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('3,500 and 5,500 per prefix are documented figures; the demand is illustrative', w - 12, 294);
+});
+
+// c2: the sorted key list, cut into prefixes by the store
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Sorted Key List, Cut Into Prefixes by the Store — Not by Your Slashes', w / 2, 24);
+
+    var x0 = 60, x1 = 680, barY = 100, barH = 46;
+    function bx(b) { return x0 + b / 256 * (x1 - x0); }
+
+    var cut1 = bx(0x4c), cut2 = bx(0xa0);
+
+    var parts = [
+        { a: x0,   b: cut1, col: P.blue,   alpha: 0.18, lab: 'prefix 1', rng: '00… → 4c…' },
+        { a: cut1, b: cut2, col: P.aqua,   alpha: 0.18, lab: 'prefix 2', rng: '4c… → a0…' },
+        { a: cut2, b: x1,   col: P.violet, alpha: 0.15, lab: 'prefix 3', rng: 'a0… → ff…' }
+    ];
+    parts.forEach(function(p) {
+        ctx.fillStyle = rgba(p.col, p.alpha);
+        roundRect(ctx, p.a, barY, p.b - p.a, barH, 6); ctx.fill();
+        ctx.strokeStyle = p.col; ctx.lineWidth = 2; ctx.stroke();
+        var cx = (p.a + p.b) / 2;
+        ctx.fillStyle = p.col; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(p.lab, cx, barY + 29);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(p.rng, cx, 170);
+    });
+
+    // the cut points the store chose
+    [cut1, cut2].forEach(function(cx) {
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(cx, 92); ctx.lineTo(cx, 154); ctx.stroke();
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('cut', cx, 88);
+    });
+
+    // sample keys, placed by their first character
+    var keys = [
+        { v: 0x00, name: '00a7-…', ly: 204 },
+        { v: 0x3d, name: '3d12-…', ly: 222 },
+        { v: 0x5f, name: '5f88-…', ly: 204 },
+        { v: 0x8b, name: '8b04-…', ly: 222 },
+        { v: 0xc3, name: 'c391-…', ly: 204 },
+        { v: 0xe7, name: 'e7d5-…', ly: 222 }
+    ];
+    keys.forEach(function(k) {
+        var kx = Math.max(x0 + 2, bx(k.v));
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(kx, 190); ctx.lineTo(kx, 148); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(k.name, Math.min(Math.max(kx, 110), 630), k.ly);
+    });
+
+    // a folder edge from a slash, falling inside prefix 2
+    var fx = bx(0x77);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(fx, 96); ctx.lineTo(fx, 248); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('a folder edge from a slash — ignored here', fx + 8, 244);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the folder edge falls inside a prefix — the cuts are not yours', 60, 270);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('keys and cut points illustrative; automatic splitting is documented behaviour', w - 12, 294);
+});
+
+// c3: 20,000 writes/sec split across 1, 2, 4 and 6 prefixes
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('20,000 Writes/sec Split Across Prefixes — Only 6 Stays Under 3,500', w / 2, 24);
+
+    var ox = 70, baseY = 248, plotW = 590, plotH = 190, yMax = 21000;
+    function py(v) { return baseY - v / yMax * plotH; }
+
+    [3500, 7000, 10500, 14000, 17500, 21000].forEach(function(g) {
+        var y = py(g);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(num(g), ox - 8, y + 4);
+    });
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    var counts = [1, 2, 4, 6];
+    var bw = 80;
+    counts.forEach(function(n, i) {
+        var v = WRITE_DEMAND / n;                       // per-prefix rate, computed
+        var cx = ox + plotW * (i + 0.5) / counts.length;
+        var ok = v <= WRITE_LIMIT;
+        var color = ok ? P.green : RED;
+        var yTop = py(v);
+
+        ctx.fillStyle = rgba(color, 0.80);
+        ctx.fillRect(cx - bw / 2, yTop, bw, baseY - yTop);
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw / 2, yTop, bw, baseY - yTop);
+
+        ctx.fillStyle = color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(num(v), cx, yTop - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(n === 1 ? '1 prefix' : n + ' prefixes', cx, 266);
+        ctx.fillStyle = color; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(ok ? 'fits, ' + num(WRITE_LIMIT - v) + '/s spare' : 'over the limit', cx, 284);
+    });
+
+    var cy = py(WRITE_LIMIT);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, cy); ctx.lineTo(ox + plotW, cy); ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('limit: ' + num(WRITE_LIMIT) + ' writes/sec per prefix', ox + plotW / 2, cy - 6);
+
+    // sits at y=46 to clear the value label above the tall 1-prefix bar (py(20000) - 6 = 61)
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(num(WRITE_DEMAND) + ' ÷ ' + num(WRITE_LIMIT) + ' = ' +
+                 (WRITE_DEMAND / WRITE_LIMIT).toFixed(2) + ' → round up to ' +
+                 Math.ceil(WRITE_DEMAND / WRITE_LIMIT), ox + plotW / 2, 46);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('3,500 is a documented figure; 20,000/sec is illustrative; divisions exact', w - 12, 296);
+});
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>

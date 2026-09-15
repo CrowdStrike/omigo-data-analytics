@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storm &amp; Samza</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Storm &amp; Samza</h1>
+<p class="subtitle">Streaming's first generation — Storm processed events one tuple at a time, Samza read them off Kafka's partitioned log; together they taught every later engine what is actually hard about streaming</p>
+
+<div class="card-section">
+    <h2>Counting Hashtags Before the Batch Job Wakes Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">Storm</span><span class="tag green">real time</span></div>
+                <ul>
+                    <li><b>The feed</b> — a TV network watches 5,000 tweets/min during a premiere and wants live hashtag counts</li>
+                    <li><b>The old way</b> — a nightly batch job would deliver the counts at 3am, hours after the show ended</li>
+                    <li><b>The spout</b> — Storm's source component pulls each tweet off the firehose as one tuple</li>
+                    <li><b>The bolts</b> — a split bolt extracts the hashtags; a count bolt keeps a running counter per tag</li>
+                    <li><b>The topology</b> — spouts and bolts wired into a graph that runs forever, one tuple at a time</li>
+                    <li><b>The heritage</b> — built at BackType, open-sourced via Twitter in 2011; the first widely used stream processor</li>
+                </ul>
+                <p class="example">At 9:02pm, ninety seconds into the premiere, the dashboard already shows #finale at 4,181 mentions — no batch job involved.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A Storm topology is a graph of spouts (sources) and bolts (transforms) that processes each event within milliseconds of arrival instead of hours later in a batch.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Lost Tuple: the Ack Tree Replays the Whole Tweet</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag orange">at-least-once</span></div>
+                <ul>
+                    <li><b>The tree</b> — tweet 8814 carries two hashtags, so one spout tuple fans into two child tuples</li>
+                    <li><b>The ack</b> — each bolt acks its tuple; only when the whole tree is acked is the tweet finished</li>
+                    <li><b>The crash</b> — the worker counting #finale dies before acking, so the tree never completes</li>
+                    <li><b>The timeout</b> — after 30 s (Storm's documented default, exact) the spout replays the whole tweet</li>
+                    <li><b>The double count</b> — #DragonShow was already counted once, so the replay pushes both tags one too high</li>
+                </ul>
+                <p class="example">True counts are #finale 4,181 and #DragonShow 2,317; after the replay the dashboard reads 4,182 and 2,318.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Storm's ack tree gives at-least-once delivery — no tuple is silently lost, but a replayed tuple can be processed twice, so counters drift upward with every failure.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Samza's Bet: the Log Is the Stream, State Lives Local</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">Samza</span><span class="tag blue">where it's used</span><span class="tag green">the log</span></div>
+                <ul>
+                    <li><b>The log</b> — Samza, from LinkedIn, reads streams straight from Kafka's partitioned, replayable log</li>
+                    <li><b>The partition</b> — each Kafka partition maps to one Samza task, so order holds within a partition</li>
+                    <li><b>Local state</b> — each task keeps its counters in an embedded store (RocksDB) on its own disk</li>
+                    <li><b>Recovery</b> — every state change also goes to a Kafka changelog; a restarted task replays it to rebuild</li>
+                    <li><b>The lesson</b> — Flink and Kafka Streams kept both ideas: the log as substrate, state beside the task</li>
+                </ul>
+                <p class="example">When task 1's machine dies, its replacement replays the changelog and reopens with #finale = 4,181 intact — no remote database was ever queried.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Samza's lasting insight is that a replayable partitioned log plus local per-task state turns streaming from fragile plumbing into rebuildable computation.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Reading At-Least-Once Counts as Exact</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">state</span></div>
+                <ul>
+                    <li><b>The mistake</b> — treating a Storm counter as the true count; every crash-and-replay inflates it</li>
+                    <li><b>The mirror image</b> — turning acking off gives at-most-once: cheaper, but crashes silently drop tuples</li>
+                    <li><b>The hard part</b> — exactly-once is not a delivery flag; it needs state snapshots tied to stream position</li>
+                    <li><b>The fix</b> — later engines checkpoint state and input offsets together, so a replay never counts twice</li>
+                    <li><b>The legacy</b> — Storm and Samza are mostly retired, but their vocabulary and lessons run every modern engine</li>
+                </ul>
+                <p class="example">After a day with 12 worker restarts, the same stream reads 49,760 (at-most-once), 50,240 (at-least-once), or 50,000 (checkpointed) — only one matches the true count of 50,000.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Believing at-least-once is close enough to exactly-once to ignore. The gap is state management — the exact problem streaming's first generation exposed and its second generation was built to solve.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x0, y0, x1, y1, color) {
+    var ang = Math.atan2(y1 - y0, x1 - x0);
+    var size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - size * Math.cos(ang - 0.45), y1 - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - size * Math.cos(ang + 0.45), y1 - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+}
+
+// c1: Storm topology flow diagram
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Storm Topology: Tweets In, Live Hashtag Counts Out', w / 2, 24);
+
+    function box2(x, y, bw, bh, fill, edge, line1, line2) {
+        ctx.fillStyle = fill;
+        roundRect(ctx, x, y, bw, bh, 8);
+        ctx.fill();
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.textAlign = 'center';
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillText(line1, x + bw / 2, y + bh / 2 - 4);
+        ctx.font = '12px system-ui';
+        ctx.fillText(line2, x + bw / 2, y + bh / 2 + 14);
+    }
+
+    // spout
+    box2(40, 115, 140, 55, 'rgba(42,120,214,0.15)', P.blue, 'tweet spout', '5,000 tweets/min');
+    // split bolt
+    box2(255, 115, 160, 55, 'rgba(42,120,214,0.15)', P.blue, 'split bolt', 'extracts hashtags');
+    // arrow spout -> split
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(180, 142); ctx.lineTo(249, 142); ctx.stroke();
+    arrowHead(ctx, 180, 142, 253, 142, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1 tuple / tweet', 217, 130);
+
+    // count bolts
+    box2(510, 65, 170, 55, 'rgba(0,131,0,0.12)', P.green, 'count bolt task 1', 'counters #a–#m');
+    box2(510, 175, 170, 55, 'rgba(0,131,0,0.12)', P.green, 'count bolt task 2', 'counters #n–#z');
+
+    // fan-out arrows
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(415, 142); ctx.lineTo(504, 95); ctx.stroke();
+    arrowHead(ctx, 415, 142, 508, 93, P.mute);
+    ctx.beginPath(); ctx.moveTo(415, 142); ctx.lineTo(504, 200); ctx.stroke();
+    arrowHead(ctx, 415, 142, 508, 202, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fields grouping by hashtag — 8,400 tags/min', 462, 152);
+
+    // annotation
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one tuple at a time — latency ~100 ms, not a nightly batch', w / 2, 270);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('rates illustrative', w - 12, h - 8);
+});
+
+// c2: ack tree replay diagram
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Crash, One Replay: Both Hashtags Count Twice', w / 2, 24);
+
+    // spout tuple box
+    ctx.fillStyle = 'rgba(42,120,214,0.15)';
+    roundRect(ctx, 30, 125, 165, 50, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('spout tuple', 112, 145);
+    ctx.font = '12px system-ui';
+    ctx.fillText('tweet 8814 — 2 hashtags', 112, 163);
+
+    // acked child
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    roundRect(ctx, 280, 55, 190, 50, 8);
+    ctx.fill();
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('#DragonShow → task 2', 375, 75);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✓ counted, acked', 375, 93);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(195, 135); ctx.lineTo(274, 88); ctx.stroke();
+    arrowHead(ctx, 195, 135, 278, 86, P.mute);
+
+    // failed child
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    roundRect(ctx, 280, 195, 190, 50, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('#finale → task 1', 375, 215);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('✗ worker dies before ack', 375, 233);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(195, 165); ctx.lineTo(274, 212); ctx.stroke();
+    arrowHead(ctx, 195, 165, 278, 214, P.mute);
+
+    // timeout label
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('tree incomplete → 30 s timeout (exact)', 285, 270);
+
+    // replay arrow: dashed orange curve from failed box back to spout bottom
+    ctx.strokeStyle = P.orange; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(280, 235);
+    ctx.quadraticCurveTo(160, 265, 112, 182);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 130, 220, 112, 180, P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('spout replays', 40, 220);
+    ctx.fillText('the whole tweet', 40, 236);
+
+    // count readout
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('true → reported', 510, 90);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('#finale 4,181 → 4,182', 510, 120);
+    ctx.fillText('#DragonShow 2,317 → 2,318', 510, 150);
+
+    // annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('nothing lost, some things twice', 510, 200);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText("counts illustrative; 30 s is Storm's documented default timeout", w - 12, h - 8);
+});
+
+// c3: Samza architecture
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Samza: Partitioned Log In, Local State Beside Each Task', w / 2, 24);
+
+    var ys = [75, 140, 205];
+
+    // Kafka topic label
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Kafka topic (replayable log)', 35, 60);
+
+    // partition boxes
+    var partLabs = ['hashtags — partition 0', 'hashtags — partition 1', 'hashtags — partition 2'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(42,120,214,0.15)';
+        roundRect(ctx, 35, ys[i], 160, 40, 6);
+        ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(partLabs[i], 115, ys[i] + 24);
+    }
+
+    // task boxes
+    var taskLabs = ['task 0', 'task 1', 'task 2'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.12)';
+        roundRect(ctx, 290, ys[i], 130, 40, 6);
+        ctx.fill();
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(taskLabs[i], 355, ys[i] + 24);
+        // arrow partition -> task
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(195, ys[i] + 20); ctx.lineTo(284, ys[i] + 20); ctx.stroke();
+        arrowHead(ctx, 195, ys[i] + 20, 288, ys[i] + 20, P.mute);
+    }
+
+    // state store boxes
+    var storeLabs = ['local store (RocksDB)', 'local store: #finale = 4,181', 'local store (RocksDB)'];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = 'rgba(25,158,112,0.12)';
+        roundRect(ctx, 500, ys[i], 190, 40, 6);
+        ctx.fill();
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(storeLabs[i], 595, ys[i] + 24);
+        // arrow task -> store
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(420, ys[i] + 20); ctx.lineTo(494, ys[i] + 20); ctx.stroke();
+        arrowHead(ctx, 420, ys[i] + 20, 498, ys[i] + 20, P.aqua);
+    }
+
+    // changelog arrow: from middle store curving left and down below partitions
+    ctx.strokeStyle = P.aqua; ctx.setLineDash([5, 4]); ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(595, 180);
+    ctx.quadraticCurveTo(560, 258, 300, 262);
+    ctx.quadraticCurveTo(150, 265, 110, 250);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 140, 258, 108, 249, P.aqua);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('changelog → Kafka (replay to recover)', 300, 285);
+
+    // annotation
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('recovery = replay the log', 500, 52);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative; architecture as documented', w - 12, h - 6);
+});
+
+// c4: three guarantees, three answers
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Stream, Three Guarantees, Three Answers', w / 2, 24);
+
+    var ox = 70, baseY = 245, plotW = 600, plotH = 170;
+    // y from 49,600 to 50,400; 800 over 170px is not the spec mapping — use spec pixel positions
+    // spec: gridlines at 49,800 (y=203), 50,000 (y=160), 50,200 (y=118)
+    var gl = [[49800, 203], [50000, 160], [50200, 118]];
+    gl.forEach(function(g) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, g[1]); ctx.lineTo(ox + plotW, g[1]); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(g[0].toLocaleString('en-US'), ox - 8, g[1] + 4);
+    });
+    ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+    ctx.fillText('49,600', ox - 8, baseY + 4);
+    ctx.fillText('50,400', ox - 8, baseY - plotH + 4);
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, baseY - plotH); ctx.lineTo(ox, baseY); ctx.lineTo(ox + plotW, baseY); ctx.stroke();
+
+    // true-count dashed line at y=160
+    ctx.strokeStyle = P.ink; ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, 160); ctx.lineTo(ox + plotW, 160); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('true count 50,000', 80, 150);
+
+    // bars
+    var bars = [
+        { x: 130, top: 211, hgt: 34, color: '#e74c3c', val: '49,760', lab: ['at-most-once', '(no acks)'] },
+        { x: 330, top: 109, hgt: 136, color: P.orange, val: '50,240', lab: ['at-least-once', '(Storm acks)'] },
+        { x: 530, top: 160, hgt: 85, color: P.green, val: '50,000', lab: ['checkpointed', 'exactly-once'] }
+    ];
+    bars.forEach(function(b) {
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x, b.top, 90, b.hgt);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillStyle = b.color;
+        ctx.fillText(b.val, b.x + 45, b.top - 6);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab[0], b.x + 45, baseY + 16);
+        ctx.fillText(b.lab[1], b.x + 45, baseY + 30);
+    });
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the fix was checkpointed state (Flink, Kafka Streams) — not luck', 430, 70);
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('counts illustrative — a day with 12 worker restarts', w - 12, h - 6);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
