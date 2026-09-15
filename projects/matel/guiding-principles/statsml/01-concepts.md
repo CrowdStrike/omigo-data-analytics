@@ -1,6 +1,6 @@
 # Concepts — Theoretical Foundations
 
-**Page type:** grid page (nav-card grid, auto-fit columns min 300px, cards with topic tags)
+**Page type:** grid page (nav-card grid, 4 columns, cards with topic tags)
 **HTML title tag:** Concepts — Theoretical Foundations for Data Science
 
 **Subtitle:** Theoretical foundations — focused learning material for the ideas behind omigo data science.
@@ -63,7 +63,7 @@ Every card links to the page itself (`01-concepts.html` — placeholder self-lin
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, then one `.nav-grid` of `.nav-card` anchors. No callout on this page.
-- **Layout:** `.nav-grid` is CSS grid, `repeat(auto-fit, minmax(300px, 1fr))`, 16px gap, margin-top 15px.
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin-top 15px; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to `.md` versions for navigation in markdown; in the regenerated HTML, every card's `href` is `01-concepts.html` (self-link placeholders) with an `.html` extension.
 - **Card structure:** `<a class="nav-card" href="01-concepts.html">` containing `<div class="card-num" style="color:CATEGORY_COLOR">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number), `<p>description</p>`, and `<div class="topics">` holding one `<span class="topic-tag">` per topic.
 - **Category label colors (inline style on `.card-num`):** STATISTICS, MATH, REASONING `#2980b9`; ML, AI `#e67e22`; GRAPH, THEORY `#8e44ad`; ENGINEERING, PATTERNS, CONCURRENCY, DISTRIBUTED, MESSAGING, ARCHITECTURE `#1a5276`; PIPELINE, GOVERNANCE `#27ae60`; TECHNOLOGY, VISUALIZATION `#e74c3c`; LANGUAGE `#795548`.

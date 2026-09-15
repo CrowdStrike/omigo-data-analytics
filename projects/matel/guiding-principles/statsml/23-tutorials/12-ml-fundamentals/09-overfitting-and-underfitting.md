@@ -1,6 +1,6 @@
 # Overfitting & Underfitting
 
-**Page type:** detail page (tutorial: 4 card-sections; section 1 uses a 3-column layout — text 38% + two canvases 31% each — the rest use the two-column 45/55 text/canvas layout)
+**Page type:** detail page (tutorial: 4 card-sections; section 1 holds both canvases side by side in a `.viz-pair` flex row inside its viz cell; all sections use the two-column text/canvas layout)
 **HTML title tag:** Overfitting & Underfitting
 
 **Subtitle:** A line that misses the pattern, a curve that catches it, and a wiggle that memorizes every point — the train-vs-test gap is the fingerprint
@@ -24,24 +24,24 @@ Shared data for both canvases (12 hardcoded rise-then-level points with noise):
 - YS = `[15, 22, 33, 36, 44, 45, 51, 50, 55, 53, 58, 56]`
 - Scales: x mapped over 0.5–12.5 domain, y over 0–70; padding top 44, bottom 40, left 40, right 16; L-shaped `#999` axis frame; points drawn as ink `#1a5276` dots radius 4.5.
 
-### Visualization (canvas `c1a`, 420×300)
+### Visualization (canvas `c1a`, 310×300)
 
 Scatter of the 12 points with two overlaid fits: an underfit straight line and a good gentle curve.
 
-- **Title (bold 15px, `#1a5276`, top center):** "Too Simple vs About Right".
+- **Title (bold 14px, `#1a5276`, top center):** "Too Simple vs About Right".
 - **Straight line fit:** y = 19.6 + 3.62x drawn from x=0.5 to x=12.4, orange `#d95926`, width 3.
 - **Gentle curve:** y = 60·(1 − e^(−x/4)) sampled at 61 points over x=0.5–12.4, green `#008300`, width 3.
-- **Annotations (bold 12px):** orange, two lines near the right at data coords (7.4, 24)/(7.4, 18): "line: cannot bend," / "misses the leveling-off"; green, two lines top-left at (1, 62)/(1, 56): "curve: follows the" / "pattern, skips the jitter".
-- **Caption (gray `#6b7280` 12px, bottom center):** "the same 12 training points".
+- **Annotations (bold 12px):** orange, right-aligned at the plot's right edge on data rows y=24 / y=17: "line: cannot bend," / "misses the leveling-off"; green, left-aligned two lines top-left at (1, 62)/(1, 56): "curve: follows the" / "pattern, skips the jitter".
+- **Caption (gray `#6b7280` 12px, bottom center of canvas):** "the same 12 training points".
 
-### Visualization (canvas `c1b`, 420×300)
+### Visualization (canvas `c1b`, 310×300)
 
 Scatter of the same 12 points with an overfit wiggle passing exactly through every point.
 
-- **Title (bold 15px, `#1a5276`, top center):** "Memorized: Through Every Point".
+- **Title (bold 14px, `#1a5276`, top center):** "Memorized: Hits Every Point".
 - **Wiggle:** magenta `#d55181` quadratic curve, width 2.5, through each consecutive point pair with control point at the segment midpoint offset ±11 y-units (alternating +11 / −11 by segment parity) — overshooting between points.
 - **Annotation (magenta bold 12px, three lines top-left at data coords (1, 65)/(1, 59)/(1, 53)):** "zero error here —" / "every swerve is noise," / "not pattern".
-- **Caption (gray 12px, bottom center):** "new points will land on the curve, not the wiggle".
+- **Caption (gray 12px, bottom center of canvas):** "new points land on the curve, not the wiggle".
 
 ## The Fingerprint: Grade Each Fit Twice
 
@@ -127,8 +127,8 @@ Diagnosis flow diagram: read both scores, branch to two diagnoses, each with its
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic page (per `tutorials/CLAUDE.md`). `<h1>` (no index number), `.subtitle` line, then 4 `.card-section` blocks, each an `<h2>` with 2px `#2980b9` bottom border plus a `table.layout` row. Section 1 uses the 3-column variant: `td.text-col3` (38%) + two `td.viz-col3` (31% each) holding canvases `c1a` and `c1b` at 420×300. Sections 2–4 use `td.text-col` (50%) + `td.viz-col` (50%) with one 720×300 canvas. Text cells hold `.tags` pills, 5 one-line bullets (each opening with `<b>` in `#1a5276`), an italic `.example` line, and a `.key-point` callout.
-- **Page CSS:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 0.95rem; h2 1.3rem `#1a5276`. `.key-point`: background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem. `.example`: italic `#555` 0.9rem. ul 0.92rem. Canvas: `width:100%`, 1px `#e0e0e0` border, 4px radius.
+- **Template:** tutorials topic page (per `tutorials/CLAUDE.md`). `<h1>` (no index number), `.subtitle` line, then 4 `.card-section` blocks, each an `<h2>` with 2px `#2980b9` bottom border plus a `table.layout` row. Every section uses `td.text-col` (50%) + `td.viz-col` (50%); one section places canvases `c1a`/`c1b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`), sections 2–4 hold one 720×300 canvas. Text cells hold `.tags` pills, 5 one-line bullets (each opening with `<b>` in `#1a5276`), an italic `.example` line, and a `.key-point` callout.
+- **Page CSS:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 0.95rem; h2 1.3rem `#1a5276`. `.key-point`: background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem. `.example`: italic `#555` 0.9rem. ul 0.92rem. Canvas: `width:100%`, 1px `#e0e0e0` border, 4px radius. `.viz-pair`: `display:flex; gap:10px; align-items:flex-start`, with `.viz-pair canvas { flex:1 1 0; min-width:0 }`.
 - **Tag pills:** 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
 - **Canvas scaling:** shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates; intrinsic width/height attributes as given per chart. Shared `makeScales`/`drawFrame`/`drawPoints` helpers used by c1a/c1b. All data arrays hardcoded (no `Math.random()`). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

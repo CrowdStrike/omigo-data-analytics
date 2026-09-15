@@ -1,6 +1,6 @@
 # Unit & Type Errors
 
-**Page type:** detail page (tutorial layout: h2 card-sections, two-column table with text left 50% / canvas right 50%; one section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial layout: h2 card-sections, two-column table with text left 50% / canvas right 50%; one section holds both canvases side by side in a `.viz-pair` flex row.)
 **HTML title tag:** Unit & Type Errors
 
 **Subtitle:** A column can hold values that aren't the same kind of thing — kilograms next to pounds, digits stored as text, dates that never parsed
@@ -67,25 +67,25 @@ Three-bar chart: kg truth, mixed mean, lbs truth.
 
 **Key point:** A column of digits is not automatically a number column. One comma or stray word quietly turns math into text games.
 
-### Visualization (canvas `c3a`, 420×340)
+### Visualization (canvas `c3a`, 310×340)
 
 Two side-by-side sorted columns comparing text sort vs numeric sort of prices.
 
 - **Title (bold 14px, `#1a5276`, top center):** "\"Cheapest First\" — Text vs Number".
-- **Left column (x=30, header "sorted as text" in orange `#d95926` bold 13px):** three 160×36 cells in 14px monospace: `"1,299"`, `"250"`, `"899"`; the first cell (the wrong winner) tinted `rgba(217,89,38,0.15)` with bold orange text. Grid borders `#e5e9ef`.
-- **Right column (x=230, header "sorted as numbers" in green `#008300`):** cells `250`, `899`, `1299`, no highlight.
-- **Annotations (bold 12px, centered per column):** orange, two lines under left column: "the most expensive item won" / "\"cheapest\" — \"1\" sorts before \"8\""; green, two lines under right column: "strip the comma, cast to number," / "and the order is honest".
-- **Caption (muted 12px, bottom center):** "same three prices in both columns".
+- **Left column (x=14, header "sorted as text" in orange `#d95926` bold 13px):** three 132×36 cells in 14px monospace: `"1,299"`, `"250"`, `"899"`; the first cell (the wrong winner) tinted `rgba(217,89,38,0.15)` with bold orange text. Grid borders `#e5e9ef`.
+- **Right column (x=164, header "sorted as numbers" in green `#008300`):** cells `250`, `899`, `1299`, no highlight.
+- **Annotations (bold 12px, centered on the canvas, stacked below the cells):** orange two lines at y=232/250: "text sort: the priciest item won" / "\"1\" sorts before \"8\", char by char"; green two lines at y=278/296: "strip the comma, cast to number" / "and the order is honest".
+- **Caption (muted 12px, centered, y=324):** "same three prices in both columns".
 
-### Visualization (canvas `c3b`, 420×340)
+### Visualization (canvas `c3b`, 310×340)
 
 Stacked horizontal bar for date parse rate plus examples of unparsed values.
 
 - **Title (bold 14px, `#1a5276`, top center):** "200 Dates: 190 Parsed, 10 Stayed Text".
-- **Bar (x=40, y=60, 340×44, muted outline):** green `#008300` segment 190/200 of the width with white bold 13px label inside "190 parsed as real dates (95%)"; orange `#d95926` segment for the rest, labeled below in bold orange 12px "10 rows (5%) still text".
-- **Failure examples (header muted bold 12px "what the 10 stragglers look like:", y=158):** orange 13px monospace list: `"March 5th"`, `"2026/13/02"`, `"n/a"`, `"yesterday"`.
-- **Side note (magenta `#d55181` bold 12px, three lines at x≈230):** "every date chart quietly" / "drops these 10 rows —" / "no error is ever raised".
-- **Caption (muted 12px, bottom center):** "a strict parse + a failure count makes the 5% visible".
+- **Bar (x=20, y=60, 270×44, muted outline):** green `#008300` segment 190/200 of the width with white bold 13px label inside "190 parsed as real dates"; orange `#d95926` segment for the rest, labeled below in bold orange 12px "10 rows (5%) still text".
+- **Failure examples (header muted bold 12px "what the 10 stragglers look like:", y=158):** orange 13px monospace list at x=36, y=180 stepping 22px: `"March 5th"`, `"2026/13/02"`, `"n/a"`, `"yesterday"`.
+- **Side note (magenta `#d55181` bold 12px, two centered lines at y=274/292):** "every date chart quietly drops" / "these 10 rows — no error raised".
+- **Caption (muted 12px, centered, y=320):** "strict parse + failure count makes 5% visible".
 
 ## Type Checks Catch What Eyeballing Misses
 
@@ -116,7 +116,7 @@ Three-row check table mapping each cheap check to the bug it caught on this page
 
 ## Regeneration instructions
 
-- **Template:** tutorial topic page (tutorials/CLAUDE.md conventions). `<h1>` concept name, `.subtitle`, four `.card-section` blocks each `<h2>` + `table.layout`. Sections 1, 2, 4 use two columns (`td.text-col` 50% / `td.viz-col` 50%, one 720×300 canvas); section 3 uses the 3-column layout (`td.text-col3` 38% / two `td.viz-col3` 31% each, canvases `c3a` and `c3b` at 420×340).
+- **Template:** tutorial topic page (tutorials/CLAUDE.md conventions). `<h1>` concept name, `.subtitle`, four `.card-section` blocks each `<h2>` + `table.layout`. Every section uses two columns (`td.text-col` 50% / `td.viz-col` 50%); sections 1, 2, 4 hold one 720×300 canvas. One section places canvases `c3a`/`c3b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure per section:** `.tags` pill row, `<ul>` of one-line bullets with `<b>` lead terms (colored `#1a5276`), italic `.example` line, `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem) with bold lead-in ("Key point:" / "Common mistake:").
 - **Tag pill CSS:** inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; canvas `width:100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.

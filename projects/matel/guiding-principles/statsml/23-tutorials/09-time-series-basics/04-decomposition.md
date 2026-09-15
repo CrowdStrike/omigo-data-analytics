@@ -1,6 +1,6 @@
 # Decomposition
 
-**Page type:** detail page (tutorial card-sections: h2 per section, two-column layout table — text left 50% / canvas right 50%; one section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial card-sections: h2 per section, two-column layout table — text left 50% / canvas right 50%)
 **HTML title tag:** Decomposition
 
 **Subtitle:** Splitting one messy sales line into trend + season + leftover — and why anomalies only show up in the leftover
@@ -52,11 +52,11 @@ Waterfall chart: rebuilding the $289 Saturday from its parts, five bars with das
 - **Title (bold 15px, `#1a5276`, top center):** "One Saturday, rebuilt: $257 + $30 + $0 + $2 = $289"
 - **Axes:** y from 0 to 320 with gridlines/labels at $0, $150, $300; L-shaped axis frame `#999`; padding l:58 r:20 t:50 b:44
 - **Bars (5 slots, width 52% of slot; bold 12px value label above, gray 12px x label below):**
-  1. "trend" — 0 to 257, `rgba(42,120,214,0.5)`, label "$257"
-  2. "Saturday" — 257 to 287, `rgba(0,131,0,0.55)`, label "+$30"
-  3. "holiday" — flat at 287 (minimum 1.5px sliver), `rgba(201,133,0,0.8)`, label "+$0"
-  4. "leftover" — 287 to 289, `rgba(74,58,167,0.7)`, label "+$2"
-  5. "the till" — 0 to 289, `rgba(25,158,112,0.55)`, label "$289"
+ 1. "trend" — 0 to 257, `rgba(42,120,214,0.5)`, label "$257"
+ 2. "Saturday" — 257 to 287, `rgba(0,131,0,0.55)`, label "+$30"
+ 3. "holiday" — flat at 287 (minimum 1.5px sliver), `rgba(201,133,0,0.8)`, label "+$0"
+ 4. "leftover" — 287 to 289, `rgba(74,58,167,0.7)`, label "+$2"
+ 5. "the till" — 0 to 289, `rgba(25,158,112,0.55)`, label "$289"
 - **Connectors:** dashed gray (dash 3/3) horizontal lines linking the top of each step to the next bar at heights 257, 287, 287, 289
 - **Annotation (bold 12px violet `#4a3aa7`, centered at y=$80 under bar 3):** "the leftover is a $2 whisper — the patterns explain this day"
 - **Caption (12px `#6b7280`, bottom right):** "illustrative data"
@@ -75,25 +75,25 @@ Waterfall chart: rebuilding the $289 Saturday from its parts, five bars with das
 
 **Key point:** The residual panel is the health report. A flat band means the model explains the data; spikes or drifts mean it doesn't — investigate there.
 
-This section uses the 3-column layout: text 38%, then two canvases at 31% each.
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c3a`, 420×340)
+### Visualization (canvas `c3a`, 310×340)
 
 Stacked mini-panels 1–2 of the classic decomposition plot (full 730 days).
 
-- **Panel 1 (top, at y 30–150):** title bold 12px `#1a5276` "1. observed = what the till recorded"; boxed frame `#999`; y range $140 to $440 (11px gray min/max labels left of frame); the full sales series in `rgba(42,120,214,0.7)` width 1
+- **Panel 1 (top, at y 30–150):** title bold 14px `#1a5276` "1. observed = what the till rang" (drawn at x=6); boxed frame `#999`; y range $140 to $440 (12px gray min/max labels left of frame); the full sales series in `rgba(42,120,214,0.7)` width 1
 - **Panel 2 (at y 185–305):** title "2. trend = the slow climb"; same frame and y range $140–$440; trend line in orange `#d95926` width 2.5
-- **Shared x labels (11px gray, at bottom):** "Jan y1" (d=0), "Jan y2" (365), "Dec y2" (729); left padding 50, right 12
-- **Caption (11px `#6b7280`, right-aligned in the gap between the panels, y=166):** "illustrative data"
+- **Shared x labels (12px gray, at bottom y=322):** "Jan y1" (left-aligned at the frame's left edge), "Jan y2" (centered on d=365), "Dec y2" (right-aligned at the frame's right edge); left padding 46, right 10
+- **Caption (12px `#6b7280`, right-aligned in the gap between the panels, y=168):** "illustrative data"
 
-### Visualization (canvas `c3b`, 400×340)
+### Visualization (canvas `c3b`, 310×340)
 
 Stacked mini-panels 3–4 of the decomposition plot (full 730 days).
 
-- **Panel 3 (top, at y 30–150):** title bold 12px `#1a5276` "3. seasonal = weekly zigzag + Dec block"; boxed frame `#999`; y range −$30 to +$100 (labels "+$100" and "−$30"); zero gridline `#e5e9ef`; season series in green `#008300` width 1; bold 11px yellow `#c98500` "Dec" labels centered on both December blocks (d≈343 and d≈708)
-- **Panel 4 (at y 185–305):** title "4. residual = leftover noise, ±$16"; y range −$25 to +$25; zero gridline; noise series in violet `#4a3aa7` width 1
-- **Shared x labels (11px gray):** "Jan y1", "Jan y2", "Dec y2"; left padding 50, right 12
-- **Caption (11px `#6b7280`, right-aligned in the gap between the panels, y=166):** "illustrative data"
+- **Panel 3 (top, at y 30–150):** title bold 14px `#1a5276` "3. seasonal = week + Dec" (drawn at x=6); boxed frame `#999`; y range −$30 to +$100 (labels "+$100" and "−$30"); zero gridline `#e5e9ef`; season series in green `#008300` width 1; bold 12px yellow `#c98500` "Dec" labels on both December blocks (d≈343 centered; the second right-aligned at the frame's right edge so it stays inside the 310px frame)
+- **Panel 4 (at y 185–305):** title "4. residual = noise, ±$16"; y range −$25 to +$25; zero gridline; noise series in violet `#4a3aa7` width 1
+- **Shared x labels (12px gray, y=322):** "Jan y1" left-aligned, "Jan y2" centered, "Dec y2" right-aligned; left padding 46, right 10
+- **Caption (12px `#6b7280`, right-aligned in the gap between the panels, y=168):** "illustrative data"
 
 ## Anomalies Only Show Up After Removing the Boring Parts
 
@@ -121,7 +121,7 @@ Two stacked panels: five weeks of raw sales (anomaly invisible) vs the residual 
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page — `<h1>` + `.subtitle`, then four `.card-section` blocks, each an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) followed by `table.layout` (full width, one row). Sections 1, 2, 4: left `td.text-col` 50%, right `td.viz-col` 50% with one canvas. Section 3 ("The Four Panels"): `td.text-col3` 38% + two `td.viz-col3` cells 31% each holding canvases `c3a` (420×340) and `c3b` (400×340). Text cells hold a `.tags` pill row, a `<ul>` of one-line bullets each opening with a `<b>` term (bold terms colored `#1a5276`), an italic `.example` paragraph, and a `.key-point` callout.
+- **Layout:** tutorial detail page — `<h1>` + `.subtitle`, then four `.card-section` blocks, each an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) followed by `table.layout` (full width, one row). Every section: left `td.text-col` 50%, right `td.viz-col` 50%. Sections 1, 2, 4 hold one canvas; section 3 ("The Four Panels") places canvases `c3a`/`c3b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Text cells hold a `.tags` pill row, a `<ul>` of one-line bullets each opening with a `<b>` term (bold terms colored `#1a5276`), an italic `.example` paragraph, and a `.key-point` callout.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; bullets 0.92rem; `.example` italic `#555` 0.9rem; `.key-point` background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem; canvases `width:100%` with 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** inline-block, 0.72rem bold, padding 2px 10px, radius 10px — blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Charts:** shared JS palette `P = { blue:#2a78d6, green:#008300, magenta:#d55181, yellow:#c98500, aqua:#199e70, orange:#d95926, violet:#4a3aa7, ink:#1a5276, text:#2c3e50, mute:#6b7280, grid:#e5e9ef }`; site palette #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange. Canvases scale by `window.devicePixelRatio` via a shared `setup(id)` helper (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). All series come from the deterministic model above (trendOf/seasonOf/holidayOf/noiseOf/salesOf) — no `Math.random()`; same running coffee-shop example as the other time-series pages.

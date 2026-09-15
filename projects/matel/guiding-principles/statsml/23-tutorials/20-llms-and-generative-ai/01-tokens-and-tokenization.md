@@ -1,6 +1,6 @@
 # Tokens & Tokenization
 
-**Page type:** detail page (tutorial layout: one `.card-section` per concept, each with h2 + two-column `table.layout` — text left 50%, canvas right 50%; third section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial layout: one `.card-section` per concept, each with h2 + two-column `table.layout` — text left 50%, canvas right 50%)
 **HTML title tag:** Tokens &amp; Tokenization
 
 **Subtitle:** Before a language model reads anything, your text is chopped into pieces called tokens — and every price tag and limit you'll ever hit is counted in them
@@ -70,8 +70,6 @@ Vertical bar chart: token count per word, colored by count.
 
 **Tags:** where it's used (blue), worked example (green)
 
-(3-column layout: text 38%, two canvases 31% each)
-
 - **Pricing is per token** — say $3 per million input tokens, $15 per million output
 - **Our report** — 4,000 input tokens × $3/M = $0.012, about one cent
 - **The answer** — 500 output tokens × $15/M = $0.0075: fewer tokens, higher rate
@@ -82,21 +80,23 @@ Vertical bar chart: token count per word, colored by count.
 
 **Key point:** Every LLM constraint a data scientist hits — price, rate limit, context limit — is denominated in tokens.
 
-### Visualization (canvas `c3a`, 420×340)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×340)
 
 Two-bar chart: cost of input vs output tokens for one report.
 
-- **Title (bold 15px `#1a5276`, top center):** "The Bill for One Report"; subtitle 12px muted: "$3 / M input tokens, $15 / M output (illustrative)".
-- **Bars (110px wide):** "input: report" — $0.012, 4,000 tokens, blue `#2a78d6`; "output: answer" — $0.0075, 500 tokens, orange `#d95926`. Dollar value bold 13px above each bar; label 12px and token count 12px muted below.
-- **Axes:** L-shaped `#999` axis, y-scale max $0.015; padding top 58, bottom 72, left 60, right 20.
+- **Title (bold 15px `#1a5276`, top center):** "The Bill for One Report"; subtitle 12px muted on two lines: "$3 / M input tokens, $15 / M output" / "(illustrative)".
+- **Bars (80px wide):** "input: report" — $0.012, 4,000 tokens, blue `#2a78d6`; "output: answer" — $0.0075, 500 tokens, orange `#d95926`. Dollar value bold 13px above each bar; label 12px and token count 12px muted below.
+- **Axes:** L-shaped `#999` axis, y-scale max $0.015; padding top 74, bottom 72, left 46, right 12.
 - **Takeaway (bold 12px orange, bottom center, two lines):** "8x fewer tokens, 5x the rate:" / "output tokens are the expensive ones".
 
-### Visualization (canvas `c3b`, 400×340)
+### Visualization (canvas `c3b`, 310×340)
 
 Stacked single-column budget bar: fitting an 8,000-token context window.
 
 - **Title (bold 15px `#1a5276`, top center):** "Fitting the 8,000-Token Window".
-- **Stack (90px wide bar at x=120, top y=48, total height 240px, segments proportional to tokens out of 8,000, white 2px separators, ink `#1a5276` outer border):**
+- **Stack (62px wide bar at x=100, top y=48, total height 240px, segments proportional to tokens out of 8,000, white 2px separators, ink `#1a5276` outer border):**
   - instructions — 500 tok, violet `#4a3aa7`
   - report — 4,000 tok, blue `#2a78d6`
   - room for answer — 1,000 tok, green `#008300`
@@ -134,7 +134,7 @@ Two-row comparison: the 10 letters you see vs the 3 token IDs the model sees.
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. h1 (2rem, `#1a5276`, 2px `#2980b9` bottom border) + `.subtitle` (`#666`, 0.95rem), then four `.card-section` blocks (40px bottom margin). Each section: `<h2>` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one row. Sections 1, 2, 4 use two columns — `td.text-col` (50%) / `td.viz-col` (50%). Section 3 uses three columns — `td.text-col3` (38%) and two `td.viz-col3` (31% each) holding canvases `c3a` (420×340) and `c3b` (400×340).
+- **Layout:** tutorial detail page. h1 (2rem, `#1a5276`, 2px `#2980b9` bottom border) + `.subtitle` (`#666`, 0.95rem), then four `.card-section` blocks (40px bottom margin). Each section: `<h2>` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one row. Every section uses two columns — `td.text-col` (50%) / `td.viz-col` (50%). Section 3 places canvases `c3a`/`c3b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` row of pill spans (0.72rem bold, 2px 10px padding, 10px radius; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`); `<ul>` bullets (0.92rem) each opening with `<b>` term in `#1a5276`; italic `.example` paragraph (`#555`, 0.9rem); `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) with `<strong>` lead.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; universal `box-sizing: border-box` reset; canvases have `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Canvas JS:** shared palette object `P = { blue:#2a78d6, green:#008300, magenta:#d55181, yellow:#c98500, aqua:#199e70, orange:#d95926, violet:#4a3aa7, ink:#1a5276, text:#2c3e50, mute:#6b7280, grid:#e5e9ef }`; shared `setup(id)` helper reads each canvas's intrinsic `width`/`height` attributes and scales by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Token/letter blocks use ui-monospace/Menlo. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

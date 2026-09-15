@@ -1,6 +1,6 @@
 # One-Class, Binary & Multiclass
 
-**Page type:** detail page (tutorial: 4 card-sections; sections 1, 3, 4 two-column table.layout 45/55, section 2 three-column 38/31/31 with two canvases)
+**Page type:** detail page (tutorial: 4 card-sections; each two-column table.layout 50/50 — text left, canvas right)
 **HTML title tag:** One-Class, Binary & Multiclass
 
 **Subtitle:** Before picking an algorithm, count your classes: only normal examples (one-class), exactly two answers (binary), or one of many (multiclass) — each shape needs different tools
@@ -46,29 +46,29 @@ Tags: `worked example` (green)
 
 **Key point:** Multiclass often IS just binary run k times — one yes/no scorer per class, highest score wins.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Scatter of the 9 training charges with the three binary boundaries drawn on one map.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Three binary fences, one map"
-- **Axes:** x = amount $ (0–350), y = hour of day (0–24); L-shaped gray `#999` axis; padding top 46 / bottom 58 / left 58 / right 20; axis caption (12px `#444`, bottom center): "amount $ (x), hour of day (y)".
+- **Axes:** x = amount $ (0–350), y = hour of day (0–24); L-shaped gray `#999` axis; padding top 46 / bottom 58 / left 46 / right 12; axis caption (12px `#444`, bottom center): "amount $ (x), hour of day (y)".
 - **Training points (6px dots):** groceries green `#008300` at (42,10), (55,12), (48,11); travel blue `#2a78d6` at (280,9), (320,15), (260,20); dining orange `#d95926` at (24,19), (52,22), (70,21).
 - **Travel boundary:** vertical dashed blue line (`#2a78d6`, dash 6/4, width 2) at amount=150, full plot height; bold blue 12px label "travel vs not" just right of the line near the top.
 - **Dining boundary:** horizontal dashed orange line (`#d95926`, dash 6/4, width 2) at hour=17, from amount=0 to amount=150; bold orange 12px label "dining vs not" above its left end.
-- **Groceries region:** bold green 12px label "groceries vs not: high here" centered at data point (75, 5).
+- **Groceries region:** bold green 12px label split over two lines, "groceries vs not:" then "high here", centered at data point (75, 5).
 - **New point:** violet `#4a3aa7` filled diamond (7px half-diagonal) at (35, 20), bold violet 12px label "new: $35, 8pm" to its right.
 - **Caption (bold 12px violet `#4a3aa7`, centered below axis):** "each fence answers one yes/no question"
 
-### Visualization (canvas `c2b`, 400×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Score bars for the new charge; the highest of the three binary scores picks the category.
 
-- **Title (bold 15px, `#1a5276`, top center):** "Score the new charge, highest wins"
+- **Title (bold 15px, `#1a5276`, top center):** "Three scores, highest wins"
 - **Subtitle (bold 13px violet `#4a3aa7`, centered, y=50):** "new charge: $35 at 8pm"
-- **Three horizontal bars:** rows at y=90/150/210, bar track from x=155 to x=360 (score 0→1), bar height 26, light gray track `#e5e9ef` with 1px `#c9d4de` border; left labels (bold 12px, right-aligned at x=145, vertically centered): green `#008300` "groceries vs not", blue `#2a78d6` "travel vs not", orange `#d95926` "dining vs not"; fills in the label color at scores 0.20 / 0.05 / 0.85; bold 13px score text ("0.20", "0.05", "0.85") in the same color just right of each bar end.
-- **Winner mark:** the dining bar gets a 2px ink `#1a5276` outline and a bold 12px ink "WINNER" tag above its right end.
+- **Three horizontal bars:** rows at y=90/150/210, bar track from x=14 to x=296 (score 0→1), bar height 26, light gray track `#e5e9ef` with 1px `#c9d4de` border; each row's name sits above its track as a bold 12px left-aligned label in the row color — green `#008300` "groceries vs not", blue `#2a78d6` "travel vs not", orange `#d95926` "dining vs not"; fills in the label color at scores 0.20 / 0.05 / 0.85; bold 13px score text ("0.20", "0.05", "0.85") in `#2c3e50`, right-aligned at x=296 on the same label line.
+- **Winner mark:** the dining bar gets a 2px ink `#1a5276` outline and a bold 12px white "WINNER" tag inside its filled right end.
 - **Caption (bold 12px green `#008300`, centered, y=268):** "highest score wins: filed as dining"
-- **Footnote (11px `#6b7280`, centered, y=290):** "scores illustrative".
+- **Footnote (12px `#6b7280`, centered, y=290):** "scores illustrative".
 
 ## Where Each Shape Shows Up
 
@@ -128,10 +128,10 @@ Two panels contrasting the look-alike pairs, each ending in a bold verdict line.
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page skeleton (most-powerful-signals compact style). Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout`; standard rows use `.text-col` (50%) / `.viz-col` (50%); the two-chart row uses `.text-col3` (38%) with two `.viz-col3` cells (31% each).
+- **Template:** tutorials topic-page skeleton (most-powerful-signals compact style). Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout`; every row uses `.text-col` (50%) / `.viz-col` (50%). One section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column per section:** `.tags` pill row first (0.72rem bold, 10px radius pills — blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`), then a `<ul>` of one-line bullets each opening with `<b>` term in `#1a5276`, then an italic `.example` line (`#555`, 0.9rem), then a `.key-point` callout (background `#f8f9fa`, left border 3px `#e74c3c`, 0.9rem).
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px bottom border `#2980b9`; `.subtitle` `#666` 0.95rem. No nav bar, no back/home links.
-- **Canvas:** intrinsic sizes as given per chart (720×300, 420×340, 400×340), CSS `width:100%`, 1px border `#e0e0e0` radius 4px; scaled via `window.devicePixelRatio` in a shared `setup(id)` helper reading width/height attributes (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
+- **Canvas:** intrinsic sizes as given per chart (720×300, 310×340), CSS `width:100%`, 1px border `#e0e0e0` radius 4px; scaled via `window.devicePixelRatio` in a shared `setup(id)` helper reading width/height attributes (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
 - **Chart palette object:** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange. Red reserved for genuine alarm points (the flagged outlier, the rare fraud dot).
 - **Data:** shared literal arrays for the worked example — GROC amounts `[42,55,48]` hours `[10,12,11]`, TRAV amounts `[280,320,260]` hours `[9,15,20]`, DIN amounts `[24,52,70]` hours `[19,22,21]`, NEW point `[35,20]`, one-vs-rest scores `[0.20, 0.05, 0.85]`; c1 and c4 sketch dots are literal coordinate arrays; no `Math.random()`.
 - In regenerated HTML, any card links use `.html` extensions.

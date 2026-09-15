@@ -1,6 +1,6 @@
 # Tables, Rows, Keys
 
-**Page type:** detail page (tutorial card-sections: h2 per section, two-column `table.layout` with text left 50% / canvas right 50%; first section uses the 3-column 38/31/31 variant with two canvases)
+**Page type:** detail page (tutorial card-sections: h2 per section, two-column `table.layout` with text left 50% / canvas right 50%)
 **HTML title tag:** Tables, Rows, Keys
 
 **Subtitle:** A database is a few small tables; every row has its own ID, and rows point at each other using those IDs
@@ -25,7 +25,9 @@
 
 **Key point:** A database is not one big spreadsheet. It is several small tables, each holding one kind of thing exactly once.
 
-### Visualization (canvas `c1a`, 420×340)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c1a`, 310×340)
 
 Two rendered data tables stacked vertically (drawn with a shared `drawTable` helper: ink `#1a5276` header band with white bold 12px column names, alternating row fills `#fff`/`#f4f6f8`, border `#cfd8e0`).
 
@@ -33,12 +35,12 @@ Two rendered data tables stacked vertically (drawn with a shared `drawTable` hel
 - **Heading 2:** "products — one row per item" — table with columns product_id / name / price holding all 4 PRODUCTS rows.
 - **Caption (muted `#6b7280`, bottom center):** "each table holds one kind of thing"
 
-### Visualization (canvas `c1b`, 420×340)
+### Visualization (canvas `c1b`, 310×340)
 
 One rendered data table.
 
 - **Heading (bold 15px `#1a5276`, centered):** "orders — one row per sale" — table with columns order_id / customer_id / product_id / amount / date holding all 8 ORDERS rows; the customer_id column is highlighted with overlay `rgba(42,120,214,0.10)`.
-- **Annotation (bold 13px orange `#d95926`, centered, two lines):** "customer_id and product_id are pointers" / "into the other two tables"
+- **Annotation (bold 13px orange `#d95926`, centered, two lines):** "customer_id and product_id are" / "pointers into the other two tables"
 - **Caption (muted `#6b7280`):** "no name, no price is copied in here"
 
 ## The Primary Key: Every Row's Own ID
@@ -61,8 +63,8 @@ Rendered customers table with highlighted key column, plus two operation boxes (
 
 - **Title (bold 15px `#1a5276`, top center):** "The Primary Key: Never Blank, Never Repeated, Never Changed"
 - **Left:** customers table (customer_id / name / city, all 5 rows), customer_id column highlighted `rgba(39,174,96,0.18)`; below it bold green `#008300` label "primary key column" and muted "5 rows, 5 different ids".
-- **Right, operation 1:** red `#e74c3c` box (270×34, fill `rgba(231,76,60,0.08)`) containing "INSERT  3  |  Chris  |  Delhi"; below, bold 14px red: "✕  REFUSED — id 3 is already taken".
-- **Right, operation 2:** green `#008300` box (fill `rgba(39,174,96,0.08)`) containing "UPDATE row 3: name → 'Chloe K.'"; below, bold 14px green: "✓  ALLOWED — facts change, the id never does".
+- **Right, operation 1:** red `#e74c3c` box (270×34, fill `rgba(231,76,60,0.08)`) containing "INSERT 3 | Chris | Delhi"; below, bold 14px red: "✕ REFUSED — id 3 is already taken".
+- **Right, operation 2:** green `#008300` box (fill `rgba(39,174,96,0.08)`) containing "UPDATE row 3: name → 'Chloe K.'"; below, bold 14px green: "✓ ALLOWED — facts change, the id never does".
 - **Annotation (bold 13px orange `#d95926`):** "the id is the row's identity; everything else is just a fact about it"
 
 ## The Foreign Key: Orders Point at Customers
@@ -113,7 +115,7 @@ Side-by-side rename comparison, split by a vertical dashed `#bdc3c7` divider at 
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout (per `tutorials/CLAUDE.md`, social-graph reference skeleton). Body: `<h1>` (no index number), `.subtitle`, then four `.card-section` blocks, each `<h2>` + `table.layout`. Section 1 uses the 3-column variant: `<td class="text-col3">` (38%) plus two `<td class="viz-col3">` (31% each) holding canvases `c1a`/`c1b` (420×340). Sections 2–4 use `<td class="text-col">` (50%) / `<td class="viz-col">` (50%) with one 720×300 canvas.
+- **Template:** tutorials topic-page layout (per `tutorials/CLAUDE.md`, social-graph reference skeleton). Body: `<h1>` (no index number), `.subtitle`, then four `.card-section` blocks, each `<h2>` + `table.layout`. Every section uses `<td class="text-col">` (50%) / `<td class="viz-col">` (50%); sections 2–4 hold one 720×300 canvas, section 1 places canvases `c1a` and `c1b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure:** `.tags` pill row first, then a `<ul>` of bullets each opening with `<b>bold term</b>` (bold terms render `#1a5276`), one italic `.example` paragraph, one `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem). A `.sql` block style exists (monospace, `#f8f9fa`, left border `3px solid #1a5276`) though this page has no SQL blocks.
 - **Tag pill styles:** inline-block, 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; section h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 0.95rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.

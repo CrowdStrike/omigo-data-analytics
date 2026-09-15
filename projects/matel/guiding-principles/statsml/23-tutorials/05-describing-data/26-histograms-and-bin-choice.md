@@ -1,6 +1,6 @@
 # Histograms & Bin Choice
 
-**Page type:** detail page (tutorial page: h1 + subtitle, then card-sections each with a two-column table layout — text left 50%, canvas right 50%; one section uses a 3-column 50/25/25 layout with two canvases)
+**Page type:** detail page (tutorial page: h1 + subtitle, then card-sections each with a two-column table layout — text left 50%, canvas right 50%)
 **HTML title tag:** Histograms &amp; Bin Choice
 
 **Subtitle:** A histogram is counting values into buckets — and the picture you get depends on how many buckets you chose.
@@ -24,7 +24,7 @@ Tags: `core idea` (blue), `running example` (green)
 Histogram of the fixed 200 checkout times with 20 bins over 0–10 minutes.
 
 - **Shared data (every chart on this page uses this exact array of 200 checkout times, in minutes):**
-  `[3.6,2.2,1.7,2.2,2.1,2.7,1.8,1.6,1.4,3, 2.8,2.8,2,2.2,3.2,1.8,2.6,2.6,2.5,1.6, 2.8,2.3,1.6,2.8,2,1.7,2.9,2.1,1.6,2.9, 2.6,2.5,2.6,1.2,2.6,2.3,2.7,2.1,2.5,1.9, 1.8,2.6,2.4,1.8,1.8,2.3,3.7,2.3,2.7,1.8, 2.6,3,2.4,2.4,3.2,1.7,1.4,2.5,2.2,2.7, 2.2,2,1.5,2.4,1.3,1.6,2.2,1.6,3.1,3.1, 3,2.3,1.4,2.1,1.7,2.1,1.9,1.9,2.1,2.3, 2.2,2.3,1.9,2.8,1.7,2.5,2.9,1.7,1.5,2.8, 2.7,1.9,2,2,2.4,1.9,2.5,2,1.8,2.6, 2.2,2,2.2,2.5,3.1,1.4,2,1.9,1.9,2.1, 1.9,2,1.6,2.6,2.3,2,1.8,2.3,2.7,1.4, 5.8,5.7,6.4,6.5,6,7.7,5.9,5.9,5.9,4, 6.2,4.5,5.8,4.5,4.1,4.9,6.2,5.5,6.5,5.7, 5.9,5.7,7.1,7.9,6,6.9,5.1,6.3,6.3,6.4, 6.4,8.2,5.6,5.7,4.3,4.3,6.4,4.1,7.2,5.9, 5.6,6.4,6.4,5.8,5.7,5.7,4.9,5.6,4.5,5.6, 5.7,5.9,5,6.5,4.3,5.5,6.8,7.1,5.3,5.7, 6.2,5.4,4.4,7,6,6.2,6.5,5.3,6.1,3.2, 5.7,6.9,4.7,5.8,4.7,4.2,5.5,6,6.2,6]`
+ `[3.6,2.2,1.7,2.2,2.1,2.7,1.8,1.6,1.4,3, 2.8,2.8,2,2.2,3.2,1.8,2.6,2.6,2.5,1.6, 2.8,2.3,1.6,2.8,2,1.7,2.9,2.1,1.6,2.9, 2.6,2.5,2.6,1.2,2.6,2.3,2.7,2.1,2.5,1.9, 1.8,2.6,2.4,1.8,1.8,2.3,3.7,2.3,2.7,1.8, 2.6,3,2.4,2.4,3.2,1.7,1.4,2.5,2.2,2.7, 2.2,2,1.5,2.4,1.3,1.6,2.2,1.6,3.1,3.1, 3,2.3,1.4,2.1,1.7,2.1,1.9,1.9,2.1,2.3, 2.2,2.3,1.9,2.8,1.7,2.5,2.9,1.7,1.5,2.8, 2.7,1.9,2,2,2.4,1.9,2.5,2,1.8,2.6, 2.2,2,2.2,2.5,3.1,1.4,2,1.9,1.9,2.1, 1.9,2,1.6,2.6,2.3,2,1.8,2.3,2.7,1.4, 5.8,5.7,6.4,6.5,6,7.7,5.9,5.9,5.9,4, 6.2,4.5,5.8,4.5,4.1,4.9,6.2,5.5,6.5,5.7, 5.9,5.7,7.1,7.9,6,6.9,5.1,6.3,6.3,6.4, 6.4,8.2,5.6,5.7,4.3,4.3,6.4,4.1,7.2,5.9, 5.6,6.4,6.4,5.8,5.7,5.7,4.9,5.6,4.5,5.6, 5.7,5.9,5,6.5,4.3,5.5,6.8,7.1,5.3,5.7, 6.2,5.4,4.4,7,6,6.2,6.5,5.3,6.1,3.2, 5.7,6.9,4.7,5.8,4.7,4.2,5.5,6,6.2,6]`
 - **Binning:** counts computed by dividing 0–10 into `bins` equal buckets (`width = 10/bins`), each value placed in `floor(value/width)` (overflow clamped to last bin).
 - **Chart type:** vertical bar histogram, 20 bins. Bar fill `rgba(42,120,214,0.55)` (blue). Bar height scaled to max count over the plot height. Bars have a 2px gap (0.5px when bins > 40).
 - **Title (bold 15px, ink `#1a5276`, top center):** "200 checkout times — 20 bins".
@@ -69,21 +69,21 @@ Tags: `the knob` (orange), `common mistake` (red)
 
 **Key point:** Smooth hill, two humps, or noise — the story changed while the data never did.
 
-This section uses the 3-column layout: text 50%, two canvases at 25% each, so the text/viz split stays 50/50.
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c3a`, 360×340)
+### Visualization (canvas `c3a`, 310×340)
 
 - **Data:** shared 200 times, 5 bins (counts printed above bars).
-- **Chart type:** vertical bar histogram, fill `rgba(201,133,0,0.55)` (yellow). Same axis frame (minute ticks, x label, max/0 y labels).
+- **Chart type:** vertical bar histogram, fill `rgba(201,133,0,0.55)` (yellow). Same axis frame (minute ticks, x label, max/0 y labels), tighter side pads for the narrow twin: left 46, right 12.
 - **Title:** "5 bins: one smooth hill".
-- **Annotation:** orange `#d95926` bold 13px, two lines centered at ~62% plot width: "the two groups merged —" / "humps hidden".
+- **Annotation:** orange `#d95926` bold 13px, two lines right-aligned to the plot's right edge: "two groups merged —" / "humps hidden".
 
-### Visualization (canvas `c3b`, 360×340)
+### Visualization (canvas `c3b`, 310×340)
 
 - **Data:** shared 200 times, 80 bins (no count labels).
-- **Chart type:** vertical bar histogram, fill `rgba(213,81,129,0.75)` (magenta), 0.5px bar gap. Same axis frame.
+- **Chart type:** vertical bar histogram, fill `rgba(213,81,129,0.75)` (magenta), 0.5px bar gap. Same axis frame, side pads left 46 / right 12.
 - **Title:** "80 bins: jagged noise".
-- **Annotation:** magenta `#d55181` bold 13px at ~60% plot width: "35 of 80 buckets are empty".
+- **Annotation:** magenta `#d55181` bold 13px, two lines right-aligned to the plot's right edge: "35 of 80 buckets" / "are empty".
 
 ## How many bins should you use?
 
@@ -112,7 +112,7 @@ Line chart: number of empty buckets vs number of bins for the same 200 times.
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). `<h1>` + `.subtitle`, then four `.card-section` blocks, each an `<h2>` with a bottom border and a `table.layout` row: `.text-col` (50%) with `.tags` pills, a `<ul>` of one-line bullets opening with `<b>` terms, an italic `.example` line, and a `.key-point` callout; `.viz-col` (50%) holds one canvas. Section 3 uses the 3-column variant: `.text-col3` (50%) plus two `.viz-col3` (25%) cells each holding a 360×340 canvas.
+- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). `<h1>` + `.subtitle`, then four `.card-section` blocks, each an `<h2>` with a bottom border and a `table.layout` row: `.text-col` (50%) with `.tags` pills, a `<ul>` of one-line bullets opening with `<b>` terms, an italic `.example` line, and a `.key-point` callout; `.viz-col` (50%) holds one canvas, except in section 3 which places canvases `c3a`/`c3b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border. `.key-point` background `#f8f9fa`, left border 3px solid `#e74c3c`, 0.9rem; `.example` italic `#555` 0.9rem; `ul` 0.92rem, `li b` in `#1a5276`. Canvas CSS `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px; blue = bg `rgba(26,82,118,0.12)` / `#1a5276`, green = bg `rgba(39,174,96,0.15)` / `#27ae60`, red = bg `rgba(231,76,60,0.12)` / `#e74c3c`, orange = bg `rgba(230,126,34,0.15)` / `#e67e22`.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

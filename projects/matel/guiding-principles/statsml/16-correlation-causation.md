@@ -1,6 +1,6 @@
 # Correlation vs Causation vs Co-occurrence
 
-**Page type:** detail page (single long doc: numbered h2 sections, each an obj-table row with text left ~40% and canvas right ~60%; final section is a summary table plus philosophy callout)
+**Page type:** detail page (single long doc: numbered h2 sections, each an obj-table row with text left 50% and canvas right 50%; final section is a summary table plus philosophy callout)
 **HTML title tag:** Correlation vs Causation vs Co-occurrence
 
 **Subtitle:** Three relationships that look identical in data but support completely different decisions. Confusing them is the most expensive mistake in data science.
@@ -164,7 +164,7 @@ Full-width summary table (no canvas in this section):
 
 ## Regeneration instructions
 
-- **Layout:** single long detail page. h1 + `.subtitle`, then numbered h2 sections (each h2 has an `id` anchor: definitions, cooccurrence, correlation, spurious, confounders, direction, testing, practical). Sections 1–7 each use a `.obj-table`: full-width table, one `<tr>` with left `<td>` (40%) holding a `<ul>` of bullets (section 7 also embeds a `.summary-table` below its bullets) and right `<td>` (60%, centered) holding the canvas. Section 8 is a standalone `.summary-table` followed by a `.philosophy` callout.
+- **Layout:** single long detail page. h1 + `.subtitle`, then numbered h2 sections (each h2 has an `id` anchor: definitions, cooccurrence, correlation, spurious, confounders, direction, testing, practical). Sections 1–7 each use a `.obj-table`: full-width table, one `<tr>` with left `<td>` (50%) holding a `<ul>` of bullets (section 7 also embeds a `.summary-table` below its bullets) and right `<td>` (50%, centered) holding the canvas. Section 8 is a standalone `.summary-table` followed by a `.philosophy` callout.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with bottom border `2px solid #2980b9`, padding-bottom 6px; subtitle `#666` 1.05em; bullets 0.9em `#333`; `strong` in `#1a5276`. `.obj-table` cells border `1px solid #e0e0e0`, padding 12px 18px, vertical-align middle. `.obj-title` style exists (1.05em, weight 600, `#1a5276`) but section titles are h2 headings here. No nav bar, no back/home links.
 - **Summary tables:** `.summary-table` — full width, 0.9em, th background `#f0f4f8` color `#1a5276` padding 10px 14px left-aligned, td padding 10px 14px, borders `1px solid #e0e0e0`. In section 8, the "Needs" column values are wrapped in `<strong style="color:...">` (green `#27ae60` for Correlation/Co-occurrence, red `#e74c3c` for Causation).
 - **Callout style:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.

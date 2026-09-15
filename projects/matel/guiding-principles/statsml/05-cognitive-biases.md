@@ -58,7 +58,7 @@ Each card links to a detail page under `cognitive-biases/`. The card shows a col
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, one `.philosophy` callout, then one `.grid` of `.card` anchors.
-- **Layout:** `.grid` is CSS grid, `repeat(3, 1fr)`, 16px gap, margin `16px 0 30px 0`; responsive: 2 columns below 800px, 1 column below 500px. Three across rather than four because every card title now carries a bias name plus a layman phrase.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin `16px 0 30px 0`; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="card" href="..." style="border-color:CATEGORY_COLOR;">` containing `<div class="card-label" style="color:CATEGORY_COLOR;">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`. Each card's inline `border-color` matches its label color.
 - **Category label colors:** ANALYSIS and EXPOSURE `#e74c3c`; DEFENSE `#27ae60`; CAUSALITY and AI INTERACTION `#8e44ad`; SAMPLING `#2980b9`; MEASUREMENT `#1a5276` (card 15) and `#2980b9` (cards 24, 27, 29); SYSTEMS `#c0392b`; REASONING `#f39c12`; UI & EVAL `#16a085`; HEURISTIC `#e67e22`.

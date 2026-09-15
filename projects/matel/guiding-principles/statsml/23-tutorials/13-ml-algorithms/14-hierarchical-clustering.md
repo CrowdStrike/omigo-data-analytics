@@ -1,6 +1,6 @@
 # Hierarchical Clustering
 
-**Page type:** detail page (tutorial card-sections: one h2 per section, two-column `table.layout` text 50% / canvas 50%; section 3 uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial card-sections: one h2 per section, two-column `table.layout` text 50% / canvas 50%; section 3 places two canvases side by side in its viz cell)
 **HTML title tag:** Hierarchical Clustering
 
 **Subtitle:** Merge the two closest groups, again and again — the merge history is a tree you can cut at any height to get any number of clusters
@@ -61,7 +61,7 @@ Full dendrogram with a merge-distance axis and every bridge height labeled.
 
 ## Cut the Tree Anywhere, Get Any Number of Groups
 
-Tags: `payoff` (blue), `rule of thumb` (green). Three-column row: text 38%, two canvases 31% each.
+Tags: `payoff` (blue), `rule of thumb` (green). The viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
 - **One run, every answer** — cutting at a height reads off the groups hanging below the cut
 - **Cut at $10** — three groups: {Ana, Ben}, {Cai, Dee}, {Eli}
@@ -73,9 +73,9 @@ Tags: `payoff` (blue), `rule of thumb` (green). Three-column row: text 38%, two 
 
 **Key point:** **k-means must rerun for every k;** hierarchical clustering pays once and every k is a horizontal line away.
 
-### Visualization (canvas `c3a`, 420×340)
+### Visualization (canvas `c3a`, 310×340)
 
-Same dendrogram (leaves at x = 70, 140, 220, 290, 380; baseline y=272, height 200px) with a cut line at $10.
+Same dendrogram (leaves at x = 56, 106, 166, 216, 278; baseline y=272, height 200px) with a cut line at $10.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Cut at $10 → 3 Groups".
 - **Tree:** leaf colors aqua/aqua/violet/violet/yellow; the two upper bridges ($21 and $58.50) are grayed out `#b9c2cc` since they sit above the cut.
@@ -83,7 +83,7 @@ Same dendrogram (leaves at x = 70, 140, 220, 290, 380; baseline y=272, height 20
 - **Leaf labels:** "Ana", "Ben", "Cai", "Dee", "Eli" below the baseline; group labels below them — "group 1" (aqua, under Ana/Ben), "group 2" (violet, under Cai/Dee), "group 3" (yellow, under Eli).
 - **Caption (muted 12px near top):** "3 branches cross the line → 3 groups".
 
-### Visualization (canvas `c3b`, 420×340)
+### Visualization (canvas `c3b`, 310×340)
 
 Same dendrogram geometry with a cut line at $40.
 
@@ -119,7 +119,7 @@ Staircase step chart: number of groups vs cut height.
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials topic page. h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by `table.layout` with one row: sections 1, 2 and 4 use `td.text-col` 50% + `td.viz-col` 50% (canvas 720×300); section 3 uses `td.text-col3` 38% + two `td.viz-col3` 31% cells (canvases 420×340).
+- **Template/layout:** tutorials topic page. h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by `table.layout` with one row: every section uses `td.text-col` 50% + `td.viz-col` 50%; sections 1, 2 and 4 hold one 720×300 canvas. One section places canvases `c3a`/`c3b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` row of pill spans (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem, weight 600, radius 10px); `<ul>` of one-line bullets each opening with `<b>` in `#1a5276`; italic `.example` paragraph (`#555`, 0.9rem); `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) with a `<strong>` lead-in.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%` with 1px `#e0e0e0` border, 4px radius.
 - **Canvas JS:** shared palette object `P = { blue:#2a78d6, green:#008300, magenta:#d55181, yellow:#c98500, aqua:#199e70, orange:#d95926, violet:#4a3aa7, ink:#1a5276, text:#2c3e50, mute:#6b7280, grid:#e5e9ef }`; shared `setup(id)` helper reading the canvas width/height attributes, scaling the backing store by `window.devicePixelRatio` and calls `ctx.scale` so drawing stays in logical coordinates; shared customer data `CUST = [['Ana',10],['Ben',12],['Cai',30],['Dee',34],['Eli',80]]` and a shared `drawDendro(ctx, geom, opts)` helper (max height 65; merge heights 2, 4, 21, 58.5; leaf colors and upper-bridge colors passed per chart) used by c2, c3a and c3b; all data hardcoded (no `Math.random()`).

@@ -1,6 +1,6 @@
 # Residuals
 
-**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column `table.layout` — text left with tag pills / bullets / example / key-point, canvas right; one section uses a 3-column 38/31/31 layout)
+**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column `table.layout` — text left with tag pills / bullets / example / key-point, canvas right)
 **HTML title tag:** Residuals
 
 **Subtitle:** Each apartment's miss from the fitted rent line — the leftover the model couldn't explain, and the model's report card when you plot it
@@ -73,32 +73,34 @@ Residual plot: size on x, residual on y, healthy shapeless band around zero.
 
 **Key point:** Any visible shape in the residuals is the data saying "your model is missing something" — fix the model, don't ignore the plot.
 
-### Visualization (canvas `c3a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×300)
 
 Curved-market scatter with a straight line forced through it.
 
 - **Title (bold 15px, `#1a5276`):** "A curved market, forced straight".
 - **Data:** sizes as above vs curved-market rents `[1040,1080,1130,1170,1220,1270,1330,1380,1440,1500,1580,1640,1730,1820,1920]` (illustrative second city).
-- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y 900–2050; padding top 42 / bottom 44 / left 54 / right 14; axis `#999`, labels 12px `#6b7280`.
+- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y 900–2050; padding top 42 / bottom 44 / left 46 / right 12; axis `#999`, labels 12px `#6b7280`.
 - **Straight fit:** violet `#4a3aa7`, width 2.5, line 449 + 17.63 × size from x=27 to x=83.
 - **Points:** magenta `#d55181` circles, radius 3.5.
 - **Labels (bold 12px):** violet "449 + 17.6×s" near (28, 1350); magenta two lines "too high in the middle," / "too low at both ends" near (42, 1030)/(42, 960).
 
-### Visualization (canvas `c3b`, 400×300)
+### Visualization (canvas `c3b`, 310×300)
 
 U-shaped residual plot for the forced straight line.
 
 - **Title (bold 15px, `#1a5276`):** "Its residuals form a smile".
 - **Data:** sizes as above vs residuals `[62,31,11,-2,-23,-26,-36,-39,-32,-25,-15,-8,11,31,60]`.
-- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y from −80 to +90 (labels "−$50", "$0", "+$50"); padding top 42 / bottom 44 / left 50 / right 14.
+- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y from −80 to +90 (labels "−$50", "$0", "+$50"); padding top 42 / bottom 44 / left 46 / right 12.
 - **Zero line:** ink `#1a5276`, width 1.5, full width.
 - **Smile guide:** thick (width 6) translucent magenta `rgba(213,81,129,0.4)` polyline connecting the residual points.
 - **Points:** magenta `#d55181` circles, radius 4.
-- **Annotation (bold 13px magenta, top center):** "pattern = the line is missing a curve".
+- **Annotation (bold 13px magenta, top center):** "pattern = a missing curve".
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorial topic page (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). h1 + `.subtitle`, then three `.card-section` blocks each with an `<h2>` (bottom border `2px solid #2980b9`) and a `table.layout`. Sections 1 and 2 use two columns: `.text-col` 50% / `.viz-col` 50%. Section 3 uses three columns: `.text-col3` 38% / two `.viz-col3` at 31% each (canvases c3a 420×300 and c3b 400×300, cells centered).
+- **Template/layout:** tutorial topic page (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). h1 + `.subtitle`, then three `.card-section` blocks each with an `<h2>` (bottom border `2px solid #2980b9`) and a `table.layout`. All three sections use two columns: `.text-col` 50% / `.viz-col` 50%. One section places canvases `c3a`/`c3b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure per section:** `.tags` row of colored pill spans (`.tag.blue` bg rgba(26,82,118,0.12) text `#1a5276`; `.tag.green` bg rgba(39,174,96,0.15) text `#27ae60`; `.tag.red` bg rgba(231,76,60,0.12) text `#e74c3c`; `.tag.orange` bg rgba(230,126,34,0.15) text `#e67e22`; 0.72rem, weight 600, radius 10px), then a `<ul>` of one-line bullets each opening with `<b>` in `#1a5276`, an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (bg `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with bottom border `2px solid #2980b9`; `.subtitle` `#666` 0.95rem; table cells padding 12px, no borders; canvases `width:100%` with border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

@@ -1,6 +1,6 @@
 # k-Nearest Neighbors
 
-**Page type:** detail page (tutorial card-sections: one h2 per section, two-column `table.layout` text 50% / canvas 50%; section 3 uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial card-sections: one h2 per section, two-column `table.layout` text 50% / canvas 50%; section 3 holds two canvases side by side in its viz cell)
 **HTML title tag:** k-Nearest Neighbors
 
 **Subtitle:** To predict what a new customer will do, find the 5 most similar past customers and let them vote
@@ -63,7 +63,7 @@ Horizontal bar chart of the 5 computed distances, colored by label.
 
 ## Choosing k: One Neighbor Is Jumpy, Fifty Are Blurry
 
-Tags: `rule of thumb` (blue), `trade-off` (orange). Three-column row: text 38%, two canvases 31% each.
+Tags: `rule of thumb` (blue), `trade-off` (orange). The viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
 - **k = 1** — copy the single closest customer; one mislabeled oddball flips the answer
 - **k = 50** — with 200 customers on file, that polls a quarter of everyone
@@ -75,27 +75,27 @@ Tags: `rule of thumb` (blue), `trade-off` (orange). Three-column row: text 38%, 
 
 **Key point:** **k is a smoothness dial:** turn it down and the model memorizes noise; turn it up and every answer drifts toward the overall majority.
 
-### Visualization (canvas `c3a`, 420×340)
+### Visualization (canvas `c3a`, 310×340)
 
 Zoomed-in scatter: k=1 flipped by one oddball.
 
 - **Title (bold 15px, `#1a5276`, top center):** "k = 1: Jumpy".
-- **Axes:** zoomed region x 65–82, y 8–13.5; padding top 48 / bottom 46 / left 50 / right 18; gray `#999` L axes, no tick labels.
+- **Axes:** zoomed region x 65–82, y 8–13.5; padding top 48 / bottom 46 / left 46 / right 12; gray `#999` L axes, no tick labels.
 - **Points:** green `#008300` 6px dots (upgraded) at `[[72,11],[75,9],[70,12],[78,10],[68,11],[74,12],[71,9],[76,13],[66,10]]`; one blue `#2a78d6` 7px oddball dot at (72.6, 10) — strictly the nearest point to the new customer.
 - **New point:** orange `#d95926` 10px/4px star at (72, 10) with a dashed magenta `#d55181` line (dash 4/3, width 2) to the oddball.
 - **Annotations:** bold blue 12px "one "stayed" oddball" under the oddball; bold magenta 13px "k=1 copies the oddball: "stays"" near the bottom of the plot; bold green 12px "k=5 outvotes it 4–1: "upgrades"" near the top.
 - **Caption (muted 12px, bottom center):** "zoomed-in corner of the customer map".
 
-### Visualization (canvas `c3b`, 420×340)
+### Visualization (canvas `c3b`, 310×340)
 
 Full-map scatter: k=50 neighborhood circle swallowing the map.
 
 - **Title (bold 15px, `#1a5276`, top center):** "k = 50: Blurry".
 - **Axes:** x 30–85, y 0–14; same padding as c3a; gray L axes, no tick labels.
 - **Points:** the shared upgraded/stayed customer arrays from c1, drawn as 5px dots at 0.45 alpha (green upgraded, blue stayed).
-- **Neighborhood:** dashed violet `#4a3aa7` circle (dash 7/5, width 2.5, radius 118px) centered on the new point (62, 8); orange 10px/4px star at the center.
-- **Annotations:** bold violet 13px "the "neighborhood" swallows the map" near the top; bold dark 12px "every answer drifts to the overall majority" near the bottom of the plot.
-- **Caption (muted 12px, bottom center):** "illustrative — 26 of the 200 customers drawn".
+- **Neighborhood:** dashed violet `#4a3aa7` circle (dash 7/5, width 2.5, radius 84px) centered on the new point (62, 8); orange 10px/4px star at the center.
+- **Annotations:** bold violet 13px "the "neighborhood" swallows the map" near the top; bold dark 12px "every answer drifts" / "to the overall majority" on two stacked lines near the bottom of the plot.
+- **Caption (muted 12px, bottom center):** "illustrative — 26 of 200 customers drawn".
 
 ## Scale the Features First, or One of Them Runs the Show
 
@@ -123,7 +123,7 @@ Two side-by-side bar panels (raw vs z-scored) showing each feature's share of th
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials topic page. h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by `table.layout` with one row: sections 1, 2 and 4 use `td.text-col` 50% + `td.viz-col` 50% (canvas 720×300); section 3 uses `td.text-col3` 38% + two `td.viz-col3` 31% cells (canvases 420×340).
+- **Template/layout:** tutorials topic page. h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by `table.layout` with one row: every section uses `td.text-col` 50% + `td.viz-col` 50%; sections 1, 2 and 4 hold one 720×300 canvas. One section places canvases `c3a`/`c3b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` row of pill spans (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem, weight 600, radius 10px); `<ul>` of one-line bullets each opening with `<b>` in `#1a5276`; italic `.example` paragraph (`#555`, 0.9rem); `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) with a `<strong>` lead-in.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%` with 1px `#e0e0e0` border, 4px radius.
 - **Canvas JS:** shared palette object `P = { blue:#2a78d6, green:#008300, magenta:#d55181, yellow:#c98500, aqua:#199e70, orange:#d95926, violet:#4a3aa7, ink:#1a5276, text:#2c3e50, mute:#6b7280, grid:#e5e9ef }`; shared `setup(id)` helper reading the canvas width/height attributes, scaling the backing store by `window.devicePixelRatio` and calls `ctx.scale` so drawing stays in logical coordinates; shared hardcoded data arrays `UP`, `ST`, `NEW` (no `Math.random()`).

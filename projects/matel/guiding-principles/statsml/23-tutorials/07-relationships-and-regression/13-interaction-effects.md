@@ -1,6 +1,6 @@
 # Interaction Effects
 
-**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%; last section uses a 3-column 38/31/31 layout)
+**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%)
 **HTML title tag:** Interaction Effects
 
 **Subtitle:** Sometimes the effect of one thing depends on another thing — a single "average effect" then describes no real situation at all
@@ -99,18 +99,18 @@ Two-line interaction plot (discount OFF → ON), lines fanning out.
 
 **Key point:** Interaction = the effect of one variable depends on the level of another — nothing more, nothing less.
 
-This section uses the 3-column layout (text 38%, two canvases 31% each).
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c4a`, 420×340)
+### Visualization (canvas `c4a`, 310×340)
 
 Two parallel lines — no interaction case.
 
 - **Title (bold 15px, ink, top center):** "No interaction: both gain +40"
 - **Lines (width 3, dots radius 5, bold 12px value labels):** blue `#2a78d6` 200 → 240; green `#008300` 300 → 340
-- **Axes:** y 150 to 400, muted labels every 50; x positions labeled 12px "OFF" and "ON"; L-shaped gray axes `#999`; padding: top 55, bottom 60, left 60, right 25
+- **Axes:** y 150 to 400, muted labels every 50; x positions labeled 12px "OFF" and "ON"; L-shaped gray axes `#999`; padding: top 55, bottom 60, left 46, right 12
 - **Caption (bold 13px green, bottom center):** "parallel — effects just add up"
 
-### Visualization (canvas `c4b`, 420×340)
+### Visualization (canvas `c4b`, 310×340)
 
 Two fanning lines — interaction case.
 
@@ -121,7 +121,7 @@ Two fanning lines — interaction case.
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). Section 4 uses `table.layout.layout3` with `.text-col3` 38% and two `.viz-col3` cells at 31% each holding canvases `c4a`/`c4b`.
+- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). One section places canvases `c4a`/`c4b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure:** `.tags` row of pill spans first (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem, 600 weight, 2px 10px padding, radius 10px), then a `<ul>` of one-line bullets each opening with `<b>` (bold terms colored `#1a5276`), an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) beginning with `<strong>Key point:</strong>`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%`, 1px solid `#e0e0e0` border, 4px radius; ul 0.92rem.
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

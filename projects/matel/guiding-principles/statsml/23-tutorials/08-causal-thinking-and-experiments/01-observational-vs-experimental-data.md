@@ -1,6 +1,6 @@
 # Observational vs Experimental Data
 
-**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column layout table, text left 45% / canvas right 55%; one section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column layout table, text left 50% / canvas right 50%; one section holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Observational vs Experimental Data
 
 **Subtitle:** Watching what users chose to do is not the same as assigning it — the choice itself carries hidden information
@@ -44,24 +44,24 @@ Bar chart: the observed retention gap between the two self-selected groups.
 
 **Key point:** The 24-point gap is entirely *who* enabled notifications, not what notifications did.
 
-### Visualization (canvas `c2a`, 420×300)
+### Visualization (canvas `c2a`, 310×300)
 
 Bar chart: the aggregate view of the same 200 users.
 
 - **Title (bold 15px, ink `#1a5276`, top center):** "What the Totals Say".
-- **Bars:** width 110, baseline at y=240, chart height 155, y scale max 70%; gray `#999` baseline from x=45 to x=390.
-  - "enabled" at x=70: 62%, blue `#2a78d6`, value label "62%" bold 14px above.
-  - "not enabled" at x=240: 38%, yellow `#c98500`, value label "38%".
+- **Bars:** width 82, baseline at y=240, chart height 155, y scale max 70%; gray `#999` baseline from x=46 to x=298.
+  - "enabled" at x=60: 62%, blue `#2a78d6`, value label "62%" bold 14px above.
+  - "not enabled" at x=186: 38%, yellow `#c98500`, value label "38%".
 - **Annotations (bottom center):** bold 13px magenta `#d55181`: "looks like notifications add +24"; below it, muted 12px `#6b7280`: "62 of 100  vs  38 of 100 retained".
 
-### Visualization (canvas `c2b`, 420×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Grouped bar chart: the same users split by user type — the gap vanishes.
 
 - **Title (bold 15px, ink `#1a5276`, top center):** "Same Users, Split by Type".
-- **Clusters:** two clusters of two bars each (bar width 58, in-cluster gap 10), baseline at y=240, chart height 155, y scale max 80%; gray `#999` baseline from x=40 to x=395. Bar colors: enabled = blue `#2a78d6`, not enabled = yellow `#c98500`.
-  - "keen users" cluster at x=60: values 70% and 70%; white 12px sub-labels inside bars near the baseline: "56/80" and "14/20".
-  - "casual users" cluster at x=235: values 30% and 30%; white sub-labels "6/20" and "24/80".
+- **Clusters:** two clusters of two bars each (bar width 43, in-cluster gap 8), baseline at y=240, chart height 155, y scale max 80%; gray `#999` baseline from x=46 to x=298. Bar colors: enabled = blue `#2a78d6`, not enabled = yellow `#c98500`.
+  - "keen users" cluster at x=48: values 70% and 70%; white 12px sub-labels inside bars near the baseline: "56/80" and "14/20".
+  - "casual users" cluster at x=164: values 30% and 30%; white sub-labels "6/20" and "24/80".
   - Value labels ("70%", "30%", etc.) bold 13px above each bar; cluster labels below baseline.
 - **Legend (top left):** 11px blue swatch + "enabled"; yellow swatch + "not enabled" (12px text).
 - **Annotation (bottom center, bold 13px green `#008300`):** "inside each group: no gap at all".
@@ -119,7 +119,7 @@ Two-panel bar chart: the same feature measured by watching vs by assigning, sepa
 
 ## Regeneration instructions
 
-- **Layout:** tutorials topic-page template. h1 (no index number) with `border-bottom: 2px solid #2980b9`, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with `td.text-col` (45%) and `td.viz-col` (55%). Section 2 uses `table.layout3` (text-col 38%, two viz-col 31% each) holding canvases `c2a` and `c2b` side by side.
+- **Layout:** tutorials topic-page template. h1 (no index number) with `border-bottom: 2px solid #2980b9`, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with `td.text-col` (50%) and `td.viz-col` (50%). Section 2 places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` row of `.tag` pills first, then a `<ul>` of one-line bullets each opening with `<b>bold term</b>` (bold terms colored `#1a5276`), one italic `.example` paragraph, one `.key-point` callout (`background #f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem) starting with `<strong>Key point:</strong>`.
 - **Tag pill styles:** inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px. blue: `rgba(26,82,118,0.12)` bg / `#1a5276` text; green: `rgba(39,174,96,0.15)` / `#27ae60`; red: `rgba(231,76,60,0.12)` / `#e74c3c`; orange: `rgba(230,126,34,0.15)` / `#e67e22`.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem; canvases have `width: 100%`, `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links, no cross-page links.

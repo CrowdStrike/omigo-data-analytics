@@ -1,6 +1,6 @@
 # ML Algorithm Assumptions Reference
 
-**Page type:** grid page (nav-grid card navigation, auto-fit columns min 300px, cards with topic tags and script-colored category labels)
+**Page type:** grid page (nav-grid card navigation, 4 columns, cards with topic tags and script-colored category labels)
 **HTML title tag:** ML Algorithm Assumptions Reference
 
 **Subtitle:** What every ML algorithm requires from your data — and what breaks when violated
@@ -30,7 +30,7 @@ Each card links to a detail page under `ml-assumptions/`. The card shows an uppe
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, then one `.nav-grid` of `.nav-card` anchors. No callouts.
-- **Layout:** `.nav-grid` is CSS grid, `repeat(auto-fit, minmax(300px, 1fr))`, 16px gap, margin-top 15px.
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin-top 15px; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to `.md` versions for markdown navigation; in the regenerated HTML each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="nav-card" href="...">` containing `<div class="card-num">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index matching the file index), `<p>description</p>`, then `<div class="topics">` with one `<span class="topic-tag">` per topic.
 - **Category label colors** applied by an inline script that maps each `.card-num` text to a color: LINEAR `#1a5276`; PROBABILISTIC `#8e44ad`; TREE `#27ae60`; ENSEMBLE `#e67e22`; DISTANCE `#e74c3c`; DEEP-LEARNING `#2980b9`; REDUCTION `#16a085`; CLUSTERING `#795548`. CSS default for `.card-num` is `#2980b9` 0.75em bold.

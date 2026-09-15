@@ -1,6 +1,6 @@
 # Multiple Regression
 
-**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%; one section uses a 3-column 38/31/31 layout)
+**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%)
 **HTML title tag:** Multiple Regression
 
 **Subtitle:** One formula shares the credit for an outcome among several inputs at once — each dial read "holding the others fixed"
@@ -25,11 +25,11 @@ Waterfall chart building one prediction step by step.
 
 - **Title (bold 15px, ink `#1a5276`, top center):** "Building one prediction: 400 + 500 − 200 + 40 = $740"
 - **Bars (5 waterfall steps, width 88px, evenly spaced):**
-  1. label "base", from 0 to 400, blue `#2a78d6`
-  2. label "+10 × 50 m²", from 400 to 900, green `#008300`
-  3. label "−50 × 4 km", from 900 to 700, orange `#d95926`
-  4. label "+20 × floor 2", from 700 to 740, violet `#4a3aa7`
-  5. label "predicted rent", from 0 to 740, ink `#1a5276`
+ 1. label "base", from 0 to 400, blue `#2a78d6`
+ 2. label "+10 × 50 m²", from 400 to 900, green `#008300`
+ 3. label "−50 × 4 km", from 900 to 700, orange `#d95926`
+ 4. label "+20 × floor 2", from 700 to 740, violet `#4a3aa7`
+ 5. label "predicted rent", from 0 to 740, ink `#1a5276`
 - **Value labels (bold 12px above each bar):** "$400", "+500", "-200", "+40", "$740" (first and last show absolute value; middle bars show signed delta)
 - **Connectors:** dashed gray (`#6b7280`, dash 4/3) horizontal segments linking each step's end level to the next bar (between steps 1-2, 2-3, 3-4)
 - **Axes:** y from $0 to $1000, gridlines (`#e5e9ef`) and muted labels ("$0", "$250", "$500", "$750", "$1000") every $250; padding: left 60, right 25, top 45, bottom 55
@@ -49,9 +49,9 @@ Waterfall chart building one prediction step by step.
 
 **Key point:** A coefficient answers one question: how does the prediction move when this input moves and the others stay put?
 
-This section uses the 3-column layout (text 38%, two canvases 31% each).
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Bar chart of three apartments' predicted rents.
 
@@ -64,7 +64,7 @@ Bar chart of three apartments' predicted rents.
 - **Axes:** y $0 to $1200, gridlines and muted "$" labels every $300; padding: left 55, top 45, bottom 70
 - **Caption (bold 12px green `#008300`, bottom center):** "every bar is arithmetic you can redo"
 
-### Visualization (canvas `c2b`, 420×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Two-bar comparison showing only distance changed.
 
@@ -136,7 +136,7 @@ Two parallel rent-vs-size lines at different distances.
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). Section 2 uses `table.layout.layout3` with `.text-col3` 38% and two `.viz-col3` cells at 31% each holding canvases `c2a`/`c2b`.
+- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). One section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure:** `.tags` row of pill spans first (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem, 600 weight, 2px 10px padding, radius 10px), then a `<ul>` of one-line bullets each opening with `<b>` (bold terms colored `#1a5276`), an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) beginning with `<strong>Key point:</strong>`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%`, 1px solid `#e0e0e0` border, 4px radius; ul 0.92rem.
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

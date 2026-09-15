@@ -1,6 +1,6 @@
 # Statistical vs English Terminology
 
-**Page type:** detail page (two-column bias-table layout: text left 45%, canvas right 55%, one h2 + table per term)
+**Page type:** detail page (two-column bias-table layout: text left 50%, canvas right 50%, one h2 + table per term)
 **HTML title tag:** Statistical vs English Terminology — Pitfalls
 
 **Subtitle:** When everyday language collides with formal statistical meaning
@@ -9,15 +9,20 @@
 
 **Tagline (red):** Not common, but completely okay
 
-In **English**, "not normal" means something is wrong with you — deviant, broken, needs fixing. A negative judgment. In **statistics**, "not normal" just means the value has low probability under this distribution — but it's still a valid, healthy outcome in the sample space.
+**Labeled bullets:**
+- **English sense** (red label): "not normal" = deviant, broken, needs fixing — a negative judgment.
+- **Statistical sense** (green label): the value simply has low probability under this distribution.
+- **Still valid** (blue label): a rare outcome is a legitimate member of the sample space, not an error.
+- **Green eyes** (blue label): roughly 2% of people — a tail value, not a medical condition.
+- **By construction** (blue label): about 5% of perfectly healthy data sits beyond 2σ on either side.
 
-Having green eyes is not normal (rare, ~2% of population). That doesn't mean green eyes are a medical condition. It means they sit in the tail of the distribution. 5% of perfectly healthy data lives beyond 2σ by definition.
+**Example box (blue left border), labeled bullets:**
+- **The damage** (orange label): patient hears "your result isn't normal" and imports the English connotation.
+- **Mismatch** (orange label): the doctor spoke descriptively; the patient heard it normatively as "you're broken".
 
-**Example box (blue left border):**
-**The damage:** Someone hears "your test result isn't normal" and imports the English connotation — *something is wrong*. The doctor just meant "this sits in a low-probability region" (descriptive). The patient hears "you're broken" (normative).
-
-**Comparison box (green left border):**
-**Correct framing:** "Your result is in the 3rd percentile — rare, but not necessarily a problem. Let's compare to clinical thresholds." Rare ≠ pathological. Infrequent ≠ wrong.
+**Comparison box (green left border), labeled bullets:**
+- **Correct framing** (green label): "3rd percentile — rare, but let's compare against clinical thresholds."
+- **The rule** (green label): rare ≠ pathological, and infrequent ≠ wrong.
 
 ### Visualization (canvas `c1`, 720×300)
 
@@ -27,7 +32,7 @@ Bell-curve diagram: an eye-color distribution with the common center shaded gree
 - **Title (600 14px, `#1a5276`, at 20,25):** "Eye Color Distribution (Illustrative)".
 - **Curve:** Gaussian drawn across the full width in `#2980b9`, width 2; center x=360, baseline y=240, sigma scale 120px, peak height 140px above baseline.
 - **Center fill:** area under curve from −2σ to +2σ filled `rgba(39,174,96,0.2)` (green).
-- **Right-tail fill:** area under curve from +2.5σ to the right edge filled `rgba(231,76,60,0.3)` (red).
+- **Right-tail fill:** area under curve from +2σ to the right edge filled `rgba(231,76,60,0.3)` (red) — right-tail mass beyond 2σ is 2.3%, matching the "~2%" label. The green ±2σ region is 95.4%, matching "~95%".
 - **Labels:** green (`#27ae60`, 12px) near the peak: "Brown/Blue (~95%)" and "Common = Normal"; red (`#e74c3c`, 12px) beside the tail: "Green (~2%)" and "Rare, but healthy".
 - **X-axis:** horizontal line `#333` (width 1.5) from x=60 to x=660 at the baseline, with 11px `#333` labels below: "← Common" (left) and "Rare →" (right).
 
@@ -35,15 +40,22 @@ Bell-curve diagram: an eye-color distribution with the common center shaded gree
 
 **Tagline (red):** Set theory vs intuitive prediction
 
-In **English**, "probability" means an intuitive guess about likelihood — "probably going to rain" has no formal calculation behind it. In **statistics/math**, probability is grounded in set theory (Kolmogorov axioms: sample space Ω, events as subsets, probability measure P satisfying P(Ω)=1, P(A)≥0, countable additivity) OR frequency data OR Bayesian updating from priors.
+**Labeled bullets:**
+- **English sense** (red label): an intuitive guess — "probably going to rain" has no calculation behind it.
+- **Formal sense** (green label): a measure on a sample space Ω obeying the Kolmogorov axioms.
+- **The axioms** (blue label): P(Ω) = 1, P(A) ≥ 0, and countable additivity over disjoint events.
+- **Legitimate sources** (blue label): frequency counts, or a Bayesian posterior updated from a stated prior.
+- **The ambiguity** (orange label): "70% chance this lifts retention" — from 100 tests, from a posterior, or from a hunch?
+- **Usually the hunch** (orange label): a confidence expression dressed in numerical clothing.
 
-When someone says "there's a 70% chance this feature improves retention," are they saying (a) 70 of 100 similar tests showed positive results, (b) their Bayesian posterior given priors and evidence is 0.7, or (c) it just feels likely? Most of the time: (c). That's not probability — it's a confidence expression dressed in numerical clothing.
+**Example box (blue left border), labeled bullets:**
+- **The damage** (orange label): stakeholders read "70% probability" as a rigorous, data-backed claim.
+- **Consequence** (orange label): budget and roadmap priority get allocated against a number nobody can audit.
 
-**Example box (blue left border):**
-**The damage:** Business stakeholders hear "70% probability" and treat it as a rigorous, data-backed claim. They allocate budget and roadmap priority. The number came from intuition, not a probability model. No one can audit it, update it with new evidence, or defend it under scrutiny.
-
-**Comparison box (green left border):**
-**Correct framing:** If you have a model: "P(success) = 0.7 given prior data [cite]." If you don't: "I estimate this is likely to work, but that's a judgment call, not a calculated probability." Don't fake precision.
+**Comparison box (green left border), labeled bullets:**
+- **With a model** (green label): "P(success) = 0.7 given prior data" — and cite the data.
+- **Without one** (green label): "I think this is likely to work, but that's a judgment call."
+- **The rule** (green label): don't fake precision you cannot reproduce.
 
 ### Visualization (canvas `c2`, 720×300)
 
@@ -58,15 +70,20 @@ Side-by-side text-panel comparison: formal probability (left, green) vs intuitiv
 
 **Tagline (red):** p < α vs important
 
-In **English**, "significant" means important, meaningful, worth paying attention to. In **statistics**, "significant" means p < α (the observed result is unlikely under the null hypothesis) — a statement about statistical detectability, not magnitude or importance.
+**Labeled bullets:**
+- **English sense** (red label): important, meaningful, worth acting on.
+- **Statistical sense** (green label): p < α — the result is unlikely under the null hypothesis.
+- **What it measures** (blue label): detectability of a difference, not its magnitude or its value.
+- **Trivial yet significant** (blue label): p = 0.001 on a 0.5% click lift is a real but negligible effect.
+- **Sample-size effect** (orange label): with enough users, any non-zero difference crosses the p threshold.
 
-You can have p = 0.001 (highly significant) for a completely trivial effect: "Users who saw the new button clicked 0.02% more often." With a large enough sample, you'll detect any non-zero difference as "statistically significant" even if it's too small to matter in practice.
+**Example box (blue left border), labeled bullets:**
+- **The damage** (orange label): "statistically significant improvement" is read as "important improvement".
+- **Consequence** (orange label): a 0.5% lift ships and then costs more to maintain than it generates.
 
-**Example box (blue left border):**
-**The damage:** Researcher reports "statistically significant improvement" in a paper or presentation. Stakeholders hear "important improvement" and launch the feature. The effect size is 0.5% lift — costs more to maintain than it generates. Statistical significance ≠ practical significance.
-
-**Comparison box (green left border):**
-**Correct framing:** "Statistically significant (p=0.003) but small effect size (0.5% lift). Below our 2% decision threshold — not worth launching." Always report effect size + confidence interval alongside p-value.
+**Comparison box (green left border), labeled bullets:**
+- **Correct framing** (green label): "Significant (p = 0.001) but only a 0.5% lift — below our 2% decision bar."
+- **Always report** (green label): effect size and a confidence interval alongside every p-value.
 
 ### Visualization (canvas `c3`, 720×300)
 
@@ -84,9 +101,10 @@ Scatter diagram on effect-size vs sample-size axes: three annotated dots showing
 
 To rebuild the HTML from this spec:
 
-- **Layout:** single page, no cards. h1, `.subtitle`, then one section per term: `<h2 id="sN">N. "Term"</h2>` followed by a `table.bias-table` with a single `<tr>` — left `<td class="text-col">` (45%) holds `.tagline`, two `.description` paragraphs, one `.example` box, one `.comparison` box; right `<td class="viz-col">` (55%) holds the canvas.
+- **Layout:** single page, no cards. h1, `.subtitle`, then one section per term: `<h2 id="sN">N. "Term"</h2>` followed by a `table.bias-table` with a single `<tr>` — left `<td class="text-col">` (50%) holds `.tagline`, a `ul.points` list of labeled bullets, then an `.example` box and a `.comparison` box each containing their own `ul.points` list; right `<td class="viz-col">` (50%) holds the canvas.
 - **Table style:** `table.bias-table` full width, border-collapse collapse, margin-bottom 48px; cells top-aligned with 12px padding (no cell borders).
 - **Text styles:** `.tagline` weight 600, `#e74c3c`, 1.05em; `.description` margin-bottom 10px; `.example` background `#f8f9fa` with left border `3px solid #2980b9`, padding 12px 16px, 0.9em; `.comparison` background `#f0f4f8` with left border `3px solid #27ae60`, padding 12px 16px, 0.9em; `strong` in `#1a5276`.
+- **Bullet styles:** `ul.points` margin `0 0 10px 20px`, 0.92em, color `#333`; `li` margin `7px 0`. Each bullet opens with a bold colored `<span>` label: `.lbl-en` red `#e74c3c` (English meaning), `.lbl-stat` green `#27ae60` (formal/correct), `.lbl-key` blue `#1a5276` (mechanism), `.lbl-warn` orange `#e67e22` (failure/consequence) — all weight 600. One bullet = one label + a phrase short enough not to wrap.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#555` 1.05rem, margin-bottom 40px; h2 1.4rem `#1a5276` with bottom border `2px solid #2980b9`, padding-bottom 8px, margin `40px 0 20px 0`.
 - **Canvas:** each canvas declares intrinsic `width="720" height="300"` and is displayed block at `width: 100%` via CSS; a shared `setup(id)` helper scales the backing store by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, secondary blue `#2980b9`, gray text `#333`.

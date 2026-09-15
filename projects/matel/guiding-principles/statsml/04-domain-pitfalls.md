@@ -1,6 +1,6 @@
 # Domain-Specific Data Pitfalls
 
-**Page type:** grid page (card navigation grid, 3 columns; one small "Derived Documents" section grid followed by one large domain-card grid)
+**Page type:** grid page (card navigation grid, 4 columns; one small "Derived Documents" section grid followed by one large domain-card grid)
 **HTML title tag:** Domain-Specific Data Pitfalls
 
 **Subtitle:** Every domain has unique data traps, misconceptions, and challenges that general ML knowledge doesn't prepare you for. Each domain is covered with real-world examples and visualizations.
@@ -194,7 +194,7 @@ A second `.grid` (no section heading) with all numbered domain cards. Each card 
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, one `.philosophy` callout, then the "Derived Documents" h2 with its own `.grid` of 3 cards, then a second `.grid` (no heading) with all numbered domain cards in table order.
-- **Layout:** `.grid` is CSS grid, `repeat(3, 1fr)`, 16px gap, margin 30px 0; responsive: 2 columns below 800px, 1 column below 500px.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin 30px 0; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the tables above link to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="card" href="...">` containing `<div class="card-label" style="color:CATEGORY_COLOR">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index matching the file index; A/B/C for derived docs), `<p>description</p>`, and — for domain cards only — `<div class="topics">` holding one `<span class="topic-tag">` per topic-tag entry.
 - **Category label colors:** FINANCE `#1a5276`; HEALTH & SCIENCE `#27ae60`; COMMERCE `#795548`; SECURITY `#e74c3c`; SOCIETY `#0e6655`; INDUSTRY `#e67e22`; PLATFORM `#2980b9`; DOMAIN `#999`; AUTONOMOUS and AI TOOLS `#8e44ad`; DATA ENGINEERING `#922b21`; DERIVED per card — A `#e67e22`, B `#27ae60`, C `#8e44ad`.

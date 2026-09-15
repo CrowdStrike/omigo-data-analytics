@@ -1,6 +1,6 @@
 # Rare Events at Scale
 
-**Page type:** detail page (tutorial card-sections: h2 with blue underline per section; two-column layout table — text left 50%, canvas right 50%; section 2 stacks two canvases in its viz cell)
+**Page type:** detail page (tutorial card-sections: h2 with blue underline per section; two-column layout table — text left 50%, canvas right 50%; section 2 holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Rare Events at Scale
 
 **Subtitle:** A one-in-a-million event stops being rare once you try a hundred million times — "practically impossible" times a huge N equals routine
@@ -44,23 +44,23 @@ Split panel: left a schematic dot grid with one hit dot; right a week of daily b
 
 **Key point:** Expected count = probability × tries — the same tiny p gives 0.001, 1, or 100 hits depending only on the tries.
 
-### Visualization (canvas `c2a`, 420×300)
+### Visualization (canvas `c2a`, 310×300)
 
 Bar chart (log-scale heights): expected hits ladder as traffic scales.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Expected Hits = Rate × Volume"; sub-title 12px mute `#6b7280`: "bug rate fixed at 1 in 1,000,000".
-- **Data:** labels `['1M/day', '10M/day', '100M/day', '1B/day']`, hit-count labels `['1', '10', '100', '1,000']`, bar heights proportional to log units `[1, 2, 3, 4]` on a scale max of 4.4.
-- **Layout:** padding top 58, bottom 66, left 50, right 20; baseline axis `#999`; bars 64px wide, evenly gapped; the 100M/day bar filled orange `#d95926`, others `rgba(26,82,118,0.35)`; hit-count value labels bold 13px `#222` above bars, traffic labels 12px below.
-- **Captions (bottom center):** 12px `#444` "daily traffic (bar height on log scale)"; bold 12px orange "every 10× traffic → 10× hits".
+- **Data:** labels `['1M', '10M', '100M', '1B']`, hit-count labels `['1', '10', '100', '1,000']`, bar heights proportional to log units `[1, 2, 3, 4]` on a scale max of 4.4.
+- **Layout:** padding top 58, bottom 66, left 46, right 12; baseline axis `#999`; bars 47px wide, evenly gapped; the 100M bar filled orange `#d95926`, others `rgba(26,82,118,0.35)`; hit-count value labels bold 13px `#222` above bars, traffic labels 12px below.
+- **Captions (bottom center):** 12px `#444` "daily requests (log-scale bars)"; bold 12px orange "every 10× traffic → 10× hits".
 
-### Visualization (canvas `c2b`, 420×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Bar chart: chance of a zero-hit day at each traffic level.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Chance of a Zero-Hit Day"; sub-title 12px mute: "same 1-in-a-million bug".
-- **Data:** labels `['100k/day', '1M/day', '10M/day', '100M/day']`, values % `[90.5, 36.8, 0.005, 0]`, displayed value text `['90.5%', '36.8%', '0.005%', '~0%']`; y scale max 100.
-- **Layout:** padding top 58, bottom 66, left 50, right 18; baseline axis `#999`; bars 60px wide, evenly gapped (minimum 2px height when value > 0); first two bars filled `rgba(25,158,112,0.55)` with `#444` value labels, last two red `#e74c3c` with red value labels (bold 12px); traffic labels 12px `#222` below.
-- **Captions (bottom center):** 12px `#444` "daily traffic"; bold 12px red `#e74c3c` "at 100M: about 1 in 10⁴³ — never".
+- **Data:** labels `['100k', '1M', '10M', '100M']`, values % `[90.5, 36.8, 0.005, 0]`, displayed value text `['90.5%', '36.8%', '0.005%', '~0%']`; y scale max 100.
+- **Layout:** padding top 58, bottom 66, left 46, right 12; baseline axis `#999`; bars 44px wide, evenly gapped (minimum 2px height when value > 0); first two bars filled `rgba(25,158,112,0.55)` with `#444` value labels, last two red `#e74c3c` with red value labels (bold 12px); traffic labels 12px `#222` below.
+- **Captions (bottom center):** 12px `#444` "daily requests"; bold 12px red `#e74c3c` "at 100M: about 1 in 10⁴³ — never".
 
 ## Testing Missed It — Production Won't
 
@@ -112,7 +112,7 @@ Two side-by-side framed panels contrasting one user's exposure with the system's
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then 4 `.card-section` blocks, each with an `<h2>` (1.3rem, `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` (width 100%, border-collapse). Every section uses one `<tr>` with left `td.text-col` (50%) and right `td.viz-col` (50%). Sections 1, 3, 4 hold one 720×300 canvas; section 2's viz cell stacks two canvases, `c2a` (420×300) and `c2b` (420×300, `margin-top:12px`).
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then 4 `.card-section` blocks, each with an `<h2>` (1.3rem, `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` (width 100%, border-collapse). Every section uses one `<tr>` with left `td.text-col` (50%) and right `td.viz-col` (50%). Sections 1, 3, 4 hold one 720×300 canvas; one section places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text cells:** `.tags` pills, then a `<ul>` of bullets, an italic `.example` line, and a `.key-point` callout.
 - **Page CSS:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `<ul>` 0.92rem; `li b` colored `#1a5276`; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem weight 600, padding 2px 10px, radius 10px; blue = `rgba(26,82,118,0.12)` bg / `#1a5276` text; green = `rgba(39,174,96,0.15)` / `#27ae60`; red = `rgba(231,76,60,0.12)` / `#e74c3c`; orange = `rgba(230,126,34,0.15)` / `#e67e22`.

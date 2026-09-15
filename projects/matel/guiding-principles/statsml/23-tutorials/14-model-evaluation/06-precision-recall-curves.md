@@ -1,6 +1,6 @@
 # Precision-Recall Curves
 
-**Page type:** detail page (tutorial card-sections: h2 per section; two-column table.layout 45/55, with one 3-column row 38/31/31 holding two canvases)
+**Page type:** detail page (tutorial card-sections: h2 per section; two-column table.layout 50/50; one section holds two canvases side by side in a `.viz-pair` flex row inside its viz cell)
 **HTML title tag:** Precision-Recall Curves
 
 **Subtitle:** The same threshold sweep, replotted as "how many flags are right" vs "how many frauds get caught" — the view that stays honest when fraud is rare
@@ -69,27 +69,27 @@ Two stacked bars showing the two denominators at threshold 0.6: the flag pile an
 
 **Key point:** ROC divides false alarms by 950 legit; PR divides them by the flag pile — only PR feels the imbalance.
 
-This row uses the 3-column layout: text 38%, then two viz columns of 31% each (viz cells center-aligned).
+This row's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c3a`, 420×340)
+### Visualization (canvas `c3a`, 310×340)
 
 ROC view of the sweep (the flattering one).
 
-- **Title (bold 15px, `#1a5276`, top center):** "ROC View: Looks Nearly Solved".
+- **Title (bold 14px, `#1a5276`, top center):** "ROC View: Looks Nearly Solved".
 - **Data:** FPR % `[0, 0.53, 2, 6, 20, 50, 100]`; TPR % `[0, 20, 40, 70, 90, 98, 100]`.
-- **Axes:** padding top 50, bottom 56, left 56, right 20; both axes 0–100%; x ticks 0/50/100; captions "false-alarm rate, %" (x) and rotated "catch rate, %" (y) in 12px `#444`; L-shaped `#999` axes.
+- **Axes:** padding top 50, bottom 56, left 46, right 18; both axes 0–100%; x ticks 0/50/100; captions "false-alarm rate, %" (x) and rotated "catch rate, %" (y) in 12px `#444`; L-shaped `#999` axes.
 - **Diagonal:** dashed `#bbb` line (dash 5/4) from (0,0) to (100,100).
 - **Curve:** blue `#2a78d6` line, width 3, with 3.5px blue dots at each point.
 - **Annotation (blue bold 13px near mid-plot):** "AUC ≈ 0.92".
 
-### Visualization (canvas `c3b`, 400×340)
+### Visualization (canvas `c3b`, 310×340)
 
 PR view of the same sweep (the honest one).
 
-- **Title (bold 15px, `#1a5276`, top center):** "PR View: The Honest Story".
+- **Title (bold 14px, `#1a5276`, top center):** "PR View: The Honest Story".
 - **Data:** recall % `[20, 40, 70, 90, 98]`; precision % `[66.7, 51.3, 38.0, 19.1, 9.4]`.
-- **Axes:** padding top 50, bottom 56, left 56, right 20; both axes 0–100%; x ticks 0/50/100; captions "recall, %" (x) and rotated "precision, %" (y); L-shaped `#999` axes.
-- **Baseline:** dashed `#bbb` line at precision 5%, labeled "random: 5%" (gray `#888` 11px).
+- **Axes:** padding top 50, bottom 56, left 46, right 18; both axes 0–100%; x ticks 0/50/100; captions "recall, %" (x) and rotated "precision, %" (y); L-shaped `#999` axes.
+- **Baseline:** dashed `#bbb` line at precision 5%, labeled "random: 5%" (gray `#888` 12px).
 - **Curve:** aqua `#199e70` line, width 3, with 3.5px aqua dots.
 - **Annotation (red `#e74c3c` bold 13px, two lines, centered near recall 62 / precision 45):** "at 90% recall," / "precision is 19%".
 
@@ -121,7 +121,7 @@ Precision and recall plotted against the threshold value, with the chosen operat
 
 ## Regeneration instructions
 
-- **Template:** tutorial detail page (tutorials/ style). h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: left text `<td>` holding `.tags` pills, a `<ul>` of one-line bullets with `<b>` lead terms, an italic `.example` paragraph, and a `.key-point` callout; right cell(s) holding canvases. Sections 1, 2, 4 use `.text-col` 50% / `.viz-col` 50%; section 3 uses the 3-column variant `.text-col3` 38% / two `.viz-col3` 31% cells (center-aligned; canvases c3a 420×340 and c3b 400×340).
+- **Template:** tutorial detail page (tutorials/ style). h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: left text `<td>` holding `.tags` pills, a `<ul>` of one-line bullets with `<b>` lead terms, an italic `.example` paragraph, and a `.key-point` callout; right cell(s) holding canvases. Every section uses `.text-col` 50% / `.viz-col` 50%; one section places canvases `c3a`/`c3b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem; `li b` in `#1a5276`; `.example` italic `#555` 0.9rem; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; canvases `width:100%`, `1px solid #e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block, 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

@@ -1,6 +1,6 @@
 # Linear Regression as ML
 
-**Page type:** detail page (tutorial card-sections: one `<h2>` per section, two-column `table.layout` — text 50% / viz 50%; section 2 uses the 3-column variant 38/31/31 with two canvases)
+**Page type:** detail page (tutorial card-sections: one `<h2>` per section, two-column `table.layout` — text 50% / viz 50%; section 2 holds both canvases side by side in a `.viz-pair` flex row.)
 **HTML title tag:** Linear Regression as ML
 
 **Subtitle:** The same straight line from statistics class — now trained on past deliveries and judged only on orders it has never seen
@@ -44,24 +44,24 @@ Scatter plot of the six training deliveries with the learned line.
 
 **Hand-checkable:** the number that matters is 2.5 minutes — the average miss on the two orders the line never trained on.
 
-### Visualization (canvas `c2a`, 420×300)
+### Visualization (canvas `c2a`, 310×300)
 
 Grouped bar chart: predicted vs actual for the six training orders.
 
 - **Title (bold 15px, `#1a5276`):** "Training Orders: Fit".
-- **Data:** predicted `[16, 22, 24, 32, 34, 42]` (blue `#2a78d6`), actual `[17, 21, 25, 33, 33, 43]` (green `#008300`); six paired bars labeled "#1"–"#6" below (12px mute); y scale 0–50 with tick labels every 10; padding top 48 / bottom 52 / left 46 / right 14.
+- **Subtitle annotation (bold ink 12px, centered under the title):** "each miss ≈ 1 min — train error 1.0".
+- **Data:** predicted `[16, 22, 24, 32, 34, 42]` (blue `#2a78d6`), actual `[17, 21, 25, 33, 33, 43]` (green `#008300`); six paired bars labeled "#1"–"#6" below (12px mute); y scale 0–50 with tick labels every 10; padding top 56 / bottom 52 / left 46 / right 14.
 - **Legend (top left):** blue swatch "predicted", green swatch "actual" (12px).
-- **Annotation (bold ink 12px, centered):** "every miss ≈ 1 minute — train error 1.0".
 - **Caption (12px mute, bottom center):** "the six orders the line trained on".
 
-### Visualization (canvas `c2b`, 420×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Grouped bar chart: predicted vs actual for the two held-out orders.
 
 - **Title (bold 15px, `#1a5276`):** "Held-Out Orders: Test".
-- **Data:** labels "Order A (3 km, 2 items)" and "Order B (5 km, 4 items)"; predicted `[26, 38]` (blue `#2a78d6`, 58px bars), actual `[28, 35]` (orange `#d95926`); bold 13px value labels above each bar; magenta (`#d55181`) bold "off by +2" / "off by −3" between the pairs; y scale 0–50.
-- **Legend (top left):** blue swatch "predicted", orange swatch "actual".
-- **Annotation (bold magenta 13px, centered):** "held-out error = (2 + 3) / 2 = 2.5 min".
+- **Subtitle annotation (bold magenta 12px, centered under the title):** "held-out error = (2 + 3) / 2 = 2.5 min".
+- **Data:** two-line x labels "Order A" / "3 km, 2 items" and "Order B" / "5 km, 4 items"; predicted `[26, 38]` (blue `#2a78d6`, 42px bars), actual `[28, 35]` (orange `#d95926`); bold 13px value labels above each bar; magenta (`#d55181`) bold "off by +2" / "off by −3" above each pair; y scale 0–50; padding top 78 / bottom 62 / left 46 / right 14.
+- **Legend (top left, under the annotation):** blue swatch "predicted", orange swatch "actual".
 - **Caption (12px mute, bottom center):** "the two orders the line never saw".
 
 ## Why the Held-Out Orders Are the Whole Point
@@ -113,10 +113,10 @@ Split panel: statistics view (coefficients) on the left, ML view (one held-out n
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). h1 (no index number) + `.subtitle`, then four `.card-section` blocks each with an `<h2>` and a `table.layout`. Sections 1, 3, 4 use two columns (`td.text-col` 50% / `td.viz-col` 50%); section 2 uses the 3-column variant (`td.text-col3` 38%, two `td.viz-col3` 31% each holding a 420×300 canvas).
+- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). h1 (no index number) + `.subtitle`, then four `.card-section` blocks each with an `<h2>` and a `table.layout`. Every section uses two columns (`td.text-col` 50% / `td.viz-col` 50%). One section places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column per section:** `.tags` pill row, `<ul>` of one-line bullets opening with `<b>bold term</b>` (bold in `#1a5276`), one italic `.example` line, one `.key-point` callout.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; section h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem. Canvas `width:100%`, 1px `#e0e0e0` border, 4px radius. `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example` italic `#555` 0.9rem.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Chart palette object `P`:** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
-- **Canvas:** intrinsic sizes 720×300 (c1, c3, c4) and 420×300 (c2a, c2b), scaled with `window.devicePixelRatio` via a shared `setup(id)` helper that reads the width/height attributes (backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.scale` back to logical coordinates). Shared training data array `TRAIN = [[1,1,17],[2,2,21],[3,1,25],[4,3,33],[5,2,33],[6,4,43]]` ([km, items, actual minutes]); line predictions 16, 22, 24, 32, 34, 42. Data hardcoded, no `Math.random()`; invented numbers labeled "illustrative".
+- **Canvas:** intrinsic sizes 720×300 (c1, c3, c4) and 310×300 (c2a, c2b), scaled with `window.devicePixelRatio` via a shared `setup(id)` helper that reads the width/height attributes (backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.scale` back to logical coordinates). Shared training data array `TRAIN = [[1,1,17],[2,2,21],[3,1,25],[4,3,33],[5,2,33],[6,4,43]]` ([km, items, actual minutes]); line predictions 16, 22, 24, 32, 34, 42. Data hardcoded, no `Math.random()`; invented numbers labeled "illustrative".
 - No nav bar, no back/home links, no cross-page links. In regenerated HTML any card links use `.html` extensions.

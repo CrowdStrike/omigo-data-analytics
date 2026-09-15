@@ -1,6 +1,6 @@
 # Confounders & Controlling
 
-**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%; one section uses a 3-column 38/31/31 layout)
+**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%)
 **HTML title tag:** Confounders & Controlling
 
 **Subtitle:** A hidden third factor can create a link between two things — controlling means comparing like with like so the illusion disappears
@@ -25,8 +25,8 @@ Two-bar chart of raw heart-disease rates.
 
 - **Title (bold 15px, ink `#1a5276`, top center):** "Heart disease rate: coffee drinkers vs non-drinkers"
 - **Bars (width 140px):**
-  - "coffee drinkers": 20%, orange `#d95926`, value label bold 14px "20%  (40 of 200)" above bar
-  - "non-drinkers": 10%, blue `#2a78d6`, value label "10%  (20 of 200)"
+  - "coffee drinkers": 20%, orange `#d95926`, value label bold 14px "20% (40 of 200)" above bar
+  - "non-drinkers": 10%, blue `#2a78d6`, value label "10% (20 of 200)"
 - **Axes:** y 0% to 25%, gridlines (`#e5e9ef`) and muted labels every 5%; padding: left 70, top 50, bottom 60
 - **Caption (bold 13px magenta `#d55181`, bottom center):** "2× the rate — but the groups also differ in who smokes"
 
@@ -44,32 +44,32 @@ Two-bar chart of raw heart-disease rates.
 
 **Key point:** Controlling for a confounder = splitting the data by it and comparing inside each slice.
 
-This section uses the 3-column layout (text 38%, two canvases 31% each).
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Grouped bar chart of stratified disease rates.
 
 - **Title (bold 15px, ink, top center):** "Within each smoking group"
-- **Groups (bar width 55px, in-group gap 14px):**
+- **Groups (bar width 40px, in-group gap 10px):**
   - "smokers": coffee 30% (sublabel "36/120"), no-coffee 30% (sublabel "12/40")
   - "non-smokers": coffee 5% (sublabel "4/80"), no-coffee 5% (sublabel "8/160")
-- **Bar colors:** coffee = orange `#d95926`, no coffee = blue `#2a78d6`; bold 12px "%" value labels above bars, muted 11px fraction sublabels and bold 12px group labels below baseline
+- **Bar colors:** coffee = orange `#d95926`, no coffee = blue `#2a78d6`; bold 12px "%" value labels above bars, muted 12px fraction sublabels and bold 12px group labels below baseline
 - **Legend (top left, 11px squares):** orange "coffee", blue "no coffee"
-- **Axes:** y 0% to 35%, gridlines and muted labels every 5%; padding: left 55, top 50, bottom 80
-- **Caption (bold 13px green `#008300`, bottom center):** "30 = 30 and 5 = 5: coffee adds nothing"
+- **Axes:** y 0% to 35%, gridlines and muted labels every 5%; padding: left 46, right 12, top 50, bottom 80
+- **Caption (bold 13px green `#008300`, bottom center, two lines):** "30% = 30% and 5% = 5%" / "coffee adds nothing"
 
-### Visualization (canvas `c2b`, 420×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Two stacked composition bars showing who is in each group.
 
 - **Title (bold 15px, ink, top center):** "Who is in each group of 200"
-- **Stacked bars (width 110px, full column height = 200 people):**
+- **Stacked bars (width 84px, full column height = 200 people):**
   - "coffee drinkers": 80 non-smokers (aqua `#199e70`, top) + 120 smokers (magenta `#d55181`, bottom); bold magenta sublabel "60% smoke" below
   - "non-drinkers": 160 non-smokers (aqua, top) + 40 smokers (magenta, bottom); bold magenta sublabel "20% smoke" below
-- **In-bar labels (bold 13px white, centered):** "80 non-smokers" / "120 smokers" and "160 non-smokers" / "40 smokers"
-- **Layout:** padding left 60, top 50, bottom 80; group labels 13px below bars
-- **Caption (bold 13px magenta, bottom center):** "the groups differ in who joined them"
+- **In-bar labels (bold 12px white, centered):** count and "non-smokers" on two stacked lines, plus "120 smokers" / "40 smokers"
+- **Layout:** padding left 46, top 50, bottom 80; group labels 12px below bars
+- **Caption (bold 13px magenta, bottom center, two lines):** "the groups differ in" / "who joined them"
 
 ## Why Data Scientists Check for This Everywhere
 
@@ -129,7 +129,7 @@ Two-panel diagram (confounder vs mediator) split by a vertical dashed divider (`
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). Section 2 uses `table.layout.layout3` with `.text-col3` 38% and two `.viz-col3` cells at 31% each holding canvases `c2a`/`c2b`.
+- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). One section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure:** `.tags` row of pill spans first (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem, 600 weight, 2px 10px padding, radius 10px), then a `<ul>` of one-line bullets each opening with `<b>` (bold terms colored `#1a5276`), an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) beginning with `<strong>Key point:</strong>`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%`, 1px solid `#e0e0e0` border, 4px radius; ul 0.92rem.
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

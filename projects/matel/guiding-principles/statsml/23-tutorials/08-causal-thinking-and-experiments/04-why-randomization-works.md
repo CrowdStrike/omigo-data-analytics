@@ -1,6 +1,6 @@
 # Why Randomization Works
 
-**Page type:** detail page (tutorial layout: h2 card-sections, two-column table 45% text / 55% viz; one 3-column section 38/31/31 with two charts)
+**Page type:** detail page (tutorial layout: h2 card-sections, two-column table 50% text / 50% viz throughout; one section holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Why Randomization Works
 
 **Subtitle:** A coin flip knows nothing about the user — so every trait, measured or not, splits evenly between the groups
@@ -35,7 +35,7 @@ Flow diagram: a dot-grid crowd flows through a coin into two group boxes.
 
 Tags: `worked example` (green)
 
-Three-column row (`table.layout3`: text 38%, two viz columns 31% each).
+Standard two-column row; the viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
 - **Age** — under-25 share: 30.4% in A vs 29.6% in B — a 0.8-point gap
 - **Age again** — 25–40: 44.9% vs 45.3%; over-40: 24.7% vs 25.1%
@@ -47,19 +47,19 @@ Three-column row (`table.layout3`: text 38%, two viz columns 31% each).
 
 **Key point:** Balance you didn't engineer, on every trait at once — that is what randomization buys.
 
-### Visualization (canvas `c2a`, 420×300)
+### Visualization (canvas `c2a`, 310×300)
 
 Paired bar chart: age-band shares for groups A and B.
 
 - **Title (bold 15px, `#1a5276`, centered, y=24):** "Age Mix: Group A vs B".
-- **Paired bars** (baseline y=235, chart height 155, y-scale max 55, bar width 40, group span 128, first group at x=45; A bars blue `#2a78d6`, B bars aqua `#199e70`; bold 12px value labels above each bar; 12px trait labels below baseline; thin `#999` baseline):
+- **Paired bars** (baseline y=235, chart height 155, y-scale max 55, bar width 30, group span 84, first group at x=42; A bars blue `#2a78d6`, B bars aqua `#199e70`; bold 12px value labels above each bar; 12px trait labels below baseline; thin `#999` baseline):
   - "under 25": A 30.4%, B 29.6%
   - "25–40": A 44.9%, B 45.3%
   - "over 40": A 24.7%, B 25.1%
 - **Legend (top left):** blue swatch "group A", aqua swatch "group B" (12px).
 - **Bottom annotation (bold green `#008300` 13px, centered):** "every age band within 0.8 points".
 
-### Visualization (canvas `c2b`, 420×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Paired bar chart: device and country shares for groups A and B.
 
@@ -125,7 +125,7 @@ Line chart: typical trait gap between groups shrinking as sample size grows.
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). Page: `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle`, four `.card-section` blocks each with `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border). Sections 1, 3, 4 use `table.layout` (text-col 45% / viz-col 55%); section 2 uses `table.layout3` (text-col 38%, two viz-cols 31% each) holding canvases `c2a` and `c2b` (420×300 each).
+- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). Page: `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle`, four `.card-section` blocks each with `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border). All four sections use `table.layout` (text-col 50% / viz-col 50%); section 2 places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` pill row (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem bold pills, 10px radius), `<ul>` (0.92rem) of one-line bullets opening with `<b>` (`#1a5276`), italic `.example` (`#555`, 0.9rem), `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%`, border `1px solid #e0e0e0`, radius 4px.
 - **Canvas palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Doc palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

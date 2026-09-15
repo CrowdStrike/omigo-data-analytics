@@ -16,7 +16,7 @@ arithmetic unless the page states one in its subtitle.
 | File | What to copy |
 |------|--------------|
 | `../most-powerful-signals/07-social-graph-and-connections.html` | Page skeleton, CSS, tag pills, one-line bullets, canvas style |
-| `../real-world-distributions/08-advertising-and-adtech.html` | 3-col layout when a row needs two charts |
+| `07-relationships-and-regression/11-multiple-regression.html` | Two canvases side by side in one viz cell (`.viz-pair`, 310 logical each) |
 | `../recently-added-misc/tracking-data-collection-methods/06-session-replay.html` | Total content amount per page (do not exceed) |
 
 ## Topic Page Structure
@@ -49,8 +49,14 @@ The page should feel more visual than textual. The chart must show something the
 text cannot — the example's actual data, a shape, a before/after, a flow.
 
 - Canvas 720×300 logical, `devicePixelRatio` scaled, `width:100%` CSS.
-- Use the 3-col layout (38/31/31, adtech reference) when one chart can't carry the row.
-- **Large fonts**: chart titles bold 15–16px, axis/data labels 12–13px, annotation callouts bold 12–13px. Nothing below 11px.
+- When one chart can't carry the row, put two canvases **side by side** inside the single 50% viz
+  cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`; each canvas `flex:1 1 0;
+  min-width:0`). Draw each at **310 logical width** — `setup()` caps display width at the logical
+  width, so a 310 canvas renders at scale 1.0 and every font appears at its nominal px size.
+  Shrink *geometry* (pads ~46 left / ~12 right, bar widths ×0.74) never font size; split a long
+  label onto two lines instead of shrinking it. Stack vertically (`margin-top:12px` on the second)
+  only when a chart genuinely cannot hold its content at ≥12px in 310px.
+- **Large fonts**: chart titles bold 14–16px, axis/data labels 12–13px, annotation callouts bold 12–13px. Nothing below 12px.
 - Generous white space: margins ≥50px left, ≥40px bottom; don't crowd annotations.
 - Bold colored in-chart annotations stating the insight ("95% of ads below 4% CTR").
 - Palette:

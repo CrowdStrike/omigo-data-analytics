@@ -1,6 +1,6 @@
 # Logistic Regression
 
-**Page type:** detail page (tutorial card-sections: one `<h2>` per section, two-column `table.layout` — text 50% / viz 50%; section 2 uses the 3-column variant 38/31/31 with two canvases)
+**Page type:** detail page (tutorial card-sections: one `<h2>` per section, two-column `table.layout` — text 50% / viz 50%; section 2 holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Logistic Regression
 
 **Subtitle:** A straight-line score squashed through an S-curve, so "will this order be returned?" comes out as a probability between 0 and 1
@@ -43,21 +43,21 @@ Sigmoid curve plot with six shopper points marked.
 
 **Hand-checkable:** the score is plain arithmetic; the only "math" is one exponential — and a score of 0 always means exactly 50%.
 
-### Visualization (canvas `c2a`, 420×300)
+### Visualization (canvas `c2a`, 310×300)
 
 Bar chart of the raw linear scores (positive and negative bars around a zero line).
 
 - **Title (bold 15px, `#1a5276`):** "Step 1: the Linear Score".
-- **Data:** values `[-2, 0, 2]` for labels "A: 0 returns", "B: 2 returns", "C: 4 returns"; bar colors green `#008300`, blue `#2a78d6`, magenta `#d55181`; 66px bars at 0.75 alpha drawn up or down from the zero line; y scale −3 to +3 with signed tick labels; padding top 50 / bottom 56 / left 52 / right 16. B's zero-height bar is marked with a radius-5 blue dot on the zero line. Bold 13px signed value labels ("−2", "0", "+2") at bar ends.
-- **Annotation (bold orange `#d95926` 12px, two lines, top center):** "a raw score — negative allowed," / "no upper limit: not yet a probability".
+- **Data:** values `[-2, 0, 2]` for shoppers A, B, C; bar colors green `#008300`, blue `#2a78d6`, magenta `#d55181`; 48px bars at 0.75 alpha drawn up or down from the zero line; y scale −3 to +3 with signed tick labels; padding top 50 / bottom 66 / left 46 / right 12. X labels are two stacked lines: bold 12px name ("A", "B", "C") then 12px mute detail ("0 returns", "2 returns", "4 returns"). B's zero-height bar is marked with a radius-5 blue dot on the zero line. Bold 13px signed value labels ("−2", "0", "+2") at bar ends.
+- **Annotation (bold orange `#d95926` 12px, two lines, top center):** "a raw score — negative allowed," / "no upper limit: not a probability".
 - **Caption (12px mute, bottom center):** "score = −2 + 1×(past returns)".
 
-### Visualization (canvas `c2b`, 420×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Bar chart of the probabilities after the sigmoid.
 
 - **Title (bold 15px, `#1a5276`):** "Step 2: After the S-Curve".
-- **Data:** values `[12, 50, 88]` (%) for "A: 0 returns", "B: 2 returns", "C: 4 returns"; same colors (green, blue, magenta), 66px bars at 0.75 alpha; y scale 0–100% with labels every 25%; light gridline at 50%; bold 13px "%"-suffixed value labels above bars.
+- **Data:** values `[12, 50, 88]` (%) for shoppers A, B, C; same colors (green, blue, magenta), 48px bars at 0.75 alpha; y scale 0–100% with labels every 25%; light gridline at 50%; bold 13px "%"-suffixed value labels above bars; padding top 50 / bottom 66 / left 46 / right 12; same two-line x labels (bold name over "0/2/4 returns").
 - **Annotation (bold orange 12px, two lines, top center):** "same three shoppers — now every" / "answer is a usable probability".
 - **Caption (12px mute, bottom center):** "probability = 1 / (1 + e⁻ˢᶜᵒʳᵉ)".
 
@@ -111,10 +111,10 @@ Bar "odds ladder": odds of a return by past-return count, each step ×2.7.
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). h1 (no index number) + `.subtitle`, then four `.card-section` blocks each with an `<h2>` and a `table.layout`. Sections 1, 3, 4 use two columns (`td.text-col` 50% / `td.viz-col` 50%); section 2 uses the 3-column variant (`td.text-col3` 38%, two `td.viz-col3` 31% each holding a 420×300 canvas).
+- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). h1 (no index number) + `.subtitle`, then four `.card-section` blocks each with an `<h2>` and a `table.layout`. Every section uses two columns (`td.text-col` 50% / `td.viz-col` 50%). One section places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column per section:** `.tags` pill row, `<ul>` of one-line bullets opening with `<b>bold term</b>` (bold in `#1a5276`), one italic `.example` line, one `.key-point` callout. Superscripts (e², e⁻ˢᶜᵒʳᵉ) rendered with `<sup>` in text.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; section h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem. Canvas `width:100%`, 1px `#e0e0e0` border, 4px radius. `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example` italic `#555` 0.9rem.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Chart palette object `P`:** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
-- **Canvas:** intrinsic sizes 720×300 (c1, c3, c4) and 420×300 (c2a, c2b), scaled with `window.devicePixelRatio` via a shared `setup(id)` helper that reads the width/height attributes (backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.scale` back to logical coordinates). Shared helpers/data: `sigmoid(z) = 1/(1+e^−z)`; `RETURNS = [0,1,2,3,4,5]`, `SCORES = [-2,-1,0,1,2,3]`, `PROBS = [0.12, 0.27, 0.50, 0.73, 0.88, 0.95]`. Data hardcoded, no `Math.random()`; costs labeled "illustrative".
+- **Canvas:** intrinsic sizes 720×300 (c1, c3, c4) and 310×300 (c2a, c2b), scaled with `window.devicePixelRatio` via a shared `setup(id)` helper that reads the width/height attributes (backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.scale` back to logical coordinates). Shared helpers/data: `sigmoid(z) = 1/(1+e^−z)`; `RETURNS = [0,1,2,3,4,5]`, `SCORES = [-2,-1,0,1,2,3]`, `PROBS = [0.12, 0.27, 0.50, 0.73, 0.88, 0.95]`. Data hardcoded, no `Math.random()`; costs labeled "illustrative".
 - No nav bar, no back/home links, no cross-page links. In regenerated HTML any card links use `.html` extensions.

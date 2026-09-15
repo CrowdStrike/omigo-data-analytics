@@ -1,6 +1,6 @@
 # Supervised vs Unsupervised
 
-**Page type:** detail page (tutorial: 4 card-sections; sections 1, 3, 4 two-column table.layout 45/55, section 2 three-column 38/31/31 with two canvases)
+**Page type:** detail page (tutorial: 4 card-sections; each two-column table.layout 50/50 — text left, canvas right)
 **HTML title tag:** Supervised vs Unsupervised
 
 **Subtitle:** The same customer table, twice: keep the churn column and you predict it; delete the column and you look for natural groups — the label is the whole difference
@@ -44,25 +44,25 @@ Tags: `worked example` (green)
 
 **Key point:** Supervised learning draws a boundary that matches the labels; unsupervised learning just circles the clumps it finds.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Labeled scatter plot with a learned decision boundary.
 
 - **Title (bold 15px, `#1a5276`, top center):** "With labels: draw the boundary"
-- **Axes:** x = monthly visits (0–17), y = monthly spend (0–85); L-shaped gray axis; padding top 46 / bottom 58 / left 58 / right 20; axis caption (12px `#444`, bottom center): "monthly visits (x), monthly spend $ (y)".
-- **Points:** the 8 customers at (visits, spend); 7px dots labeled with white bold 10px letters A–H; churned (A–D) in orange `#d95926`, stayed (E–H) in blue `#2a78d6`.
+- **Axes:** x = monthly visits (0–17), y = monthly spend (0–85); L-shaped gray axis; padding top 46 / bottom 58 / left 46 / right 12; axis caption (12px `#444`, bottom center): "monthly visits (x), monthly spend $ (y)".
+- **Points:** the 8 customers at (visits, spend); 7.5px dots labeled with white bold 12px letters A–H; churned (A–D) in orange `#d95926`, stayed (E–H) in blue `#2a78d6`.
 - **Boundary:** vertical dashed violet line (`#4a3aa7`, dash 6/4, width 2) at visits=8, labeled above in bold violet: "visits < 8 → churn".
-- **In-plot labels (bold 12px):** orange "churned (A-D)" upper-left; blue "stayed (E-H)" near the right cluster.
+- **In-plot labels (bold 12px):** orange "churned (A-D)" upper-left; blue "stayed (E-H)" centered over the right cluster.
 - **Caption (bold 12px green `#008300`, centered below axis):** "the rule gets 8 of 8 right"
 
-### Visualization (canvas `c2b`, 400×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Unlabeled scatter plot with two discovered cluster ellipses.
 
 - **Title (bold 15px, `#1a5276`, top center):** "No labels: find the clumps"
-- **Axes:** same scales (x 0–17, y 0–85); padding top 46 / bottom 58 / left 52 / right 18; caption (12px `#444`): "same 8 customers, churn column hidden".
-- **Points:** all 8 customers in neutral gray `#8a97a5`, 7px dots with white letter labels.
-- **Clusters:** two dashed aqua ellipses (`#199e70`, dash 6/4, width 2.5) — one around (3, 11) radii 52×40, one around (13, 65) radii 62×48; bold aqua labels "Group 1" and "Group 2" above each.
+- **Axes:** same scales (x 0–17, y 0–85); padding top 46 / bottom 58 / left 46 / right 12; caption (12px `#444`): "same 8 customers, churn column hidden".
+- **Points:** all 8 customers in neutral gray `#8a97a5`, 7.5px dots with white bold 12px letter labels.
+- **Clusters:** two dashed aqua ellipses (`#199e70`, dash 6/4, width 2.5) — one around (3, 11) radii 37×26, one around (13, 65) radii 45×45; bold aqua labels "Group 1" and "Group 2" above each.
 - **Caption (bold 12px magenta `#d55181`, centered below axis):** "two clumps appear with no labels at all"
 
 ## The Label Decides Your Toolbox
@@ -114,10 +114,10 @@ Before/after board: raw algorithm output flowing through an analyst to named seg
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page skeleton (most-powerful-signals compact style). Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout`; standard rows use `.text-col` (50%) / `.viz-col` (50%); the two-chart row uses `.text-col3` (38%) with two `.viz-col3` cells (31% each).
+- **Template:** tutorials topic-page skeleton (most-powerful-signals compact style). Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout`; every row uses `.text-col` (50%) / `.viz-col` (50%). One section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column per section:** `.tags` pill row first (0.72rem bold, 10px radius pills — blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`), then a `<ul>` of one-line bullets each opening with `<b>` term in `#1a5276`, then an italic `.example` line (`#555`, 0.9rem), then a `.key-point` callout (background `#f8f9fa`, left border 3px `#e74c3c`, 0.9rem).
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px bottom border `#2980b9`; `.subtitle` `#666` 0.95rem. No nav bar, no back/home links.
-- **Canvas:** intrinsic sizes as given per chart (720×300, 420×340, 400×340), CSS `width:100%`, 1px border `#e0e0e0` radius 4px; scaled via `window.devicePixelRatio` in a shared `setup(id)` helper reading width/height attributes (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
+- **Canvas:** intrinsic sizes as given per chart (720×300, 310×340), CSS `width:100%`, 1px border `#e0e0e0` radius 4px; scaled via `window.devicePixelRatio` in a shared `setup(id)` helper reading width/height attributes (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
 - **Chart palette object:** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange.
 - **Data:** shared literal arrays IDS A–H, VISITS `[2,3,4,3,12,15,11,14]`, SPEND `[10,15,12,8,60,75,55,70]`, CHURN `[Yes×4, No×4]` used by all four charts; no `Math.random()`.
 - In regenerated HTML, any card links use `.html` extensions.

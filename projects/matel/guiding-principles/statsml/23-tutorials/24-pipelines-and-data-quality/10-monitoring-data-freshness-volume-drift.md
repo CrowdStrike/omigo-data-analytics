@@ -1,6 +1,6 @@
 # Monitoring Data: Freshness, Volume, Drift
 
-**Page type:** detail page (tutorial card-sections: one h2 per section, two-column table layout — text left 45%, canvas right 55%; one section uses a 3-col 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial card-sections: one h2 per section, two-column table layout — text left 50%, canvas right 50%)
 **HTML title tag:** Monitoring Data: Freshness, Volume, Drift
 
 **Subtitle:** Three simple questions asked every morning — did the data arrive on time, in the usual amount, looking like it used to? — catch broken data before the people reading the dashboard do.
@@ -59,8 +59,6 @@ Bar chart: 15 days of daily row counts with a shaded ±3-sigma alert band, the l
 
 Tags: `drift alerts` (blue), `what goes wrong` (red)
 
-(This section uses the 3-column layout: text 38%, two viz columns 31% each.)
-
 - **The change** — upstream renames the payment value "credit_card" to "CC" in its export
 - **The stealth** — data arrives at 5:08 with 48,300 rows; freshness and volume both pass
 - **The signature** — credit_card share drops 46% → 2% in a day; a new "CC" bucket appears at 45%
@@ -71,26 +69,28 @@ Tags: `drift alerts` (blue), `what goes wrong` (red)
 
 **Key point:** Freshness and volume watch the container; drift watches the contents. Renames, unit changes, and null floods only trip the third check.
 
-### Visualization (canvas `c3a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×300)
 
 Line chart: the share of "credit_card" payments over 10 days, cliff-dropping at day 8.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Share of \"credit_card\" payments".
 - **Data (% by day 1–10):** `[45, 46, 44, 47, 45, 46, 46, 2, 2, 2]`.
-- **Axes:** y 0–60% with labels 0%, 20%, 40%, 60%; padding left 55, right 20, top 45, bottom 45; gray axes `#6b7280`. X labels "day 1", "day 8", "day 10" under days 1, 8, 10.
+- **Axes:** y 0–60% with labels 0%, 20%, 40%, 60%; padding left 46, right 12, top 45, bottom 45; gray axes `#6b7280`. X labels "day 1", "day 8" centered under days 1 and 8, and "day 10" right-aligned at the frame edge.
 - **Series:** connected blue line `#2a78d6`, width 3, with 4px-radius dots at every point; dots red `#e74c3c` when the share < 10% (days 8–10), otherwise blue.
-- **Annotations:** bold red 13px "day 8: 46% → 2% overnight" near mid-chart; italic gray 11px caption at bottom center: "freshness and volume both passed all 10 days".
+- **Annotations:** bold red 13px "day 8: 46% → 2%" / "overnight" on two stacked lines in the open mid-left space; italic gray 12px caption at bottom center: "freshness and volume both passed".
 
-### Visualization (canvas `c3b`, 400×300)
+### Visualization (canvas `c3b`, 310×300)
 
 Grouped bar chart: payment value shares on day 7 vs day 8, showing the renamed bucket.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Payment values: day 7 vs day 8".
 - **Categories:** `['credit_card', 'CC', 'debit', 'wallet']`; day-7 shares `[46, 0, 34, 20]`%, day-8 shares `[2, 45, 33, 20]`%.
-- **Axes:** y 0–60% with labels 0%, 20%, 40%, 60%; padding left 55, right 15, top 50, bottom 60; gray axes `#6b7280`. Category labels rotated ~-0.35 rad below the baseline.
+- **Axes:** y 0–60% with labels 0%, 20%, 40%, 60%; padding left 46, right 12, top 50, bottom 60; gray axes `#6b7280`. Category labels horizontal, 12px, centered under each group.
 - **Bars:** paired per category, 26px wide; day-7 bars filled `rgba(42,120,214,0.45)`; day-8 bars filled `rgba(25,158,112,0.6)` except the "CC" bar, which is solid red `#e74c3c`.
-- **Legend (top left):** small squares "day 7" (blue fill) and "day 8" (green fill), 11px text.
-- **Annotations:** bold red 12px "same payments, new name: \"CC\" at 45%" near the bottom; italic gray 11px caption below it: "a share profile compared day-over-day catches it".
+- **Legend (top left):** small squares "day 7" (blue fill) and "day 8" (green fill), 12px text.
+- **Annotations:** bold red 12px "same payments, new name: \"CC\" at 45%" near the bottom; italic gray 12px caption below it: "day-over-day share profile catches it".
 
 ## "The Job Succeeded" Is Not "The Data Is Fine"
 
@@ -119,7 +119,7 @@ Status-board diagram: the same seven runs shown as two rows of check/cross cells
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then 4 `.card-section` blocks, each an `<h2>` (1.3rem, `#1a5276`, bottom border `2px solid #2980b9`) followed by `table.layout` with one `<tr>`: left `td.text-col` (45%) holding `.tags` pills + `<ul>` bullets + italic `.example` + `.key-point` callout; right `td.viz-col` (55%) holding one canvas. Section 3 uses `table.layout3` (text 38%, two viz columns 31% each) with canvases `c3a` (420×300) and `c3b` (400×300).
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then 4 `.card-section` blocks, each an `<h2>` (1.3rem, `#1a5276`, bottom border `2px solid #2980b9`) followed by `table.layout` with one `<tr>`: left `td.text-col` (50%) holding `.tags` pills + `<ul>` bullets + italic `.example` + `.key-point` callout; right `td.viz-col` (50%) holding one canvas — except section 3, whose single viz cell places canvases `c3a` and `c3b` (310×300 each) side by side, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). 
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with bottom border `2px solid #2980b9`; `.subtitle` `#666` 0.95rem; canvases `width:100%`, border `1px solid #e0e0e0`, radius 4px; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; `<li><b>` bold terms in `#1a5276`. No nav bar, no back/home links.
 - **Tag pills:** `.tag` inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px — blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Chart palette object:** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`, red `#e74c3c`. Overall doc palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

@@ -1,6 +1,6 @@
 # Polling vs Push
 
-**Page type:** detail page (tutorial card-sections: h2 per section, two-column table.layout with text left 45% / canvas right 55%; one section uses a 3-col layout3 38/31/31 with two canvases)
+**Page type:** detail page (tutorial card-sections: h2 per section, two-column table.layout with text left 50% / canvas right 50%)
 **HTML title tag:** Polling vs Push
 
 **Subtitle:** Two ways to learn something happened: keep asking "anything new?" on a timer, or have the system tell you the moment it happens
@@ -34,8 +34,6 @@ Two horizontal timelines: polling vs push for the 10:04:23 order.
 
 Tags: `worked example` (green pill), `trade-off` (orange pill)
 
-Layout note: this section uses the 3-col `table.layout3` — text column 38%, two viz columns 31% each (canvases `c2a` and `c2b`).
-
 - **The shop** — 30 orders arrive over a day, spread across 24 hours
 - **Polling every 60 s** — 60 × 24 = 1,440 checks in the day
 - **Empty checks** — at most 30 checks find news, so ≥1,410 checks (~98%) find nothing
@@ -46,33 +44,35 @@ Layout note: this section uses the 3-col `table.layout3` — text column 38%, tw
 
 **Key point:** Polling cost scales with the clock (checks per day); push cost scales with reality (events per day) — and push is fresher anyway.
 
-### Visualization (canvas `c2a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c2a`, 310×300)
 
 Three-bar chart: checks made vs checks with news.
 
 - **Title (bold 14px ink, top center):** "One Day of Asking: 1,440 Checks"
-- **Bars** (width 84, baseline y=232 with thin gray line, chart height 168, scale max 1,500, min bar height 4px; bold colored value above each bar, two-line dark 12px label below):
+- **Bars** (width 62, baseline y=232 with thin gray line from x=20 to x=292, chart height 168, scale max 1,500, min bar height 4px; bold colored value above each bar, two-line dark 12px label below):
 
 | x | label | value | color |
 |---|-------|-------|-------|
-| 60 | polling checks | 1,440 | orange `#d95926` |
-| 170 | checks with news | 30 | aqua `#199e70` |
-| 280 | push messages | 30 | green `#008300` |
+| 30 | polling checks | 1,440 | orange `#d95926` |
+| 122 | checks with news | 30 | aqua `#199e70` |
+| 214 | push messages | 30 | green `#008300` |
 
 - **Bottom annotation (bold magenta 12px, centered, y=285):** "~98% of checks found nothing"
 
-### Visualization (canvas `c2b`, 400×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Three-bar chart: how late you learn about each order.
 
 - **Title (bold 14px ink, top center):** "How Late Is the News?"
-- **Bars** (width 80, baseline y=232, chart height 168, scale max 65 s, min bar height 4px):
+- **Bars** (width 62, baseline y=232 from x=20 to x=292, chart height 168, scale max 65 s, min bar height 4px):
 
 | x | label | value | value label | color |
 |---|-------|-------|-------------|-------|
-| 55 | poll: worst case | 60 | 60 s | orange `#d95926` |
-| 165 | poll: average | 30 | 30 s | yellow `#c98500` |
-| 275 | push | 1 | <1 s | green `#008300` |
+| 30 | poll: worst case | 60 | 60 s | orange `#d95926` |
+| 122 | poll: average | 30 | 30 s | yellow `#c98500` |
+| 214 | push | 1 | <1 s | green `#008300` |
 
 - **Bottom annotation (bold green 12px, centered, y=285):** "push: fresh AND cheaper here"
 
@@ -137,9 +137,9 @@ Log-scale line chart: checks per day vs polling interval, push as a reference li
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks each with `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border). Sections 1, 3, 4 use `table.layout` (`td.text-col` 45% / `td.viz-col` 55%); section 2 uses `table.layout3` (`td.text-col` 38%, two `td.viz-col` 31%). All tables width 100%, border-collapse, td padding 12px, vertical-align top.
+- **Template/layout:** tutorials detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks each with `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border). Every section uses `table.layout` (`td.text-col` 50% / `td.viz-col` 50%); section 2 places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). All tables width 100%, border-collapse, td padding 12px, vertical-align top.
 - **Text column structure:** `.tags` pill row first (pills 0.72rem bold, 2px 10px padding, 10px radius: blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`); then a `<ul>` (0.92rem) of one-line bullets each opening with `<b>` in `#1a5276`; one italic `.example` line (0.9rem `#555`); one `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem).
 - **Page CSS:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem. Canvases have `width:100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
-- **Canvas:** `c1`, `c3`, `c4` are 720×300; `c2a` is 420×300 and `c2b` is 400×300. Scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id, w, h)` helper that defaults to 720×300. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
+- **Canvas:** `c1`, `c3`, `c4` are 720×300; `c2a` and `c2b` are 310×300. Scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id, w, h)` helper that defaults to 720×300. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - In regenerated HTML, any card/page links use `.html` extensions.

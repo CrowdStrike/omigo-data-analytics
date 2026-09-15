@@ -1,6 +1,6 @@
 # Statistical Power
 
-**Page type:** detail page (tutorial: 4 card-sections, each h2 + two-column layout table, text left 50% with tag pills / canvas right 50%; first section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial: 4 card-sections, each h2 + two-column layout table, text left 50% with tag pills / canvas right 50%)
 **HTML title tag:** Statistical Power
 
 **Subtitle:** Power is the chance your test catches an effect that is really there — a real 1% lift in conversion looks identical to nothing in a test that is too small.
@@ -19,7 +19,9 @@ Tags: `core idea` (blue), `running example` (green)
 
 **Key point:** power is a property of the test's design, fixed before any data arrives — mostly by sample size and effect size.
 
-### Visualization (canvas `c1a`, 350×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c1a`, 310×300)
 
 "Detector" panel: a bell curve of the measured lift around the true +1 point, with a significance bar and a shaded catch region.
 
@@ -31,7 +33,7 @@ Tags: `core idea` (blue), `running example` (green)
 - **Truth marker:** vertical dashed violet `#4a3aa7` line (dash 4/3, width 2) at +1, labeled "truth: +1" bold 12px violet at top.
 - **Significance bar:** vertical solid red `#e74c3c` line (width 2) at +8.5, labeled "bar: +8.5" bold 12px red.
 
-### Visualization (canvas `c1b`, 350×300)
+### Visualization (canvas `c1b`, 310×300)
 
 Same detector panel design for the big test.
 
@@ -118,7 +120,7 @@ Bell curve of the 200-user test's measured lift with the flagged tail highlighte
 
 ## Regeneration instructions
 
-- **Layout:** tutorial page — `<h1>` + `.subtitle`, then 4 `.card-section` blocks. Each has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` (width 100%, border-collapse, cell padding 12px, vertical-align top). Sections 2–4 use one row with `.text-col` (50%) and `.viz-col` (50%). Section 1 uses the 3-column variant: `.text-col3` (38%) plus two `.viz-col3` cells (31% each) holding canvases `c1a` and `c1b` (350×300 each).
+- **Layout:** tutorial page — `<h1>` + `.subtitle`, then 4 `.card-section` blocks. Each has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` (width 100%, border-collapse, cell padding 12px, vertical-align top). Every section uses one row with `.text-col` (50%) and `.viz-col` (50%); section 1 places canvases `c1a`/`c1b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text cell structure:** `.tags` row of pills, then a `<ul>` of bullets each opening with `<b>bold term</b>` (bold terms colored `#1a5276`), one italic `.example` paragraph (italic, `#555`, 0.9rem), one `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) whose "Key point:" prefix is `<strong>`.
 - **Tag pills:** `.tag` inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px. Variants: blue `rgba(26,82,118,0.12)`/`#1a5276`; green `rgba(39,174,96,0.15)`/`#27ae60`; red `rgba(231,76,60,0.12)`/`#e74c3c`; orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 0.95rem. Canvases have `width: 100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.

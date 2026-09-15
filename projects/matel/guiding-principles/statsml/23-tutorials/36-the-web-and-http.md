@@ -33,6 +33,7 @@ Each card links to a topic page under `web-http/`. The card shows a colored uppe
 | 20 | IDENTITY & AUTH | JWT | [36-the-web-and-http/20-jwt.md](36-the-web-and-http/20-jwt.md) | A signed note the client carries with every request — the server checks the signature instead of looking the user up. | signed token, claims, no lookup |
 | 21 | IDENTITY & AUTH | SSO & SAML/OIDC | [36-the-web-and-http/21-sso-and-saml-oidc.md](36-the-web-and-http/21-sso-and-saml-oidc.md) | Prove who you are once — to one identity provider — and every company app accepts its signed note; SAML and OIDC are the two dialects that note is written in. | single sign-on, identity provider, SAML vs OIDC |
 | 22 | IDENTITY & AUTH | MFA & Passkeys | [36-the-web-and-http/22-mfa-and-passkeys.md](36-the-web-and-http/22-mfa-and-passkeys.md) | A phishing page can steal a password and a 6-digit code in seconds — a passkey signs only for the real site, so there is nothing to steal. | phishing, second factor, WebAuthn |
+| 23 | IDENTITY & AUTH | HTTP Basic Auth | [36-the-web-and-http/23-http-basic-auth.md](36-the-web-and-http/23-http-basic-auth.md) | The oldest login on the web — no login page and no session: the browser just attaches your name and secret to every single request as one header. | 401 challenge, Authorization header, base64 is not encryption |
 
 ## Regeneration instructions
 

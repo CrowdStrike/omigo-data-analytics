@@ -1,6 +1,6 @@
 # Metrics — Patterns, Anti-Patterns & Design
 
-**Page type:** grid page (card navigation grid, 3 columns, one philosophy callout, cards with colored borders)
+**Page type:** grid page (card navigation grid, 4 columns, one philosophy callout, cards with colored borders)
 **HTML title tag:** Metrics — Patterns, Anti-Patterns & Design
 
 **Subtitle:** Good metrics drive good decisions. Bad metrics drive confident wrong decisions. Sub-documents covering: what makes a metric good or bad, business vs informational metrics, collection frequency, UI reporting pitfalls, anti-patterns, and design patterns.
@@ -35,7 +35,7 @@ Cards link to detail pages under `metrics/`; card and file index numbers match. 
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, one `.philosophy` callout, then one `.grid` of `.card` anchors.
-- **Layout:** `.grid` is CSS grid, `repeat(3, 1fr)`, 16px gap, margin `30px 0`; responsive: 2 columns below 800px, 1 column below 500px.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin `30px 0`; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to the `.md` versions for markdown navigation; in the regenerated HTML each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="card" href="..." style="border-color:LABEL_COLOR;">` containing `<div class="card-label" style="color:LABEL_COLOR">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number), `<p>description</p>`.
 - **Per-card label/border colors:** card 1 `#27ae60`; card 2 `#e74c3c`; card 3 `#c0392b`; card 4 `#e67e22`; card 5 `#f39c12`; card 6 `#2980b9`; card 7 `#8e44ad`; card 8 `#1a5276`; card 9 `#e74c3c`; card 10 `#c0392b`; card 11 `#2980b9`; card 12 `#8e44ad`; card 13 `#e67e22`; card 14 `#f39c12`.

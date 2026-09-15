@@ -1,6 +1,6 @@
 # Ratios & Rates as Features
 
-**Page type:** detail page (tutorial page: h1 + subtitle, 4 `.card-section` blocks each with an h2 and a `table.layout` — sections 2–4 use text left 50% / canvas right 50%; section 1 uses a 3-column row: text 38% + two canvases 31% each)
+**Page type:** detail page (tutorial page: h1 + subtitle, 4 `.card-section` blocks each with an h2 and a `table.layout` — all sections use text left 50% / canvas right 50%; section 1 holds both canvases side by side in a `.viz-pair` flex row.)
 **HTML title tag:** Ratios &amp; Rates as Features
 
 **Subtitle:** A raw count mixes together "how big" and "how bad" — dividing by the right denominator separates the two
@@ -19,21 +19,21 @@
 
 **Key point:** A count answers "how many happened". A rate answers "how likely per user" — and only the rate lets you compare a big product with a small one.
 
-### Visualization (canvas `c1a`, 420×340)
+### Visualization (canvas `c1a`, 310×340)
 
 Two-bar chart of raw ticket counts — visually identical bars.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Raw Count: Tickets Last Month".
-- **Bars (width 100, baseline y=265, chart height 190, scale max 600):** "Product A" 500 and "Product B" 500, both muted gray `#6b7280` at 0.6 alpha; bold 14px `#1a5276` value labels "500" above each; 12px `#333` product labels below; thin `#999` baseline.
-- **Caption (bold 13px muted, bottom center):** "identical — the count can't tell them apart".
+- **Bars (width 74, evenly spaced between left pad 46 and right pad 12, baseline y=265, chart height 190, scale max 600):** "Product A" 500 and "Product B" 500, both muted gray `#6b7280` at 0.6 alpha; bold 14px `#1a5276` value labels "500" above each; 12px `#333` product labels below; thin `#999` baseline.
+- **Caption (bold 13px muted, bottom center, two stacked lines):** "identical — the count" / "can't tell them apart".
 
-### Visualization (canvas `c1b`, 400×340)
+### Visualization (canvas `c1b`, 310×340)
 
 Two-bar chart of tickets per 100 users — hugely different bars.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Rate: Tickets per 100 Users".
-- **Bars (width 100, baseline y=265, chart height 190, scale max 100, 0.72 alpha):** "Product A" 5% green `#008300` with 11px muted sub-label "500 / 10,000"; "Product B" 83% red `#e74c3c` with sub-label "500 / 600". Bold 14px value labels "5%" / "83%" above in the bar color; thin `#999` baseline.
-- **Caption (bold 13px red `#e74c3c`, bottom center):** "same 500 tickets — 17x the rate".
+- **Bars (width 74, evenly spaced between left pad 46 and right pad 12, baseline y=265, chart height 190, scale max 100, 0.72 alpha):** "Product A" 5% green `#008300` with 12px muted sub-label "500 / 10,000"; "Product B" 83% red `#e74c3c` with sub-label "500 / 600". Bold 14px value labels "5%" / "83%" above in the bar color; thin `#999` baseline.
+- **Caption (bold 13px red `#e74c3c`, bottom center, two stacked lines):** "same 500 tickets —" / "17x the rate".
 
 ## The Division, Checked by Hand
 
@@ -109,8 +109,8 @@ Funnel scatter: rate vs denominator on a log x-axis, extremes clustered at small
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle` paragraph, then four `.card-section` divs, each an `<h2>` (bottom border `2px solid #2980b9`) followed by a `table.layout`. Section 1 row uses `td.text-col3` (38%) + two `td.viz-col3` (31% each) holding canvases c1a (420×340) and c1b (400×340); sections 2–4 use `td.text-col` (50%) + `td.viz-col` (50%) with one 720×300 canvas. Left cells hold `.tags` pills, a `<ul>` of bold-term bullets, an italic `.example` line, and a `.key-point` callout (lead-ins "Key point:", "Rule of thumb:", "Common mistake:").
-- **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `2px solid #2980b9` bottom border; `.subtitle` `#666` 0.95rem; h2 1.3rem `#1a5276`. `ul` 0.92rem; `li b` in `#1a5276`. `.example` italic `#555` 0.9rem. `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. Canvases `width:100%`, border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle` paragraph, then four `.card-section` divs, each an `<h2>` (bottom border `2px solid #2980b9`) followed by a `table.layout`. Every row uses `td.text-col` (50%) + `td.viz-col` (50%); section 1 places canvases `c1a`/`c1b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Sections 2–4 hold one 720×300 canvas. Left cells hold `.tags` pills, a `<ul>` of bold-term bullets, an italic `.example` line, and a `.key-point` callout (lead-ins "Key point:", "Rule of thumb:", "Common mistake:").
+- **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `2px solid #2980b9` bottom border; `.subtitle` `#666` 0.95rem; h2 1.3rem `#1a5276`. `ul` 0.92rem; `li b` in `#1a5276`. `.example` italic `#555` 0.9rem. `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. Canvases `width:100%`, border `1px solid #e0e0e0`, radius 4px; `.viz-pair` is `display:flex; gap:10px; align-items:flex-start` with `.viz-pair canvas { flex:1 1 0; min-width:0 }`. No nav bar, no back/home links.
 - **Tag pills:** `.tag` inline-block, 0.72rem bold, padding 2px 10px, radius 10px; `.tag.blue` background rgba(26,82,118,0.12) color `#1a5276`; `.tag.green` rgba(39,174,96,0.15) `#27ae60`; `.tag.red` rgba(231,76,60,0.12) `#e74c3c`; `.tag.orange` rgba(230,126,34,0.15) `#e67e22`.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
 - **Canvas:** the shared `setup(id)` helper reads each canvas's `width`/`height` attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates.

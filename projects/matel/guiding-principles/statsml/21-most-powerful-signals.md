@@ -1,6 +1,6 @@
 # Most Powerful Signals in Data
 
-**Page type:** grid page (3-column card grid with topic-tag pills per card; per-card border color matches label color)
+**Page type:** grid page (4-column card grid with topic-tag pills per card; per-card border color matches label color)
 **HTML title tag:** Most Powerful Signals in Data
 
 **Subtitle:** The raw signals that tech companies use to power recommendations, ranking, pricing, and personalization. Each signal type gets its own page showing how it's captured, shaped, and exploited.
@@ -28,7 +28,7 @@ Each card links to a detail page under `most-powerful-signals/`. The card shows 
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, then one `.grid` of `.card` anchors. No philosophy callouts on this page.
-- **Layout:** `.grid` is CSS grid, `repeat(3, 1fr)`, 16px gap, margin `20px 0 30px 0`; responsive: 2 columns below 800px, 1 column below 500px.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin `20px 0 30px 0`; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="card" href="..." style="border-color:HEX;">` (same hex as its label color, per row) containing `<div class="card-label" style="color:HEX">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`, `<div class="topics">` with one `<span class="topic-tag">` per topic listed in the Topics column.
 - **Card style:** background `#f8fafb`, border `1px solid #e0e0e0` (color overridden inline per card), radius 8px, padding 16px; hover: shadow `0 4px 12px rgba(0,0,0,0.1)`, border `#2980b9`. Label 0.72em bold uppercase letter-spacing 0.5px, h3 `#1a5276` 1.0em, description 0.85em `#555` margin 0.

@@ -1,6 +1,6 @@
 # Timezones & Timestamps
 
-**Page type:** detail page (tutorial page: card-sections, each with a two-column layout table — text left 45% with tag pills / bullets / example / key-point, canvas right 55%; section 3 uses a 3-column layout with two canvases)
+**Page type:** detail page (tutorial page: card-sections, each with a two-column layout table — text left 50% with tag pills / bullets / example / key-point, canvas right 50%)
 **HTML title tag:** Timezones & Timestamps
 
 **Subtitle:** "2024-03-10 02:30" — in whose clock? A timestamp without a timezone is a number without a unit: store the instant in UTC, translate to a wall clock only at display time
@@ -70,25 +70,27 @@ Tags: `where it's used` (blue), `common mistake` (red)
 
 **Key point:** Before explaining a dip with a story about customers, check whether the day itself was a different length.
 
-### Visualization (canvas `c3a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×300)
 
 Bar chart of daily revenue with a single DST dip.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Daily Revenue (local days)".
 - **Data:** days ["Mar 7", "Mar 8", "Mar 9", "Mar 10", "Mar 11", "Mar 12", "Mar 13"], values `[2400, 2400, 2400, 2300, 2400, 2400, 2400]`.
-- **Axes:** y range 2,200–2,450 (truncated axis) with labels "$2,200" and "$2,400" (11px `#6b7280`); L-shaped `#6b7280` axis; day labels 11px, rotated ~-0.5 rad.
-- **Bars:** 40px wide; normal bars fill `rgba(42,120,214,0.45)` with `#2a78d6` stroke; the Mar 10 dip bar red `#e74c3c` at 60% alpha with red stroke and bold red value label; values printed above every bar.
-- **Annotations:** bold 13px red at y=46: "-$100: a 23-hour day, not a sales problem"; italic 11px `#6b7280` bottom center: "y-axis starts at $2,200 to make the dip readable".
+- **Axes:** y range 2,200–2,450 (truncated axis) with labels "$2,200" and "$2,400" (12px `#6b7280`); L-shaped `#6b7280` axis; day labels 12px, rotated ~-0.5 rad.
+- **Bars:** 26px wide; normal bars fill `rgba(42,120,214,0.45)` with `#2a78d6` stroke; the Mar 10 dip bar red `#e74c3c` at 60% alpha with red stroke and bold red value label; values printed above every bar.
+- **Annotations:** bold 13px red on two lines at y=44/59: "-$100: a 23-hour day," / "not a sales problem"; italic 12px `#6b7280` bottom center: "y-axis starts at $2,200".
 
-### Visualization (canvas `c3b`, 400×300)
+### Visualization (canvas `c3b`, 310×300)
 
 Hourly bar chart for Mar 10 with the missing 02:00 bar highlighted.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Mar 10, Hour by Hour".
 - **Data:** 24 hour slots, each a uniform bar (fill `rgba(25,158,112,0.5)`) at the $100 level — except hour 02, which has no bar. The empty 02:00 slot is shaded `rgba(231,76,60,0.12)` full-height with a dashed red (`#e74c3c`, dash 4/3) outline.
-- **Axes:** y labels "$100" and "$0" (11px `#6b7280`); x tick labels "0h", "6h", "12h", "18h", "23h" (11px `#2c3e50`).
-- **Callout:** red leader line from the gap to bold 12px red text, two lines: "02:00 never happened —" / "23 bars × $100 = $2,300".
-- **Caption (italic 11px `#6b7280`, bottom center):** "steady $100/hour shop, local wall-clock hours".
+- **Axes:** y labels "$100" and "$0" (12px `#6b7280`); x tick labels "0h", "6h", "12h", "18h", "23h" (12px `#2c3e50`).
+- **Callout:** short red leader stub above the gap; bold 12px red text centered on two lines: "02:00 never happened —" / "23 bars × $100 = $2,300".
+- **Caption (italic 12px `#6b7280`, bottom center):** "steady $100/hour, local hours".
 
 ## Whose Midnight? The Day-Boundary Trap
 
@@ -119,7 +121,7 @@ Two day-boundary ribbons crossed by one order instant.
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + a layout table. Sections 1, 2, 4 use `table.layout` (`td.text-col` 45% / `td.viz-col` 55%); section 3 uses `table.layout3` (text 38%, two viz cells 31% each holding canvases `c3a` 420×300 and `c3b` 400×300). Text cell order: `.tags` pill row, `<ul>` bullets (each starting with `<b>bold term</b>` in `#1a5276`), italic `.example`, `.key-point` callout.
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + a layout table. Every section uses `table.layout` (`td.text-col` 50% / `td.viz-col` 50%); section 3 places canvases `c3a`/`c3b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Text cell order: `.tags` pill row, `<ul>` bullets (each starting with `<b>bold term</b>` in `#1a5276`), italic `.example`, `.key-point` callout.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; ul 0.92rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px; blue = bg `rgba(26,82,118,0.12)` / `#1a5276`, green = `rgba(39,174,96,0.15)` / `#27ae60`, red = `rgba(231,76,60,0.12)` / `#e74c3c`, orange = `rgba(230,126,34,0.15)` / `#e67e22`.
 - **Key-point callout:** background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem.

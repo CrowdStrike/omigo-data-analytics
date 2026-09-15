@@ -1,6 +1,6 @@
 # The Central Limit Theorem
 
-**Page type:** detail page (tutorial page: h2 card-sections, each a two-column layout table — text left 50%, canvas right 50%; the first section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial page: h2 card-sections, each a two-column layout table — text left 50%, canvas right 50%)
 **HTML title tag:** The Central Limit Theorem
 
 **Subtitle:** Average enough random things and the averages form a bell curve — no matter what the original data looks like
@@ -19,23 +19,25 @@
 
 **Key point:** the bell is a property of averaging, not of dice — flat in, bell out.
 
-### Visualization (canvas `c1a`, 420×340)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c1a`, 310×340)
 
 Bar chart: one die's flat distribution.
 
 - **Title (bold 15px, `#1a5276`, top center):** "One Die: Flat"
 - **Data:** six equal bars, one per face 1–6, each 16.7% (labeled "1/6" above each bar); y max 25.
-- **Axes:** padding top 56, bottom 56, left 55, right 25; horizontal baseline in `#999`; bars 44px wide, evenly spaced; face numbers 1–6 below bars; x-axis title "face rolled" in muted gray `#6b7280`.
+- **Axes:** padding top 56, bottom 56, left 46, right 12; horizontal baseline in `#999`; bars 32px wide, evenly spaced; face numbers 1–6 below bars; x-axis title "face rolled" in muted gray `#6b7280`.
 - **Bars:** `rgba(42,120,214,0.7)`.
 - **Annotation (bold 13px orange `#d95926`, centered above the plot):** "no bell in sight"
 
-### Visualization (canvas `c1b`, 420×340)
+### Visualization (canvas `c1b`, 310×340)
 
 Histogram: average of 10 dice — bell shape (illustrative theoretical shape).
 
 - **Title (bold 15px, `#1a5276`, top center):** "Average of 10 Dice: Bell"
 - **Data:** 7 evenly spaced bins centered at 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0 with heights `[0.5, 4, 15, 23, 15, 4, 0.5]`; y max 27; minimum drawn bar height 2px.
-- **Axes:** same padding as c1a; horizontal baseline in `#999`; bars 32px wide; x tick labels "2.0", "3.0", "3.5", "4.0", "5.0" under bins 0, 2, 4, 6, 8; caption "average of the 10 faces (illustrative)" in muted gray.
+- **Axes:** padding top 56, bottom 62, left 46, right 12; horizontal baseline in `#999`; bars 24px wide; x tick labels "2.0", "3.0", "3.5", "4.0", "5.0" under bins 0, 2, 3, 4, 6; caption "average of the 10 faces" with "(illustrative)" on a second line below, in muted gray.
 - **Bars:** green — the central 3.5 bin solid `#008300`, all others `rgba(0,131,0,0.45)`.
 - **Annotation (bold 13px green `#008300`, centered above the plot):** "averages crowd around 3.5"
 
@@ -112,10 +114,10 @@ Curve overlay: the raw skewed distribution stays put while the sampling distribu
 
 ## Regeneration instructions
 
-- **Template:** tutorial detail page (tutorials style, see `tutorials/CLAUDE.md`). h1 with 2px `#2980b9` bottom border, `.subtitle`, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout`. Sections 2–4 use `.text-col` (50%) / `.viz-col` (50%) with one 720×300 canvas; section 1 uses the 3-column variant `.text-col3` (38%) plus two `.viz-col3` (31%) cells holding canvases c1a and c1b (420×340 each).
+- **Template:** tutorial detail page (tutorials style, see `tutorials/CLAUDE.md`). h1 with 2px `#2980b9` bottom border, `.subtitle`, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout`. Every section uses `.text-col` (50%) / `.viz-col` (50%); sections 2–4 hold one 720×300 canvas. One section places canvases `c1a`/`c1b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text cell structure:** `.tags` row of colored pills, `<ul>` of one-line bullets each opening with `<b>bold term</b>` (colored `#1a5276`), one italic `.example` paragraph, one `.key-point` callout (background `#f8f9fa`, left border `3px solid #1a5276`); the last section's callout is prefixed "Common mistake:" instead of "Key point:". The bullet word "average" in section 4 is italic (`<i>`).
 - **Tag pill styles:** 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; bullets 0.92rem; canvases `width:100%` with `1px solid #e0e0e0` border, 4px radius. HTML entities used in text: `&times;` (×), `&ndash;` (–), `&divide;` (÷), `&radic;` (√), `&asymp;` (≈).
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Project palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
-- **Canvas:** intrinsic sizes per chart (720×300 or 420×340); sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) via a shared `setup(id, W, H)` helper (`ctx.scale` back to logical coordinates). All data hardcoded literal arrays — no `Math.random()`; invented shapes labeled "illustrative".
+- **Canvas:** intrinsic sizes per chart (720×300 or 310×340); sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) via a shared `setup(id, W, H)` helper (`ctx.scale` back to logical coordinates). All data hardcoded literal arrays — no `Math.random()`; invented shapes labeled "illustrative".
 - No nav bar, no back/home links, no cross-page links. In regenerated HTML any card links would use `.html` extensions.

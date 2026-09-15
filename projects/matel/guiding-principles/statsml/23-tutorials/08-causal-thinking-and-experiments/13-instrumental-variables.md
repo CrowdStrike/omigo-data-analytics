@@ -1,6 +1,6 @@
 # Instrumental Variables
 
-**Page type:** detail page (tutorial layout: h1 + subtitle, then `.card-section` blocks each with an h2 and a `table.layout` — text column ~45% left with tag pills / bullets / example / key-point, viz column ~55% right with a canvas; one section uses a 3-col 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial layout: h1 + subtitle, then `.card-section` blocks each with an h2 and a `table.layout` — text column 50% left with tag pills / bullets / example / key-point, viz column 50% right with a canvas; one section holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Instrumental Variables
 
 **Subtitle:** When the treatment is tangled up with hidden traits, find a random nudge that moves the treatment — and nothing else — then measure through the nudge.
@@ -73,23 +73,23 @@ Tags: `worked example` (green), `by hand` (blue)
 
 **Key point:** The division just rescales the fair day-level comparison into a per-exposure effect: purchase difference ÷ exposure difference.
 
-(This section uses the 3-col layout: 38% text, two 31% viz columns.)
+(This section keeps the 50/50 layout; its two canvases sit side by side in a `.viz-pair` flex row inside the single viz cell.)
 
-### Visualization (canvas `c3a`, 420×320)
+### Visualization (canvas `c3a`, 310×320)
 
 Two-bar chart, first stage.
 
 - **Title (bold 15px, `#1a5276`, centered):** "Step 1: Nudge → Exposure".
-- **Bars (110px wide, gap 80, centered; scale max 70%, alpha 0.7):** "slot days" 60% in aqua `#199e70`; "no-slot days" 20% in gray `#6b7280`. Bold 14px value labels "60%" / "20%" above bars, 12px category labels below the baseline (thin `#999` line).
+- **Bars (82px wide, gap 59, centered; scale max 70%, alpha 0.7):** "slot days" 60% in aqua `#199e70`; "no-slot days" 20% in gray `#6b7280`. Bold 14px value labels "60%" / "20%" above bars, 12px category labels below the baseline (thin `#999` line).
 - **Difference annotation (bold orange `#d95926` 14px, centered near top):** "difference: 40 pts", with a 2px orange vertical connector line between the two bar tops.
 - **Footer (gray `#6b7280` 12px, centered):** "share of users who see the ad".
 
-### Visualization (canvas `c3b`, 420×320)
+### Visualization (canvas `c3b`, 310×320)
 
 Two-bar chart, second stage.
 
 - **Title (bold 15px, `#1a5276`, centered):** "Step 2: Nudge → Purchases".
-- **Bars (110px wide, gap 80, centered; scale max 7%, alpha 0.7):** "slot days" 6.0% in green `#008300`; "no-slot days" 4.4% in gray `#6b7280`. Bold 14px value labels "6.0%" / "4.4%" above bars, 12px category labels below the baseline.
+- **Bars (82px wide, gap 59, centered; scale max 7%, alpha 0.7):** "slot days" 6.0% in green `#008300`; "no-slot days" 4.4% in gray `#6b7280`. Bold 14px value labels "6.0%" / "4.4%" above bars, 12px category labels below the baseline.
 - **Difference annotation (bold orange `#d95926` 14px, centered near top):** "difference: 1.6 pts".
 - **Result line (bold magenta `#d55181` 13px, centered near bottom):** "effect per exposure = 1.6 ÷ 40 = 4 pts".
 - **Footer (gray 12px, centered):** "share of users who purchase".
@@ -122,7 +122,7 @@ Two-bar comparison of the naive vs IV estimate.
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + `table.layout` (border-collapse, full width). Standard rows: `td.text-col` 45% / `td.viz-col` 55%; the worked-example row uses `table.layout.threecol` with `td.text-col` 38% and two `td.viz-col` 31% cells holding canvases `c3a` and `c3b`.
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + `table.layout` (border-collapse, full width). All rows: `td.text-col` 50% / `td.viz-col` 50%; the worked-example row places canvases `c3a`/`c3b` (310×320 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` row of pill spans (0.72rem, weight 600, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`), then a `<ul>` (0.92rem) of one-line bullets each starting with `<b>` in `#1a5276`, an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (background `#f8f9fa`, 3px solid `#e74c3c` left border, padding 8px 12px, 0.9rem, `<strong>` lead-in).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem. Canvases have `width: 100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Page palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

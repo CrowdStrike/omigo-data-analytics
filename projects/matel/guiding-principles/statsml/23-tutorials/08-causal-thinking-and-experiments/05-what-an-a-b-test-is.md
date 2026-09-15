@@ -1,6 +1,6 @@
 # What an A/B Test Is
 
-**Page type:** detail page (tutorial layout: h2 card-sections, two-column table 50% text / 50% viz; one 3-column section 38/31/31 with two charts)
+**Page type:** detail page (tutorial layout: h2 card-sections, two-column table 50% text / 50% viz)
 **HTML title tag:** What an A/B Test Is
 
 **Subtitle:** Show two versions to two random groups at the same time, and let the difference in one number decide
@@ -60,8 +60,6 @@ Two-bar chart: purchase rate by button, with lift annotations in a right margin.
 
 Tags: `why it matters` (orange), `common mistake` (red)
 
-Three-column row (`text-col3` 38%, two `viz-col3` 31% each).
-
 - **Before/after** — swap the button, compare weeks; but the weeks differ in more ways
 - **Confounds** — a sale, payday, or weather can move conversion more than 0.3 points
 - **Same-time split** — whatever happens during the test hits blue and green equally
@@ -71,22 +69,24 @@ Three-column row (`text-col3` 38%, two `viz-col3` 31% each).
 
 **Key point:** An A/B test does not remove outside events — it makes them hit both groups equally so they cancel out.
 
-### Visualization (canvas `c3a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×300)
 
 Two-bar chart: the misleading before/after comparison.
 
 - **Title (bold 15px, `#1a5276`, centered, y=24):** "Before / After: Misleads".
-- **Axes:** padding top 58 / bottom 62 / left 52 / right 20; y-scale max 4.5% with mute labels "4%" and "2%"; `#999` L-axes.
-- **Bars (100px wide, 70px gap, 75% alpha):** "Week 1: blue" (sub "during 20%-off sale") 3.8%, blue `#2a78d6`; "Week 2: green" (sub "no sale") 3.4%, green `#008300`. Bold 13px value labels above; bold 12px labels and 11px mute subs below.
-- **Annotations (bold red `#e74c3c` 13px, centered):** under the title: "verdict: "green lost 0.4pt""; at the bottom: "— the sale did that, not the color".
+- **Axes:** padding top 58 / bottom 62 / left 46 / right 12; y-scale max 4.5% with mute labels "4%" and "2%"; `#999` L-axes.
+- **Bars (70px wide, 40px gap, 75% alpha):** "Week 1: blue" (sub "20%-off sale") 3.8%, blue `#2a78d6`; "Week 2: green" (sub "no sale") 3.4%, green `#008300`. Bold 13px value labels above; bold 12px labels and 12px mute subs below.
+- **Annotations (bold red `#e74c3c` 13px, centered):** under the title: "verdict: "green lost 0.4pt""; at the bottom: "the sale did that, not the color".
 
-### Visualization (canvas `c3b`, 400×300)
+### Visualization (canvas `c3b`, 310×300)
 
 Two-bar chart: the fair same-time split.
 
 - **Title (bold 15px, `#1a5276`, centered, y=24):** "Same-Time Split: Fair".
 - **Axes:** same style as `c3a`, y-scale max 4.5% with "4%" and "2%" labels.
-- **Bars (95px wide, 65px gap, 75% alpha):** "Blue (A)" 3.1%, blue; "Green (B)" 3.4%, green; each with mute 11px sub-label "same week".
+- **Bars (70px wide, 40px gap, 75% alpha):** "Blue (A)" 3.1%, blue; "Green (B)" 3.4%, green; each with mute 12px sub-label "same week".
 - **Annotations (bold green `#008300` 13px, centered):** under the title: "verdict: green +0.3pt"; at the bottom: "any sale would hit both bars".
 
 ## The Full Loop: Hypothesis, Split, Measure, Decide
@@ -109,17 +109,17 @@ Process diagram: four step boxes in a row with connecting arrows and a dashed lo
 
 - **Title (bold 16px, `#1a5276`, centered, y=28):** "The Loop, Filled In With the Button Test".
 - **Step boxes (145×96, 34px gaps, centered row at y=78; fill `#f8f9fa`, 2.5px colored stroke; bold 14px colored title, two 12px `#2c3e50` detail lines):**
-  1. "1. Hypothesis" (violet `#4a3aa7`): ""green raises" / "purchase rate""
-  2. "2. Split" (blue `#2a78d6`): "random 50/50" / "10,000 per arm"
-  3. "3. Measure" (aqua `#199e70`): "blue 3.1%" / "green 3.4%"
-  4. "4. Decide" (orange `#d95926`): "ship / keep /" / "run longer"
+ 1. "1. Hypothesis" (violet `#4a3aa7`): ""green raises" / "purchase rate""
+ 2. "2. Split" (blue `#2a78d6`): "random 50/50" / "10,000 per arm"
+ 3. "3. Measure" (aqua `#199e70`): "blue 3.1%" / "green 3.4%"
+ 4. "4. Decide" (orange `#d95926`): "ship / keep /" / "run longer"
 - **Arrows:** mute gray (`#6b7280`) horizontal arrows between consecutive boxes.
 - **Loop-back:** dashed mute (dash 5/4, 1.5px) path from below box 4 across to below box 1 with an upward arrowhead; mute 12px centered label "next change goes through the same loop".
 - **Bottom annotation (bold orange 13px, centered):** "steps 1 and 4 are written down BEFORE the data arrives".
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). Page: `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle`, four `.card-section` blocks each with `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout` row. Sections 1, 2, 4 use `.text-col` (50%) / `.viz-col` (50%); section 3 uses `.text-col3` (38%) plus two `.viz-col3` (31% each) holding canvases `c3a` (420×300) and `c3b` (400×300).
+- **Template:** tutorials topic-page layout (see `tutorials/CLAUDE.md`). Page: `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle`, four `.card-section` blocks each with `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout` row. Every section uses `.text-col` (50%) / `.viz-col` (50%); section 3 places canvases `c3a`/`c3b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` pill row (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem bold pills, 10px radius), `<ul>` (0.92rem) of one-line bullets opening with `<b>` (`#1a5276`), italic `.example` (`#555`, 0.9rem), `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%`, border `1px solid #e0e0e0`, radius 4px.
 - **Canvas palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Doc palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

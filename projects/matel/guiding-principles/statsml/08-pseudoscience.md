@@ -1,6 +1,6 @@
 # Pseudoscience in Data Analysis
 
-**Page type:** grid page (card navigation grid, 3 columns)
+**Page type:** grid page (card navigation grid, 4 columns)
 **HTML title tag:** Pseudoscience in Data Analysis
 
 **Subtitle:** Practices that LOOK scientific (use numbers, charts, p-values) but are actually cargo-cult reasoning — conclusions without valid methodology. Common in industry, research, and especially in fields where someone "looked successful" and reverse-engineered a story.
@@ -45,7 +45,7 @@ Each card links to a detail page under `pseudoscience/`. The card shows a colore
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, one `.philosophy` callout, then one `.grid` of `.card` anchors.
-- **Layout:** `.grid` is CSS grid, `repeat(3, 1fr)`, 16px gap, margin `16px 0 30px`; responsive: 2 columns below 900px, 1 column below 500px.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin `16px 0 30px`; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="card" href="...">` containing `<div class="card-label" style="color:CATEGORY_COLOR">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`.
 - **Category label colors:** REASONING `#e74c3c`; METHOD `#e67e22`; STRUCTURAL `#8e44ad`.

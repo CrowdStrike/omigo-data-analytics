@@ -1,6 +1,6 @@
 # Fitting a Line
 
-**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column `table.layout` — text left with tag pills / bullets / example / key-point, canvas right; one section uses a 3-column 38/31/31 layout)
+**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column `table.layout` — text left with tag pills / bullets / example / key-point, canvas right)
 **HTML title tag:** Fitting a Line
 
 **Subtitle:** Fifteen apartment listings, one straight line through the scatter — the line that misses the points by the least, read out in plain words
@@ -44,22 +44,24 @@ Scatter plot with fitted line over 15 apartment listings.
 
 **Key point:** "Least squares" means exactly this — of all straight lines, the fitted one has the smallest total of squared misses.
 
-### Visualization (canvas `c2a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c2a`, 310×300)
 
 Scatter with three candidate lines over the same 15 points.
 
 - **Title (bold 15px, `#1a5276`):** "Three candidate lines".
-- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y 600–2200; padding top 42 / bottom 44 / left 52 / right 14; axis `#999`, tick labels 12px `#6b7280`.
+- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y 600–2200; padding top 42 / bottom 44 / left 46 / right 12; axis `#999`, tick labels 12px `#6b7280`.
 - **Lines (drawn from x=27 to x=83):** orange `#d95926` dashed (6/4, width 2) for 300 + 20×s; magenta `#d55181` dashed (6/4, width 2) for 200 + 22×s; green `#008300` solid width 3 for 400 + 18×s (the fitted line).
 - **Points:** blue `#2a78d6` circles, radius 3.5 (same sizes/rents data as c1).
 - **Labels (bold 12px):** green "400 + 18×s (fitted)" near (28, 2060); orange "300 + 20×s" near (63, 1500); magenta "200 + 22×s" near (56, 870).
 
-### Visualization (canvas `c2b`, 400×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Bar chart of total squared misses per candidate line.
 
 - **Title (bold 15px, `#1a5276`):** "Total of squared misses".
-- **Bars (4, width 56px):** labels `['400+18×s', '300+20×s', '200+22×s', 'flat $1,388']`, values `[425200, 440132, 484928, 1519586]`, displayed value labels `['425k', '440k', '485k', '1,520k']` (bold 12px `#2c3e50` above each bar), colors `[#008300, #d95926, #d55181, #6b7280]`; the first (fitted) bar full opacity, the other three at 0.55 alpha; y scale max 1,600,000; padding top 42 / bottom 60 / left 56 / right 14; axis lines `#999`; bar labels 12px `#6b7280` under each bar.
+- **Bars (4, width 40px):** labels `['400+18×s', '300+20×s', '200+22×s', 'flat line']` with the fourth carrying a second line "$1,388" 15px lower, values `[425200, 440132, 484928, 1519586]`, displayed value labels `['425k', '440k', '485k', '1,520k']` (bold 12px `#2c3e50` above each bar), colors `[#008300, #d95926, #d55181, #6b7280]`; the first (fitted) bar full opacity, the other three at 0.55 alpha; y scale max 1,600,000; padding top 42 / bottom 60 / left 46 / right 12; axis lines `#999`; bar labels 12px `#6b7280` under each bar.
 - **Caption (bold 13px green `#008300`, bottom center):** "smallest total wins — that is the fit".
 
 ## Slope and intercept in plain words
@@ -90,7 +92,7 @@ Fitted line extended to the y-axis showing intercept and a slope triangle.
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorial topic page (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). h1 + `.subtitle`, then three `.card-section` blocks each with an `<h2>` (bottom border `2px solid #2980b9`) and a `table.layout`. Sections 1 and 3 use two columns: `.text-col` 50% / `.viz-col` 50%. Section 2 uses three columns: `.text-col3` 38% / two `.viz-col3` at 31% each (canvases c2a 420×300 and c2b 400×300, cells centered).
+- **Template/layout:** tutorial topic page (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). h1 + `.subtitle`, then three `.card-section` blocks each with an `<h2>` (bottom border `2px solid #2980b9`) and a `table.layout`. All three sections use two columns: `.text-col` 50% / `.viz-col` 50%. Section 2 places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure per section:** `.tags` row of colored pill spans (`.tag.blue` bg rgba(26,82,118,0.12) text `#1a5276`; `.tag.green` bg rgba(39,174,96,0.15) text `#27ae60`; `.tag.red` bg rgba(231,76,60,0.12) text `#e74c3c`; `.tag.orange` bg rgba(230,126,34,0.15) text `#e67e22`; 0.72rem, weight 600, radius 10px), then a `<ul>` of one-line bullets each opening with `<b>` in `#1a5276`, an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (bg `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with bottom border `2px solid #2980b9`; `.subtitle` `#666` 0.95rem; table cells padding 12px, no borders; canvases `width:100%` with border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

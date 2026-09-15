@@ -1,6 +1,6 @@
 # Slowly Changing Data
 
-**Page type:** detail page (tutorial page: card-sections, each with a two-column layout table — text left 45% with tag pills / bullets / example / key-point, canvas right 55%; section 3 uses a 3-column layout with two canvases)
+**Page type:** detail page (tutorial page: card-sections, each with a two-column layout table — text left 50% with tag pills / bullets / example / key-point, canvas right 50%)
 **HTML title tag:** Slowly Changing Data
 
 **Subtitle:** Customers move, prices change, categories get renamed — if you overwrite the old value, every old report quietly changes with it. Keeping dated history lets each report show what was true back then.
@@ -54,7 +54,7 @@ Rendered SCD Type 2 dimension table with as-of join arrows from two order boxes.
 - **Table** (at x=175, width 480, rows 34px): header cells fill `#eef3f8` with `#1a5276` border and bold 12px labels "city" (100px), "effective_from" (135px), "effective_to" (135px), "current" (110px). Data rows (white fill, 1.5px border in row color, city name bold in row color):
   - Row 1 (blue `#2a78d6`): Austin | 2023-01-10 | 2025-06-30 | N
   - Row 2 (aqua `#199e70`): Denver | 2025-07-01 | 9999-12-31 | Y
-- **Order boxes** (180×30, fill `#f8f9fa`, 1.5px stroke in matching row color, bold 12px text, at left): "order  Mar 15  $40" (y≈200, blue) and "order  Aug 9   $50" (y≈250, aqua); each with a curved colored arrow to its matching dimension row.
+- **Order boxes** (180×30, fill `#f8f9fa`, 1.5px stroke in matching row color, bold 12px text, at left): "order Mar 15 $40" (y≈200, blue) and "order Aug 9 $50" (y≈250, aqua); each with a curved colored arrow to its matching dimension row.
 - **Annotations:** bold 13px orange (`#d95926`) centered at y=216: "join: order_date BETWEEN effective_from AND effective_to"; bold 12px `#1a5276` centered at y=286: "result: Austin gets $40 + $60 = $100, Denver gets $50 + $30 = $80 — forever".
 
 ## Why the June Report No Longer Matches the December Re-Run
@@ -71,21 +71,23 @@ Tags: `where it's used` (blue), `what goes wrong` (red)
 
 **Key point:** If a re-run of an old report can change, you don't have history — you have only the present, retroactively applied.
 
-### Visualization (canvas `c3a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×300)
 
 Two-bar chart: the same query drifting under a Type 1 store.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Type 1 store: the report drifts"; sub-line 12px `#6b7280`: "Maya's H1 spend attributed to Austin".
-- **Bars:** "run in June" = $100 (blue `#2a78d6`) and "re-run in Dec" = $0 (red `#e74c3c`, drawn as a 2px stub); 90px wide, fill at 55% alpha with 2px stroke; value labels "$100" / "$0" bold 13px in bar color; run labels 12px `#2c3e50` below; scale max 120, L-shaped `#6b7280` axis.
-- **Annotations:** bold 13px red centered at y=272: "same query, $100 vanished"; italic 11px `#6b7280` at y=290: "illustrative amounts from the running example".
+- **Bars:** "run in June" = $100 (blue `#2a78d6`) and "re-run in Dec" = $0 (red `#e74c3c`, drawn as a 2px stub); 66px wide, fill at 55% alpha with 2px stroke; value labels "$100" / "$0" bold 13px in bar color; run labels 12px `#2c3e50` below; scale max 120, L-shaped `#6b7280` axis.
+- **Annotations:** bold 13px red centered at y=272: "same query, $100 vanished"; italic 12px `#6b7280` at y=290: "illustrative amounts from the example".
 
-### Visualization (canvas `c3b`, 400×300)
+### Visualization (canvas `c3b`, 310×300)
 
 Two-bar chart: the same query holding steady under a Type 2 store.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Type 2 store: the report holds"; sub-line 12px `#6b7280`: "Maya's H1 spend attributed to Austin".
-- **Bars:** "run in June" = $100 and "re-run in Dec" = $100, both green `#008300`, 90px wide, fill at 50% alpha with 2px stroke; value labels "$100" bold 13px green; scale max 120.
-- **Annotations:** bold 13px green centered at y=272: "history rows make old answers stable"; italic 11px `#6b7280` at y=290: "the December run reads the closed Austin row".
+- **Bars:** "run in June" = $100 and "re-run in Dec" = $100, both green `#008300`, 66px wide, fill at 50% alpha with 2px stroke; value labels "$100" bold 13px green; scale max 120.
+- **Annotations:** bold 13px green centered at y=272: "history rows make old answers stable"; italic 12px `#6b7280` at y=290: "the Dec run reads the closed Austin row".
 
 ## Type 1, 2, 3 — and Which Changes Deserve History
 
@@ -115,7 +117,7 @@ Three side-by-side panels comparing SCD Types 1, 2, 3.
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + a layout table. Sections 1, 2, 4 use `table.layout` (`td.text-col` 45% / `td.viz-col` 55%); section 3 uses `table.layout3` (text 38%, two viz cells 31% each holding canvases `c3a` 420×300 and `c3b` 400×300). Text cell order: `.tags` pill row, `<ul>` bullets (each starting with `<b>bold term</b>` in `#1a5276`), italic `.example`, `.key-point` callout.
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + a layout table. Every section uses `table.layout` (`td.text-col` 50% / `td.viz-col` 50%); One section places canvases `c3a`/`c3b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Text cell order: `.tags` pill row, `<ul>` bullets (each starting with `<b>bold term</b>` in `#1a5276`), italic `.example`, `.key-point` callout.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; ul 0.92rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px; blue = bg `rgba(26,82,118,0.12)` / `#1a5276`, green = `rgba(39,174,96,0.15)` / `#27ae60`, red = `rgba(231,76,60,0.12)` / `#e74c3c`, orange = `rgba(230,126,34,0.15)` / `#e67e22`.
 - **Key-point callout:** background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem.

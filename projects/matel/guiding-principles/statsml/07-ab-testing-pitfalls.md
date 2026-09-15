@@ -1,6 +1,6 @@
 # A/B Testing: Tricks, Pitfalls & Malpractice
 
-**Page type:** grid page (card navigation grid, 3 columns)
+**Page type:** grid page (card navigation grid, 4 columns)
 **HTML title tag:** A/B Testing: Tricks, Pitfalls & Malpractice
 
 **Subtitle:** The most abused tool in data-driven decision making. Every org "does A/B testing." Almost none do it correctly. The complete catalog of what goes wrong — accidentally and deliberately.
@@ -53,7 +53,7 @@ Each card links to a detail page under `ab-testing/`. The card shows a colored u
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, one `.philosophy` callout, then one `.grid` of `.card` anchors.
-- **Layout:** `.grid` is CSS grid, `repeat(3, 1fr)`, 16px gap; responsive: 2 columns below 900px, 1 column below 500px.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 16px gap; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="card" href="...">` containing `<div class="card-label" style="color:CATEGORY_COLOR">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`.
 - **Category label colors:** STATISTICAL and MINDSET `#e74c3c`; DESIGN and POWER `#e67e22`; DELIBERATE `#8e44ad`; ORG and CONFOUND `#555`.

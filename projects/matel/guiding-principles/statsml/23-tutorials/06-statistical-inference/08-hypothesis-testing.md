@@ -1,6 +1,6 @@
 # Hypothesis Testing
 
-**Page type:** detail page (tutorial layout: `.card-section` blocks; first section uses a 3-column row — text 38% + two 31% canvases — remaining sections text 50% / canvas 50%)
+**Page type:** detail page (tutorial layout: `.card-section` blocks)
 **HTML title tag:** Hypothesis Testing
 
 **Subtitle:** Assume nothing unusual is going on, then ask one question: could plain luck explain what I'm seeing? A coin flipped 100 times carries the whole idea.
@@ -19,24 +19,26 @@ Tags: `core idea` (blue), `courtroom logic` (orange)
 
 **Hypothesis testing:** assume the boring explanation (a fair coin), then measure how badly the data clashes with it.
 
-### Visualization (canvas `c1a`, 350×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c1a`, 310×300)
 
 Two-bar chart of the observed flip result against the fair-coin expectation.
 
 - **Title (bold 15px, `#1a5276`, top center):** "The Evidence: 100 Flips".
-- **Bars:** "heads" = 61 in `#2a78d6` and "tails" = 39 in `#d95926`, both at 75% alpha; bar width 90, gap 60, centered; baseline y=240, y scale max 70 over 165px. Value labels bold 14px above bars; category labels 13px below; gray `#999` baseline.
+- **Bars:** "heads" = 61 in `#2a78d6` and "tails" = 39 in `#d95926`, both at 75% alpha; bar width 70, gap 40, left edge x=30; baseline y=240, y scale max 70 over 165px. Value labels bold 14px above bars; category labels 13px below; gray `#999` baseline.
 - **Expected-50 line:** dashed `#6b7280` horizontal (width 1.5, dash 5/4) at the 50 level, two-line label at right: "fair coin" / "expects 50".
-- **Annotation (bold violet `#4a3aa7`, bottom center):** "11 heads above expected — luck or bias?".
+- **Annotation (bold violet `#4a3aa7`, bottom center, two lines):** "11 heads above expected" / "— luck or bias?".
 
-### Visualization (canvas `c1b`, 350×300)
+### Visualization (canvas `c1b`, 310×300)
 
 Vertical three-step flow diagram of the courtroom logic.
 
 - **Title (bold 15px, `#1a5276`, top center):** "The Courtroom Logic".
-- **Boxes** (x=45, width = canvas−90, height 48, fill `#f8f9fa`, colored 2px border; bold 13px main line in `#1a5276`, 12px muted sub-line):
-  1. y=48, border `#2a78d6`: "1. Presume innocence" / "assume the coin is fair"
-  2. y=118, border `#c98500`: "2. Weigh the evidence" / "how surprising is 61 if fair?"
-  3. y=188, border `#008300`: "3. Verdict" / 'rare under "fair"? reject "fair"'
+- **Boxes** (x=20, width = canvas−40, height 48, fill `#f8f9fa`, colored 2px border; bold 13px main line in `#1a5276`, 12px muted sub-line):
+ 1. y=48, border `#2a78d6`: "1. Presume innocence" / "assume the coin is fair"
+ 2. y=118, border `#c98500`: "2. Weigh the evidence" / "how surprising is 61 if fair?"
+ 3. y=188, border `#008300`: "3. Verdict" / 'rare under "fair"? reject "fair"'
 - **Connectors:** gray `#6b7280` vertical arrows (line width 2 + filled triangle heads) between the boxes.
 - **Footer:** bold green `#008300`: "the data must overturn the presumption"; muted 12px below: "the coin never has to prove it is fair".
 
@@ -119,7 +121,7 @@ Two overlapping pmf curves (fair vs 55%-biased coin) with the "biased" verdict c
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. h1 (2rem, `#1a5276`, 2px `#2980b9` bottom border) + `.subtitle` (`#666`, 0.95rem), then four `.card-section` blocks, each `<h2>` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) + `table.layout`. Section 1 uses the 3-column variant: `<td class="text-col3">` (38%) + two `<td class="viz-col3">` (31% each, canvases 350×300). Sections 2–4 use `<td class="text-col">` (50%) + `<td class="viz-col">` (50%, canvas 720×300). Left cell: `.tags` pill row, `<ul>` bullets (each starting with `<b>` term in `#1a5276`), one italic `.example`, one `.key-point` callout.
+- **Layout:** tutorial detail page. h1 (2rem, `#1a5276`, 2px `#2980b9` bottom border) + `.subtitle` (`#666`, 0.95rem), then four `.card-section` blocks, each `<h2>` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) + `table.layout`. Every section uses `<td class="text-col">` (50%) + `<td class="viz-col">` (50%); sections 2–4 hold one 720×300 canvas. One section places canvases `c1a`/`c1b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Left cell: `.tags` pill row, `<ul>` bullets (each starting with `<b>` term in `#1a5276`), one italic `.example`, one `.key-point` callout.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. Bullets 0.92rem; `.example` italic `#555` 0.9rem; `.key-point` background `#f8f9fa`, left border 3px solid `#e74c3c` (red on this page), padding 8px 12px, 0.9rem.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px. Colors — blue: bg `rgba(26,82,118,0.12)` / `#1a5276`; green: bg `rgba(39,174,96,0.15)` / `#27ae60`; red: bg `rgba(231,76,60,0.12)` / `#e74c3c`; orange: bg `rgba(230,126,34,0.15)` / `#e67e22`.
 - **Canvas:** intrinsic width/height attributes as given per chart (setup helper reads the attributes), CSS `width:100%`, 1px `#e0e0e0` border, radius 4px; shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

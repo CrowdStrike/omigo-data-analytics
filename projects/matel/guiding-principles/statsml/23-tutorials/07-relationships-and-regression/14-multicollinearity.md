@@ -1,6 +1,6 @@
 # Multicollinearity
 
-**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%; one section uses a 3-column 38/31/31 layout)
+**Page type:** detail page (tutorial: card-sections, each a two-column layout table — text left 50%, canvas right 50%)
 **HTML title tag:** Multicollinearity
 
 **Subtitle:** When two inputs carry the same signal, the model can't split credit between them — coefficients go haywire while predictions stay fine
@@ -43,30 +43,30 @@ Scatter plot — dollars vs euros, 10 weeks on a straight line.
 
 **Key point:** With duplicated inputs the data cannot pick one coefficient pair — many stories fit equally well.
 
-This section uses the 3-column layout (text 38%, two canvases 31% each).
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Grouped bar chart of coefficient pairs for the three fits (bars extend above/below a zero line).
 
 - **Title (bold 15px, ink, top center):** "Three coefficient stories"
-- **Groups (bar width 40px, in-group gap 10px), dollar coef = blue `#2a78d6`, euro coef = violet `#4a3aa7`:**
+- **Groups (bar width 28px, in-group gap 6px), dollar coef = blue `#2a78d6`, euro coef = violet `#4a3aa7`:**
   - "Fit 1": dollars 2.0, euros 0
   - "Fit 2": dollars 0, euros 2.22
   - "Fit 3": dollars 12, euros −11.1
-- **Value labels:** bold 11px numbers above positive bars / below negative bars
-- **Axes:** y from −14 to +14, gridlines and muted labels at −12, −6, 0, 6, 12; solid gray zero line (`#999`, width 1.5); padding: left 55, top 45, bottom 65
+- **Value labels:** bold 12px numbers above positive bars / below negative bars
+- **Axes:** y from −14 to +14, gridlines and muted labels at −12, −6, 0, 6, 12; solid gray zero line (`#999`, width 1.5); padding: left 46, right 12, top 45, bottom 65
 - **Legend (top left, 11px squares):** blue "dollar coef", violet "euro coef"
 - **Caption (bold 13px magenta `#d55181`, bottom center):** "wildly different stories"
 
-### Visualization (canvas `c2b`, 420×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Three identical bars — same prediction from all fits.
 
 - **Title (bold 15px, ink, top center):** "Predicted sales at $10k spend"
-- **Bars (width 80px, all aqua `#199e70`, all value 70):** labels "Fit 1" / "Fit 2" / "Fit 3" with muted 11px sublabels "50 + 20", "50 + 20", "50 + 120 − 100"
+- **Bars (width 56px, all aqua `#199e70`, all value 70):** labels "Fit 1" / "Fit 2" / "Fit 3" with muted 12px sublabels "50 + 20", "50 + 20", "50 + 120" over a second line "− 100"
 - **Value labels:** bold 13px "70" above each bar
-- **Axes:** y 0 to 90, gridlines and muted labels every 30; padding: left 55, top 45, bottom 65
+- **Axes:** y 0 to 90, gridlines and muted labels every 30; padding: left 46, right 12, top 45, bottom 78
 - **Caption (bold 13px green `#008300`, bottom center):** "identical predictions, every time"
 
 ## Coefficients Go Haywire, Predictions Stay Calm
@@ -124,7 +124,7 @@ Two-panel before/after line chart split by vertical dashed divider (`#bdc3c7`, d
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). Section 2 uses `table.layout.layout3` with `.text-col3` 38% and two `.viz-col3` cells at 31% each holding canvases `c2a`/`c2b`.
+- **Template/layout:** tutorials topic-page skeleton. `<h1>` (no index number) with 2px bottom border `#2980b9`, `.subtitle` paragraph, then four `.card-section` blocks each with an `<h2>` (1.3rem, `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout` (one `<tr>`: `.text-col` 50% / `.viz-col` 50%). One section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure:** `.tags` row of pill spans first (`.tag.blue` rgba(26,82,118,0.12)/#1a5276, `.tag.green` rgba(39,174,96,0.15)/#27ae60, `.tag.red` rgba(231,76,60,0.12)/#e74c3c, `.tag.orange` rgba(230,126,34,0.15)/#e67e22; 0.72rem, 600 weight, 2px 10px padding, radius 10px), then a `<ul>` of one-line bullets each opening with `<b>` (bold terms colored `#1a5276`), an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) beginning with `<strong>Key point:</strong>`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; canvases `width:100%`, 1px solid `#e0e0e0` border, 4px radius; ul 0.92rem.
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

@@ -1,6 +1,6 @@
 # Schemas & Contracts
 
-**Page type:** detail page (tutorial page: card-sections, each with a two-column layout table — text left 45% with tag pills / bullets / example / key-point, canvas right 55%; section 2 uses a 3-column layout with two canvases)
+**Page type:** detail page (tutorial page: card-sections, each with a two-column layout table — text left 50% with tag pills / bullets / example / key-point, canvas right 50%)
 **HTML title tag:** Schemas & Contracts
 
 **Subtitle:** A schema is a promise between teams about what the data looks like — a written contract plus a check catches a broken promise at the border, not in the CEO's dashboard
@@ -47,25 +47,28 @@ Tags: `worked example` (green), `common mistake` (red)
 
 **Key point:** The money never disappeared — every dollar is still in the events, under `total`. Only the promise about the name broke.
 
-### Visualization (canvas `c2a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c2a`, 310×300)
 
 Two JSON record cards, before and after the rename.
 
-- **Title (bold 15px, `#1a5276`, top center):** "The Same Kind of Order, Two Days Apart".
-- **Record boxes:** 360×96, fill `#f8f9fa`, 2px stroke in the title color, monospace 13px body text (`#2c3e50`), highlighted line bold in the title color:
-  - Box 1 (green `#008300`), caption above: "Monday (12 orders like this, $482 total)"; lines `{ "order_id": 1841,` / `  "amount": 25.00,` (highlighted) / `  "ts": "…" }`.
-  - Box 2 (orange `#d95926`), caption: "Wednesday (after the deploy)"; lines `{ "order_id": 1907,` / `  "total": 25.00,` (highlighted) / `  "ts": "…" }`.
-- **Annotation between the boxes (bold 12px `#e74c3c`, centered):** "the report still asks for \"amount\" → nothing back".
+- **Title (bold 15px, `#1a5276`, top center):** "The Same Order, Two Days Apart".
+- **Record boxes:** 282×84, fill `#f8f9fa`, 2px stroke in the title color, monospace 13px body text (`#2c3e50`), highlighted line bold in the title color:
+  - Box 1 (green `#008300`), caption above: "Monday (12 such orders, $482)"; lines `{ "order_id": 1841,` / ` "amount": 25.00,` (highlighted) / ` "ts": "…" }`.
+  - Box 2 (orange `#d95926`), caption: "Wednesday (after the deploy)"; lines `{ "order_id": 1907,` / ` "total": 25.00,` (highlighted) / ` "ts": "…" }`.
+- **Annotation between the boxes (bold 12px `#e74c3c`, centered, two lines):** "the report still asks for \"amount\"" / "→ nothing comes back".
 
-### Visualization (canvas `c2b`, 400×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Bar chart of daily dashboard revenue with the silent $0 days.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Dashboard Revenue by Day".
 - **Data:** days ["Mon", "Tue", "Wed", "Thu"], values `[482, 505, 0, 0]`; y scale max 550.
-- **Bars:** 56px wide; non-zero bars fill `rgba(42,120,214,0.45)` with 1.5px `#2a78d6` stroke; zero bars drawn as a 3px red (`#e74c3c`) stub. Value labels "$482", "$505", "$0", "$0" bold 12px above bars (red for zeros); day labels 12px below.
-- **Axes:** L-shaped axis in `#6b7280`, left padding 55, bottom padding 46.
-- **Annotations:** bold 13px red at y=46: "$0 drawn silently — no error, no alert"; italic 11px `#6b7280` bottom center: "deploy happened Tuesday night".
+- **Bars:** 40px wide; non-zero bars fill `rgba(42,120,214,0.45)` with 1.5px `#2a78d6` stroke; zero bars drawn as a 3px red (`#e74c3c`) stub. Value labels "$482", "$505", "$0", "$0" bold 12px above bars (red for zeros); day labels 12px below.
+- **Axes:** L-shaped axis in `#6b7280`, left padding 46, bottom padding 46.
+- **Annotations:** bold 13px red at y=46: "silent $0 — no error, no alert"; italic 12px `#6b7280` bottom center: "deploy happened Tuesday night".
+
 
 ## Catch It at the Border, Not in the Dashboard
 
@@ -120,7 +123,7 @@ Bar chart of the ~100x unit change plus a check-result panel.
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + a layout table. Sections 1, 3, 4 use `table.layout` (`td.text-col` 45% / `td.viz-col` 55%); section 2 uses `table.layout3` (text 38%, two viz cells 31% each holding canvases `c2a` 420×300 and `c2b` 400×300). Text cell order: `.tags` pill row, `<ul>` bullets (each starting with `<b>bold term</b>` in `#1a5276`; inline `<code>` for field names), italic `.example`, `.key-point` callout.
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) + a layout table. Every section uses `table.layout` (`td.text-col` 50% / `td.viz-col` 50%); section 2 places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Text cell order: `.tags` pill row, `<ul>` bullets (each starting with `<b>bold term</b>` in `#1a5276`; inline `<code>` for field names), italic `.example`, `.key-point` callout.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; ul 0.92rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem bold, padding 2px 10px, radius 10px; blue = bg `rgba(26,82,118,0.12)` / `#1a5276`, green = `rgba(39,174,96,0.15)` / `#27ae60`, red = `rgba(231,76,60,0.12)` / `#e74c3c`, orange = `rgba(230,126,34,0.15)` / `#e67e22`.
 - **Key-point callout:** background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem.

@@ -1,6 +1,6 @@
 # Cost, Latency, Quality
 
-**Page type:** detail page (tutorial layout: `.card-section` blocks with h2 + layout table; first section is 3-column 38/31/31 text + two canvases, remaining sections two-column text 50% / canvas 50%)
+**Page type:** detail page (tutorial layout: `.card-section` blocks with h2 + layout table)
 **HTML title tag:** Cost, Latency, Quality
 
 **Subtitle:** Every model choice trades three things — money, speed, and how good the answers are — and no single model wins all three
@@ -19,22 +19,24 @@
 
 **Key point:** "Which model is best?" is the wrong question. Ask "best at what price, at what speed, for this task?"
 
-### Visualization (canvas `c1a`, 420×340)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c1a`, 310×340)
 
 Two-bar vertical chart of cost per 1,000 calls (drawn by a shared `twoBars` helper).
 
 - **Title (bold 15px, `#1a5276`, top center):** "Cost per 1,000 calls".
 - **Data:** "small model" $2, "large model" $40; value labels "$2" and "$40" bold 13px above the bars.
-- **Bars:** 100px wide, small model aqua `#199e70`, large model violet `#4a3aa7`; scale max 44; model names 12px below baseline.
-- **Axes:** y ticks at $0, $20, $40 (formatted "$0" etc.), gridlines `#e5e9ef`; padding top 56, bottom 52, left 62, right 20.
+- **Bars:** 74px wide, small model aqua `#199e70`, large model violet `#4a3aa7`; scale max 44; model names 12px below baseline.
+- **Axes:** y ticks at $0, $20, $40 (formatted "$0" etc.), gridlines `#e5e9ef`; padding top 56, bottom 52, left 46, right 12.
 - **Note (bold 13px violet, bottom center):** "20x the price".
 
-### Visualization (canvas `c1b`, 400×340)
+### Visualization (canvas `c1b`, 310×340)
 
 Two stacked panels of horizontal bars: latency (top) and quality (bottom) for the two models.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Response time & quality".
-- **Top panel:** heading bold 12px mute `#6b7280` "median response time"; bars start at x=120, width scaled to a 0–5s range: "small" 0.8s (aqua `#199e70`), "large" 4.5s (violet `#4a3aa7`); 24px tall, rows at y=66 and y=104; names right-aligned left of bars, bold 12px value labels ("0.8s", "4.5s") right of bars.
+- **Top panel:** heading bold 12px mute `#6b7280` "median response time"; bars start at x=46, width scaled to a 0–5s range: "small" 0.8s (aqua `#199e70`), "large" 4.5s (violet `#4a3aa7`); 24px tall, rows at y=66 and y=104; names right-aligned left of bars, bold 12px value labels ("0.8s", "4.5s") right of bars.
 - **Bottom panel:** heading "quality (golden-set pass rate)"; bars scaled 0–100%: "small" 78% (aqua), "large" 92% (violet); rows at y=190 and y=228; value labels "78%", "92%".
 - **Note (bold 13px violet, bottom center):** "+14 quality points, 5.6x slower".
 
@@ -114,7 +116,7 @@ Horizontal latency-budget bars per use case with vertical model-speed marker lin
 ## Regeneration instructions
 
 - **Template:** tutorials topic-page layout (per `tutorials/CLAUDE.md`). Body: h1 with 2px `#2980b9` bottom border, `.subtitle`, then four `.card-section` blocks, each `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout`.
-- **Column widths:** section 1 uses the 3-column layout — `td.text-col3` (38%) + two `td.viz-col3` (31% each) holding canvases `c1a` (420×340) and `c1b` (400×340); sections 2–4 use `td.text-col` (50%) + `td.viz-col` (50%) with 720×300 canvases.
+- **Column widths:** every section uses `td.text-col` (50%) + `td.viz-col` (50%); sections 2–4 hold one 720×300 canvas. One section places canvases `c1a`/`c1b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` pill row, `<ul>` of one-line bullets each opening `<li><b>term</b> — ...`, one italic `.example` paragraph, one `.key-point` callout (`background #f8f9fa`, left border 3px `#e74c3c`, `<strong>` label).
 - **Tag pill styles:** 0.72rem bold, 2px 10px padding, 10px radius; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `li b` in `#1a5276`; ul 0.92rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.

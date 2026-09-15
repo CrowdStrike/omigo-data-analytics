@@ -1,6 +1,6 @@
 # Applied Game Theory & Behavioral Design
 
-**Page type:** grid page (2-column card grid, philosophy callouts above and below)
+**Page type:** grid page (4-column card grid, philosophy callouts above and below)
 **HTML title tag:** Applied Game Theory & Behavioral Design
 
 **Subtitle:** How math, statistics, game theory, and psychology are applied in modern product design — from pricing structures to engagement mechanics to auction systems.
@@ -31,7 +31,7 @@ Each card links to a detail page under `applied-game-theory-behavioral-design/`.
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, top `.philosophy` callout, one `.grid` of `.card` anchors, bottom `.philosophy` callout.
-- **Layout:** `.grid` is CSS grid, `repeat(2, 1fr)`, 20px gap, margin `20px 0 30px`; responsive: 1 column below 700px.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 20px gap, margin `20px 0 30px`; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="card" href="...">` containing `<div class="card-label" style="color:HEX">CATEGORY</div>` (hex given per row in the Category column), `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`. No mental-model line on this page.
 - **Card style:** background `#f8fafb`, border `1px solid #e0e0e0`, radius 8px, padding 20px 24px; hover: shadow `0 4px 12px rgba(0,0,0,0.1)`, border `#2980b9`. Label 0.72em bold uppercase letter-spacing 0.5px, h3 `#1a5276` 1.05em, description 0.85em `#555` margin 0.

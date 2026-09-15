@@ -1,6 +1,6 @@
 # Classification vs Regression
 
-**Page type:** detail page (tutorial: 4 card-sections; sections 1, 3, 4 two-column table.layout 45/55, section 2 three-column 38/31/31 with two canvases)
+**Page type:** detail page (tutorial: 4 card-sections; each two-column table.layout 50/50 — text left, canvas right)
 **HTML title tag:** Classification vs Regression
 
 **Subtitle:** Predicting WHETHER a loan defaults gives a category; predicting HOW MUCH is lost gives a number — different outputs, different losses, different metrics
@@ -43,23 +43,25 @@ Tags: `worked example` (green)
 
 **Key point:** Classification is graded on right vs wrong calls; regression is graded on how FAR OFF the numbers are.
 
-### Visualization (canvas `c2a`, 420×340)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c2a`, 310×340)
 
 2×2 confusion-count grid for the classifier.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Classifier: right vs wrong calls"
-- **Grid:** 2×2 cells 92px square at (130, 78); column headers "predicted: yes" / "predicted: no" (bold 12px `#444`); rotated row headers "actual: yes" / "actual: no" on the left.
+- **Grid:** 2×2 cells 104px square at (51, 70); column headers "predicted: yes" / "predicted: no" (bold 12px `#444`); rotated row headers "actual: yes" / "actual: no" on the left.
 - **Cells:** top-left "2 hits" / "#2, #5" green `#008300` on `rgba(0,131,0,0.14)`; top-right "1 miss" / "#9" orange `#d95926` on `rgba(217,89,38,0.16)`; bottom-left "1 false alarm" / "#7" orange; bottom-right "6 correct" / "the rest" green. Cell main text bold 13px in cell color, sub text 12px `#555`.
 - **Summary (bold 14px green, centered):** "accuracy: 8 of 10 = 80%"
 - **Caption (12px `#444`, bottom center):** "every loan is simply right or wrong — no sizes"
 
-### Visualization (canvas `c2b`, 400×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Grouped bar chart: predicted vs actual loss for the three defaulted loans.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Regressor: how far off in $"
-- **Data:** loans #2, #5, #9; actual `[2000, 5000, 8000]` in aqua `#199e70`; predicted `[3000, 4000, 6000]` in translucent violet `rgba(74,58,167,0.55)`. Scale max $9,000; padding top 50 / bottom 70 / left 60 / right 16; bars 40px wide, actual left of predicted in each group.
-- **Labels:** bold 11px value labels ("$2k" style) above each bar in the bar's color; bold 12px "loan #N" below the baseline; under each group a bold 11px magenta `#d55181` miss label: "off $1k", "off $1k", "off $2k".
+- **Data:** loans #2, #5, #9; actual `[2000, 5000, 8000]` in aqua `#199e70`; predicted `[3000, 4000, 6000]` in translucent violet `rgba(74,58,167,0.55)`. Scale max $9,000; padding top 50 / bottom 70 / left 46 / right 12; bars 30px wide, actual left of predicted in each group.
+- **Labels:** bold 12px value labels ("$2k" style) above each bar in the bar's color; bold 12px "loan #N" below the baseline; under each group a bold 12px magenta `#d55181` miss label: "off $1k", "off $1k", "off $2k".
 - **Legend (top left):** aqua swatch "actual loss"; violet swatch "predicted".
 - **Bottom caption (bold 13px magenta, centered):** "average miss (MAE) = $1,333"
 
@@ -114,10 +116,10 @@ Number line with shaded bins showing information lost by binning.
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page skeleton (most-powerful-signals compact style). Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout`; standard rows use `.text-col` (50%) / `.viz-col` (50%); the two-chart row uses `.text-col3` (38%) with two `.viz-col3` cells (31% each).
+- **Template:** tutorials topic-page skeleton (most-powerful-signals compact style). Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px bottom border `#2980b9`) and a `table.layout`; every row uses `.text-col` (50%) / `.viz-col` (50%). One section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column per section:** `.tags` pill row first (0.72rem bold, 10px radius pills — blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`), then a `<ul>` of one-line bullets each opening with `<b>` term in `#1a5276`, then an italic `.example` line (`#555`, 0.9rem), then a `.key-point` callout (background `#f8f9fa`, left border 3px `#e74c3c`, 0.9rem).
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px bottom border `#2980b9`; `.subtitle` `#666` 0.95rem. No nav bar, no back/home links.
-- **Canvas:** intrinsic sizes as given per chart (720×300, 420×340, 400×340), CSS `width:100%`, 1px border `#e0e0e0` radius 4px; scaled via `window.devicePixelRatio` in a shared `setup(id)` helper reading width/height attributes (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
+- **Canvas:** intrinsic sizes as given per chart (720×300, 310×340), CSS `width:100%`, 1px border `#e0e0e0` radius 4px; scaled via `window.devicePixelRatio` in a shared `setup(id)` helper reading width/height attributes (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
 - **Chart palette object:** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange.
 - **Data:** shared literal arrays — DEFAULTED `[2, 5, 9]` and LOSSES `[0, 2000, 0, 0, 5000, 0, 0, 0, 8000, 0]` for loans #1–#10; predicted `[3000, 4000, 6000]`; no `Math.random()`.
 - In regenerated HTML, any card links use `.html` extensions.

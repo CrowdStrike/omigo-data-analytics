@@ -1,6 +1,6 @@
 # One Good Deed as Cover: The Offset Nobody Prices
 
-**Page type:** detail page — card-section template (see `05-cognitive-biases/25-familiarity-feels-like-quality.html`)
+**Page type:** detail page — card-section template (see `05-cognitive-biases/25-mere-exposure-effect.html`)
 **HTML title tag:** One Good Deed as Cover — Common Bad Practices
 
 **Subtitle:** One loudly advertised good result is offered as the answer to a pile of quiet bad ones, and the arithmetic of the trade is never actually performed.
@@ -163,7 +163,7 @@ off, and each case's pass count tallied at the right.
 ## Regeneration instructions
 
 - **Template:** the card-section layout copied verbatim from
-  `05-cognitive-biases/25-familiarity-feels-like-quality.html` — the whole `<style>` block, the
+  `05-cognitive-biases/25-mere-exposure-effect.html` — the whole `<style>` block, the
   `setup()` canvas helper, the `lcg()` seeded PRNG, the `P` palette object, the `__charts` array and
   the debounced resize tail, the `table.layout` / `text-col` / `viz-col` 50/50 structure, the `.tags`
   pills, `.key-point` and `.src` conventions.

@@ -1,6 +1,6 @@
 # Recently Added & Miscellaneous
 
-**Page type:** grid page (card navigation grid, 3 columns, cards with topic tag pills)
+**Page type:** grid page (card navigation grid, 4 columns, cards with topic tag pills)
 **HTML title tag:** Recently Added & Miscellaneous
 
 **Subtitle:** Topics that don't fit neatly into a single category — recent additions, cross-cutting themes, and standalone explorations.
@@ -36,7 +36,7 @@ Each card links to a detail page under `recently-added-misc/`. The card shows a 
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, then one `.nav-grid` of `.nav-card` anchors.
-- **Layout:** `.nav-grid` is CSS grid, `repeat(3, 1fr)`, 16px gap, `margin-top: 15px`; responsive: 2 columns below 900px, 1 column below 600px.
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, `margin-top: 15px`; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to the `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a class="nav-card" href="...">` containing `<div class="card-num">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`, and `<div class="topics">` with `<span class="topic-tag">` pills.
 - **Category label colors** (set by a small script mapping `.card-num` text to color): SIGNALS `#e74c3c`; HISTORY `#2980b9`; TRACKING `#27ae60`; DATA COLLECTION `#8e44ad`. Default `.card-num` color `#2980b9`.

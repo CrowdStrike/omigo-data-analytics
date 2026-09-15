@@ -1,6 +1,6 @@
 # Date & Time Features
 
-**Page type:** detail page (tutorial page: h1 + subtitle, 4 `.card-section` blocks each with an h2 and a `table.layout` — sections 1, 2, 4 use text left 50% / canvas right 50%; section 3 uses a 3-column row: text 38% + two canvases 31% each)
+**Page type:** detail page (tutorial page: h1 + subtitle, 4 `.card-section` blocks each with an h2 and a `table.layout` — all sections use text left 50% / canvas right 50%; section 3 holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Date &amp; Time Features
 
 **Subtitle:** One timestamp is a bundle of hidden signals — hour, weekday, month, weekend, tenure — that a model can only use once you unpack them
@@ -76,25 +76,25 @@ Segmented horizontal calendar strip summing the days from signup to order.
 
 **Key point:** Patterns that repeat every day or week only become learnable when the repeating part — hour, weekday — is its own column.
 
-### Visualization (canvas `c3a`, 420×340)
+### Visualization (canvas `c3a`, 310×300)
 
 Bar chart of orders per hour of day with the two rushes highlighted.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Orders per Hour (illustrative)".
-- **Data (24 hourly bars, hours 0–23):** [12, 8, 5, 3, 2, 2, 4, 10, 22, 30, 38, 55, 90, 75, 45, 35, 40, 60, 95, 110, 80, 50, 30, 18]; y scale max 120; padding left 45, right 15, top 45, bottom 55; thin `#999` baseline.
+- **Data (24 hourly bars, hours 0–23):** [12, 8, 5, 3, 2, 2, 4, 10, 22, 30, 38, 55, 90, 75, 45, 35, 40, 60, 95, 110, 80, 50, 30, 18]; y scale max 120; padding left 28, right 12, top 45, bottom 55; thin `#999` baseline.
 - **Bar colors:** hours 12 and 19 orange `#d95926` at 0.85 alpha; all others blue `#2a78d6` at 0.45 alpha.
 - **X ticks:** hour labels every 4 hours (0, 4, 8, 12, 16, 20) in 12px `#444`; axis label "hour of day" below.
 - **Annotations (bold 12px orange):** "lunch 12h: 90" above the hour-12 bar; "dinner 19h: 110" near the hour-19 bar.
 - **Caption (bold 13px blue `#2a78d6`, bottom center):** "two rushes, every single day".
 
-### Visualization (canvas `c3b`, 400×340)
+### Visualization (canvas `c3b`, 310×300)
 
 Bar chart of orders per weekday with the weekend highlighted.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Orders per Day (illustrative)".
-- **Data:** Mon 850, Tue 820, Wed 830, Thu 860, Fri 1180, Sat 1250, Sun 1180; y scale max 1400; padding left 45, right 15, top 45, bottom 55; thin `#999` baseline.
+- **Data:** Mon 850, Tue 820, Wed 830, Thu 860, Fri 1180, Sat 1250, Sun 1180; y scale max 1400; padding left 16, right 12, top 45, bottom 55; thin `#999` baseline.
 - **Bar colors (0.6 alpha):** Fri–Sun green `#008300`; Mon–Thu blue `#2a78d6`. Bold 12px value labels above each bar in the bar color; 12px `#444` weekday labels below.
-- **Caption (bold 13px green, bottom center):** "Fri–Sun run ~40% above Mon–Thu".
+- **Caption (bold 12px green, bottom center, two stacked lines):** "Fri–Sun run ~40%" / "above Mon–Thu".
 
 ## Hour 23 Sits Next to Hour 0
 
@@ -122,7 +122,7 @@ Split panel: hour as a number line (left) vs hour on a clock circle (right), div
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. `<h1>` + `.subtitle` paragraph, then four `.card-section` divs, each an `<h2>` (bottom border `2px solid #2980b9`) followed by a `table.layout`. Sections 1, 2, 4 use `td.text-col` (50%) + `td.viz-col` (50%) with one 720×300 canvas; section 3 uses `td.text-col3` (38%) + two `td.viz-col3` (31% each) holding canvases c3a (420×340) and c3b (400×340). Left cells hold `.tags` pills, a `<ul>` of bold-term bullets (inline `<code>` for the timestamp literal), an italic `.example` line, and a `.key-point` callout (lead-ins "Key point:" or "Common mistake:").
+- **Layout:** tutorial detail page. `<h1>` + `.subtitle` paragraph, then four `.card-section` divs, each an `<h2>` (bottom border `2px solid #2980b9`) followed by a `table.layout`. Every section uses `td.text-col` (50%) + `td.viz-col` (50%); sections 1, 2, 4 hold one 720×300 canvas, section 3 places canvases `c3a`/`c3b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Left cells hold `.tags` pills, a `<ul>` of bold-term bullets (inline `<code>` for the timestamp literal), an italic `.example` line, and a `.key-point` callout (lead-ins "Key point:" or "Common mistake:").
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `2px solid #2980b9` bottom border; `.subtitle` `#666` 0.95rem; h2 1.3rem `#1a5276`. `ul` 0.92rem; `li b` in `#1a5276`; `li code` ui-monospace on `#f4f6f8`. `.example` italic `#555` 0.9rem. `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. Canvases `width:100%`, border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
 - **Tag pills:** `.tag` inline-block, 0.72rem bold, padding 2px 10px, radius 10px; `.tag.blue` background rgba(26,82,118,0.12) color `#1a5276`; `.tag.green` rgba(39,174,96,0.15) `#27ae60`; `.tag.red` rgba(231,76,60,0.12) `#e74c3c`; `.tag.orange` rgba(230,126,34,0.15) `#e67e22`.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

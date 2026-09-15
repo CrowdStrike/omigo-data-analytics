@@ -1,6 +1,6 @@
 # Simpson's Paradox
 
-**Page type:** detail page (tutorial page: h2 card-sections, each a two-column layout table — text left 50%, canvas right 50%; one section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial page: h2 card-sections, each a two-column layout table — text left 50%, canvas right 50%)
 **HTML title tag:** Simpson's Paradox
 
 **Subtitle:** A treatment can win inside every single group yet lose in the combined total — because the two sides faced different mixes of easy and hard cases
@@ -47,25 +47,27 @@ Grouped bar chart: recovery % for A vs B in three groups (young, older, overall)
 
 **Key point:** The blend of cases, not the treatment, decides the pooled winner here.
 
-### Visualization (canvas `c2a`, 420×340)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c2a`, 310×340)
 
 Stacked bar chart: patient mix per treatment.
 
-- **Title (bold 15px, `#1a5276`, top center):** "Who Got Which Patients"
-- **Axes:** L-shaped axis in `#999`; baseline y=280, chart height 210px mapping 0–100; y labels "0" and "100" in muted gray.
-- **Bars (80px wide):** treatment A at x=110: 80 young (green `#008300`, bottom) + 20 older (orange `#d95926`, top); treatment B at x=250: 20 young + 80 older.
-- **Labels:** white bold 13px inside segments: "80 young" / "20 older" / "20 young" / "80 older"; bold names "treatment A" / "treatment B" below bars.
+- **Title (bold 14px, `#1a5276`, top center):** "Who Got Which Patients"
+- **Axes:** L-shaped axis in `#999`; baseline y=280, chart height 210px mapping 0–100; y labels "0" and "100" in muted gray at x=40.
+- **Bars (60px wide):** treatment A at x=80: 80 young (green `#008300`, bottom) + 20 older (orange `#d95926`, top); treatment B at x=190: 20 young + 80 older.
+- **Labels:** white bold 12px inside segments on two stacked lines — count then "young" / "older"; bold names "treatment A" / "treatment B" below bars.
 - **Annotation (bottom center, bold 12px, orange `#d95926`):** "B got the hard cases"
 
-### Visualization (canvas `c2b`, 420×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Stacked bar chart: recoveries out of 100.
 
-- **Title (bold 15px, `#1a5276`, top center):** "Recoveries out of 100"
+- **Title (bold 14px, `#1a5276`, top center):** "Recoveries out of 100"
 - **Axes:** same layout as c2a (baseline y=280, height 210px, 0–100 scale, "0"/"100" labels).
-- **Bars (80px wide):** treatment A at x=110: 72 young (green `#008300`) + 10 older (orange `#d95926`), total label "82 total"; treatment B at x=250: 19 young + 48 older, total label "67 total". Segment counts in white bold 13px inside; bold total labels above each stack; bold treatment names below.
-- **Legend (left, 12px muted gray):** "green = young, orange = older"
-- **Annotation (bold 12px red `#e74c3c`, centered at x=250 near top):** "82 vs 67: the mix decides"
+- **Bars (60px wide):** treatment A at x=80: 72 young (green `#008300`) + 10 older (orange `#d95926`), total label "82 total"; treatment B at x=190: 19 young + 48 older, total label "67 total". Segment counts in white bold 13px inside; bold total labels above each stack; bold treatment names below.
+- **Legend (bottom center, 12px muted gray):** "green = young, orange = older"
+- **Annotation (bold 12px red `#e74c3c`, centered below the title):** "82 vs 67: the mix decides"
 
 ## The Sicker Patients Went to B
 
@@ -127,10 +129,10 @@ Diverging bar chart: "B minus A" in percentage points for the three views.
 
 ## Regeneration instructions
 
-- **Template:** tutorial detail page (tutorials style, see `tutorials/CLAUDE.md` and reference `most-powerful-signals/07-social-graph-connections.html`). h1 with 2px `#2980b9` bottom border, `.subtitle`, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with `.text-col` (50%) and `.viz-col` (50%); the "Add Up the Table Yourself" section uses `table.layout.layout3` with `.text-col3` (38%) and two `.viz-col3` (31%) cells holding canvases c2a and c2b (420×340 each).
+- **Template:** tutorial detail page (tutorials style, see `tutorials/CLAUDE.md` and reference `most-powerful-signals/07-social-graph-connections.html`). h1 with 2px `#2980b9` bottom border, `.subtitle`, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with `.text-col` (50%) and `.viz-col` (50%); the "Add Up the Table Yourself" section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text cell structure:** `.tags` row of colored pills first, then `<ul>` of one-line bullets each opening with `<b>bold term</b>` (bold terms colored `#1a5276`), one italic `.example` paragraph, one `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, `<strong>` prefix).
 - **Tag pill styles:** 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; bullets 0.92rem; canvases `width:100%` with `1px solid #e0e0e0` border, 4px radius.
 - **Chart palette (JS object P):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Project palette: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
-- **Canvas:** intrinsic sizes per chart (720×300 or 420×340); sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) via a shared `setup(id, W, H)` helper that multiplies width/height and calls `ctx.scale` so drawing stays in logical coordinates. All data is hardcoded literal arrays — no `Math.random()`.
+- **Canvas:** intrinsic sizes per chart (720×300 or 310×340); sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) via a shared `setup(id, W, H)` helper that multiplies width/height and calls `ctx.scale` so drawing stays in logical coordinates. All data is hardcoded literal arrays — no `Math.random()`.
 - No nav bar, no back/home links, no cross-page links. In regenerated HTML any card links would use `.html` extensions.

@@ -127,6 +127,7 @@ Each subfolder has its own `CLAUDE.md` with folder-specific context and pending 
 
 | Folder | Focus |
 |--------|-------|
+| `06-ml-pipeline-pitfalls/` | Two-level stage grids; check if `11-misc` has earned a new category |
 | `07-ab-testing-pitfalls/` | A/B testing pitfalls and methodology |
 | `04-domain-pitfalls/` | Industry-specific data traps |
 | `17-folk-wisdom-fallacies/` | Popular sayings decomposed for hidden fallacies |

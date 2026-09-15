@@ -1,6 +1,6 @@
 # Statistical Paradoxes
 
-**Page type:** grid page (card navigation grid, 3 columns, philosophy callouts before and after the grid)
+**Page type:** grid page (card navigation grid, 4 columns, philosophy callouts before and after the grid)
 **HTML title tag:** Statistical Paradoxes
 
 **Subtitle:** Ways that good data leads a careful person to the wrong answer — each one a different piece of hidden structure that intuition does not account for.
@@ -40,8 +40,8 @@ uppercase category label, a numbered title matching the file index, a one-line d
 
 - **Template:** nav-grid style (`docs/statsml/ui-templates/02-nav-grid`). Single page: h1,
   `.subtitle`, a `.philosophy` callout, one `.grid` of `.card` anchors, a closing `.philosophy`.
-- **Layout:** `.grid` is CSS grid, `repeat(3, 1fr)`, 16px gap, margin `16px 0 30px`; 2 columns
-  below 900px, 1 column below 500px.
+- **Layout:** `.grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin `16px 0 30px`; 3 columns
+  below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Card structure:** `<a class="card">` containing `.card-label` (colored uppercase category),
   `<h3>N. Title</h3>` with the unpadded index matching the filename, a one-line `<p>`, then a
   `.tags` row of `.topic-tag` pills.

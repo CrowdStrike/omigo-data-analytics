@@ -1,6 +1,6 @@
 # Entropy
 
-**Page type:** detail page (tutorial layout: h1 + subtitle, then card-sections each with an h2 and a text/viz table row, 45% text / 55% canvas)
+**Page type:** detail page (tutorial layout: h1 + subtitle, then card-sections each with an h2 and a text/viz table row, 50% text / 50% canvas)
 **HTML title tag:** Entropy
 
 **Subtitle:** A single number for how uncertain you are before you look — the average surprise per outcome, measured in bits
@@ -43,26 +43,26 @@ Tags: `worked example` (green), `rule of thumb` (blue)
 
 **Key point:** Entropy = each outcome's surprise × how often it happens, summed — literally the average surprise.
 
-This section uses the three-column layout (`table.layout.three`: text 38%, two viz columns 31% each) with two side-by-side canvases.
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Bar chart: surprise per outcome for the 90/10 coin.
 
 - **Title:** "Step 1 — Surprise per Outcome"; gray subtitle "90/10 coin: surprise = log₂(1/p)".
 - **Data:** labels `['heads (p = 0.9)', 'tails (p = 0.1)']`, values `[0.15, 3.32]` bits, colors `[#008300 green, #d55181 magenta]`.
-- **Axes:** L-shaped gray axes; y max 3.7; padding top 60, bottom 70, left 56, right 20; bars 110px wide at 28%/72% width; 0.75 alpha fill; bold value labels "0.15 bits" / "3.32 bits" above bars.
-- **Annotations:** bold magenta "rare tails: 22× the surprise" near the tails bar; gray bottom caption "...but how often does each happen?".
+- **Axes:** L-shaped gray axes; y max 3.7; padding top 60, bottom 70, left 46, right 12; bars 82px wide at 28%/72% width; 0.75 alpha fill; bold value labels "0.15 bits" / "3.32 bits" above bars.
+- **Annotations:** bold magenta "rare tails:" / "22× the surprise" on two stacked lines in the open space left of the tall tails bar; gray bottom caption "...but how often does each happen?".
 
-### Visualization (canvas `c2b`, 420×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Bar chart: weighted contributions summing to entropy.
 
-- **Title:** "Step 2 — Weight by Frequency, Add"; gray subtitle "contribution = p × surprise".
+- **Title:** "Step 2 — Weight by Frequency"; gray subtitle "contribution = p × surprise".
 - **Data:** labels `['heads', 'tails', 'entropy']`, sub-captions `['0.9 × 0.15', '0.1 × 3.32', '0.14 + 0.33']`, values `[0.14, 0.33, 0.47]`, colors `[#008300 green, #d55181 magenta, #d95926 orange]`.
 - **Third bar is stacked:** green segment for the heads part (0.14) with magenta segment for the tails part (0.33) on top.
-- **Axes:** y max 0.56; bars 90px wide at 18%/50%/82% width; bold value labels above bars; bold labels + gray sub-captions below.
-- **Annotation:** bold orange "average surprise = 0.47 bits" near the top center.
+- **Axes:** y max 0.56; padding top 60, bottom 70, left 46, right 12; bars 66px wide at 18%/50%/82% width; bold value labels above bars; bold labels + gray sub-captions below.
+- **Annotation:** bold orange "average surprise = 0.47 bits" near the top, left of the tall entropy bar.
 
 ## Where a Data Scientist Meets It: The Churn Curve
 
@@ -113,7 +113,7 @@ Bar chart: biggest surprise vs average surprise for the 90/10 coin.
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorial concept page (tutorials category). h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: left `td.text-col` (45%) and right `td.viz-col` (55%, one canvas). Section 2 uses `table.layout.three` (text 38%, two viz columns 31% each) with two canvases.
+- **Template/layout:** tutorial concept page (tutorials category). h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` gray one-liner, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: left `td.text-col` (50%) and right `td.viz-col` (50%, one canvas). Section 2's `td.viz-col` places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure:** `.tags` pill row first, then a `<ul>` of 5 one-line bullets each opening with `<b>bold term</b>` (bold terms colored `#1a5276`), one italic `.example` line, one `.key-point` callout (`#f8f9fa` background, 3px `#e74c3c` left border).
 - **Tag pills:** 0.72rem, weight 600, padding 2px 10px, radius 10px. Colors: blue `rgba(26,82,118,0.12)`/`#1a5276`; green `rgba(39,174,96,0.15)`/`#27ae60`; red `rgba(231,76,60,0.12)`/`#e74c3c`; orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem; canvases `width:100%` with 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.

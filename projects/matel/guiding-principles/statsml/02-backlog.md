@@ -1,6 +1,6 @@
 # Backlog — Discussion Topics & Future Work
 
-**Page type:** grid page (nav-card grid, auto-fit columns min 300px, cards with topic tags, plus a separate single-column archive grid)
+**Page type:** grid page (nav-card grid, 4 columns, cards with topic tags, plus a separate single-column archive grid)
 **HTML title tag:** Backlog — Discussion Topics & Future Work
 
 **Subtitle:** Unresolved questions, future directions, and discussion topics waiting to be explored.
@@ -100,6 +100,7 @@ Each card links to a detail page under `backlog/`. Each card shows a colored upp
 | 87 | DOMAIN | Digital Theft — What Gets Stolen Online, and How | [02-backlog/87-digital-theft-what-gets-stolen-online-and-how.md](02-backlog/87-digital-theft-what-gets-stolen-online-and-how.md) | A scenario map of online theft — what gets taken, how it happens, and what limits the damage in each case. | stolen passwords, identity theft, leaked code, data breaches |
 | 88 | SYSTEMS | Prompt Engineering as Programming | [02-backlog/88-prompt-engineering-as-programming.md](02-backlog/88-prompt-engineering-as-programming.md) | A prompt is a spec that executes, so it inherits versioning, review, and regression testing — with none of programming's tooling and no compile step. | prompt as spec, versioning, regression tests, prose contracts |
 | 89 | DATA COLLECTION | Long LLM Sessions as a Data Collection Channel | [02-backlog/89-long-llm-sessions-as-a-data-collection-channel.md](02-backlog/89-long-llm-sessions-as-a-data-collection-channel.md) | A long session captures pasted files, internal names, and the reasoning path to a decision — a richer record than any form ever collected. | session transcripts, training consent, retention, secret leakage, idea leakage |
+| 90 | METHODS | Marginal vs Joint Distributions — The Data Cost of Dimensions | [02-backlog/90-marginal-vs-joint-distributions-the-data-cost-of-dimensions.md](02-backlog/90-marginal-vs-joint-distributions-the-data-cost-of-dimensions.md) | One column is cheap to study. Each column you add multiplies the cells you must fill, so the same rows divide into groups that each need their own sample. | marginal vs joint, cell sparsity, multiple testing, partial pooling |
 ## Archive grid
 
 Separate single-column grid (`.archive-grid`) below the main grid, containing one muted archive card:
@@ -113,7 +114,7 @@ Separate single-column grid (`.archive-grid`) below the main grid, containing on
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, `.nav-grid` of `.nav-card` anchors, then `.archive-grid` with the archive card.
-- **Layout:** `.nav-grid` is CSS grid, `repeat(auto-fit, minmax(300px, 1fr))`, 16px gap. `.archive-grid` is CSS grid, single column (`1fr`), 16px gap, margin-top 30px.
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px. `.archive-grid` is CSS grid, single column (`1fr`), 16px gap, margin-top 30px.
 - **Links:** the tables above link to `.md` versions for navigation in markdown; in the regenerated HTML each card's `href` is the same path with an `.html` extension (cards 77–80 and 89 self-link to `02-backlog.html`; archive links to `backlog/archive/index.html`).
 - **Card structure:** `<a class="nav-card" href="...">` containing `<div class="card-num" style="color:CATEGORY_COLOR">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`, and `<div class="topics">` with one `<span class="topic-tag">` per topic.
 - **Category label colors (inline style on `.card-num`):** SHAPE `#e67e22`; METHODS `#2980b9`; PARADOX, SEMANTIC, BEHAVIORAL, METRICS, DATA COLLECTION `#8e44ad`; ARCHITECTURE `#1a5276`; SYSTEMS, CASE STUDY `#27ae60`; DOMAIN `#e74c3c`; PHILOSOPHY `#16a085`; ARCHIVE `#95a5a6`.

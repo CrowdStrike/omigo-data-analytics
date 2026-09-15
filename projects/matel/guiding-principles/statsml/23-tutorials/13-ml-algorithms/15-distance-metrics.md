@@ -1,6 +1,6 @@
 # Distance Metrics
 
-**Page type:** detail page (tutorial card-sections: h2 per section, two-column table layout text left 50% / canvas right 50%, one three-column row)
+**Page type:** detail page (tutorial card-sections: h2 per section, two-column table layout text left 50% / canvas right 50%; one section holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Distance Metrics
 
 **Subtitle:** "Similar" is not one thing — Euclidean asks how far apart two users sit, cosine asks whether their tastes point the same way
@@ -36,7 +36,7 @@ Vector plot: three users drawn as arrows from the origin in rating space, compar
 
 Tags: `worked example` (green), `arithmetic` (blue)
 
-Three-column row: text 38%, two canvases 31% each.
+The viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
 - **Euclid, Ana–Ben** — √((4−2)² + (2−1)²) = √5 ≈ 2.24
 - **Euclid, Ana–Cara** — √((4−3)² + (2−3)²) = √2 ≈ 1.41 — Cara wins
@@ -48,17 +48,17 @@ Three-column row: text 38%, two canvases 31% each.
 
 **Key point:** **Neither ruler is wrong:** Euclidean counts enthusiasm as part of similarity; cosine deliberately ignores it and compares the taste pattern alone. Strictly, cosine is a similarity score — bigger means closer.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Two-bar chart of Euclidean distances from Ana.
 
 - **Title (bold 15px `#1a5276`):** "Euclidean Distance to Ana"; subtitle (12px `#6b7280`): "smaller = more similar".
-- **Bars:** Ben = 2.24 (green `#008300`, alpha 0.55) and Cara = 1.41 (violet `#4a3aa7`, alpha 0.95 — the winner is more opaque). Bar width 100, gap 80, centered; baseline gray axis.
+- **Bars:** Ben = 2.24 (green `#008300`, alpha 0.55) and Cara = 1.41 (violet `#4a3aa7`, alpha 0.95 — the winner is more opaque). Bar width 74, gap 60, centered; baseline gray axis.
 - **Y-axis:** 0.0 to 2.5 in steps of 0.5 (scale max 2.6), right-aligned 12px gray labels.
 - **Value labels (bold 13px `#2c3e50`)** above bars: "2.24", "1.41"; names "Ben", "Cara" below.
 - **Bottom annotation (bold 13px violet):** "this ruler picks Cara".
 
-### Visualization (canvas `c2b`, 420×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Two-bar chart of cosine similarities to Ana.
 
@@ -121,7 +121,7 @@ Two side-by-side bar panels showing the nearest-neighbor flip between minutes an
 
 ## Regeneration instructions
 
-- **Layout:** tutorial detail page. h1 (2rem, `#1a5276`, bottom border 2px solid `#2980b9`), `.subtitle` (`#666`, 0.95rem), then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: `.text-col` (50%) text, `.viz-col` (50%) canvas. Section 2 uses the 3-column variant: `.text-col3` (38%) + two `.viz-col3` (31% each), canvases 420×340.
+- **Layout:** tutorial detail page. h1 (2rem, `#1a5276`, bottom border 2px solid `#2980b9`), `.subtitle` (`#666`, 0.95rem), then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: `.text-col` (50%) text, `.viz-col` (50%) canvas. Section 2's `.viz-col` places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text cell structure:** `.tags` row of pill spans first, then `<ul>` of one-line bullets each opening with `<b>` term (bold terms colored `#1a5276`), one italic `.example` paragraph, one `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem).
 - **Tag pills:** 0.72rem, weight 600, padding 2px 10px, radius 10px. blue = `rgba(26,82,118,0.12)`/`#1a5276`; green = `rgba(39,174,96,0.15)`/`#27ae60`; red = `rgba(231,76,60,0.12)`/`#e74c3c`; orange = `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; ul 0.92rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.

@@ -1,6 +1,6 @@
 # Stationarity
 
-**Page type:** detail page (tutorial layout: `.card-section` blocks, each h2 + `table.layout` two-column row, text left 45% / canvas right 55%; section 2 uses a three-column 38/31/31 variant with two canvases)
+**Page type:** detail page (tutorial layout: `.card-section` blocks, each h2 + `table.layout` two-column row, text left 50% / canvas right 50%; section 2 holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** Stationarity
 
 **Subtitle:** A series is stationary when its typical level and spread stay put over time — most models quietly assume this, and growing data breaks it
@@ -45,27 +45,27 @@ Line chart of 36 months of growing sales with year-1 and year-3 mean segments.
 
 **Key point:** Differencing turns a drifting series into a stable one — model the changes, then add them back up if you need levels.
 
-This row uses the three-column layout (`table.layout.three`, text 38%, two viz columns 31% each) with two canvases.
+This row uses the standard 50/50 layout, and its viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 Line-and-dot chart of the 8 monthly levels drifting upward.
 
 - **Title (bold 15px, `#1a5276`, top center):** "The levels drift upward"
 - **Data (`levels8`):** `[100, 112, 108, 122, 130, 126, 138, 144]`, x labeled m1–m8.
-- **Axes:** y from 90 to 155, tick labels 100, 120, 140; L-shaped `#999` axes; padding top 50, bottom 50, left 52, right 16.
+- **Axes:** y from 90 to 155, tick labels 100, 120, 140; L-shaped `#999` axes; padding top 50, bottom 50, left 46, right 12.
 - **Half-mean lines:** dashed (6/4) orange `#d95926` width 2.5 segments — y=110.5 over points 1–4, y=134.5 over points 5–8; bold 12px orange labels "first-4 mean 110.5" (below its segment) and "last-4 mean 134.5" (above its segment).
-- **Series:** blue `#2a78d6` line width 2.5 with radius-4.5 blue dots; each point's value printed above it (11px, `#2c3e50`).
+- **Series:** blue `#2a78d6` line width 2.5 with radius-4.5 blue dots; each point's value printed above it (12px, `#2c3e50`).
 - **Caption (12px gray, bottom center):** "monthly sales — the mean will not sit still".
 
-### Visualization (canvas `c2b`, 400×340)
+### Visualization (canvas `c2b`, 310×340)
 
 Bar chart of the 7 month-over-month differences.
 
 - **Title (bold 15px, `#1a5276`, top center):** "The changes stay stable"
 - **Data (`diffs7`):** `[12, -4, 14, 8, -4, 12, 6]`, x labeled m2–m8.
-- **Axes:** y from −10 to 20, tick labels −10, 0, 10, 20; zero line in gray `#999`; padding top 50, bottom 50, left 52, right 16.
-- **Bars:** width 32px with even gaps; positive bars `rgba(25,158,112,0.55)`, negative bars `rgba(213,81,129,0.55)`; signed value labels ("+12", "−4", …) 11px `#2c3e50` above/below each bar.
+- **Axes:** y from −10 to 20, tick labels −10, 0, 10, 20; zero line in gray `#999`; padding top 50, bottom 50, left 46, right 12.
+- **Bars:** width 24px with even gaps; positive bars `rgba(25,158,112,0.55)`, negative bars `rgba(213,81,129,0.55)`; signed value labels ("+12", "−4", …) 12px `#2c3e50` above/below each bar.
 - **Mean-change line:** dashed (6/4) green `#008300` width 2.5 horizontal line at y=6.3.
 - **Annotation:** bold 13px green centered near the top: "changes hover around +6 throughout".
 - **Caption (12px gray, bottom center):** "month-over-month change — one stable level".
@@ -127,9 +127,9 @@ Three small line panels: stable, drifting mean, growing spread.
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorials topic page. `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle`, then 4 `.card-section` blocks: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` — sections 1, 3, 4 use one `<tr>` with `td.text-col` (45%) and `td.viz-col` (55%, one canvas); section 2 uses `table.layout.three` with `td.text-col` 38% and two `td.viz-col` at 31% each (canvases c2a and c2b). Text cells hold `.tags` pills, one-line bold-term bullets, italic `.example`, and a `.key-point` callout.
+- **Template/layout:** tutorials topic page. `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle`, then 4 `.card-section` blocks: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` — every section uses one `<tr>` with `td.text-col` (50%) and `td.viz-col` (50%). One section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). Text cells hold `.tags` pills, one-line bold-term bullets, italic `.example`, and a `.key-point` callout.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem; `li b` `#1a5276`; `.example` italic `#555` 0.9rem; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block 0.72rem weight 600, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Project palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
-- **Canvas:** intrinsic width/height attributes as given per chart (c1 720×300, c2a 420×340, c2b 400×340, c3 720×300, c4 720×300); scale by `window.devicePixelRatio` via a shared `setup(id)` helper; all data arrays hardcoded.
+- **Canvas:** intrinsic width/height attributes as given per chart (c1 720×300, c2a 310×340, c2b 310×340, c3 720×300, c4 720×300); scale by `window.devicePixelRatio` via a shared `setup(id)` helper; all data arrays hardcoded.
 - No nav bar, no back/home links, no cross-page links. In regenerated HTML any card links use `.html` extensions (this page has none).

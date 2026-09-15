@@ -1,6 +1,6 @@
 # The Confusion Matrix
 
-**Page type:** detail page (tutorial card-sections: h2 per section; two-column table.layout 45/55, with one 3-column row 38/31/31 holding two canvases)
+**Page type:** detail page (tutorial card-sections: h2 per section; two-column table.layout 50/50; one section holds both canvases side by side in a `.viz-pair` flex row in its viz cell)
 **HTML title tag:** The Confusion Matrix
 
 **Subtitle:** Four boxes that hold everything a yes/no model did — every metric you'll ever quote is just arithmetic on these four counts
@@ -49,23 +49,23 @@ A 2×2 confusion matrix (shared `drawMatrix` helper) with side annotations and a
 
 **Key point:** Precision is a column story, recall is a row story — both start from the same TP box.
 
-This row uses the 3-column layout: text 38%, then two viz columns of 31% each.
+This row's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×340)
 
 The same 2×2 matrix with the "flagged" (left) column highlighted for precision.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Precision: the Flagged Column".
-- **Matrix (at x=90, y=70; cells 130×82):** same cells/colors/labels as c1, but cells NOT in column 0 are dimmed to 18% opacity with gray `#6b7280` text.
+- **Matrix (at x=46, y=78; cells 126×82):** same cells/colors/labels as c1, but cells NOT in column 0 are dimmed to 18% opacity with gray `#6b7280` text. Column headers split onto two stacked lines ("model says" / "\"fraud\"") to fit the 310-wide frame.
 - **Bracket:** violet `#4a3aa7` 3px rectangle around the left column (TP over FP).
 - **Bottom annotations (centered):** violet bold 14px: "40 / (40 + 60) = 40%"; gray 12px: "of the 100 flagged, how many were fraud?"; violet bold 12px: "read DOWN one column".
 
-### Visualization (canvas `c2b`, 400×340)
+### Visualization (canvas `c2b`, 310×340)
 
 The same 2×2 matrix with the "fraud" (top) row highlighted for recall.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Recall: the Fraud Row".
-- **Matrix (at x=80, y=70; cells 130×82):** same cells as c1, but cells NOT in row 0 are dimmed to 18% opacity with gray text.
+- **Matrix (at x=46, y=78; cells 126×82):** same cells as c1, but cells NOT in row 0 are dimmed to 18% opacity with gray text. Column headers split onto two stacked lines.
 - **Bracket:** aqua `#199e70` 3px rectangle around the top row (TP and FN).
 - **Bottom annotations (centered):** aqua bold 14px: "40 / (40 + 10) = 80%"; gray 12px: "of the 50 frauds, how many got flagged?"; aqua bold 12px: "read ACROSS one row".
 
@@ -120,7 +120,7 @@ Two word-decoding diagrams side by side (FALSE POSITIVE at cx=200, FALSE NEGATIV
 
 ## Regeneration instructions
 
-- **Template:** tutorial detail page (tutorials/ style). h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: left text `<td>` holding `.tags` pills, a `<ul>` of one-line bullets with `<b>` lead terms, an italic `.example` paragraph, and a `.key-point` callout; right cell(s) holding canvases. Sections 1, 3, 4 use `.text-col` 50% / `.viz-col` 50%; section 2 uses the 3-column variant `.text-col3` 38% / two `.viz-col3` 31% cells (canvases c2a 420×340 and c2b 400×340).
+- **Template:** tutorial detail page (tutorials/ style). h1 (no index number) with 2px `#2980b9` bottom border, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with one `<tr>`: left text `<td>` holding `.tags` pills, a `<ul>` of one-line bullets with `<b>` lead terms, an italic `.example` paragraph, and a `.key-point` callout; right cell(s) holding canvases. Every section uses `.text-col` 50% / `.viz-col` 50%; one section places canvases `c2a`/`c2b` (310×340 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Shared JS:** a `drawMatrix(ctx, x, y, cellW, cellH, opts)` helper draws the 2×2 matrix (cells TP/FN/FP/TN with counts 40/10/60/890, colors as specified in c1) and supports an `opts.highlight(cell)` predicate that dims non-matching cells to 18% alpha.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem; `li b` in `#1a5276`; `.example` italic `#555` 0.9rem; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; canvases `width:100%`, `1px solid #e0e0e0` border, 4px radius.
 - **Tag pills:** `.tag` inline-block, 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.

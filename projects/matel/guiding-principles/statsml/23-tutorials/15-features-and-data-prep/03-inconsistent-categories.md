@@ -1,6 +1,6 @@
 # Inconsistent Categories
 
-**Page type:** detail page (tutorial layout: h2 card-sections, two-column table with text left 50% / canvas right 50%; one section uses a 3-column 38/31/31 layout with two canvases)
+**Page type:** detail page (tutorial layout: h2 card-sections, two-column table with text left 50% / canvas right 50%; one section holds both canvases side by side in a `.viz-pair` flex row.)
 **HTML title tag:** Inconsistent Categories
 
 **Subtitle:** Four spellings of one country split a single group into four small ones — and group-by reports them as strangers
@@ -42,22 +42,22 @@ Drawn distinct-values table with counts, US-family rows tinted alike, plus right
 
 **Key point:** Group-by trusts the strings exactly as they are. It will never volunteer that four of its groups are one thing.
 
-### Visualization (canvas `c2a`, 420×340)
+### Visualization (canvas `c2a`, 310×300)
 
 Horizontal bar chart: raw group-by where UK appears to win.
 
 - **Title (bold 14px, `#1a5276`, top center):** "Raw group-by: UK \"wins\"".
-- **Bars (labels right-aligned in 12px monospace, values bold to the right of each bar):** `'UK'` 10, `'US'` 8, `'USA'` 6, `'Canada'` 5, `'United States'` 4, `'us '` 2. Scale max 22. US-family bars (`US`, `USA`, `United States`, `us `) blue `#2a78d6`; UK magenta `#d55181`; Canada aqua `#199e70`. Padding: top 52, bottom 40, left 130, right 55.
-- **Annotations:** magenta bold 13px "\"top country: UK, 10\"" near the UK bar; blue bold 12px two lines "blue bars = one country," / "shattered into four" lower right.
+- **Bars (labels right-aligned in 12px monospace, values bold to the right of each bar):** `'UK'` 10, `'US'` 8, `'USA'` 6, `'Canada'` 5, `'United States'` 4, `'us '` 2. Scale max 22. US-family bars (`US`, `USA`, `United States`, `us `) blue `#2a78d6`; UK magenta `#d55181`; Canada aqua `#199e70`. Padding: top 46, bottom 62, left 120, right 36.
+- **Annotations (centered, stacked above the caption):** magenta bold 12px "headline: \"top country: UK, 10\""; blue bold 12px "blue bars = one country, split four ways".
 - **Caption (bottom center, muted 12px):** "customers per typed value".
 
-### Visualization (canvas `c2b`, 420×340)
+### Visualization (canvas `c2b`, 310×300)
 
 Horizontal bar chart: clean group-by where US wins by 2x.
 
 - **Title (bold 14px, `#1a5276`, top center):** "After cleanup: US wins by 2x".
-- **Bars (32px tall):** `'US'` 20 blue `#2a78d6`, `'UK'` 10 magenta `#d55181`, `'Canada'` 5 aqua `#199e70`. Scale max 22; same padding as c2a.
-- **Annotations:** blue bold 13px "8+6+4+2 reunited = 20" inside the US bar row; orange bold 12px "same data, opposite headline" near the UK row.
+- **Bars (32px tall):** `'US'` 20 blue `#2a78d6`, `'UK'` 10 magenta `#d55181`, `'Canada'` 5 aqua `#199e70`. Scale max 22. Padding: top 46, bottom 62, left 76, right 36.
+- **Annotations (left-aligned at the bar baseline x):** blue bold 13px "8+6+4+2 reunited = 20" under the US bar; orange bold 12px "same data, opposite headline" under the UK bar.
 - **Caption (bottom center, muted 12px):** "customers per real country".
 
 ## Why a Data Scientist Cares
@@ -112,7 +112,7 @@ Three-stage cleanup funnel: three outlined boxes connected by arrows, each listi
 
 ## Regeneration instructions
 
-- **Template:** tutorial topic page (tutorials/CLAUDE.md conventions). `<h1>` concept name, `.subtitle`, four `.card-section` blocks each `<h2>` + `table.layout`. Sections 1, 3, 4 use two columns (`td.text-col` 50% / `td.viz-col` 50%, one 720×300 canvas); section 2 uses the 3-column layout (`td.text-col3` 38% / two `td.viz-col3` 31% each, canvases `c2a` and `c2b` at 420×340).
+- **Template:** tutorial topic page (tutorials/CLAUDE.md conventions). `<h1>` concept name, `.subtitle`, four `.card-section` blocks each `<h2>` + `table.layout`. Every section uses two columns (`td.text-col` 50% / `td.viz-col` 50%); sections 1, 3, 4 hold one 720×300 canvas. One section places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure per section:** `.tags` pill row, `<ul>` of one-line bullets with `<b>` lead terms (colored `#1a5276`), italic `.example` line, `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem) with a bold lead-in ("Key point:" / "Rule of thumb:").
 - **Tag pill CSS:** inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; canvas `width:100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.

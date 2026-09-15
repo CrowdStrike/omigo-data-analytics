@@ -1,6 +1,6 @@
 # Data Leakage
 
-**Page type:** detail page (tutorial: 4 card-sections; section 2 uses a 3-column layout — text 38% + two canvases 31% each — the rest use the two-column 45/55 text/canvas layout)
+**Page type:** detail page (tutorial: 4 card-sections; section 2 holds both canvases side by side in a `.viz-pair` flex row; all sections use the two-column text/canvas layout)
 **HTML title tag:** Data Leakage
 
 **Subtitle:** A feature secretly contains the answer — the model looks brilliant offline because a piece of the future leaked into its inputs
@@ -44,27 +44,27 @@ Timeline diagram of one customer: the feature window reaches past the prediction
 
 **Key point:** **Hand-checkable:** the leaky model's 95% was real on paper and worthless in production — the honest 82% was the true ceiling all along.
 
-### Visualization (canvas `c2a`, 420×300)
+### Visualization (canvas `c2a`, 310×300)
 
 Grouped bar chart: average support calls per customer, leaky window vs honest window.
 
-- **Title (bold 15px, `#1a5276`, top center):** "Average Support Calls per Customer".
-- **Groups:** "leaky window" — churned 4.6, stayed 1.2; "honest window" — churned 1.7, stayed 1.3. Churned bars magenta `#d55181`, stayed bars aqua `#199e70`; fill alpha 0.5, 2px stroke; bar width 52, 8px between the pair; group x positions 95 and 255.
-- **Axes:** y from 0 to 5 calls, integer labels (gray `#6b7280` 12px); baseline y=226, chart height 150, left pad 52; L-shaped `#999` axis.
+- **Title (bold 15px, `#1a5276`, top center):** "Avg Support Calls per Customer".
+- **Groups:** "leaky window" — churned 4.6, stayed 1.2; "honest window" — churned 1.7, stayed 1.3. Churned bars magenta `#d55181`, stayed bars aqua `#199e70`; fill alpha 0.5, 2px stroke; bar width 38, 6px between the pair; group x positions 68 and 176.
+- **Axes:** y from 0 to 5 calls, integer labels (gray `#6b7280` 12px); baseline y=226, chart height 150, left pad 46; L-shaped `#999` axis.
 - **Value labels (bold 12px in bar color above bars):** "4.6", "1.2", "1.7", "1.3"; group labels 12px `#2c3e50` below baseline.
-- **Legend (x=250, upper right):** magenta swatch "churned (50)"; aqua swatch "stayed (150)" (12px).
-- **Annotation (magenta bold 12px, centered below):** "the giveaway gap is mostly cancel calls"; below it gray 11px "illustrative numbers".
+- **Legend (x=180, upper right):** magenta swatch "churned (50)"; aqua swatch "stayed (150)" (12px).
+- **Annotation (magenta bold 12px, centered below):** "the gap is mostly cancel calls"; below it gray 12px "illustrative numbers".
 
-### Visualization (canvas `c2b`, 420×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Grouped bar chart: offline vs live accuracy for the leaky and honest models.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Offline Score vs Live Score".
-- **Groups:** "leaky model" — offline 95%, live 63%; "honest model" — offline 82%, live 81%. Offline bars blue `#2a78d6`, live bars violet `#4a3aa7`; fill alpha 0.5, 2px stroke; bar width 52, 8px between the pair; group x positions 95 and 255.
-- **Axes:** y from 0 to 100%, labels every 25% (gray 12px); baseline y=226, chart height 150, left pad 52; L-shaped `#999` axis.
+- **Groups:** "leaky model" — offline 95%, live 63%; "honest model" — offline 82%, live 81%. Offline bars blue `#2a78d6`, live bars violet `#4a3aa7`; fill alpha 0.5, 2px stroke; bar width 38, 6px between the pair; group x positions 68 and 176.
+- **Axes:** y from 0 to 100%, labels every 25% (gray 12px); baseline y=226, chart height 150, left pad 46; L-shaped `#999` axis.
 - **Value labels (bold 12px in bar color above bars):** "95%", "63%", "82%", "81%"; group labels 12px `#2c3e50` below baseline.
-- **Legend (x=260, upper right):** blue swatch "offline"; violet swatch "live, next month" (12px).
-- **Annotation (magenta `#d55181` bold 12px, centered below):** "95% melts to 63%; the honest 82% holds"; below it gray 11px "illustrative numbers".
+- **Legend (x=172, upper right):** blue swatch "offline"; violet swatch "live, next month" (12px).
+- **Annotation (magenta `#d55181` bold 12px, centered below):** "95% melts to 63%; 82% holds"; below it gray 12px "illustrative numbers".
 
 ## Why "Too Good to Be True" Is a Diagnosis
 
@@ -121,7 +121,7 @@ Feature-window audit: horizontal time bars for five features against a vertical 
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic page (per `tutorials/CLAUDE.md`). `<h1>` (no index number), `.subtitle` line, then 4 `.card-section` blocks, each an `<h2>` with 2px `#2980b9` bottom border plus a `table.layout` row. Section 2 uses the 3-column variant: `td.text-col3` (38%) + two `td.viz-col3` (31% each) holding canvases `c2a` and `c2b` at 420×300. Sections 1, 3, 4 use `td.text-col` (50%) + `td.viz-col` (50%) with one 720×300 canvas. Text cells hold `.tags` pills, 5 one-line bullets (each opening with `<b>` in `#1a5276`), an italic `.example` line, and a `.key-point` callout.
+- **Template:** tutorials topic page (per `tutorials/CLAUDE.md`). `<h1>` (no index number), `.subtitle` line, then 4 `.card-section` blocks, each an `<h2>` with 2px `#2980b9` bottom border plus a `table.layout` row. Every section uses `td.text-col` (50%) + `td.viz-col` (50%); One section places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`); sections 1, 3, 4 hold one 720×300 canvas. Text cells hold `.tags` pills, 5 one-line bullets (each opening with `<b>` in `#1a5276`), an italic `.example` line, and a `.key-point` callout.
 - **Page CSS:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 0.95rem; h2 1.3rem `#1a5276`. `.key-point`: background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem. `.example`: italic `#555` 0.9rem. ul 0.92rem. Canvas: `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Tag pills:** 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Chart palette (JS object `P`):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

@@ -1,6 +1,6 @@
 # The Perceptron
 
-**Page type:** detail page (tutorial card-sections: h2 + two-column table.layout, text left 50% / canvas right 50%; one section uses 3-col 38/31/31)
+**Page type:** detail page (tutorial card-sections: h2 + two-column table.layout, text left 50% / canvas right 50%; one section holds both canvases side by side in a `.viz-pair` flex row)
 **HTML title tag:** The Perceptron
 
 **Subtitle:** 1958's spam filter: each word votes with a weight, the email is flagged if the votes cross a threshold — and every mistake nudges the weights
@@ -47,14 +47,14 @@ Node-and-edge perceptron diagram scoring the email "free winner".
 
 **Key point callout:** **The perceptron rule:** leave correct answers alone; move the weights one step toward fixing each error. Repeat passes until one is mistake-free.
 
-This section uses the 3-column layout: text (38%) plus two canvases (31% each).
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
 
-### Visualization (canvas `c2a`, 420×300)
+### Visualization (canvas `c2a`, 310×300)
 
 Step-line chart of the four weights after each mistake.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Weights, Nudge by Nudge"
-- **X axis:** 4 stages labeled `start`, `mistake 1`, `mistake 2`, `mistake 3` (gray 12px). Padding: top 50, bottom 56, left 52, right 100.
+- **X axis:** 4 stages labeled `start`, `1`, `2`, `3` (gray 12px), with the axis caption "mistake number" 16px below them. Padding: top 50, bottom 62, left 46, right 100.
 - **Y axis:** −2 to +2, tick labels at every integer (`−2`…`+2`, positive values prefixed `+`), gray `#6b7280` 12px; vertical axis line `#999`; light horizontal gridline `#e5e9ef` at y=0.
 - **Series (connected lines width 2.5 with 4px dots, each with a small vertical pixel offset so overlapping paths stay visible):**
   - free, green `#008300`, values `[0, 1, 0, 1]`, offset −3
@@ -63,17 +63,17 @@ Step-line chart of the four weights after each mistake.
   - invoice, violet `#4a3aa7`, values `[0, 0, 0, 1]`, offset +7
   - (offsets multiplied by 0.8 in pixels)
 - **End labels:** at the right of each line, bold 12px in the series color: "free +1", "winner +1", "meeting −1", "invoice +1".
-- **Caption (bottom center, gray 12px):** "weights start at 0; only mistakes move them"
+- **Caption (bottom center, gray 12px):** "only mistakes move the weights"
 
-### Visualization (canvas `c2b`, 420×300)
+### Visualization (canvas `c2b`, 310×300)
 
 Bar chart of mistakes per training pass.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Mistakes per Pass"
-- **Data:** mistakes `[2, 1, 0]` for passes 1–3; y axis 0–3 with integer tick labels; axis lines `#999`. Padding: top 50, bottom 56, left 52, right 16.
-- **Bars:** 76px wide, alpha 0.8; passes 1–2 magenta `#d55181`, pass 3 green `#008300`. Value label bold 14px `#2c3e50` above each bar; "pass 1"/"pass 2"/"pass 3" gray 12px below.
-- **Annotation (bold 13px green, over pass-3 area, two lines):** "pass 3: zero mistakes —" / "training stops"
-- **Caption (bottom center, gray 12px):** "one pass = all 5 training emails, in order"
+- **Data:** mistakes `[2, 1, 0]` for passes 1–3; y axis 0–3 with integer tick labels; axis lines `#999`. Padding: top 50, bottom 56, left 46, right 12.
+- **Bars:** 56px wide, alpha 0.8; passes 1–2 magenta `#d55181`, pass 3 green `#008300`. Value label bold 14px `#2c3e50` above each bar; "pass 1"/"pass 2"/"pass 3" gray 12px below.
+- **Annotation (bold 13px green, centered in the plot's upper area, two lines):** "pass 3: zero mistakes" / "→ training stops"
+- **Caption (bottom center, gray 12px):** "one pass = all 5 emails, in order"
 
 ## The Ancestor of Every Neural Network
 
@@ -131,7 +131,7 @@ Side-by-side diagram: one perceptron (left) vs a small multilayer network (right
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page skeleton (per `tutorials/CLAUDE.md`, modeled on `most-powerful-signals/07-social-graph-connections.html`): h1 + `.subtitle`, then four `.card-section` blocks, each `<h2>` + `table.layout` with `.text-col` (50%) and `.viz-col` (50%); the learning section uses the 3-col variant `.text-col3` (38%) + two `.viz-col3` (31%) cells holding canvases `c2a` and `c2b`.
+- **Template:** tutorials topic-page skeleton (per `tutorials/CLAUDE.md`, modeled on `most-powerful-signals/07-social-graph-connections.html`): h1 + `.subtitle`, then four `.card-section` blocks, each `<h2>` + `table.layout` with `.text-col` (50%) and `.viz-col` (50%); the learning section places canvases `c2a`/`c2b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Left column structure per section:** `.tags` pill row, then `<ul>` of one-line bullets each opening with `<b>bold term</b> —`, one italic `.example` paragraph, one `.key-point` callout with a `<strong>` lead.
 - **Tag pill classes:** `.tag.blue` bg `rgba(26,82,118,0.12)` text `#1a5276`; `.tag.green` bg `rgba(39,174,96,0.15)` text `#27ae60`; `.tag.red` bg `rgba(231,76,60,0.12)` text `#e74c3c`; `.tag.orange` bg `rgba(230,126,34,0.15)` text `#e67e22`. Pills 0.72rem, weight 600, padding 2px 10px, radius 10px.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px bottom border `#2980b9`; section h2 1.3rem `#1a5276` with 2px bottom border `#2980b9`; `.subtitle` `#666` 0.95rem; bullets 0.92rem with `li b` in `#1a5276`; `.example` italic `#555` 0.9rem; `.key-point` bg `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.

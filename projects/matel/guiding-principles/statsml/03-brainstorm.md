@@ -1,6 +1,6 @@
 # Brainstorm — Design Explorations & Profiling Pipeline
 
-**Page type:** grid page (nav-card grid, auto-fit columns min 300px, cards with topic tags)
+**Page type:** grid page (nav-card grid, 4 columns, cards with topic tags)
 **HTML title tag:** Brainstorm — Design Explorations & Profiling Pipeline
 
 **Subtitle:** Design brainstorms on feature profiling, shape detection, bucket strategy, and measurement patterns.
@@ -24,7 +24,7 @@ Each card links to a detail page under `brainstorm/`. Each card shows an upperca
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, one `.nav-grid` of `.nav-card` anchors. (A `.section-header` CSS rule exists — `#1a5276`, 1.2em, 2px solid `#d0d0d0` bottom border — but no section header element is used on the page.)
-- **Layout:** `.nav-grid` is CSS grid, `repeat(auto-fit, minmax(300px, 1fr))`, 16px gap, margin-top 15px.
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin-top 15px; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to `.md` versions for navigation in markdown; in the regenerated HTML, each card's `href` is the same path with an `.html` extension.
 - **Card structure:** `<a class="nav-card" href="...">` containing `<div class="card-num">PROFILING</div>` (no inline color; see script note), `<h3>N. Title</h3>` (unpadded index number matching the file index), `<p>description</p>`, and `<div class="topics">` with one `<span class="topic-tag">` per topic.
 - **Category color script:** a small inline `<script>` at the end of `<body>` defines `categoryColors = { "PROFILING": "#27ae60" }` and iterates over all `.card-num` elements, setting `style.color` when the trimmed text matches a key. Default `.card-num` CSS color is `#2980b9`, 0.75em bold.

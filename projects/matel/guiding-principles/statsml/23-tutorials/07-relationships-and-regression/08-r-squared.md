@@ -1,6 +1,6 @@
 # R-Squared
 
-**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column `table.layout` — text left with tag pills / bullets / example / key-point, canvas right; first section uses a 3-column 38/31/31 layout)
+**Page type:** detail page (tutorial page: `.card-section` blocks, each h2 + two-column `table.layout` — text left with tag pills / bullets / example / key-point, canvas right)
 **HTML title tag:** R-Squared
 
 **Subtitle:** The rent model has R² = 0.72: size explains 72% of why rents differ — the other 28% is location, floor, and luck
@@ -19,19 +19,21 @@
 
 **Key point:** R² compares your model against the dumbest guess (the mean) — 0.72 means the line removed 72% of the squared spread.
 
-### Visualization (canvas `c1a`, 420×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c1a`, 310×300)
 
 Scatter panel showing vertical miss segments from every point to the mean line.
 
 - **Title (bold 15px, `#1a5276`):** "Misses from the mean".
 - **Data:** sizes `[30,34,38,41,45,48,52,55,58,61,65,68,72,76,80]` vs rents `[1140,842,994,1258,1190,1124,1586,1360,1194,1328,1750,1694,1946,1528,1880]`; mean rent 1387.6.
-- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y 700–2100 (labels $800 and $2,000); padding top 42 / bottom 44 / left 54 / right 14; axis `#999`, labels 12px `#6b7280`.
+- **Axes:** x 25–85 (ticks 30, 50, 70; label "size (m²)"), y 700–2100 (labels $800 and $2,000); padding top 42 / bottom 44 / left 50 / right 12; axis `#999`, labels 12px `#6b7280`.
 - **Miss segments:** vertical lines from the mean to each point in `rgba(217,89,38,0.55)`, width 2.
 - **Reference line:** horizontal violet `#4a3aa7` line, width 2.5, at $1,388 from x=27 to x=83, labeled bold 12px violet "mean $1,388".
 - **Points:** blue `#2a78d6` circles, radius 3.5.
-- **Annotation (bold 13px, `#d95926`, bottom center):** "squared misses total 1,519,586".
+- **Annotation (bold 13px, `#d95926`, centered, two stacked lines just above the x axis):** "squared misses total" / "1,519,586".
 
-### Visualization (canvas `c1b`, 400×300)
+### Visualization (canvas `c1b`, 310×300)
 
 Same scatter panel but with miss segments measured to the fitted line.
 
@@ -40,7 +42,7 @@ Same scatter panel but with miss segments measured to the fitted line.
 - **Miss segments:** vertical lines from the fitted value 400 + 18 × size to each point in `rgba(217,89,38,0.55)`, width 2.
 - **Reference line:** fitted line 400 + 18 × size in green `#008300`, width 2.5, from x=27 to x=83, labeled bold 12px green "400 + 18×s".
 - **Points:** blue `#2a78d6` circles, radius 3.5.
-- **Annotation (bold 13px, `#008300`, bottom center):** "total 425,200 — 72% of the spread gone".
+- **Annotation (bold 13px, `#008300`, centered, two stacked lines just above the x axis):** "total 425,200 —" / "72% of the spread gone".
 
 ## 72% explained, 28% left over
 
@@ -94,7 +96,7 @@ Fitted line with a ±$168 typical-miss band around it.
 
 ## Regeneration instructions
 
-- **Template/layout:** tutorial topic page (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). h1 + `.subtitle`, then three `.card-section` blocks each with an `<h2>` (bottom border `2px solid #2980b9`) and a `table.layout`. Section 1 uses three columns: `.text-col3` 38% / two `.viz-col3` at 31% each (canvases c1a 420×300 and c1b 400×300, cells centered; both drawn by one shared `scatterPanel(id, title, mode, annot, annotColor)` helper). Sections 2 and 3 use two columns: `.text-col` 50% / `.viz-col` 50%.
+- **Template/layout:** tutorial topic page (see `tutorials/CLAUDE.md`; skeleton copied from `most-powerful-signals/07-social-graph-connections.html`). h1 + `.subtitle`, then three `.card-section` blocks each with an `<h2>` (bottom border `2px solid #2980b9`) and a `table.layout`. All three sections use two columns: `.text-col` 50% / `.viz-col` 50%. Section 1 places canvases `c1a`/`c1b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`), both drawn by one shared `scatterPanel(id, title, mode, annot, annotColor)` helper.
 - **Left column structure per section:** `.tags` row of colored pill spans (`.tag.blue` bg rgba(26,82,118,0.12) text `#1a5276`; `.tag.green` bg rgba(39,174,96,0.15) text `#27ae60`; `.tag.red` bg rgba(231,76,60,0.12) text `#e74c3c`; `.tag.orange` bg rgba(230,126,34,0.15) text `#e67e22`; 0.72rem, weight 600, radius 10px), then a `<ul>` of one-line bullets each opening with `<b>` in `#1a5276`, an italic `.example` paragraph (`#555`, 0.9rem), and a `.key-point` callout (bg `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem). The third section's callout opens with "Common confusion:" instead of "Key point:".
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with bottom border `2px solid #2980b9`; `.subtitle` `#666` 0.95rem; table cells padding 12px, no borders; canvases `width:100%` with border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

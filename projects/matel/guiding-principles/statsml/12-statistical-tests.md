@@ -1,6 +1,6 @@
 # Statistical Tests & Metrics Reference
 
-**Page type:** grid page (nav-grid card navigation, auto-fit columns min 300px, cards with topic tags)
+**Page type:** grid page (nav-grid card navigation, 4 columns, cards with topic tags)
 **HTML title tag:** Statistical Tests & Metrics Reference
 
 **Subtitle:** When each test is valid, when it breaks, and what to use instead — with real data examples
@@ -26,7 +26,7 @@ Each card links to a detail page under `statistical-tests/`. The card shows an u
 To rebuild the HTML from this spec:
 
 - **Template:** nav-grid style (see `docs/statsml/ui-templates/02-nav-grid`). Single page: h1, `.subtitle` paragraph, then one `.nav-grid` of `.nav-card` anchors. No callouts.
-- **Layout:** `.nav-grid` is CSS grid, `repeat(auto-fit, minmax(300px, 1fr))`, 16px gap, margin-top 15px.
+- **Layout:** `.nav-grid` is CSS grid, `repeat(4, 1fr)`, 16px gap, margin-top 15px; responsive: 3 columns below 1400px, 2 columns below 1100px, 1 column below 600px.
 - **Links:** the table above links to `.md` versions for markdown navigation; in the regenerated HTML each card's `href` is the same path with an `.html` extension instead.
 - **Card structure:** `<a href="..." class="nav-card">` containing `<div class="card-num">CATEGORY</div>`, `<h3>N. Title</h3>` (unpadded index matching the file index), `<p>description</p>`, then `<div class="topics">` with one `<span class="topic-tag">` per topic.
 - **Card style:** background `#ffffff`, border `1px solid #d8d8d8`, radius 10px, padding 20px, shadow `0 2px 4px rgba(0,0,0,0.05)`; hover: border `#2980b9`, `translateY(-2px)`. `.card-num` color `#2980b9`, 0.75em bold (same color for every category on this page — no per-category coloring script). h3 `#1a3a4a` 1em; description `#555` 0.85em.

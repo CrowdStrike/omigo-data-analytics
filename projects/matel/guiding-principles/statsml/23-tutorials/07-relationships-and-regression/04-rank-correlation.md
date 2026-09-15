@@ -1,6 +1,6 @@
 # Rank Correlation
 
-**Page type:** detail page (tutorial layout: `.card-section` blocks, each h2 + two-column table — text left 50%, canvas right 50%; one section uses the 3-column variant 38/31/31 with two canvases)
+**Page type:** detail page (tutorial layout: `.card-section` blocks, each h2 + two-column table — text left 50%, canvas right 50%)
 **HTML title tag:** Rank Correlation
 
 **Subtitle:** Spearman's ρ ignores the raw scores and asks one question: do the two judges put things in the same ORDER?
@@ -59,8 +59,6 @@ Two rank columns connected by lines, a d² column, and a formula panel.
 
 **Tags:** `outliers` (red), `worked example` (green)
 
-This section uses the 3-column layout: text 38%, two canvases 31% each.
-
 - **Ten desserts** — the judges agree on the order all the way down
 - **One typo** — judge A's 8.1 gets entered as 81
 - **Pearson panics** — the regular r collapses from 0.98 to 0.36
@@ -71,26 +69,28 @@ This section uses the 3-column layout: text 38%, two canvases 31% each.
 
 **Why it's robust:** ranks cap how far any single point can move — the wildest outlier can only shift its own rank, never stretch the whole scale.
 
-### Visualization (canvas `c3a`, 350×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×300)
 
 Scatter of judge A vs judge B scores with the typo point highlighted.
 
 - **Title (bold 14px, `#1a5276`):** "Judge A vs Judge B, with typo".
 - **Data:** A = `[9.4, 8.8, 81, 7.3, 6.6, 5.8, 5.1, 4.3, 3.6, 2.8]`; B = `[8.9, 8.6, 8.3, 8.0, 7.8, 7.6, 7.4, 7.2, 7.1, 7.0]`.
-- **Axes:** x 0–90 (labels 0, 30, 60, 90), y scale 6.6–9.4 (labels 7, 8, 9); L-shaped gray axes; padding top 44, bottom 46, left 46, right 16; x-axis title "judge A score".
+- **Axes:** x 0–90 (labels 0, 30, 60, 90), y scale 6.6–9.4 (labels 7, 8, 9); L-shaped gray axes; padding top 44, bottom 46, left 46, right 12; x-axis title "judge A score".
 - **Points:** blue `#2a78d6` circles radius 5; the typo point (81, 8.3) red `#e74c3c` radius 7.
 - **Annotations (bold 12px):** red right-aligned "8.1 typed as 81" near the typo point; blue left-aligned "the real cluster" near the main cluster.
 
-### Visualization (canvas `c3b`, 350×300)
+### Visualization (canvas `c3b`, 310×300)
 
 Grouped bar chart: Pearson r and Spearman ρ, clean vs with the typo.
 
 - **Title (bold 14px, `#1a5276`):** "Same data, two answers".
-- **Axes:** y 0–1.00 (labels every 0.25); L-shaped gray axes; padding top 44, bottom 60, left 46, right 16.
-- **Groups (bars 44px wide, 14px gap; "clean" bar at 50% alpha, "typo" bar at 85%):**
+- **Axes:** y 0–1.00 (labels every 0.25); L-shaped gray axes; padding top 44, bottom 64, left 46, right 12.
+- **Groups (bars 40px wide, 10px gap; "clean" bar at 50% alpha, "typo" bar at 85%):**
   - "Pearson r": clean 0.98 in muted gray `#6b7280`, typo 0.36 in red `#e74c3c`.
   - "Spearman ρ": clean 1.00 in muted gray, typo 0.96 in green `#008300`.
-- **Labels:** values bold 12px `#222` above bars; "clean"/"typo" 11px muted below bars; group names bold 12px `#444` beneath.
+- **Labels:** values bold 12px `#222` above bars; "clean"/"typo" 12px muted below bars; group names bold 12px `#444` beneath.
 - **Caption (red bold 12px, bottom center):** "one typo: r loses 0.62, ρ loses 0.04".
 
 ## Where Rank Correlation Saves You
@@ -122,9 +122,9 @@ Grouped bar chart comparing Pearson vs Spearman across three data scenarios.
 
 ## Regeneration instructions
 
-- **Template:** tutorials topic-page layout. Page: `<h1>` + `.subtitle`, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, bottom border 2px solid `#2980b9`) + `table.layout`. Sections 1, 2, 4 use one `<tr>` with `td.text-col` (50%) + `td.viz-col` (50%, one 720×300 canvas). Section 3 uses the 3-column variant: `td.text-col-3` (38%) + two `td.viz-col-3` (31% each), each holding one 350×300 canvas.
+- **Template:** tutorials topic-page layout. Page: `<h1>` + `.subtitle`, then 4 `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, bottom border 2px solid `#2980b9`) + `table.layout`. Every section uses one `<tr>` with `td.text-col` (50%) + `td.viz-col` (50%); sections 1, 2, 4 hold one 720×300 canvas. One section places canvases `c3a`/`c3b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`).
 - **Text column structure per section:** `.tags` row of colored pill spans (0.72rem, 600 weight, padding 2px 10px, radius 10px — blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`); then a `<ul>` of one-line bullets each opening with `<b>bold term</b>` (`li b` in `#1a5276`); one italic `.example` paragraph (`#555`, 0.9rem); one `.key-point` callout (background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem) starting with a `<strong>` label.
 - **Page CSS:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.
-- **Canvas:** intrinsic sizes as given (720×300 or 350×300); the shared `setup(id, width, height)` helper takes optional width/height (defaults 720×300) and scales by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Hardcode all data arrays (no `Math.random()`). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
+- **Canvas:** intrinsic sizes as given (720×300 or 310×300); the shared `setup(id, width, height)` helper takes optional width/height (defaults 720×300) and scales by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Hardcode all data arrays (no `Math.random()`). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Chart palette (tutorials `P` object):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Site palette accents: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange (red `#e74c3c` used for typo/error highlights).
 - In regenerated HTML, any card links use `.html` extensions (this page has none).

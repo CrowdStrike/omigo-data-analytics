@@ -1,6 +1,6 @@
 # Bimodal Data: Two Populations in One
 
-**Page type:** detail page (tutorial topic page: `.card-section` blocks, each an h2 + two-column `table.layout` — text left 50%, canvas right 50%; section 3 uses a three-column 50/25/25 layout with two canvases)
+**Page type:** detail page (tutorial topic page: `.card-section` blocks, each an h2 + two-column `table.layout` — text left 50%, canvas right 50%)
 **HTML title tag:** Bimodal Data: Two Populations in One
 
 **Subtitle:** When one dataset secretly contains two different groups, the histogram grows two humps — and the average lands in the empty valley between them
@@ -62,8 +62,6 @@ Dot plot on a number line: the ten visits as two clusters, with mean and median 
 
 Tags: `best practice` (green), `worked example` (blue)
 
-This section uses the 3-column layout: text cell `td.text-col3` (50%) plus two viz cells `td.viz-col3` (25% each), keeping the text/viz split at 50/50.
-
 - **Split first** — label each visit takeaway or dine-in, then summarize each group
 - **Takeaway** — 10+11+12+13+14 = 60; 60 / 5 = 12 minutes, and every visit is within 2
 - **Diners** — 50+53+55+57+60 = 275; 275 / 5 = 55 minutes, all within 5
@@ -74,25 +72,27 @@ This section uses the 3-column layout: text cell `td.text-col3` (50%) plus two v
 
 **Key point:** **Rule of thumb:** if the histogram shows two humps, report two summaries — one per hump — never one blended number.
 
-### Visualization (canvas `c3a`, 360×300)
+This section's viz cell holds both canvases side by side in a `.viz-pair` flex row.
+
+### Visualization (canvas `c3a`, 310×300)
 
 Dot plot: the takeaway group alone with its mean.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Takeaway Only"
-- **Data:** values `[10, 11, 12, 13, 14]` as 10px-radius blue `#2a78d6` dots 26px above the baseline, each with its value in bold 11px white inside the dot.
-- **Axes:** number line 0–20, ticks/labels every 5 (12px `#333`); gray `#999` baseline; padding top 54, bottom 60, left 45, right 20.
-- **Mean marker:** solid green `#008300` vertical line (width 3) at 12; bold 14px green "mean 60 / 5 = 12 min" above it; bold 12px green "every visit within 2 min of it" below the label.
-- **Axis label (12px `#444`):** "minutes" bottom center.
+- **Data:** values `[10, 11, 12, 13, 14]` as 6px-radius blue `#2a78d6` dots 26px above the baseline.
+- **Axes:** number line 0–20, ticks/labels every 5 (12px `#333`); gray `#999` baseline; padding top 54, bottom 60, left 40, right 12.
+- **Mean marker:** solid green `#008300` vertical line (width 3) at 12, drawn behind the dots; bold 14px green "mean 60 / 5 = 12 min" above it; bold 12px green "every visit within 2 min of it" below the label.
+- **Axis label (12px `#444`):** "minutes: 10, 11, 12, 13, 14" bottom center.
 
-### Visualization (canvas `c3b`, 360×300)
+### Visualization (canvas `c3b`, 310×300)
 
 Dot plot: the diners group alone with its mean.
 
 - **Title (bold 15px, `#1a5276`, top center):** "Diners Only"
-- **Data:** values `[50, 53, 55, 57, 60]` as 10px-radius violet `#4a3aa7` dots 26px above the baseline, each with its value in bold 11px white inside the dot.
-- **Axes:** number line 45–65, ticks/labels every 5 (12px `#333`); gray `#999` baseline; padding top 54, bottom 60, left 45, right 20.
-- **Mean marker:** solid green `#008300` vertical line (width 3) at 55; bold 14px green "mean 275 / 5 = 55 min" above it; bold 12px green "every visit within 5 min of it" below the label.
-- **Axis label (12px `#444`):** "minutes" bottom center.
+- **Data:** values `[50, 53, 55, 57, 60]` as 6px-radius violet `#4a3aa7` dots 26px above the baseline.
+- **Axes:** number line 45–65, ticks/labels every 5 (12px `#333`); gray `#999` baseline; padding top 54, bottom 60, left 40, right 12.
+- **Mean marker:** solid green `#008300` vertical line (width 3) at 55, drawn behind the dots; bold 14px green "mean 275 / 5 = 55 min" above it; bold 12px green "every visit within 5 min of it" below the label.
+- **Axis label (12px `#444`):** "minutes: 50, 53, 55, 57, 60" bottom center.
 
 ## Why It Matters: Decisions Built on the Valley Fail Both Groups
 
@@ -124,7 +124,7 @@ Horizontal bar timeline: the 34-minute plan vs what each group actually does.
 
 ## Regeneration instructions
 
-- **Layout:** tutorial topic page. `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by `table.layout` (100% width, collapsed). Sections 1, 2, 4 use one row of `td.text-col` (50%) + `td.viz-col` (50%); section 3 uses `td.text-col3` (50%) + two `td.viz-col3` (25% each) holding canvases `c3a` (360×300) and `c3b` (360×300). All cells 12px padding, top-aligned.
+- **Layout:** tutorial topic page. `<h1>` (no index number) with 2px `#2980b9` bottom border, `.subtitle` paragraph, then four `.card-section` blocks. Each section: `<h2>` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by `table.layout` (100% width, collapsed). Every section uses one row of `td.text-col` (50%) + `td.viz-col` (50%); one section places canvases `c3a`/`c3b` (310×300 each) side by side inside its single viz cell, wrapped in a `.viz-pair` flex row (`display:flex; gap:10px`, each canvas `flex:1 1 0; min-width:0`). All cells 12px padding, top-aligned.
 - **Text cell structure:** `.tags` pill row, `<ul>` of 5 one-line bullets each opening with `<b>bold term</b>` (bold terms `#1a5276`), one italic `.example` paragraph, one `.key-point` callout.
 - **Tag pills:** 0.72rem, weight 600, padding 2px 10px, radius 10px. Colors — blue: bg `rgba(26,82,118,0.12)` text `#1a5276`; green: bg `rgba(39,174,96,0.15)` text `#27ae60`; red: bg `rgba(231,76,60,0.12)` text `#e74c3c`; orange: bg `rgba(230,126,34,0.15)` text `#e67e22`.
 - **Key-point callout:** background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example`: italic, `#555`, 0.9rem.
