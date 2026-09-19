@@ -1,6 +1,6 @@
 # Streaming / Media Domain Pitfalls
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one table per h2 section; each text cell is an `.obj-title` punchline followed by a `<ul>` of labeled one-line bullets)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one table per h2 section; each text cell is an `.obj-title` punchline followed by a `<ul>` of labeled one-line bullets)
 **HTML title tag:** Streaming / Media Domain Pitfalls
 
 **Subtitle:** Critical failure modes in recommendation systems, content metrics, and user behavior modeling for streaming platforms
@@ -151,7 +151,7 @@ Paired bar chart: stream count vs actual preference across five listening contex
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page structure — h1, `.subtitle` paragraph, then per pitfall an `<h2>` section heading followed by a one-row `.obj-table`: left `<td>` (40%) with an `.obj-title` div holding a one-line punchline (not a repeat of the h2 text) plus a `<ul>` of 7-10 `<li>` bullets, each `<strong>Label:</strong> short phrase` fitting on one line; right `<td>` (60%, centered) with a `<canvas>` (HTML attributes `width="720" height="300"`).
+- **Layout:** standard detail-page structure — h1, `.subtitle` paragraph, then per pitfall an `<h2>` section heading followed by a one-row `.obj-table`: left `<td>` (50%) with an `.obj-title` div holding a one-line punchline (not a repeat of the h2 text) plus a `<ul>` of 7-10 `<li>` bullets, each `<strong>Label:</strong> short phrase` fitting on one line; right `<td>` (50%, centered) with a `<canvas>` (HTML attributes `width="720" height="300"`).
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; `strong` `#1a5276`; `ul` margin `8px 0 8px 20px`, 0.9em, `#333`; `li` margin `4px 0`; `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px, even rows background `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; `.philosophy` callout class defined (background `#f0f4f8`, left border `4px solid #2980b9`) though unused on this page. No nav bar, no back/home links.
 - **Canvas:** shared `setupCanvas(id)` helper scales by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates); constants `CHART_FONT = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'`, `HEADER_COLOR = #1a5276`, `ACCENT_COLOR = #2980b9`. Note the drawn size (720×200) overrides the 720×300 HTML attribute.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, purple `#8e44ad`, dark slate `#2c3e50`, gray `#95a5a6`.

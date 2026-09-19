@@ -1,6 +1,6 @@
 # Publish Accuracy Without Sample Size or CI
 
-**Page type:** detail page (anti-pattern-pairs two-section layout: one `.card-section` per pattern, each with a two-column table — text left 45%, canvas right 55%)
+**Page type:** detail page (anti-pattern-pairs two-section layout: one `.card-section` per pattern, each with a two-column table — text left 50%, canvas right 50%)
 **HTML title tag:** Publish Accuracy Without Sample Size or CI
 
 **Subtitle:** '99% accuracy' on 100 examples looks identical to 99% on 100,000 — the format erases the denominator
@@ -52,7 +52,7 @@ Single "proper reporting card" mockup showing a complete metric report.
 
 ## Regeneration instructions
 
-- **Template/layout:** anti-pattern-pairs detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, then two `.card-section` blocks ("The Anti-Pattern", "The Design Pattern"). Each section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` (width 100%, border-collapse) with one row: `td.text-col` (45%) holding a paragraph, a `.key-point` callout, an italic `.example`/bold lead-in and a `<ul>`; `td.viz-col` (55%) holding the canvas.
+- **Template/layout:** anti-pattern-pairs detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, then two `.card-section` blocks ("The Anti-Pattern", "The Design Pattern"). Each section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` (width 100%, border-collapse) with one row: `td.text-col` (50%) holding a paragraph, a `.key-point` callout, an italic `.example`/bold lead-in and a `<ul>`; `td.viz-col` (50%) holding the canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; ul 0.92rem. Canvas elements `width: 100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.
 - **Canvas:** intrinsic size 720×300 via a shared `setup(id)` helper that sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Canvas `c1` in the HTML carries `height="300"`, `c2` likewise. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, bar/box fills `rgba(231,76,60,0.2)` and `rgba(39,174,96,0.2)`, gray text `#666`/`#555`.

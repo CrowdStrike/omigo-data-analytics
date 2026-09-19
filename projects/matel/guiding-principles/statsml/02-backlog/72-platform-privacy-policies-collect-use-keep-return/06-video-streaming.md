@@ -1,6 +1,6 @@
 # Video Streaming
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Video Streaming — Collect, Use, Keep, Return
 
 **Subtitle:** Watch time, pause points, abandonment — a taste and attention profile built from what you almost finished.
@@ -81,7 +81,7 @@ Two side-by-side comparison panels: export contents vs retained data.
 
 ## Regeneration instructions
 
-- **Layout:** detail page using `.obj-table` — full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + `<ul>` bullets and optional `.key-point` callout, right `<td>` (55%, `text-align: center`) holds the canvas. Cell borders `1px solid #e0e0e0`, padding 16px.
+- **Layout:** detail page using `.obj-table` — full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + `<ul>` bullets and optional `.key-point` callout, right `<td>` (50%, `text-align: center`) holds the canvas. Cell borders `1px solid #e0e0e0`, padding 16px.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.obj-title` bold `#1a5276` 1.1em; `li` 0.93em with 6px bottom margin.
 - **Callouts:** `.disclaimer` — background `#fdf3e7`, left border `3px solid #e67e22`, padding 10px 14px, 0.9em, text `#7d5a29`. `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em.
 - **Canvas:** declare intrinsic `width`/`height` attributes per chart; a shared `setupCanvas(id, w, h)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Canvases are `display: block; margin: 0 auto`.

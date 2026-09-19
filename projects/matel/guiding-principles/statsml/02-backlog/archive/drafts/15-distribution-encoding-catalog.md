@@ -1,6 +1,6 @@
 # Distribution Encoding Catalog
 
-**Page type:** detail page (TOC box + two-column obj-table layout: text left 45%, canvas right 55%, one table per encoding; plus a 3-column monospace example grid near the end)
+**Page type:** detail page (TOC box + two-column obj-table layout: text left 50%, canvas right 50%, one table per encoding; plus a 3-column monospace example grid near the end)
 **HTML title tag:** Distribution Encoding Catalog
 
 **Subtitle:** All the ways to capture a numerical feature's distribution characteristics for downstream use — each is a different lens on the same data.
@@ -368,7 +368,7 @@ Bimodal curve decomposed into two dashed Gaussian components.
 
 ## Regeneration instructions
 
-- **Layout:** TOC-reference detail page: h1, `.subtitle`, a `.toc` box (bold "Table of Contents" + ordered anchor list to the ten section ids), then one h2 per encoding, each followed by one or more `.obj-table` blocks (left `<td>` 45% with `.obj-title` + bullets/paragraphs, right `<td>` 55% centered with canvas(es) — the KDE/CDF row holds two stacked canvases `c2c`/`c2d`, the CNN row holds `c4`/`c4b`). After section 10: an h2 "Complete Example" with an inline-styled 3-column grid of monospace cards, then a `.philosophy` callout.
+- **Layout:** TOC-reference detail page: h1, `.subtitle`, a `.toc` box (bold "Table of Contents" + ordered anchor list to the ten section ids), then one h2 per encoding, each followed by one or more `.obj-table` blocks (left `<td>` 50% with `.obj-title` + bullets/paragraphs, right `<td>` 50% centered with canvas(es) — the KDE/CDF row holds two stacked canvases `c2c`/`c2d`, the CNN row holds `c4`/`c4b`). After section 10: an h2 "Complete Example" with an inline-styled 3-column grid of monospace cards, then a `.philosophy` callout.
 - **Page CSS:** body system sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px bottom border `#2980b9`; `.subtitle` `#666` 1.05em; `.obj-table` cells border `1px solid #e0e0e0`, padding 20px 24px, even rows `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; `.toc` background `#f8fafb` border `#e0e0e0` radius 4px, links `#2980b9`; `.philosophy` background `#f0f4f8`, left border `4px solid #2980b9`, 0.9em. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes per chart; shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. All chart text 17px -apple-system. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, secondary blue `#2980b9`, purple `#8e44ad`, gold `#f39c12`, dark red `#c0392b`, bar fill `rgba(26,82,118,0.35-0.4)`.

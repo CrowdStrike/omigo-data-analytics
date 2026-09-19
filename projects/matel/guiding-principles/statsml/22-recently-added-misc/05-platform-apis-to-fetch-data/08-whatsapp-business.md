@@ -1,6 +1,6 @@
 # WhatsApp Business API (Cloud API)
 
-**Page type:** detail page (two-column obj-table: text left 45%, code sample + canvas right 55%, one row)
+**Page type:** detail page (two-column obj-table: text left 50%, code sample + canvas right 50%, one row)
 **HTML title tag:** WhatsApp Business API — Platform APIs
 
 **Subtitle:** Send and receive WhatsApp messages with customers at scale through Meta's hosted Cloud API.
@@ -72,7 +72,7 @@ Grouped bar chart: template message pricing per country, four category bars per 
 
 ## Regeneration instructions
 
-- **Layout:** single page: h1, `.subtitle`, `.verified` badge, then `h2` "API Overview &amp; Per-Message Pricing" followed by a one-row `.obj-table` (left `<td>` 45% with `<strong>` sub-headings — this page uses plain `<strong>` rather than a `.section-title` div — bullet lists, and a `.key-point` callout; right `<td>` 55% with a `<strong>` heading, a `<pre>` code sample, and the canvas), then `h2` "Official API References" with a link list.
+- **Layout:** single page: h1, `.subtitle`, `.verified` badge, then `h2` "API Overview &amp; Per-Message Pricing" followed by a one-row `.obj-table` (left `<td>` 50% with `<strong>` sub-headings — this page uses plain `<strong>` rather than a `.section-title` div — bullet lists, and a `.key-point` callout; right `<td>` 50% with a `<strong>` heading, a `<pre>` code sample, and the canvas), then `h2` "Official API References" with a link list.
 - **Page style:** body system sans-serif, `#2c3e50` text, white background, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; h2 1.3em `#1a5276` with 2px `#2980b9` bottom border; `.verified` inline badge — background `#eaf2f8`, border 1px `#2980b9`, color `#1a5276`, 0.8em, radius 4px, padding 2px 10px; `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em; `.key-point` background `#f8f9fa`, left border 3px `#e74c3c`, padding 10px 14px, 0.93em; li 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="pricingChart" height="400">`, CSS `width: 100%`; redraws on window resize using `getBoundingClientRect()` width; sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and `ctx.scale` back to logical coordinates.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, neutral gray `#bdc3c7`, grays `#666`/`#888`/`#2c3e50`.

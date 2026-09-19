@@ -1,6 +1,6 @@
 # Pandemic Waves / Epidemic Data
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one h2 + one-row table per pitfall)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one h2 + one-row table per pitfall)
 **HTML title tag:** 108. Pandemic Waves / Epidemic Data
 
 **Subtitle:** Exponential growth, geographic propagation, variant mutations, testing artifacts, behavioral interventions — data patterns that broke every existing model simultaneously.
@@ -220,7 +220,7 @@ Compliance decay curves under an unchanged policy.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table` layout — one `h2` per pitfall followed by a single-row table: left `<td>` (40%) with `.obj-title` div (repeating the section title), a `<ul>` of bullets, and one `<p><strong>Example:</strong> …</p>`, right `<td>` (60%, centered) with one `<canvas width="720" height="300">` (the setup helper redraws at 720×200 logical size and fixes CSS size to 720×200). Ten sections total. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
+- **Layout:** standard detail-page `.obj-table` layout — one `h2` per pitfall followed by a single-row table: left `<td>` (50%) with `.obj-title` div (repeating the section title), a `<ul>` of bullets, and one `<p><strong>Example:</strong> …</p>`, right `<td>` (50%, centered) with one `<canvas width="720" height="300">` (the setup helper redraws at 720×200 logical size and fixes CSS size to 720×200). Ten sections total. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
 - **Page CSS:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; ul 0.9em `#333`; p 0.95em `#333`. `.philosophy` callout style defined but unused. No nav bar, no back/home links.
 - **Canvas:** one outer IIFE with a `setupCanvas(id)` helper (const/arrow style) that scales the backing store by `window.devicePixelRatio`, sets CSS size 720×200, `ctx.scale` back to logical coordinates; base chart font 17px system sans, titles bold at 15px, canvas backgrounds `#f8f9fa` with `#ccc` axes.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c` (dark red `#c0392b`), orange `#f39c12`, purple `#8e44ad`, gray `#555`/`#7f8c8d`/`#95a5a6`.

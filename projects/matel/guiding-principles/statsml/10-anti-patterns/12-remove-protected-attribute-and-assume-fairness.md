@@ -1,6 +1,6 @@
 # Remove Protected Attribute and Assume Fairness
 
-**Page type:** detail page (two card-sections, each an h2 + two-column layout table: text left 45%, canvas right 55%)
+**Page type:** detail page (two card-sections, each an h2 + two-column layout table: text left 50%, canvas right 50%)
 **HTML title tag:** Remove Protected Attribute and Assume Fairness
 
 **Subtitle:** Drop the race column — zip code, first name, university still encode it. Proxies remain
@@ -62,7 +62,7 @@ Horizontal bar chart of feature correlations with the protected attribute, with 
 
 ## Regeneration instructions
 
-- **Layout:** two `.card-section` blocks ("The Anti-Pattern", "The Design Pattern"), each with an `h2` and a `table.layout` (width 100%, border-collapse) containing one row: `td.text-col` (45%) with paragraph + `.key-point` + `.example` + `ul`, `td.viz-col` (55%) with the canvas.
+- **Layout:** two `.card-section` blocks ("The Anti-Pattern", "The Design Pattern"), each with an `h2` and a `table.layout` (width 100%, border-collapse) containing one row: `td.text-col` (50%) with paragraph + `.key-point` + `.example` + `ul`, `td.viz-col` (50%) with the canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border; canvas `width: 100%`, 1px `#e0e0e0` border, 4px radius; `.key-point` background `#f8f9fa`, 3px red `#e74c3c` left border, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; `ul` 0.92rem. The "r > 0.5" comparisons use the `&gt;` HTML entity in source. No nav bar, no back/home links.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`.
 - **Canvas:** intrinsic 720×300, scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; CSS width 100%. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

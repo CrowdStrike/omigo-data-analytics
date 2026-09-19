@@ -1,6 +1,6 @@
 # Subscription Services / Auto-Renewal
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one row per section)
 **HTML title tag:** 120. Subscription Services / Auto-Renewal
 
 **Subtitle:** Auto-renewal and cancellation friction inflate retention metrics, hiding the gap between paying subscribers and customers who actually want to stay.
@@ -164,7 +164,7 @@ Three outlined feature boxes (then/now/new tiers) with a migration arrow.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a single-row full-width table; left `<td>` (40%) holds `.obj-title` + bullet list + bold-labeled example paragraph, right `<td>` (60%, centered) holds the canvas. Even rows background `#fafcfe`.
+- **Layout:** standard detail-page `.obj-table`: one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a single-row full-width table; left `<td>` (50%) holds `.obj-title` + bullet list + bold-labeled example paragraph, right `<td>` (50%, centered) holds the canvas. Even rows background `#fafcfe`.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; bullets 0.9em `#333`. No nav bar, no back/home links.
 - **Canvas:** all 9 canvases declared `width="720" height="300"`; a shared IIFE loops over all canvases, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Default chart font 17px -apple-system.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`/`#3498db`, green `#27ae60`/`#2ecc71`, red `#e74c3c`, orange `#e67e22`/`#f39c12`, purple `#8e44ad`, gray `#7f8c8d`/`#555`/`#333`/`#666`.

@@ -1,6 +1,6 @@
 # Over-Engineering as Empire Building
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvases right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvases right ~50%, one row per section)
 **HTML title tag:** Over-Engineering as Empire Building — Common Bad Practices
 
 **Subtitle:** Complexity as Job Security — Problem needs 200 lines of SQL. You build a distributed system requiring a team of 4.
@@ -86,7 +86,7 @@ Cumulative cost line chart over 24 months: the simple solution flatlines after s
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, four `<tr>` rows (The Practice / The Incentive Problem / Variant — "Future-Proofing" / Variant — Resume-Driven Development); left `<td>` (40%) holds `.obj-title` + bullets/paragraphs, right `<td>` (60%, centered) holds the canvas(es) — row 4 stacks `c4` and `c5`.
+- **Layout:** standard detail-page `.obj-table`: full-width table, four `<tr>` rows (The Practice / The Incentive Problem / Variant — "Future-Proofing" / Variant — Resume-Driven Development); left `<td>` (50%) holds `.obj-title` + bullets/paragraphs, right `<td>` (50%, centered) holds the canvas(es) — row 4 stacks `c4` and `c5`.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` `#333` 0.95em; `ul` 0.9em `#333`, `li` margin 6px 0; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; `canvas { display: block; margin: 0 auto; width: 100%; height: auto; }`. Sharp-rendering pattern: shared `setup(id)` helper stores the logical size in `data-w`/`data-h` on first call, sizes the backing store to rendered CSS width × `devicePixelRatio` (`scale = (getBoundingClientRect().width / w) * dpr`), and `ctx.scale(scale, scale)`. Chart draw functions are pushed into a `__charts` array, run once on load, and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, gray text `#666`/`#333`.

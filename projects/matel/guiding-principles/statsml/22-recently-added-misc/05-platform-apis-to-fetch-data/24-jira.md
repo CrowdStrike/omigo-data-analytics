@@ -1,6 +1,6 @@
 # Jira Cloud REST API
 
-**Page type:** detail page (two-column obj-table layout with bordered cells: text left 45%, payload + canvas right 55%, one row)
+**Page type:** detail page (two-column obj-table layout with bordered cells: text left 50%, payload + canvas right 50%, one row)
 **HTML title tag:** Jira Cloud REST API — Platform APIs
 
 **Subtitle:** Pull issues out of Jira — along with the full history of every status change, the time people logged, and sprint dates.
@@ -82,7 +82,7 @@ Two-band timeline comparing the same issue lifecycle as reconstructed from the c
 
 ## Regeneration instructions
 
-- **Layout:** single-page detail doc: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" with one `.obj-table` (one `<tr>`: left `<td>` 45% with `.obj-title` headings + bullet lists + one `.key-point` callout; right `<td>` 55%, text-align center, with a `.payload-note`, a `pre.payload` block, and the canvas), then `h2` "Official API References" with a link list. No nav bar, no back/home links.
+- **Layout:** single-page detail doc: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" with one `.obj-table` (one `<tr>`: left `<td>` 50% with `.obj-title` headings + bullet lists + one `.key-point` callout; right `<td>` 50%, text-align center, with a `.payload-note`, a `pre.payload` block, and the canvas), then `h2` "Official API References" with a link list. No nav bar, no back/home links.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text #2c3e50, padding 30px 40px, white background. h1 1.8rem #1a5276; `.subtitle` #666 1.05em; `.verified` badge — plain variant: color #888, border 1px solid #e0e0e0, padding 2px 10px, radius 4px, 0.8em; h2 1.3em #1a5276 with 2px solid #2980b9 bottom border; `.obj-title` bold #1a5276 1.1em; `.obj-table td` border 1px solid #e0e0e0, padding 16px, vertical-align top; `.payload` background #f8f9fa, left border 3px solid #1a5276, ui-monospace 0.78em, left-aligned; `.payload-note` 0.82em #666 italic left-aligned; `.key-point` background #f8f9fa, left border 3px solid #1a5276, padding 10px 14px, 0.93em; li 0.93em; links #1a5276.
 - **Canvas:** `<canvas id="c1" height="380">`, CSS `width: 100%`; draw() sizes backing store by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates), redraw on window resize.
 - **Palette:** #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange, rgba(26,82,118,0.35) bar fill, grays #666/#ccc.

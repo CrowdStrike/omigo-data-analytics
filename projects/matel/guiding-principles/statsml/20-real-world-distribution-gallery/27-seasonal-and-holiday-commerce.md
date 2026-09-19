@@ -100,7 +100,7 @@ Overlay line chart: return volume vs staff scheduled over 30 days.
 - **Axes:** gray `#999` L-shaped axes; y max 100 (unlabeled); x labels "Dec 26" (left), "Jan 10" (middle), "Jan 25" (right); padding top 40, right 20, bottom 50, left 50.
 - **Return volume series:** days 0-2: `100 − 15·d` (100, 85, 70); days 3+: `70·exp(−0.25·(d−2))`; drawn solid `#2980b9` width 3 with area under the curve filled `rgba(52,152,219,0.2)`.
 - **Staff series:** `0.9 × return volume + 5` per day; dashed (8/4) `#e67e22` width 2.5.
-- **Annotation:** bold 11px `#1a5276` two-line text at ~40% width near the top: "If you know the shape," / "you can staff it", with a 2px `#1a5276` arrow pointing down-left to the curve.
+- **Annotation:** bold 11px `#1a5276` two-line text at 50% width near the top: "If you know the shape," / "you can staff it", with a 2px `#1a5276` arrow pointing down-left to the curve.
 - **Legend (below x-axis):** solid `#2980b9` swatch + bold 10px "Return Volume"; dashed `#e67e22` swatch + "Staff Scheduled".
 
 ## Inventory Pre-Build (Asymmetric Triangle)

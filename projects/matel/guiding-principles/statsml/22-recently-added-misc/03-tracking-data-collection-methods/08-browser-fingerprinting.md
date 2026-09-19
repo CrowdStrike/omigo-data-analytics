@@ -1,6 +1,6 @@
 # Tracking Data: Browser Fingerprinting
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Tracking Data: Browser Fingerprinting
 
 **Subtitle:** A script reads configuration values the browser exposes to any page — screen, timezone, fonts, rendering behaviour — and hashes them into one identifier. Nothing is stored on the device.
@@ -116,7 +116,7 @@ Bar chart: probability that a rejoined visitor history contains at least one wro
 
 ## Regeneration instructions
 
-- **Layout:** tracking-page `.obj-table`: full-width table, `border-collapse: collapse`, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + `.lede` paragraph, bullets and `.key-point` callouts; right `<td>` (55%, centered) holds the canvas, plus (row 2 only) the `.payload-note` caption and `.payload` pre block, both left-aligned.
+- **Layout:** tracking-page `.obj-table`: full-width table, `border-collapse: collapse`, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + `.lede` paragraph, bullets and `.key-point` callouts; right `<td>` (50%, centered) holds the canvas, plus (row 2 only) the `.payload-note` caption and `.payload` pre block, both left-aligned.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; subtitle `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `li` 0.93em with bold lead terms `li b` in `#1a5276` weight 600; `.key-point` background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em, leading `strong` in `#1a5276`; `.lbl` uppercase pill labels 0.7em bold — `.lbl-purpose` background `#eaf2fb` color `#1a5276`, `.lbl-effect` background `#fdf0e6` color `#a8501c`; `.payload` monospace 0.78em, background `#f8f9fa`, left border `3px solid #1a5276`, `white-space: pre`; `.payload-note` 0.82em italic `#666`. No nav bar, no back/home links.
 - **Canvas:** each canvas declares intrinsic `width`/`height` attributes (720×320); a shared `setupCanvas(id)` helper reads those attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Helpers: `tint(hex, a)` for translucent fills, `rr(ctx, x, y, w, h, r)` rounded-rect path. Chart 3 computes bar heights from the literal formula 1−(1−0.005)^n over joins [1, 10, 50, 200, 600] — no random data.
 - **Palette:** declared once as tokens `P` — blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`, ink `#1a5276`, text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Red is deliberately excluded from the series rotation (reserved for genuine alarm states). Project-wide palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

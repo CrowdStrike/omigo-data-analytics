@@ -1,6 +1,6 @@
 # Corporate & Market Data Exhaust — Commerce Leaves a Public Trail
 
-**Page type:** detail page (two-column layout table per section: text left 45%, canvas right 55%, one `.lang-section` per topic)
+**Page type:** detail page (two-column layout table per section: text left 50%, canvas right 50%, one `.lang-section` per topic)
 **HTML title tag:** Corporate & Market Data Exhaust — Commerce Leaves a Public Trail
 
 **Subtitle:** Markets and internet infrastructure generate publicly readable data as a side effect of operating. Disclosure rules force it, transparent-by-design ledgers publish it, and open technical registries record it — none of it was collected "about" anyone, yet all of it is readable by everyone.
@@ -108,7 +108,7 @@ Mock competitor-intelligence dashboard: five bordered panels, each with a colore
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page (kusto-style 2-col): h1, `.subtitle`, `.intro` callout, then one `.lang-section` per numbered topic. Each section: `<h2>` with 2px `#2980b9` bottom border, then a `table.layout` (border-collapse, full width) with one row: `td.text-col` (45%) holding an intro sentence, a `<ul>` of labeled bullets (bold lead terms), and a `.key-point` div; `td.viz-col` (55%) holding the canvas. No index number in the h1.
+- **Layout:** backlog detail page (kusto-style 2-col): h1, `.subtitle`, `.intro` callout, then one `.lang-section` per numbered topic. Each section: `<h2>` with 2px `#2980b9` bottom border, then a `table.layout` (border-collapse, full width) with one row: `td.text-col` (50%) holding an intro sentence, a `<ul>` of labeled bullets (bold lead terms), and a `.key-point` div; `td.viz-col` (50%) holding the canvas. No index number in the h1.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `.intro` background `#f0f4f8` with 3px `#2980b9` left border; `.key-point` background `#f8f9fa` with 3px `#e74c3c` left border; ul 0.92rem. Canvases `width: 100%`, 1px `#e0e0e0` border, 4px radius.
 - **Canvases:** intrinsic width 720, heights as given per chart (420/380/360/420); shared `setupCanvas(id, h)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple accent `#8e44ad`, bar fill `rgba(26,82,118,0.35)`, gray text `#666`/`#999`.

@@ -1,6 +1,6 @@
 # Scala
 
-**Page type:** detail page (kusto-style two-column layout: text column left 45% with bullets, key-point callout and tag pills; viz column right 55% with one canvas plus a code block)
+**Page type:** detail page (kusto-style two-column layout: text column left 50% with bullets, key-point callout and tag pills; viz column right 50% with one canvas plus a code block)
 **HTML title tag:** Scala
 
 **Subtitle:** OOP + FP on the JVM. Built for Spark, actors, and DSLs.
@@ -57,7 +57,7 @@ def describe(x: Any): String = x match {
 
 ## Regeneration instructions
 
-- **Layout:** single `table.layout` with one `<tr>`: left `td.text-col` (45%) holds the bullet list, `.key-point` callout, and `.tags` pill row; right `td.viz-col` (55%) holds the canvas then the code block. Cell padding 12px, `vertical-align: top`.
+- **Layout:** single `table.layout` with one `<tr>`: left `td.text-col` (50%) holds the bullet list, `.key-point` callout, and `.tags` pill row; right `td.viz-col` (50%) holds the canvas then the code block. Cell padding 12px, `vertical-align: top`.
 - **Page style:** body system-ui/-apple-system sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9` and 8px padding-bottom; subtitle `#666` 0.95rem, margin-bottom 32px; `ul` 0.92rem with 20px left margin; no nav bar, no back/home links.
 - **Key-point style:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, margin-top 12px, 0.9rem.
 - **Tag pill style:** `.tags` flex-wrap with 8px gap, margin-top 20px; `.tag` padding 4px 10px, radius 4px, 0.78rem, weight 600. Colors: `.tag-green` background `#eafaf1` text `#1e8449`; `.tag-red` background `#fdedec` text `#c0392b`; `.tag-blue` background `#eaf2f8` text `#1a5276`; `.tag-orange` background `#fef9e7` text `#b7540c`.

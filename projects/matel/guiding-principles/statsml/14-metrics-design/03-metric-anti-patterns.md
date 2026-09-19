@@ -1,6 +1,6 @@
 # Metric Anti-Patterns
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvas right 60%, one h2 + one-row table per anti-pattern, even rows shaded)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one h2 + one-row table per anti-pattern, even rows shaded)
 **HTML title tag:** Metric Anti-Patterns
 
 **Subtitle:** Common patterns in metric design that guarantee gaming, misinterpretation, or invisible failure. Each one with a real-world example and visualization.
@@ -339,7 +339,7 @@ Forest plot: the same published "99%" at four sample sizes, with its confidence 
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, `.subtitle`, then per anti-pattern: `<h2>N. Title</h2>` (h2 1.3em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 6px) followed by a one-row `.obj-table` — left `<td>` (40%) holds `.obj-title`, bullets, and a fix/pattern `<p>`; right `<td>` (60%, centered) holds the canvas. `.obj-table tr:nth-child(even) td` background `#fafcfe`.
+- **Layout:** detail page. h1, `.subtitle`, then per anti-pattern: `<h2>N. Title</h2>` (h2 1.3em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 6px) followed by a one-row `.obj-table` — left `<td>` (50%) holds `.obj-title`, bullets, and a fix/pattern `<p>`; right `<td>` (50%, centered) holds the canvas. `.obj-table tr:nth-child(even) td` background `#fafcfe`.
 - **Canvas IDs:** note section 8 uses `ca9` and section 9 uses `ca8` (the ids are swapped relative to section order in the source); all others are `caN` matching their order (`ca1`–`ca7`, `ca10`–`ca16`). Sizes 720×300 except `ca15` at 720×340.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; subtitle `#666` 1.05em; ul 0.9em `#333`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** shared `setup(id)` reads intrinsic `width`/`height` attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates; charts redraw on window resize (debounced). All data arrays are hardcoded literals — never `Math.random()`.

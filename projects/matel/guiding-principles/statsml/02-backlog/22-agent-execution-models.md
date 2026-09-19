@@ -1,6 +1,6 @@
 # Continuous Monitoring Agent Execution Models
 
-**Page type:** detail page (backlog-style: intro callout, numbered h2 sections, two-column layout table with text left ~45% and canvas right ~55%; last section has two stacked canvases)
+**Page type:** detail page (backlog-style: intro callout, numbered h2 sections, two-column layout table with text left ~50% and canvas right ~50%; last section has two stacked canvases)
 **HTML title tag:** Continuous Monitoring Agent Execution Models — Discussion Backlog
 
 **Subtitle:** How work gets distributed across agents that watch, re-profile, and trigger
@@ -134,7 +134,7 @@ Horizontal five-stage cascade chain of what agents actually monitor.
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style. `<h1>` (2rem, `#1a5276`, 2px solid `#2980b9` bottom border), `.subtitle` (`#666`, 0.95rem), `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem). Each section is a `.lang-section` (40px bottom margin) with an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (45%) with intro paragraph + bullets/callouts, right `td.viz-col` (55%) with the canvas. Section 4's viz cell stacks two canvases (`c4` then `c5`).
+- **Layout:** backlog detail-page style. `<h1>` (2rem, `#1a5276`, 2px solid `#2980b9` bottom border), `.subtitle` (`#666`, 0.95rem), `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem). Each section is a `.lang-section` (40px bottom margin) with an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (50%) with intro paragraph + bullets/callouts, right `td.viz-col` (50%) with the canvas. Section 4's viz cell stacks two canvases (`c4` then `c5`).
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem.
 - **Inline code:** `code` — background `#e8f0f8`, padding 2px 6px, radius 3px, 0.85em, `#1a5276`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; `ul` 0.92rem with 20px left margin (section 3 has a nested `ul` for variants); canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius.

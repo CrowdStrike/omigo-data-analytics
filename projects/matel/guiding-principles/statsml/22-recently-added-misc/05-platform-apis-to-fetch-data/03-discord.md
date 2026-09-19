@@ -1,6 +1,6 @@
 # Discord Messages API
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, code sample + canvas right 55%, one Overview row; second h2 section with reference links)
+**Page type:** detail page (two-column obj-table layout: text left 50%, code sample + canvas right 50%, one Overview row; second h2 section with reference links)
 **HTML title tag:** Discord Messages API — Platform APIs
 
 **Subtitle:** Read and send messages in Discord servers your bot has joined — live as they happen, or back through channel history.
@@ -73,7 +73,7 @@ Sequence diagram between two lifelines — "Client" (left, x=90) and "Discord Ga
 
 ## Regeneration instructions
 
-- **Layout:** single detail page: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" with a full-width `.obj-table` (one `<tr>`; left `<td>` 45% text, right `<td>` 55% code + canvas), then `h2` "Official API References" with a plain `<ul>` of links. No nav bar, no back/home links.
+- **Layout:** single detail page: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" with a full-width `.obj-table` (one `<tr>`; left `<td>` 50% text, right `<td>` 50% code + canvas), then `h2` "Official API References" with a plain `<ul>` of links. No nav bar, no back/home links.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, white background, padding 30px 40px; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge — background `#eaf2f8`, border `1px solid #e0e0e0`, text `#1a5276`, padding 2px 10px, radius 4px, 0.8em; h2 1.3em `#1a5276` with `border-bottom: 2px solid #2980b9`; obj-table cells padding 16px, top-aligned (no cell borders); `.section-title` bold `#1a5276` 1.05em; li 0.93em; links `#1a5276`.
 - **Code block:** `pre` — background `#f4f4f4`, padding 14px, radius 6px, 0.82em, left-aligned, horizontal overflow scroll.
 - **Callout:** `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em.

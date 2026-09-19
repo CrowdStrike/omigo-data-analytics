@@ -1,6 +1,6 @@
 # ETL Structure
 
-**Page type:** detail page (backlog-style 2-col text/viz layout: numbered h2 sections, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog-style 2-col text/viz layout: numbered h2 sections, text left ~50%, canvas right ~50%)
 **HTML title tag:** ETL Structure
 
 **Subtitle:** Principled organization of Extract-Transform-Load pipelines — separation of concerns, testability, and lineage preservation
@@ -78,7 +78,7 @@ Status: stub. Needs brainstorming session. (small gray `#999` 12px text at page 
 
 ## Regeneration instructions
 
-- **Template:** backlog detail-page layout — h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, 8px 12px padding, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` row with `td.text-col` (45%) holding the table/bullets and `td.viz-col` (55%) holding the canvas.
+- **Template:** backlog detail-page layout — h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, 8px 12px padding, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` row with `td.text-col` (50%) holding the table/bullets and `td.viz-col` (50%) holding the canvas.
 - **Table style:** `.ex-table` — full width, collapsed borders, 0.88em; `th` background `#1a5276` white text; `td` 6px 8px padding, `1px solid #ddd` border; even rows `#f8f9fa`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `ul` 0.92rem; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius; `code` on `#f4f4f4` background.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; grays `#444`/`#555`/`#888`/`#999`.

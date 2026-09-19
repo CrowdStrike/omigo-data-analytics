@@ -1,6 +1,6 @@
 # Spaceship Launch / Rocket Data
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one h2 + one-row table per pitfall)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one h2 + one-row table per pitfall)
 **HTML title tag:** 104. Spaceship Launch / Rocket Data
 
 **Subtitle:** One-shot systems where data decisions are irreversible, bandwidth is limited, and ground truth only exists after you've already committed.
@@ -183,7 +183,7 @@ Side-by-side comparison boxes: ground testing vs actual flight.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table` layout — one `h2` section heading per pitfall, followed by a full-width single-row table: left `<td>` (40%) holds `.obj-title` div + a `<ul>` of bullets, right `<td>` (60%, centered) holds one `<canvas>`. Even rows have background `#fafcfe`. Cell borders `1px solid #e0e0e0`, padding 20px 24px.
+- **Layout:** standard detail-page `.obj-table` layout — one `h2` section heading per pitfall, followed by a full-width single-row table: left `<td>` (50%) holds `.obj-title` div + a `<ul>` of bullets, right `<td>` (50%, centered) holds one `<canvas>`. Even rows have background `#fafcfe`. Cell borders `1px solid #e0e0e0`, padding 20px 24px.
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6. h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border and 8px padding-bottom; subtitle `#666` 1.05em; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` in `#1a5276`; ul 0.9em `#333`. `.philosophy` callout style defined (background `#f0f4f8`, left border 4px `#2980b9`) but unused. Canvas CSS: display block, width 720px, height 200px, margin 0 auto. No nav bar, no back/home links.
 - **Canvas:** all charts drawn at 720×200 logical size via a shared `setupCanvas(id)` helper that sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates; default font 17px system sans.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#f39c12`, gray `#95a5a6`/`#555`/`#666`; canvas backgrounds `#f8f9fa` (dark space scene uses `#0a1628`).

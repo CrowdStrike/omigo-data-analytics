@@ -1,6 +1,6 @@
 # Datetime-Formatted Strings for Filenames
 
-**Page type:** detail page (backlog-style two-column layout table: text left 45%, canvas right 55%, one `.lang-section` per numbered h2; sections 1-2 hold small `ex-table` tables in the text column)
+**Page type:** detail page (backlog-style two-column layout table: text left 50%, canvas right 50%, one `.lang-section` per numbered h2; sections 1-2 hold small `ex-table` tables in the text column)
 **HTML title tag:** Datetime-Formatted Strings for Filenames
 
 **Subtitle:** Timestamp conventions that sort correctly, parse unambiguously, and work across OS/tools
@@ -88,7 +88,7 @@ Split panel: a chronologically sorted file listing (left) and forbidden characte
 
 ## Regeneration instructions
 
-- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Structure: h1, `.subtitle` paragraph, `.intro` callout, then one `.lang-section` per section — each with an h2 (numbered "N. Title") and a `table.layout` with `td.text-col` (45%) and `td.viz-col` (55%) holding the canvas. Sections 1 and 2 put an `.ex-table` in the text column; section 3 puts a bullet list. Ends with a small gray status paragraph. No index number in the page h1/title.
+- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Structure: h1, `.subtitle` paragraph, `.intro` callout, then one `.lang-section` per section — each with an h2 (numbered "N. Title") and a `table.layout` with `td.text-col` (50%) and `td.viz-col` (50%) holding the canvas. Sections 1 and 2 put an `.ex-table` in the text column; section 3 puts a bullet list. Ends with a small gray status paragraph. No index number in the page h1/title.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; section h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border. `.intro` — background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem. `.ex-table` — full width, 0.88em; th background `#1a5276` white text, padding 6px 8px, left-aligned; td 1px `#ddd` border, padding 6px 8px; even rows `#f8f9fa`. `code` background `#f4f4f4`, padding 2px 6px, radius 3px, 0.9em. `ul` 0.92rem, margin 8px 0 8px 20px. Canvas `width: 100%`, 1px `#e0e0e0` border, 4px radius. No nav bar, no back/home links.
 - **Canvas:** intrinsic width/height attributes per chart (all 720×320); scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id, h)` helper; JS declares palette constants primary `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; monospace `Menlo, monospace` for filename/timestamp text inside charts.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; bar/highlight fills `rgba(26,82,118,0.35)` and `rgba(26,82,118,0.08)`; gray text `#444`/`#555`/`#999`.

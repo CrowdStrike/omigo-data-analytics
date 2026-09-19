@@ -1,6 +1,6 @@
 # Sport Wearables: Racket, Bat & Ball Sensors
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section; picture-story canvases)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section; picture-story canvases)
 **HTML title tag:** Sport Wearables: Racket, Bat &amp; Ball Sensors
 
 **Subtitle:** Here nothing is worn at all — the sensor lives in the equipment. The tool is tracked; the athlete, and the ball off the strings, are inferences.
@@ -106,7 +106,7 @@ Picture story: one racket handed between two players, both feeding a single acco
 
 ## Regeneration instructions
 
-- **Layout:** tracking detail page — `<table class="obj-table">`, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` heading, `.lede`, bullets with bold lead terms (`li b` in `#1a5276`), `.key-point` callouts, `.lbl` label pills (last row); right `<td>` (55%, text-align center) holds the canvas, and for the "What does it collect?" row also the `.payload-note` caption plus `<pre class="payload">` block (left-aligned).
+- **Layout:** tracking detail page — `<table class="obj-table">`, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` heading, `.lede`, bullets with bold lead terms (`li b` in `#1a5276`), `.key-point` callouts, `.lbl` label pills (last row); right `<td>` (50%, text-align center) holds the canvas, and for the "What does it collect?" row also the `.payload-note` caption plus `<pre class="payload">` block (left-aligned).
 - **Page CSS:** identical to the sibling sport pages (see `01-golf.html`): body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; td borders `1px solid #2980b9`, padding 16px; `.key-point` background `#f8f9fa`, left border `3px solid #1a5276`; `.lbl-purpose` `#eaf2fb`/`#1a5276`, `.lbl-effect` `#fdf0e6`/`#a8501c`; `.payload` monospace block with ink left border. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes (c1 720×360, c2/c3 720×320); shared `setupCanvas(id)` sizes the backing store to rendered width × `window.devicePixelRatio` and `ctx.scale`s to logical coordinates. Helpers: `tint(hex,a)`, `band()` header/footer strips, `arrowHead()`, `dashedLeader()`.
 - **Palette:** `P = { blue: #2a78d6, green: #008300, magenta: #d55181, yellow: #c98500, aqua: #199e70, orange: #d95926, violet: #4a3aa7, ink: #1a5276, text: #2c3e50, mute: #6b7280, grid: #e5e9ef }`; sport hue green, measured annotations aqua (green is taken on this page), derived orange; red unused. All chart data hardcoded literal arrays; invented zones and numbers labeled schematic/illustrative.

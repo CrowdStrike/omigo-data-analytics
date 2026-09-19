@@ -1,6 +1,6 @@
 # Non-Random Assignment as 'A/B Test'
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one row per section)
 **HTML title tag:** Non-Random Assignment as A/B Test — A/B Testing Pitfalls
 
 **Subtitle:** Design Flaw — Beta opt-in users get treatment. Self-selected groups ≠ randomized groups.
@@ -55,7 +55,7 @@ Grouped bar chart: sessions per week for beta volunteers vs everyone else, befor
 
 - **Determinism rule:** no chart on this page may call `Math.random()`. Both draw functions build their data from a local seeded Park-Miller LCG (`lcg(20250110)` for `c1`, `lcg(20250302)` for `c2`), one generator per chart with a distinct fixed seed so the charts are independent and stable. Every statistic printed on a chart or asserted in the prose is computed from the generated arrays at render time.
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (40%) holds `.obj-title` + bullets/paragraphs, right `<td>` (60%, centered) holds the canvas.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets/paragraphs, right `<td>` (50%, centered) holds the canvas.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; paragraphs 0.95em `#333`; lists 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms). Immediately after `setup(id)` the script defines the canonical seeded PRNG helper `function lcg(seed)` (Park-Miller, multiplier 16807, modulus 2147483647, returning `s / 2147483647`) plus a `mean(a)` helper used for the computed labels.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`, gray text `#666`/`#333`.

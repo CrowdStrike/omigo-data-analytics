@@ -1,6 +1,6 @@
 # Notification Fatigue
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one table per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one table per section)
 **HTML title tag:** Notification Fatigue — Common Bad Practices
 
 **Subtitle:** When everything is marked urgent, nothing is. Flooding users with alerts drains cognitive capacity, destroys signal-to-noise ratio, and makes them unable to engage with the features that actually matter.
@@ -128,7 +128,7 @@ Dual line chart over 12 weeks: climbing dismiss rate vs seemingly stable DAU tha
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table` layout, one single-row `<table class="obj-table">` per section (5 tables total); left `<td>` (40%) holds `.obj-title`, paragraphs, bullets, and optional `.philosophy` callout; right `<td>` (60%, centered) holds the canvas.
+- **Layout:** standard detail-page `.obj-table` layout, one single-row `<table class="obj-table">` per section (5 tables total); left `<td>` (50%) holds `.obj-title`, paragraphs, bullets, and optional `.philosophy` callout; right `<td>` (50%, centered) holds the canvas.
 - **Page style:** body system sans-serif, white background, padding 20px 10px, line-height 1.6. Note: this page uses slightly darker text shades than siblings — body text `#1a1a1a`, p/ul `#222`, subtitle `#444`. h1 1.6em `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`; `.philosophy` callout — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em, color `#222`. No nav bar, no back/home links.
 - **Canvas:** intrinsic size 720×360 for all five; scale by `window.devicePixelRatio` via a shared `setup(id)` helper.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, greys `#888`/`#444`/`#222`.

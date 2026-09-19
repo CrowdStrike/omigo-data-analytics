@@ -1,6 +1,6 @@
 # AI Agrees with Everything You Say
 
-**Page type:** detail page (anti-pattern-pair layout: two card-sections, each a two-column table — text left 45%, canvas right 55%)
+**Page type:** detail page (anti-pattern-pair layout: two card-sections, each a two-column table — text left 50%, canvas right 50%)
 **HTML title tag:** AI Agrees with Everything You Say
 
 **Subtitle:** Confirmation bias as a service — AI agreement is reflexive, not evidence-based
@@ -65,7 +65,7 @@ Dialog-flow diagram: one user question answered with a counter-argument, plus si
 
 ## Regeneration instructions
 
-- **Template/layout:** anti-pattern-pair detail page. h1 with `border-bottom: 2px solid #2980b9`, `.subtitle` paragraph, then two `.card-section` divs ("The Anti-Pattern", "The Design Pattern"). Each section: `h2` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` with one `<tr>`: left `td.text-col` (45%) holding paragraph + `.key-point` callout + bold "Domain examples:"/"Steps:" label (inline style: margin-top 12px, weight 600, 0.92rem) + `<ul>` (+ trailing `.example` italic paragraph in the anti-pattern section); right `td.viz-col` (55%) holding one `<canvas>`.
+- **Template/layout:** anti-pattern-pair detail page. h1 with `border-bottom: 2px solid #2980b9`, `.subtitle` paragraph, then two `.card-section` divs ("The Anti-Pattern", "The Design Pattern"). Each section: `h2` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` with one `<tr>`: left `td.text-col` (50%) holding paragraph + `.key-point` callout + bold "Domain examples:"/"Steps:" label (inline style: margin-top 12px, weight 600, 0.92rem) + `<ul>` (+ trailing `.example` italic paragraph in the anti-pattern section); right `td.viz-col` (50%) holding one `<canvas>`.
 - **Page CSS:** universal reset; body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; `.subtitle` `#666` 0.95rem, margin-bottom 32px; `.card-section` margin-bottom 40px; table cells `vertical-align: top`, padding 12px; canvas `width: 100%`, `1px solid #e0e0e0` border, radius 4px; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; ul 0.92rem with 20px left margin. No nav bar, no back/home links.
 - **Canvas:** each canvas drawn at intrinsic 720×300 and scaled via `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) through a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; bubble fills `#eaf2f8` (blue tint), `#eafaf1` (green tint), `#fef9e7` (orange tint), bars `#fadbd8`/`#d5f5e3`.

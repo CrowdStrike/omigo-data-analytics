@@ -1,6 +1,6 @@
 # Turing Complete Languages & Query Systems
 
-**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column ~45% left and a canvas column ~55% right)
+**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column 50% left and a canvas column 50% right)
 **HTML title tag:** Turing Complete Languages & Query Systems
 
 **Subtitle:** Pure relational SQL is deliberately not Turing complete — it terminates, it is statically analyzable, and the optimizer can rewrite it freely. Recursive CTEs without bounds, procedural extensions and UDFs are what push a query system past that line, buying expressiveness by giving up guarantees.
@@ -188,7 +188,7 @@ Horizontal five-box pipeline diagram: imperative edges, contract gates, declarat
 
 ## Regeneration instructions
 
-- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (45%) with paragraphs, `<ul>` bullets, `.key-point`/`.questions` callouts and `.example` lines; right `td.viz-col` (55%) with the canvas. Section 4 additionally has a full-width `table.compare` below its layout table; section 6 has a full-width `.questions` callout (with a `<ul>`) below its layout table. No index number in the h1.
+- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (50%) with paragraphs, `<ul>` bullets, `.key-point`/`.questions` callouts and `.example` lines; right `td.viz-col` (50%) with the canvas. Section 4 additionally has a full-width `table.compare` below its layout table; section 6 has a full-width `.questions` callout (with a `<ul>`) below its layout table. No index number in the h1.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `strong` in `#1a5276`; lists 0.92rem.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.questions` — same but left border `3px solid #e67e22`. `.example` — italic, `#555`, 0.9rem.
 - **Inline code:** background `#f8f9fa`, border `1px solid #e0e0e0`, padding 1px 5px, radius 3px, 0.85em, color `#1a5276`.

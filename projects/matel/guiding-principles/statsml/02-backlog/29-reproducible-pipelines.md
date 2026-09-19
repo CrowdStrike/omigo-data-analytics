@@ -1,6 +1,6 @@
 # Reproducible Data Pipelines & Deterministic Output
 
-**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column ~45% left and a canvas column ~55% right)
+**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column 50% left and a canvas column 50% right)
 **HTML title tag:** Reproducible Data Pipelines & Deterministic Output
 
 **Subtitle:** A pipeline should produce identical output given identical input — regardless of when it runs, how many times it retries, or which environment executes it. This is the design philosophy that contains query determinism but reaches further: ingestion through model output, plus the audit trail that lets you replay any past decision.
@@ -209,7 +209,7 @@ Timeline diagram of retention bands vs audit horizon over the last 180 days.
 
 ## Regeneration instructions
 
-- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (45%) with paragraphs, `<ul>` bullets, `.key-point`/`.questions` callouts and `.example` lines; right `td.viz-col` (55%) with the canvas. No index number in the h1.
+- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (50%) with paragraphs, `<ul>` bullets, `.key-point`/`.questions` callouts and `.example` lines; right `td.viz-col` (50%) with the canvas. No index number in the h1.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `strong` in `#1a5276`; lists 0.92rem.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.questions` — same but left border `3px solid #e67e22`. `.example` — italic, `#555`, 0.9rem.
 - **Inline code:** background `#f8f9fa`, border `1px solid #e0e0e0`, padding 1px 5px, radius 3px, 0.85em, color `#1a5276`. (This page also defines a `table.compare` style — 0.9rem, `th` background `#f8f9fa` color `#1a5276`, all cells `1px solid #e0e0e0` — though no compare table appears in the body.)

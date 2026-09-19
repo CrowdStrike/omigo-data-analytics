@@ -1,6 +1,6 @@
 # K-Means Clustering
 
-**Page type:** detail page (two-column obj-table layout: text left 42%, canvas right 58%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** K-Means Clustering - ML Assumptions
 
 **Subtitle:** Partitions data into K spherical clusters — assumes equal-size, equal-variance blobs
@@ -95,7 +95,7 @@ Four small panels showing the same data clustered differently under four random 
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (42%) holds `.obj-title` + `.obj-desc` paragraph + `.obj-detail` lines, right `<td>` (58%, centered) holds the canvas. Even rows have background `#fafcfe`.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + `.obj-desc` paragraph + `.obj-detail` lines, right `<td>` (50%, centered) holds the canvas. Even rows have background `#fafcfe`.
 - **Detail-line labels:** "Breaks:" uses `<span class="bad">` (red `#e74c3c`, weight 600); "Verify:" uses `<span class="tag tag-check">` (background `#eafaf1`, text `#1e8449`); "Fix:" uses `<span class="tag tag-fix">` (background `#fef9e7`, text `#b7950b`). `.tag` here is weight 600, padding 1px 6px, radius 3px, 0.82em.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 unstyled browser default (this page's style block has no h1 rule — no colored border under the title); subtitle `#666` 0.95rem; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `.obj-desc` 0.9em `#333`; `.obj-detail` 0.85em `#444`, margin 4px 0. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes as given per chart (c0 is 720×300, c1–c4 are 720×340); scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setupCanvas(id)` helper; `canvas { display:block; margin:0 auto; }`.

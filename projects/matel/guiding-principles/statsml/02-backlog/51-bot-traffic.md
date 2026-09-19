@@ -1,6 +1,6 @@
 # Bot Traffic: The Invisible Majority
 
-**Page type:** detail page (backlog-style two-column layout: text left 45%, canvas right 55%, one `.lang-section` per topic; BACKLOG status badge in h1)
+**Page type:** detail page (backlog-style two-column layout: text left 50%, canvas right 50%, one `.lang-section` per topic; BACKLOG status badge in h1)
 **HTML title tag:** Bot Traffic: The Invisible Majority
 
 **Status badge:** BACKLOG (inline in h1)
@@ -109,7 +109,7 @@ Horizontal progress-style bars: bot sophistication level vs evasion rate.
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog kusto-style detail page. `<h1>` with inline `<span class="status">BACKLOG</span>` badge, `.subtitle` paragraph, `.intro` callout, then four `.lang-section` blocks, each an `<h2>` ("N. Title") plus a `table.layout` with one row: left `td.text-col` (45%) with intro paragraph, `<ul>` of bold-labeled bullets, and a `.key-point` (sections 1, 2, 4) or `.philosophy` (section 3) callout; right `td.viz-col` (55%) with the canvas.
+- **Template/layout:** backlog kusto-style detail page. `<h1>` with inline `<span class="status">BACKLOG</span>` badge, `.subtitle` paragraph, `.intro` callout, then four `.lang-section` blocks, each an `<h2>` ("N. Title") plus a `table.layout` with one row: left `td.text-col` (50%) with intro paragraph, `<ul>` of bold-labeled bullets, and a `.key-point` (sections 1, 2, 4) or `.philosophy` (section 3) callout; right `td.viz-col` (50%) with the canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border. h2 1.3rem `#1a5276`, 2px `#2980b9` bottom border. `.subtitle` `#666` 0.95rem. `.intro` and `.philosophy` background `#f0f4f8`, left border 3px `#2980b9`, 0.9rem. `.key-point` background `#f8f9fa`, left border 3px `#e74c3c`, 0.9rem. `.status` badge: background `#fef9e7`, border 1px `#f39c12`, text `#b7950b`, radius 4px. Inline `code`: background `#e8f0f8`, text `#1a5276`, radius 3px. `ul` 0.92rem. Canvases `width: 100%`, border 1px `#e0e0e0`, radius 4px.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange; also `#2980b9` accent blue, `#8e44ad` purple, `#2ecc71` light green.
 - **Canvas rendering:** canvases declare intrinsic width/height and are scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setupCanvas(id)` helper; fonts are -apple-system sans-serif.

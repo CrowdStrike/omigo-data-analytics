@@ -1,6 +1,6 @@
 # Geolocation from Photo Context Clues
 
-**Page type:** detail page (backlog-style two-column layout: numbered h2 sections, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog-style two-column layout: numbered h2 sections, text left ~50%, canvas right ~50%)
 **HTML title tag:** Geolocation from Photo Context Clues
 
 **Subtitle:** Extracting geospatial signal from unstructured visual data — a pure inference problem where every pixel encodes location constraints.
@@ -123,7 +123,7 @@ Range plot: achievable resolution per scene type on an ordinal scale.
 
 ## Regeneration instructions
 
-- **Layout:** backlog-style detail page. h1, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2; inside each, `table.layout` with a single row: left `td.text-col` (45%) holding paragraphs/bullets and a `.key-point` callout, right `td.viz-col` (55%) holding the canvas.
+- **Layout:** backlog-style detail page. h1, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2; inside each, `table.layout` with a single row: left `td.text-col` (50%) holding paragraphs/bullets and a `.key-point` callout, right `td.viz-col` (50%) holding the canvas.
 - **Page CSS:** body system sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`; section h2 1.3rem `#1a5276` with the same 2px `#2980b9` bottom border; subtitle `#666` 0.95rem; bullets 0.92rem.
 - **Callouts:** `.intro` — background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem. `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem.
 - **Canvas:** each declared 720×300 with `width: 100%`, border `1px solid #e0e0e0`, radius 4px; scaled via a shared `setupCanvas(id)` helper using `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).

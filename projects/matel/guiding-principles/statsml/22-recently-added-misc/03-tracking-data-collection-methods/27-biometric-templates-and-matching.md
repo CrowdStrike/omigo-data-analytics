@@ -1,6 +1,6 @@
 # Tracking Data: Biometric Templates and Matching
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Tracking Data: Biometric Templates and Matching
 
 **Subtitle:** A biometric system does not recognise anyone. It computes a similarity score and compares it to a threshold. Everything else — the match, the identification, the accuracy claim — follows from that one comparison.
@@ -130,7 +130,7 @@ Bar chart: wrong matches grow with the database, while the accuracy figure does 
 
 ## Regeneration instructions
 
-- **Layout:** tracking detail page — `<table class="obj-table">`, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` heading, optional `.lede`, bullets with bold lead terms (`li b` in `#1a5276`), `.key-point` callouts, `.lbl` label pills, and (row 3) a `.calc` monospace callout; right `<td>` (55%, text-align center) holds the canvas, and for the "What does it collect?" row also the `.payload-note` caption plus `<pre class="payload">` block (left-aligned).
+- **Layout:** tracking detail page — `<table class="obj-table">`, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` heading, optional `.lede`, bullets with bold lead terms (`li b` in `#1a5276`), `.key-point` callouts, `.lbl` label pills, and (row 3) a `.calc` monospace callout; right `<td>` (50%, text-align center) holds the canvas, and for the "What does it collect?" row also the `.payload-note` caption plus `<pre class="payload">` block (left-aligned).
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.obj-title` bold 1.1em `#1a5276`; td borders `1px solid #2980b9`, padding 16px; li 0.93em; `.key-point` background `#f8f9fa`, left border `3px solid #1a5276`, 0.93em, `strong:first-child` in `#1a5276`; `.lede` 0.95em; `.lbl` pills 0.7em bold uppercase radius 3px — `.lbl-purpose` `#eaf2fb`/`#1a5276`, `.lbl-effect` `#fdf0e6`/`#a8501c`; `.calc` background `#f8f9fa`, left border `3px solid #1a5276`, ui-monospace 0.88em; `.payload` background `#f8f9fa`, left border `3px solid #1a5276`, ui-monospace 0.78em, white-space pre; `.payload-note` 0.82em italic `#666`. No nav bar, no back/home links.
 - **Canvas:** each canvas declares intrinsic `width`/`height` attributes; a shared `setupCanvas(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Helpers: `tint(hex, a)`, rounded-rect `rr()`, and an `arrow(ctx, x1, y, x2, color)` horizontal-arrow helper.
 - **Palette:** charts use the validated categorical palette `P = { blue: #2a78d6, green: #008300, magenta: #d55181, yellow: #c98500, aqua: #199e70, orange: #d95926, violet: #4a3aa7, ink: #1a5276, text: #2c3e50, mute: #6b7280, grid: #e5e9ef }`; red `#e74c3c` reserved for genuine error states (used here only for false accepts). Site palette anchors: `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

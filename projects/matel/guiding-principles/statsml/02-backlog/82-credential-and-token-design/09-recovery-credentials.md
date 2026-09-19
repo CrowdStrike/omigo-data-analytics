@@ -1,6 +1,6 @@
 # Recovery Credentials
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Recovery Credentials
 
 **Subtitle:** Reset links, one-time codes, backup keys, and every other way back into an account are credentials in their own right — and because an attacker gets to pick the weakest accepted path in, they set the account's real strength.
@@ -237,7 +237,7 @@ Mapping diagram: four region/era styles, each with an arrow to its trusted recov
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/`.key-point`/`.example`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/`.key-point`/`.example`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is `- **Label:** phrase` — a bold colored label naming the concept plus a phrase short enough to fit on one line in the 45% text column (roughly ≤55 characters). Never let a bullet wrap; split long content into more labeled bullets instead of deleting facts. Lead paragraphs are at most one short sentence.
 - **Label colors:** in HTML each bullet label renders as `<span class="pt-label" style="color:...">Label:</span> phrase`, with the color chosen by meaning — `#1a5276` blue = design/fact, `#27ae60` green = win/strength, `#e74c3c` red = flaw/risk, `#e67e22` orange = context/history/trend. The intro callout and each `.key-point` open the same way with a bold colored lead word (`<strong style="color:...">Word:</strong>`) followed by one short sentence.
 - **Page CSS:** body system-ui sans-serif, background `#fff`, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; h2 1.3rem `#1a5276`; `.subtitle` `#666` 0.95rem; `.intro` background `#f0f4f8` with `border-left: 3px solid #2980b9`; `.key-point` background `#f8f9fa` with `border-left: 3px solid #e74c3c`, 0.9rem; `.example` italic `#555` 0.9rem; ul 0.92rem; `.pt-label { font-weight: 600; }`; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links.

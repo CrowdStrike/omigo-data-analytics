@@ -1,6 +1,6 @@
 # Privacy Filters on Bulk-Collected Data
 
-**Page type:** detail page (backlog-style two-column layout: text left 45%, canvas right 55%, one section per h2)
+**Page type:** detail page (backlog-style two-column layout: text left 50%, canvas right 50%, one section per h2)
 **HTML title tag:** Privacy Filters on Bulk-Collected Data
 
 **Subtitle:** Street-view cars photograph everyone on the street — then a model blurs faces and plates before publishing. The redaction step, not the collection step, is the privacy control.
@@ -113,7 +113,7 @@ Stick-figure diagram of remaining identifiers plus a transform-strength column.
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog detail page, kusto-style 2-column layout. Each section is a `.lang-section` with an `h2` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout`: left `td.text-col` 45% (bullets, ex-table, key-point callouts), right `td.viz-col` 55% (one canvas).
+- **Template/layout:** backlog detail page, kusto-style 2-column layout. Each section is a `.lang-section` with an `h2` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout`: left `td.text-col` 50% (bullets, ex-table, key-point callouts), right `td.viz-col` 50% (one canvas).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border. `.subtitle` `#666` 0.95rem. `.intro`: background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem. `.key-point`: background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `ul` 0.92rem. `.ex-table`: full width, 0.88em; th background `#1a5276` white text; td `1px solid #ddd`; even rows `#f8f9fa`.
 - **Canvas:** intrinsic 720×340 each, CSS `width: 100%`, `1px solid #e0e0e0` border, 4px radius; scaled by `window.devicePixelRatio` via a shared `setupCanvas(id)` helper (`ctx.scale` back to logical coordinates). Shared `arrow()` and `box()` helpers draw arrows with triangular heads and boxes (12%-alpha fill, 2px stroke, bold title, gray sublines).
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `#8e44ad` purple, grays `#555`/`#666`/`#999`.

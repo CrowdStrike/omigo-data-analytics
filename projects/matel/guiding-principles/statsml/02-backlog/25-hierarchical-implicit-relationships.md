@@ -1,6 +1,6 @@
 # Hierarchical Data with Implicit Relationships
 
-**Page type:** detail page (backlog kusto-style 2-col layout: text left 45%, canvas right 55%, one `.card-section` per numbered section)
+**Page type:** detail page (backlog kusto-style 2-col layout: text left 50%, canvas right 50%, one `.card-section` per numbered section)
 **HTML title tag:** Hierarchical Data with Implicit Relationships
 
 **Subtitle:** Many datasets contain columns that form implicit hierarchies — parent/child, part/whole, containment — with no explicit foreign key or tree structure. The pipeline must detect these relationships and understand their consequences for profiling and modeling.
@@ -201,7 +201,7 @@ Four detection-test → pipeline-response mapping rows (blue test chip → arrow
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page. Body → h1 → `.subtitle` → `.status` badge ("TO DISCUSS") → one `.card-section` per numbered section, each an `<h2>` plus a `table.layout` with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/`.key-point`/`.questions`/`.example`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail page. Body → h1 → `.subtitle` → `.status` badge ("TO DISCUSS") → one `.card-section` per numbered section, each an `<h2>` plus a `table.layout` with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/`.key-point`/`.questions`/`.example`, right `td.viz-col` (50%) for the canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`. `.subtitle` `#666` 0.95rem. `.status` inline-block pill: background `#e8f0f8`, color `#1a5276`, padding 3px 10px, radius 12px, 0.85em bold. h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`. `.questions` background `#f8f9fa`, `border-left: 3px solid #e67e22`. `.example` italic `#555` 0.9rem. `strong` in `#1a5276`; `code` background `#e8f0f8`, color `#1a5276`. Canvas: `width: 100%`, border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links, no index number in h1.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`.
 - **Canvas:** intrinsic width/height attributes per chart (c1–c4 and c8 are 720×300; c5–c7 are 720×380); a `setup(id)` helper (with inline equivalents for 380-tall canvases) sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

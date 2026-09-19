@@ -1,6 +1,6 @@
 # Monty Hall as Information Update Paradox
 
-**Page type:** detail page (backlog 2-col layout: text left 45%, canvas right 55%, one `table.layout` row per `.card-section`)
+**Page type:** detail page (backlog 2-col layout: text left 50%, canvas right 50%, one `table.layout` row per `.card-section`)
 **HTML title tag:** Backlog: Monty Hall as Information Update Paradox
 
 **Subtitle:** Backlog item for 29-statistical-paradoxes. Hard to detect, hard to explain, but real.
@@ -141,7 +141,7 @@ Two-panel bar comparison: informed vs accidental elimination.
 
 ## Regeneration instructions
 
-- **Template:** backlog detail page (kusto-style 2-col layout). Structure: h1, `.subtitle` paragraph, then one `.card-section` per section, each with an `<h2>` and a `table.layout` single `<tr>`: left `<td class="text-col">` (45%) with paragraph/bullets/key-point/example, right `<td class="viz-col">` (55%) with the canvas. A `.philosophy` status callout follows the last section. No index number in the h1, no `.intro` block on this page.
+- **Template:** backlog detail page (kusto-style 2-col layout). Structure: h1, `.subtitle` paragraph, then one `.card-section` per section, each with an `<h2>` and a `table.layout` single `<tr>`: left `<td class="text-col">` (50%) with paragraph/bullets/key-point/example, right `<td class="viz-col">` (50%) with the canvas. A `.philosophy` status callout follows the last section. No index number in the h1, no `.intro` block on this page.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border. `.subtitle` `#666` 0.95rem. `.key-point` background `#f8f9fa`, left border 3px solid `#e74c3c`, padding 8px 12px, 0.9rem. `.example` italic `#555` 0.9rem. `.philosophy` background `#f0f4f8`, left border 4px solid `#2980b9`, padding 12px 16px, 0.9rem. `ul` 0.92rem; `strong` colored `#1a5276`. Canvas `width: 100%`, border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, bar fill `rgba(26,82,118,0.35)`, muted gray `#888`/`#999`.
 - **Canvas:** canvases c1, c2, c4, c5 are 720×300 via a shared `setup(id)` helper; c3 is 720×380 with inline setup. All scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

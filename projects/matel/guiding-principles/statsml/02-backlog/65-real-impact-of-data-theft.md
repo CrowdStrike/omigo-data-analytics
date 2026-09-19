@@ -1,6 +1,6 @@
 # Real Impact of Data Theft
 
-**Page type:** detail page (backlog-style two-column layout: numbered h2 sections, text left ~45%, canvas right ~55%; DISCUSS status badge next to h1)
+**Page type:** detail page (backlog-style two-column layout: numbered h2 sections, text left ~50%, canvas right ~50%; DISCUSS status badge next to h1)
 **HTML title tag:** Real Impact of Data Theft
 
 **Status badge (next to h1):** DISCUSS
@@ -85,7 +85,7 @@ Hub-and-spoke diagram: two red hub circles with three spoke boxes each.
 
 ## Regeneration instructions
 
-- **Layout:** backlog-style detail page. h1 with inline `.status` badge, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2; inside each, `table.layout` with a single row: left `td.text-col` (45%) holding paragraphs/bullets/`.key-point`/`table.data`, right `td.viz-col` (55%) holding the canvas.
+- **Layout:** backlog-style detail page. h1 with inline `.status` badge, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2; inside each, `table.layout` with a single row: left `td.text-col` (50%) holding paragraphs/bullets/`.key-point`/`table.data`, right `td.viz-col` (50%) holding the canvas.
 - **Page CSS:** body system sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`; section h2 1.3rem `#1a5276` with the same 2px `#2980b9` bottom border; subtitle `#666` 0.95rem; bullets 0.92rem.
 - **Callouts:** `.intro` — background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem. `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem.
 - **Status badge:** `.status` inline-block, background `#fef9e7`, border `1px solid #f39c12`, color `#b7950b`, padding 2px 10px, radius 4px, 0.75em, text "DISCUSS".

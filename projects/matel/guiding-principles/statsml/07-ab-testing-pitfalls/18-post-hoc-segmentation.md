@@ -1,6 +1,6 @@
 # Post-Hoc Segmentation
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one row per section)
 **HTML title tag:** Post-Hoc Segmentation — A/B Testing Pitfalls
 
 **Subtitle:** Deliberate — Test failed overall? Find the subgroup where p<0.05.
@@ -46,7 +46,7 @@ Bar chart: % lift per slice of a flat test — most bars hover near zero, one ra
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (40%) holds `.obj-title` + bullets/paragraphs, right `<td>` (60%, centered) holds the canvas.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets/paragraphs, right `<td>` (50%, centered) holds the canvas.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; paragraphs 0.95em `#333`; bullets 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, gray text `#666`/`#333`.

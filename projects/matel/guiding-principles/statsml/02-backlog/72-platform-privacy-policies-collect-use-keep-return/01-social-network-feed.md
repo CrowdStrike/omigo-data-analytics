@@ -1,6 +1,6 @@
 # Social Network / Feed
 
-**Page type:** detail page (obj-table layout: one row per section, text left 45%, canvas right 55% centered)
+**Page type:** detail page (obj-table layout: one row per section, text left 50%, canvas right 50% centered)
 **HTML title tag:** Social Network / Feed — Collect, Use, Keep, Return
 
 **Subtitle:** The social graph, dwell time per post, drafts you never published — and interests inferred from all three.
@@ -104,7 +104,7 @@ Two side-by-side panels comparing export contents vs retained-but-not-returned d
 
 ## Regeneration instructions
 
-- **Template/layout:** platform-privacy-policies detail page. h1, `.subtitle`, one `.disclaimer` callout, then a single `.obj-table` (full-width, border-collapse) with four `<tr>` rows — one per section (collected / used / kept / returned). Left `<td>` (45%) holds `.obj-title` + `<ul>` bullets + optional `.key-point` box and paragraph; right `<td>` (55%, text-align center) holds the canvas.
+- **Template/layout:** platform-privacy-policies detail page. h1, `.subtitle`, one `.disclaimer` callout, then a single `.obj-table` (full-width, border-collapse) with four `<tr>` rows — one per section (collected / used / kept / returned). Left `<td>` (50%) holds `.obj-title` + `<ul>` bullets + optional `.key-point` box and paragraph; right `<td>` (50%, text-align center) holds the canvas.
 - **Page CSS:** body -apple-system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; subtitle `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `li` 0.93em; `.key-point` background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em; `.disclaimer` background `#fdf3e7`, left border `3px solid #e67e22`, padding 10px 14px, 0.9em, text `#7d5a29`. No nav bar, no back/home links.
 - **Palette:** `#1a5276` primary blue, `#2980b9` secondary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `#8e44ad` purple, gray `#999`/`#666`.
 - **Canvas:** declare intrinsic `width`/`height` attributes per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setupCanvas(id, w, h)` helper.

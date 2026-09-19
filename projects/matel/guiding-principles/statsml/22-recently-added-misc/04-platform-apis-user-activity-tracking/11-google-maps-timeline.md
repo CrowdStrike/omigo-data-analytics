@@ -1,6 +1,6 @@
 # Google Maps Timeline
 
-**Page type:** detail page (two-column obj-table layout: descriptive text left 45%, payload + canvas right 55%, one row)
+**Page type:** detail page (two-column obj-table layout: descriptive text left 50%, payload + canvas right 50%, one row)
 **HTML title tag:** Google Maps Timeline
 
 **Subtitle:** Location visits, travel routes, dwell time, and place categories — a continuous record of where you have been, now transitioning to on-device storage.
@@ -87,7 +87,7 @@ Horizontal bar chart: average daily minutes by place category.
 
 ## Regeneration instructions
 
-- **Layout:** platform-API detail page. h1 + `.subtitle`, then a single `.obj-table` with one `<tr>`: left `<td>` (45%) holds `.obj-title` div headings ("What It Provides", "Authentication", "Granularity", "Major Transition (2024–2025)", "Business Scenarios", "Restrictions") with inline `style="margin-top: 18px;"` after the first, paragraphs and a `.key-point` callout; right `<td>` (55%) holds "Payload Example" title, `.payload` block, "Dwell Time Distribution" title, canvas, and centered caption paragraph. After the table, `<h2>Official API References</h2>` with a `<ul>` of links.
+- **Layout:** platform-API detail page. h1 + `.subtitle`, then a single `.obj-table` with one `<tr>`: left `<td>` (50%) holds `.obj-title` div headings ("What It Provides", "Authentication", "Granularity", "Major Transition (2024–2025)", "Business Scenarios", "Restrictions") with inline `style="margin-top: 18px;"` after the first, paragraphs and a `.key-point` callout; right `<td>` (50%) holds "Payload Example" title, `.payload` block, "Dwell Time Distribution" title, canvas, and centered caption paragraph. After the table, `<h2>Official API References</h2>` with a `<ul>` of links.
 - **Page style:** `* { box-sizing: border-box; margin: 0; padding: 0; }`; body system sans-serif (-apple-system stack), white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`, margin-bottom 4px; `.subtitle` `#666` 1.05em, margin-bottom 24px. No nav bar, no back/home links.
 - **Table style:** `.obj-table` full width, border-collapse; td vertical-align top, padding 16px, border `1px solid #2980b9`; `.obj-title` bold `#1a5276` 1.1em, margin-bottom 8px.
 - **Payload block:** `.payload` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px, ui-monospace/Menlo 0.78em, `white-space: pre`, `overflow-x: auto`, line-height 1.45, margin 12px 0.

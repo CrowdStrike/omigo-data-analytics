@@ -1,6 +1,6 @@
 # Netflix Viewing Activity
 
-**Page type:** detail page (single-row two-column obj-table: text left 45%, payload samples + canvas right 55%)
+**Page type:** detail page (single-row two-column obj-table: text left 50%, payload samples + canvas right 50%)
 **HTML title tag:** Netflix Viewing Activity
 
 **Subtitle:** Personal data export via account settings and viewing activity page
@@ -86,7 +86,7 @@ Bar chart: weekly viewing hours over 26 weeks with binge weeks highlighted and a
 
 ## Regeneration instructions
 
-- **Layout:** single `.obj-table` (full width, collapsed borders) with one `<tr>`: left `<td>` (45%) holds `.obj-title` headings, two `.key-point` callouts, bullet lists, and a `.missing` callout; right `<td>` (55%, text-align center) holds two `.payload-note` + `.payload` blocks and the canvas. Subtitle and verified lines are `<div>`s on this page.
+- **Layout:** single `.obj-table` (full width, collapsed borders) with one `<tr>`: left `<td>` (50%) holds `.obj-title` headings, two `.key-point` callouts, bullet lists, and a `.missing` callout; right `<td>` (50%, text-align center) holds two `.payload-note` + `.payload` blocks and the canvas. Subtitle and verified lines are `<div>`s on this page.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` 0.85em `#888`; `.obj-title` bold `#1a5276` 1.1em; table cell borders `1px solid #2980b9`, padding 16px; li 0.93em.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px. `.missing` — background `#fdf2f2`, left border `3px solid #e74c3c`.
 - **Payload block:** `.payload` — background `#f8f9fa`, left border `3px solid #1a5276`, monospace (ui-monospace/Menlo) 0.78em, white-space pre, left-aligned; `.payload-note` 0.82em `#666` italic left-aligned.

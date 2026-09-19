@@ -151,7 +151,7 @@ Equation-box diagram plus horizontal bars comparing assumed vs actual collapse p
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page structure — h1, `.subtitle`, then one `<h2>` per pitfall, each followed by a one-row `.obj-table`: left `<td>` (40%) holds `.obj-title` + `<ul>` of labeled bullets, right `<td>` (60%, centered) holds one canvas. Even table rows background `#fafcfe`.
+- **Layout:** standard detail-page structure — h1, `.subtitle`, then one `<h2>` per pitfall, each followed by a one-row `.obj-table`: left `<td>` (50%) holds `.obj-title` + `<ul>` of labeled bullets, right `<td>` (50%, centered) holds one canvas. Even table rows background `#fafcfe`.
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border, padding-bottom 8px; subtitle `#666` 1.05em; ul 0.9em `#333`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `.philosophy` callout style available (background `#f0f4f8`, left border `4px solid #2980b9`) though unused on this page. No nav bar, no back/home links.
 - **Canvases:** all six declared 720×300; scaled by `window.devicePixelRatio` via a shared `setup(id)` helper that multiplies the backing store, and calls `ctx.scale` so drawing stays in logical coordinates. Chart text is 17px -apple-system (bold for titles/emphasis).
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, grays `#333`/`#555`/`#666`/`#999`.

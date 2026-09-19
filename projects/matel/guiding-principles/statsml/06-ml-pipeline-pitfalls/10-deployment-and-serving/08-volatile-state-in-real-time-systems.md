@@ -1,6 +1,6 @@
 # Pitfall: Volatile State in Real-Time Systems
 
-**Page type:** detail page (three card-sections, each a two-column layout table: text left 45%, canvas right 55%)
+**Page type:** detail page (three card-sections, each a two-column layout table: text left 50%, canvas right 50%)
 **HTML title tag:** Volatile State in Real-Time Systems
 
 **Subtitle:** Data changes between API calls, model sees inconsistent state causing prediction errors.
@@ -88,7 +88,7 @@ Pipeline flowchart: snapshot read → model prediction → freshness-gate diamon
 
 ## Regeneration instructions
 
-- **Layout:** three `.card-section` blocks ("The Problem", "Why It Happens", "The Correct Approach"), each with an h2 underlined by `2px solid #2980b9` and a `table.layout` (one `<tr>`): left `<td class="text-col">` (45%) holds `.tags` pills, a `<ul>` of labeled bullets, a `.example` paragraph, and a `.key-point` callout; right `<td class="viz-col">` (55%) holds one canvas.
+- **Layout:** three `.card-section` blocks ("The Problem", "Why It Happens", "The Correct Approach"), each with an h2 underlined by `2px solid #2980b9` and a `table.layout` (one `<tr>`): left `<td class="text-col">` (50%) holds `.tags` pills, a `<ul>` of labeled bullets, a `.example` paragraph, and a `.key-point` callout; right `<td class="viz-col">` (50%) holds one canvas.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `2px solid #2980b9` bottom border; `.subtitle` `#666` 0.95rem; `li b` in `#1a5276`; `ul` 0.92rem.
 - **Tag pills:** `.tag` inline-block, 0.72rem bold, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Callouts:** `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem.

@@ -1,6 +1,6 @@
 # Controller, Processor, Data Subject — Who's Who
 
-**Page type:** detail page (backlog-style two-column layout: text left 45%, canvas right 55%, one section per h2)
+**Page type:** detail page (backlog-style two-column layout: text left 50%, canvas right 50%, one section per h2)
 **HTML title tag:** Controller, Processor, Data Subject — Who's Who
 
 **Subtitle:** Privacy law assigns every party in a data flow one of three roles
@@ -109,7 +109,7 @@ Decision-flow diagram: three question boxes on the left, each with a "yes" arrow
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog detail page, kusto-style 2-column layout. Each section is a `.lang-section` with an `h2` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout` (border-collapse, 12px cell padding): left `td.text-col` 45% with bullets/tables/key-points, right `td.viz-col` 55% with one canvas.
+- **Template/layout:** backlog detail page, kusto-style 2-column layout. Each section is a `.lang-section` with an `h2` (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout` (border-collapse, 12px cell padding): left `td.text-col` 50% with bullets/tables/key-points, right `td.viz-col` 50% with one canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border. `.subtitle` `#666` 0.95rem. `.intro` callout: background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem. `.key-point` callout: background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `ul` 0.92rem. `.ex-table`: full width, 0.88em; th background `#1a5276` white text padding 6px 8px; td 6px 8px padding, `1px solid #ddd` border; even rows `#f8f9fa`.
 - **Canvas:** intrinsic 720×340, CSS `width: 100%`, `1px solid #e0e0e0` border, 4px radius; scaled by `window.devicePixelRatio` via a shared `setupCanvas(id)` helper (`ctx.scale` back to logical coordinates). Shared `arrow()` and `roleBox()` helpers draw arrows with triangular heads and role boxes (12%-alpha fill, 2px stroke, bold title, gray sublines).
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `#8e44ad` purple, grays `#555`/`#666`/`#999`.

@@ -1,6 +1,6 @@
 # Abandoned Custom Features in Pipeline
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvas right 60%, one row)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row)
 **HTML title tag:** Abandoned Custom Features — Common Bad Practices
 
 **Subtitle:** Negligent Accumulation — Added tracking or a feature for a short-term research project. Project ended. Feature never launched. The custom instrumentation still runs — consuming compute, adding latency, polluting the schema. Nobody removes it because nobody owns it anymore.
@@ -47,7 +47,7 @@ Stacked area chart: pipeline accumulating dead features over 36 months.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table with `border-collapse: collapse`, one `<tr>` with left `<td>` (40%) holding three `.obj-title` blocks (second and third with `margin-top:14px`) each followed by a `<ul>`, then two closing `<p>` paragraphs; right `<td>` (60%, centered) holds the single canvas.
+- **Layout:** standard detail-page `.obj-table`: full-width table with `border-collapse: collapse`, one `<tr>` with left `<td>` (50%) holding three `.obj-title` blocks (second and third with `margin-top:14px`) each followed by a `<ul>`, then two closing `<p>` paragraphs; right `<td>` (50%, centered) holds the single canvas.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` `#333` 0.95em; `ul` 0.9em `#333`, margin 8px 0 8px 20px; `li` margin 6px 0; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`, margin-bottom 8px. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width="720" height="400"`; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; `canvas { display: block; margin: 0 auto; }`. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, area fills `rgba(231,76,60,0.3)` and `rgba(39,174,96,0.3)`, gray text `#666`/`#555`/`#333`.

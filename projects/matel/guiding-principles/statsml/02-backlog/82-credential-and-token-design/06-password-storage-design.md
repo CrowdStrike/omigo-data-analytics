@@ -1,6 +1,6 @@
 # Password Storage Design
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Password Storage Design
 
 **Subtitle:** From plaintext to memory-hard hashing — each design was forced by the attack that broke the one before, and the choice decides how a leaked database ages.
@@ -127,7 +127,7 @@ Horizontal bar ranking: prevalence of storage defenses.
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for bullets/`.key-point`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for bullets/`.key-point`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is one line — a bold colored label naming the concept plus a phrase short enough (≤55 characters) not to wrap in the 45% text column. Long ideas are split into more labeled bullets, never longer ones. Markdown form: `- **Label:** [color] phrase`. HTML form: `<span class="pt-label" style="color:#hex">Label:</span> phrase`, with CSS `.pt-label { font-weight: 600; }`.
 - **Label colors:** the `[color]` tag on each md bullet maps to `#1a5276` blue = design/fact, `#27ae60` green = win/strength, `#e74c3c` red = flaw/risk, `#e67e22` orange = context/history/trend. Drop the `[color]` tag in HTML — it becomes the span's inline color.
 - **Callout/key-point style:** the `.intro` callout and each `.key-point` box are one short sentence led by the same bold colored `pt-label` lead word, colored by the same scheme.

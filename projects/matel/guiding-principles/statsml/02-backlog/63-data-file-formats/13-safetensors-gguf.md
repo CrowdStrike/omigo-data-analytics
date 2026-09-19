@@ -1,6 +1,6 @@
 # safetensors / GGUF
 
-**Page type:** detail page (single card-section with two-column layout table: text left 45%, canvas right 55%)
+**Page type:** detail page (single card-section with two-column layout table: text left 50%, canvas right 50%)
 **HTML title tag:** safetensors / GGUF
 
 **Subtitle:** Model weight storage formats for ML.
@@ -49,7 +49,7 @@ Diagram of the safetensors file layout, a pickle-vs-safetensors comparison, and 
 
 ## Regeneration instructions
 
-- **Template/layout:** file-formats detail page. h1 with 2px `#2980b9` bottom border, `.subtitle` paragraph, one `.intro-callout` (background `#f8f9fa`, left border `3px solid #2980b9`, padding 10px 14px, 0.93rem), then one `.card-section` with an h2 ("How It Works", 1.3rem `#1a5276`, 2px `#2980b9` bottom border) containing a `table.layout` with a single row: `td.text-col` (45%) and `td.viz-col` (55%, holds the canvas).
+- **Template/layout:** file-formats detail page. h1 with 2px `#2980b9` bottom border, `.subtitle` paragraph, one `.intro-callout` (background `#f8f9fa`, left border `3px solid #2980b9`, padding 10px 14px, 0.93rem), then one `.card-section` with an h2 ("How It Works", 1.3rem `#1a5276`, 2px `#2980b9` bottom border) containing a `table.layout` with a single row: `td.text-col` (50%) and `td.viz-col` (50%, holds the canvas).
 - **Text-column structure:** lead paragraph, `<ul>` of labeled bullets, a follow-on paragraph (margin-top 10px, 0.9rem), a `.key-point` box (background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem), and a `.example` italic gray (`#555`) 0.9rem line.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `ul` 0.92rem with 20px left margin; `code` on `#f0f4f8` background, 2px 6px padding, 3px radius; canvas `width:100%`, `1px solid #e0e0e0` border, 4px radius.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `rgba(26,82,118,…)` blue fills.

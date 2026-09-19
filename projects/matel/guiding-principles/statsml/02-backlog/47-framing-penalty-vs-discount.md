@@ -1,6 +1,6 @@
 # Framing: Penalty vs Discount
 
-**Page type:** detail page (backlog-style 2-col text/viz layout: numbered h2 sections, text left ~45%, canvas right ~55%, closing key-point)
+**Page type:** detail page (backlog-style 2-col text/viz layout: numbered h2 sections, text left ~50%, canvas right ~50%, closing key-point)
 **HTML title tag:** Framing: Penalty vs Discount
 
 **Subtitle:** Identical math, opposite psychology — loss-frame pricing destroys relationships while gain-frame pricing builds loyalty
@@ -81,7 +81,7 @@ Paired-frame table diagram: four rows, each with a loss-frame box "=" gain-frame
 
 ## Regeneration instructions
 
-- **Template:** backlog detail-page layout — h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, 8px 12px padding, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` row with `td.text-col` (45%) and `td.viz-col` (55%) holding the canvas. The closing status note is a standalone `.key-point` div after the last section.
+- **Template:** backlog detail-page layout — h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, 8px 12px padding, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` row with `td.text-col` (50%) and `td.viz-col` (50%) holding the canvas. The closing status note is a standalone `.key-point` div after the last section.
 - **Callout styles:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, 8px 12px padding, 0.9rem. `.example` — italic, `#555`, 0.9rem. `code` — background `#f4f4f4`, 2px 6px padding, 3px radius.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `ul` 0.92rem; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; grays `#444`/`#666`/`#999`.

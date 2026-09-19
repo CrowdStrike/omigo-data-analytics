@@ -1,6 +1,6 @@
 # Oura Ring API
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, payload/canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, payload/canvas right 50%, one row per section)
 **HTML title tag:** Oura Ring API
 
 **Subtitle:** Wearable sleep, readiness, and biometric data via REST API
@@ -153,7 +153,7 @@ Content-Type: application/json
 
 ## Regeneration instructions
 
-- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + bullets, right `<td>` (55%, `text-align: center`) holds — row 1: `.payload` pre + the canvas; rows 2-4: a short `.key-point` heading (bold label) followed by a `.payload` block (no canvases). After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links. The subtitle here is a `<div class="subtitle">` rather than `<p>`.
+- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets, right `<td>` (50%, `text-align: center`) holds — row 1: `.payload` pre + the canvas; rows 2-4: a short `.key-point` heading (bold label) followed by a `.payload` block (no canvases). After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links. The subtitle here is a `<div class="subtitle">` rather than `<p>`.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `li` 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Callout style:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em. `.payload` — same background/border, monospace (ui-monospace/Menlo) 0.78em, `white-space: pre`, left-aligned.
 - **Canvas:** `display: block; width: 100%`; intrinsic height 380; sized from `getBoundingClientRect().width`, backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.scale` back to logical coordinates.

@@ -1,6 +1,6 @@
 # Dissecting Popular Metrics
 
-**Page type:** detail page (backlog-style two-column layout: text left 45%, canvas right 55%, one `.lang-section` per metric; BACKLOG status badge in h1)
+**Page type:** detail page (backlog-style two-column layout: text left 50%, canvas right 50%, one `.lang-section` per metric; BACKLOG status badge in h1)
 **HTML title tag:** Dissecting Popular Metrics
 
 **Status badge:** BACKLOG (inline in h1)
@@ -203,7 +203,7 @@ Comparison table (`table.compare`, blue header row):
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog kusto-style detail page. `<h1>` with inline `<span class="status">BACKLOG</span>` badge, `.subtitle` paragraph, `.intro` callout, then one `.lang-section` per metric. Sections 1–9 each contain an `<h2>` ("N. Title") and a `table.layout` with one row: left `td.text-col` (45%) with `.field` paragraphs (`<strong>` label + text) and one `.inflation` callout; right `td.viz-col` (55%) with the canvas. Section 10 contains only a `table.compare`.
+- **Template/layout:** backlog kusto-style detail page. `<h1>` with inline `<span class="status">BACKLOG</span>` badge, `.subtitle` paragraph, `.intro` callout, then one `.lang-section` per metric. Sections 1–9 each contain an `<h2>` ("N. Title") and a `table.layout` with one row: left `td.text-col` (50%) with `.field` paragraphs (`<strong>` label + text) and one `.inflation` callout; right `td.viz-col` (50%) with the canvas. Section 10 contains only a `table.compare`.
 - **Field structure:** each text cell has four `.field` paragraphs labeled Formula / Measures / Correct read / Mistakes (bold labels in `#1a5276`), then the `.inflation` box.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border. h2 1.3rem `#1a5276`, 2px `#2980b9` bottom border. `.subtitle` `#666` 0.95rem. `.intro` background `#f0f4f8`, left border 3px `#2980b9`. `.status` badge: background `#fef9e7`, border 1px `#f39c12`, text `#b7950b`, radius 4px. `.inflation` background `#fef9e7`, left border 3px `#e67e22`, 0.86rem. `.field` 0.9rem with `strong` in `#1a5276`. `table.compare`: header background `#1a5276` white text, rows bordered `#eee`, even rows `#f8fafb`, first column bold. Canvases `width: 100%`, border 1px `#e0e0e0`, radius 4px.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange; also `#8e44ad` purple and `#2980b9` accent blue.

@@ -1,6 +1,6 @@
 # Ring Doorbell API
 
-**Page type:** detail page (two-column obj-table layout: descriptive text left 45%, payload + canvas right 55%, one row)
+**Page type:** detail page (two-column obj-table layout: descriptive text left 50%, payload + canvas right 50%, one row)
 **HTML title tag:** Ring Doorbell API
 
 **Subtitle:** Motion events, doorbell presses, and video history — no official public API exists; access relies on reverse-engineered endpoints.
@@ -78,7 +78,7 @@ Scatter/event timeline: motion and ding events plotted across a 24-hour x-axis, 
 
 ## Regeneration instructions
 
-- **Layout:** platform-API detail page. h1 + `.subtitle`, then a single `.obj-table` (full width, border-collapse) with one `<tr>`: left `<td>` (45%) holds `.obj-title` headings + paragraphs and `.key-point` callouts; right `<td>` (55%) holds the `.payload` code block and the canvas. After the table, an `<h2>Official API References</h2>` with a `<ul>` of links.
+- **Layout:** platform-API detail page. h1 + `.subtitle`, then a single `.obj-table` (full width, border-collapse) with one `<tr>`: left `<td>` (50%) holds `.obj-title` headings + paragraphs and `.key-point` callouts; right `<td>` (50%) holds the `.payload` code block and the canvas. After the table, an `<h2>Official API References</h2>` with a `<ul>` of links.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; `* { box-sizing: border-box; }`; h1 1.8rem `#1a5276`, margin-bottom 4px; `.subtitle` `#666` 1.05em, margin-bottom 24px. No nav bar, no back/home links.
 - **Table style:** `.obj-table td` vertical-align top, padding 16px, border `1px solid #2980b9`; `.obj-title` bold `#1a5276` 1.1em, margin-bottom 8px.
 - **Payload block:** `.payload` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px, ui-monospace/Menlo 0.78em, `white-space: pre`, `overflow-x: auto`, line-height 1.45, margin 12px 0.

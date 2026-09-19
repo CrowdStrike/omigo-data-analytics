@@ -1,6 +1,6 @@
 # Alert Suppression Before Reviews
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%; single row with multiple titled blocks and two stacked canvases)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%; single row with multiple titled blocks and two stacked canvases)
 **HTML title tag:** Alert Suppression Before Reviews — Common Bad Practices
 
 **Subtitle:** Metric Manipulation — Silence monitoring for 2 weeks before review cycle. Zero incidents on paper.
@@ -59,7 +59,7 @@ Two-cycle sawtooth timeline over 24 weeks: visible logged alerts (bars) vs hidde
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table with a single `<tr>`; left `<td>` (40%) holds four `.obj-title` blocks (The Practice, Variant — Threshold Manipulation, Variant — Incident Reclassification, Compounding — the latter three with `style="margin-top:14px;"`) each followed by its bullet list, then the two closing `<p>` paragraphs (**Why it persists** / **The tell** with `strong` lead-ins); right `<td>` (60%, centered) holds canvases `c1` and `c2` stacked.
+- **Layout:** standard detail-page `.obj-table`: full-width table with a single `<tr>`; left `<td>` (50%) holds four `.obj-title` blocks (The Practice, Variant — Threshold Manipulation, Variant — Incident Reclassification, Compounding — the latter three with `style="margin-top:14px;"`) each followed by its bullet list, then the two closing `<p>` paragraphs (**Why it persists** / **The tell** with `strong` lead-ins); right `<td>` (50%, centered) holds canvases `c1` and `c2` stacked.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; `p` 0.95em `#333`; `ul` 0.9em `#333`, `li` margin 6px 0; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; `canvas { display: block; margin: 0 auto; }`. All chart data is deterministic (hardcoded arrays, no randomness), so resize redraws are stable.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; gray text `#666`/`#555`.

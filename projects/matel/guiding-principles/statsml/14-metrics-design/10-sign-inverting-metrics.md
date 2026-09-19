@@ -1,6 +1,6 @@
 # Sign-Inverting Metrics
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvas right 60%, one h2 + one-row table per pattern, even rows shaded)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one h2 + one-row table per pattern, even rows shaded)
 **HTML title tag:** Sign-Inverting Metrics
 
 **Subtitle:** A lossy metric blurs the truth; a sign-inverting metric reverses it. These metrics move in the good direction precisely because something bad happened outside their field of view — the dashboard doesn't just miss the problem, it reports the problem as an improvement.
@@ -217,7 +217,7 @@ Causal diagram: one bad event, two arrows with opposite signs.
 To rebuild the HTML from this spec:
 
 - **Template:** same detail-page style as `metrics/03-anti-patterns.html`. Single page: h1, `.subtitle` paragraph, then one h2 + one-row `.obj-table` per section above.
-- **Table layout:** `.obj-table` full width, collapsed borders `#e0e0e0`, cell padding 20px 24px; first cell 40% width (text), second cell 60% centered (canvas). Even rows shaded `#fafcfe`.
+- **Table layout:** `.obj-table` full width, collapsed borders `#e0e0e0`, cell padding 20px 24px; first cell 40% width (text), second cell 50% centered (canvas). Even rows shaded `#fafcfe`.
 - **Text cell structure:** `.obj-title` (1.05em, 600 weight, `#1a5276`), then a `ul` of the labeled bullets, then a `<p><strong>Fix:</strong> …</p>` where the section has one.
 - **Canvas:** each canvas 720×300 with `width: 100%`, drawn via a shared `setup(id)` helper that sizes the backing store to displayed width × `devicePixelRatio` and rescales the context; all draw functions pushed to a `__charts` array, executed on load and re-executed on debounced window resize (150ms).
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.3em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em. No nav bar, no back/home links.

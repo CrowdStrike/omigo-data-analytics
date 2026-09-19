@@ -1,6 +1,6 @@
 # Logistic Regression
 
-**Page type:** detail page (single obj-table, one row per assumption: text left 42%, canvas right 58%)
+**Page type:** detail page (single obj-table, one row per assumption: text left 50%, canvas right 50%)
 **HTML title tag:** Logistic Regression - ML Assumptions
 
 **Subtitle:** Each feature must contribute linearly to the log-odds. Violations are silent — the model simply ignores signal it cannot represent.
@@ -138,7 +138,7 @@ True vs outlier-distorted sigmoid on a wide cholesterol axis.
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle`, then a single `.obj-table` (full width, border-collapse) with one `<tr>` per section (no thead): left `<td>` (42%) holds `.obj-title` div, `.obj-desc` paragraph, and `.obj-detail` lines; right `<td>` (58%, centered) holds the canvas. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
+- **Layout:** h1 + `.subtitle`, then a single `.obj-table` (full width, border-collapse) with one `<tr>` per section (no thead): left `<td>` (50%) holds `.obj-title` div, `.obj-desc` paragraph, and `.obj-detail` lines; right `<td>` (50%, centered) holds the canvas. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
 - **Text markup:** "Breaks:" uses `<span class="bad">` (red `#e74c3c`, weight 600); "Verify:" uses pill `<span class="tag tag-check">` (background `#eafaf1`, text `#1e8449`); "Fix:" uses pill `<span class="tag tag-fix">` (background `#fef9e7`, text `#b7950b`); tags are 0.75em, padding 2px 8px, radius 4px. Also defined: `.good` green `#27ae60`, `.warn` orange `#e67e22`, `.tag-break` background `#fdeaea` text `#c0392b`.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `.obj-title` 1.05em weight 600 `#1a5276`; `.obj-desc` 0.9em `#333`; `.obj-detail` 0.85em `#555`; `strong` `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width="720" height="300"` per chart; a shared `setupCanvas(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates.

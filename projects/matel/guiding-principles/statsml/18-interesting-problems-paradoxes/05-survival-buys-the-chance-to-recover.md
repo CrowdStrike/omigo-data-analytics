@@ -1,6 +1,6 @@
 # Survival Buys the Chance to Recover
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section; plus one full-width summary table section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section; plus one full-width summary table section)
 **HTML title tag:** Survival Buys the Chance to Recover — Capital as Survival Time
 
 **Subtitle:** Staying in the game doesn't promise your losses come back — but going broke guarantees they never do. Capital buys the time to keep that chance alive.
@@ -143,7 +143,7 @@ Full-width summary table (no canvas):
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, then numbered `h2` sections ("1." – "4."). Sections 1–3 each use a `.obj-table` (full-width, one `<tr>`: left `<td>` 45% with `.math-box` blocks / paragraphs / bullets, right `<td>` 55% centered holding the canvas). Section 4 is a full-width `.summary-table` (th row + 5 data rows). Closing `.philosophy` callout at the end. No `.obj-title` divs on this page — text cells start directly with math boxes.
+- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, then numbered `h2` sections ("1." – "4."). Sections 1–3 each use a `.obj-table` (full-width, one `<tr>`: left `<td>` 50% with `.math-box` blocks / paragraphs / bullets, right `<td>` 50% centered holding the canvas). Section 4 is a full-width `.summary-table` (th row + 5 data rows). Closing `.philosophy` callout at the end. No `.obj-title` divs on this page — text cells start directly with math boxes.
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border, padding-bottom 8px; subtitle `#666` 1.05em; p 0.95em `#333`; `strong` `#1a5276`; obj-table cells `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle. No nav bar, no back/home links.
 - **Component styles:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. `.math-box` — background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 16px 20px, 0.9em; `code` inside on `#eef2f7` with 2px 6px padding, radius 3px. `.summary-table` — full width, 0.9em, th background `#f0f4f8` color `#1a5276` padding 10px 14px left-aligned, td padding 10px 14px, all borders `1px solid #e0e0e0`.
 - **Canvases:** three canvases, each 720×360 intrinsic; a shared `setupCanvas(id, w, h)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

@@ -1,6 +1,6 @@
 # Confluence
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, code sample + canvas right 55%, one row)
+**Page type:** detail page (two-column obj-table layout: text left 50%, code sample + canvas right 50%, one row)
 **HTML title tag:** Confluence API — Platform APIs
 
 **Subtitle:** Read and update the pages, comments, and attachments in a Confluence wiki — including every past version of a page.
@@ -76,7 +76,7 @@ Dot-matrix comparison grid: 6 feature rows × 4 format columns, each cell a circ
 
 ## Regeneration instructions
 
-- **Layout:** single-page detail doc: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" section containing one `.obj-table` (full width, one `<tr>`: left `<td>` 45% with `.section-head` headings + bullet lists + one `.key-point` callout; right `<td>` 55% with `.section-head` headings, a `pre` code block, and the canvas), then `h2` "Official API References" with a link list. No nav bar, no back/home links.
+- **Layout:** single-page detail doc: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" section containing one `.obj-table` (full width, one `<tr>`: left `<td>` 50% with `.section-head` headings + bullet lists + one `.key-point` callout; right `<td>` 50% with `.section-head` headings, a `pre` code block, and the canvas), then `h2` "Official API References" with a link list. No nav bar, no back/home links.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text #2c3e50, padding 30px 40px, white background; global `* { margin:0; padding:0; box-sizing:border-box }` reset. h1 1.8rem #1a5276; `.subtitle` #666 1.05em; `.verified` badge — background #eaf2f8, border 1px solid #2980b9, color #1a5276, padding 2px 10px, radius 4px, 0.8em; h2 1.3em #1a5276 with 2px solid #2980b9 bottom border; `.section-head` bold #1a5276 0.95em; `pre` background #f4f4f4, padding 14px, radius 6px, 0.8em, ui-monospace/Menlo; `.key-point` background #f8f9fa, left border 3px solid #e74c3c, padding 10px 14px, 0.93em; li 0.93em; links #1a5276.
 - **Canvas:** `<canvas id="formatChart" height="380">`, CSS `width: 100%`; on resize, backing store scaled by `window.devicePixelRatio` (width = rect.width × dpr, height = 380 × dpr, `ctx.setTransform(dpr,0,0,dpr,0,0)`), redraw on window resize.
 - **Palette:** #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange, #8e44ad purple, rgba(26,82,118,0.35) bar fill, grays #888/#ccc/#e5e5e5/#fafafa.

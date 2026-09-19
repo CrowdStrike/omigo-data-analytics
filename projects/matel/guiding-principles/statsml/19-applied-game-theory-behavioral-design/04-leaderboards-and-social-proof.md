@@ -1,6 +1,6 @@
 # 4. Leaderboards & Social Proof
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one h2 + table per section, philosophy callouts top and bottom)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one h2 + table per section, philosophy callouts top and bottom)
 **HTML title tag:** 4. Leaderboards & Social Proof
 
 **Subtitle:** How manufactured competition and fabricated scarcity turn browsing into urgency — and why it works even when you know it's happening.
@@ -152,7 +152,7 @@ Bar histogram of star-rating distribution showing compression at the top.
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1 + `.subtitle`, `.philosophy` callout, then per section: `<h2>N. Title</h2>` (numbered, bottom border `2px solid #2980b9`) followed by a `.obj-table` with one `<tr>`: left `<td>` (45%) holds `.obj-title`, two `.math-box` divs, and a `<ul>`; right `<td>` (55%, centered) holds the canvas. Closing `.philosophy` callout after the last section.
+- **Layout:** detail page. h1 + `.subtitle`, `.philosophy` callout, then per section: `<h2>N. Title</h2>` (numbered, bottom border `2px solid #2980b9`) followed by a `.obj-table` with one `<tr>`: left `<td>` (50%) holds `.obj-title`, two `.math-box` divs, and a `<ul>`; right `<td>` (50%, centered) holds the canvas. Closing `.philosophy` callout after the last section.
 - **Page CSS:** body `-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with `border-bottom: 2px solid #2980b9`; subtitle `#666` 1.05em; `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em weight 600 `#1a5276`; `ul` 0.9em `#333`; `strong` `#1a5276`; `.philosophy` background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em; `.math-box` background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 16px 20px, 0.9em; `.math-box code` background `#eef2f7`, padding 2px 6px, radius 3px. No nav bar, no back/home links.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, bar fill `rgba(26,82,118,0.35)`.
 - **Canvas:** intrinsic width/height attributes 720×380; shared `setupCanvas(id, w, h)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

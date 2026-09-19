@@ -1,6 +1,6 @@
 # Metric Testing — Non-Normal Distributions
 
-**Page type:** detail page (numbered h2 sections, each holding one or more two-column obj-table rows: text left 40%, canvas right 60%; closing philosophy callout)
+**Page type:** detail page (numbered h2 sections, each holding one or more two-column obj-table rows: text left 50%, canvas right 50%; closing philosophy callout)
 **HTML title tag:** Metric Testing — Non-Normal Distributions & Alternatives
 
 **Subtitle:** Most business metrics are NOT normally distributed. Using t-tests on them gives wrong answers. Here's what to use instead.
@@ -206,7 +206,7 @@ Metric-shape-to-test lookup table rendered as colored rows.
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle` paragraph, then three numbered `<h2>` sections ("1.", "2.", "3.", 1.3em `#1a5276` with a 2px `#2980b9` bottom border). Section 1 holds four `.obj-table` blocks (one per metric type), section 2 holds five, section 3 holds one. Each `.obj-table` is a full-width single-row table: left `<td>` (40%) with `.obj-title` (1.05em, weight 600, `#1a5276`), a `<ul>` (0.9em), and optionally a closing `<p>` (0.95em); right `<td>` (60%, centered) with the canvas (explicit `width`/`height` attributes). Cell borders `1px solid #e0e0e0`, padding 20px 24px, `vertical-align: middle`; even rows `#fafcfe`. Page ends with a `.philosophy` callout — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.
+- **Layout:** h1 + `.subtitle` paragraph, then three numbered `<h2>` sections ("1.", "2.", "3.", 1.3em `#1a5276` with a 2px `#2980b9` bottom border). Section 1 holds four `.obj-table` blocks (one per metric type), section 2 holds five, section 3 holds one. Each `.obj-table` is a full-width single-row table: left `<td>` (50%) with `.obj-title` (1.05em, weight 600, `#1a5276`), a `<ul>` (0.9em), and optionally a closing `<p>` (0.95em); right `<td>` (50%, centered) with the canvas (explicit `width`/`height` attributes). Cell borders `1px solid #e0e0e0`, padding 20px 24px, `vertical-align: middle`; even rows `#fafcfe`. Page ends with a `.philosophy` callout — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; subtitle `#666` 1.05em; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** sizes 720×300 (c1–c9) and 720×240 (c10); shared `setup(id)` helper reads width/height attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Charts mix histograms/curves with text-diagram layouts; all text uses 17px `-apple-system` (bold 17px for titles and verdicts).
 - **Palette:** primary blue `#1a5276`, chart blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, grays `#555`/`#333`/`#999`.

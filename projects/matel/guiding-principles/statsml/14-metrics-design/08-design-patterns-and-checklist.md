@@ -1,6 +1,6 @@
 # Metric Design Patterns
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvas right 60%, one h2 + one-row table per section, closing philosophy callout)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one h2 + one-row table per section, closing philosophy callout)
 **HTML title tag:** Metric Design Patterns
 
 **Subtitle:** How to design metrics that actually drive good decisions. Checklist, lifecycle, and the meta-principle.
@@ -55,7 +55,7 @@ Four-stage pipeline diagram with arrows.
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, `.subtitle`, then per section: `<h2>Title</h2>` (h2 1.3em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 6px) followed by a one-row `.obj-table` — left `<td>` (40%) holds `.obj-title`, bullets, and optional result `<p>`; right `<td>` (60%, centered) holds the canvas. `.obj-table tr:nth-child(even) td` background `#fafcfe`. Page closes with a `.philosophy` callout.
+- **Layout:** detail page. h1, `.subtitle`, then per section: `<h2>Title</h2>` (h2 1.3em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 6px) followed by a one-row `.obj-table` — left `<td>` (50%) holds `.obj-title`, bullets, and optional result `<p>`; right `<td>` (50%, centered) holds the canvas. `.obj-table tr:nth-child(even) td` background `#fafcfe`. Page closes with a `.philosophy` callout.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; subtitle `#666` 1.05em; ul 0.9em `#333`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`. No nav bar, no back/home links.
 - **Callout style:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.
 - **Canvas:** intrinsic sizes 720×240 (`c7`) and 720×300 (`c8`); shared `setup(id)` reads the `width`/`height` attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. In-chart text 17px -apple-system. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

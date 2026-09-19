@@ -1,6 +1,6 @@
 # Twitter/X Analytics API
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, payload/canvas right 55% centered, one row per section; footer references list)
+**Page type:** detail page (two-column obj-table layout: text left 50%, payload/canvas right 50% centered, one row per section; footer references list)
 **HTML title tag:** Twitter/X Analytics API
 
 **Subtitle:** Tweet-level and account-level engagement metrics via the X API v2. Point-in-time snapshots of cumulative counters, not time-series data.
@@ -133,7 +133,7 @@ Side-by-side comparison boxes showing two engagement-rate formulas from the same
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle`, then one `.obj-table` with 4 rows; each row: left `<td>` (45%) holds `.obj-title` + `<ul>` bullets + `.key-point` box, right `<td>` (55%, text-align center) holds an optional `.payload` `<pre>` block and a canvas. After the table: h2 "Official API References" + link list. No nav bar, no back/home links.
+- **Layout:** h1 + `.subtitle`, then one `.obj-table` with 4 rows; each row: left `<td>` (50%) holds `.obj-title` + `<ul>` bullets + `.key-point` box, right `<td>` (50%, text-align center) holds an optional `.payload` `<pre>` block and a canvas. After the table: h2 "Official API References" + link list. No nav bar, no back/home links.
 - **Table style:** `.obj-table` full width, `border-collapse: collapse`; td vertical-align top, padding 16px, border `1px solid #2980b9`.
 - **Key-point / payload style:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em. `.payload` — same background/border, monospace (ui-monospace, Menlo), 0.78em, `white-space: pre`, `overflow-x: auto`, left-aligned.
 - **Page CSS:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.obj-title` bold `#1a5276` 1.1em; links `#1a5276`; li 0.93em; canvas `display: block; margin: 12px auto 0; width: 100%`.

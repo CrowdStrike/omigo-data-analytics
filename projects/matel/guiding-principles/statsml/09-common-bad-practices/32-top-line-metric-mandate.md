@@ -1,6 +1,6 @@
 # Top-Line Metric Mandate
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one row per section)
 **HTML title tag:** Top-Line Metric Mandate — Common Bad Practices
 
 **Subtitle:** Measurement — Requiring every feature to move company-wide metrics (GMV, Revenue, DAU) regardless of feature scope or causal distance.
@@ -57,7 +57,7 @@ Metric-hierarchy diagram: four stacked levels connected by upward arrows, with d
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (40%) holds `.obj-title` + bullets, right `<td>` (60%, centered) holds the canvas. Single table with two rows.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets, right `<td>` (50%, centered) holds the canvas. Single table with two rows.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; ul 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic size 720×400 for both; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). This page inlines the dpr setup per canvas rather than a shared helper; either style works.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, grays `#666`/`#999`/`#333`.

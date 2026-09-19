@@ -1,6 +1,6 @@
 # Domain Pitfalls: Threat Hunting
 
-**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: text left ~40%, canvas right ~60%)
+**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: text left ~50%, canvas right ~50%)
 **HTML title tag:** Domain Pitfalls: Threat Hunting
 
 **Subtitle:** Statistical and analytical traps in proactive threat detection and adversary pursuit
@@ -128,7 +128,7 @@ Exponential half-life decay curves for four IOC types over 35 days.
 
 ## Regeneration instructions
 
-- **Layout:** detail page in the domains-page style: h1 + `.subtitle`, then one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px, margin 40px 0 15px), each followed by a full-width `.obj-table` with a single `<tr>`: left `<td>` (40%) holds `.obj-title` div (repeating the h2 text) + `<ul>` bullets, right `<td>` (60%, centered) holds the canvas. No thead, no nav, no badges, no cross-page links.
+- **Layout:** detail page in the domains-page style: h1 + `.subtitle`, then one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px, margin 40px 0 15px), each followed by a full-width `.obj-table` with a single `<tr>`: left `<td>` (50%) holds `.obj-title` div (repeating the h2 text) + `<ul>` bullets, right `<td>` (50%, centered) holds the canvas. No thead, no nav, no badges, no cross-page links.
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; `ul` 0.9em `#333`, margin 8px 0 8px 20px; `strong` in `#1a5276`; `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; even rows background `#fafcfe`; `.obj-title` 1.05em, weight 600, `#1a5276`; `.philosophy` callout style defined (background `#f0f4f8`, left border `4px solid #2980b9`) but unused on this page.
 - **Canvas:** canvas tags declare `width="720" height="300"` but a `setupCanvas(id)` helper overrides the drawing surface to 720×200, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates; default font set to 17px -apple-system. Each chart paints its own pale tinted full-canvas background (`#f0f4f8`, `#f8f4f0`, `#f4f8f0`, `#f0f0f8`, `#f8f4f8`, `#f8f8f0`).
 - **Palette:** primary blue `#1a5276`, accent blues `#2980b9`/`#3498db`, green `#27ae60`, red `#e74c3c` (dark `#c0392b`), orange `#e67e22`, amber `#f39c12`, yellow `#f1c40f`, purple `#9b59b6`, grays `#7f8c8d`/`#2c3e50`/`#bdc3c7`/`#ddd`/`#ecf0f1`.

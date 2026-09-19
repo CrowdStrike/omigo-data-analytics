@@ -1,6 +1,6 @@
 # Fitbit / Google Fit API
 
-**Page type:** detail page (two-column obj-table layout: one single table row — all text sections stacked in the left 45% cell, payload + canvas in the right 55% cell)
+**Page type:** detail page (two-column obj-table layout: one single table row — all text sections stacked in the left 50% cell, payload + canvas in the right 50% cell)
 **HTML title tag:** Fitbit / Google Fit API
 
 **Subtitle:** Steps, heart rate (1-sec intraday), sleep stages, SpO2 — personal health telemetry accessible via OAuth2 APIs.
@@ -100,7 +100,7 @@ Line chart of heart rate over 24 hours with tinted background zone bands.
 
 ## Regeneration instructions
 
-- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table containing a SINGLE `<tr>`. Left `<td>` (45%) stacks multiple `.obj-title` headings (What it provides / Authentication / Granularity / Rate limit / Business scenarios / Restrictions / Migration note), each followed by a `<ul>` or a 0.93em `<p>`; the Restrictions section body is a `.key-point` callout. Later `.obj-title`s carry `margin-top: 18px`. Right `<td>` (55%, no text-align:center on this page) holds a `.payload-note`, the `.payload` pre, an italic gray chart caption `<p>`, and the canvas. After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links.
+- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table containing a SINGLE `<tr>`. Left `<td>` (50%) stacks multiple `.obj-title` headings (What it provides / Authentication / Granularity / Rate limit / Business scenarios / Restrictions / Migration note), each followed by a `<ul>` or a 0.93em `<p>`; the Restrictions section body is a `.key-point` callout. Later `.obj-title`s carry `margin-top: 18px`. Right `<td>` (50%, no text-align:center on this page) holds a `.payload-note`, the `.payload` pre, an italic gray chart caption `<p>`, and the canvas. After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `li` 0.93em; links `#1a5276`. `.payload-note` 0.82em `#666` italic. No nav bar, no back/home links.
 - **Callout style:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em. `.payload` — same background/border, monospace (ui-monospace/Menlo) 0.78em, `white-space: pre`.
 - **Canvas:** `display: block; margin: 0 auto`; explicit `width="720" height="360"` attributes; `setupCanvas(id, w, h)` sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), fixes CSS width/height, and calls `ctx.scale` so drawing stays in logical coordinates.

@@ -1,6 +1,6 @@
 # Data Anonymization & De-identification
 
-**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: bullets left ~40%, canvas right ~60%)
+**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: bullets left 50%, canvas right ~50%)
 **HTML title tag:** Data Anonymization & De-identification - Domain Pitfalls
 
 **Subtitle:** Anonymization techniques that look robust in theory — k-anonymity, aggregation thresholds, name removal — crumble against adversaries armed with auxiliary datasets and behavioral fingerprints.
@@ -226,7 +226,7 @@ Flow diagram of a differencing attack using three stacked labeled boxes.
 
 ## Regeneration instructions
 
-- **Layout:** one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px), each followed by its own single-row `.obj-table`: full-width table, left `<td>` (40%) with `.obj-title` + `<ul>` bullets, right `<td>` (60%, centered) with the canvas. Even table rows background `#fafcfe`.
+- **Layout:** one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px), each followed by its own single-row `.obj-table`: full-width table, left `<td>` (50%) with `.obj-title` + `<ul>` bullets, right `<td>` (50%, centered) with the canvas. Even table rows background `#fafcfe`.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; `ul` 0.9em `#333`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px. A `.philosophy` callout style (background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em) is defined but unused. No nav bar, no back/home links.
 - **Canvas:** HTML attributes `width="720" height="300"`, but a shared `initCanvas(id)` helper re-sizes the backing store to 720×200 × `window.devicePixelRatio` and calls `ctx.scale` so drawing stays in logical coordinates; CSS fixes canvases at 720×200px. Effective drawing area is 720×200.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#f39c12`/`#e67e22`, blue accent `#3498db`, gray text `#666`/`#333`.

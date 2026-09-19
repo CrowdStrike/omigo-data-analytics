@@ -1,6 +1,6 @@
 # The Penny That Beats a Million
 
-**Page type:** detail page (h2-sectioned two-column obj-table layout: text left 45%, canvas right 55%, one table per section; philosophy callouts at top and bottom)
+**Page type:** detail page (h2-sectioned two-column obj-table layout: text left 50%, canvas right 50%, one table per section; philosophy callouts at top and bottom)
 **HTML title tag:** The Penny That Beats a Million — Case Study
 
 **Subtitle:** The famous riddle: would you rather take $1,000,000 in cash today, or one penny that doubles every day for 30 days? Almost everyone takes the million. Almost everyone loses $9.7 million by doing so.
@@ -183,7 +183,7 @@ Canvas-drawn table: the doubling pattern across domains.
 
 ## Regeneration instructions
 
-- **Layout:** case-study detail page. h1, `.subtitle`, `.philosophy` callout, then per numbered section: `<h2>` (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by an `.obj-table` (full-width, one `<tr>`; left `<td>` 45% with `.obj-title` + `.math-box` blocks + bullets, right `<td>` 55% centered holding the canvas). Closing `.philosophy` callout at the end. No nav bar, no back/home links.
+- **Layout:** case-study detail page. h1, `.subtitle`, `.philosophy` callout, then per numbered section: `<h2>` (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by an `.obj-table` (full-width, one `<tr>`; left `<td>` 50% with `.obj-title` + `.math-box` blocks + bullets, right `<td>` 50% centered holding the canvas). Closing `.philosophy` callout at the end. No nav bar, no back/home links.
 - **Math boxes:** `.math-box` — background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 16px 20px, 0.9em; inline `code` on `#eef2f7` background, padding 2px 6px, radius 3px.
 - **Callout style:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; subtitle `#666` 1.05em; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`; ul 0.9em `#333`, margin `8px 0 8px 20px`.

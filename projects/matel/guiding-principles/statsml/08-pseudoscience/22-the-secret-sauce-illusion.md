@@ -1,6 +1,6 @@
 # The Secret Sauce Illusion
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, two stacked canvases right 60%, one row)
+**Page type:** detail page (two-column obj-table layout: text left 50%, two stacked canvases right 50%, one row)
 **HTML title tag:** The Secret Sauce Illusion — Pseudoscience in Data Analysis
 
 **Subtitle:** 99% of Results Come from Boring Fundamentals, the 1% "Secret" Gets All the Credit
@@ -39,7 +39,7 @@ Two vertical stacked bars showing the inversion between actual contribution and 
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table with one `<tr>`; left `<td>` (40%) holds `.obj-title` + bullet list + closing paragraph, right `<td>` (60%, centered) holds two stacked canvases (`c1` then `c2`).
+- **Layout:** standard detail-page `.obj-table`: full-width table with one `<tr>`; left `<td>` (50%) holds `.obj-title` + bullet list + closing paragraph, right `<td>` (50%, centered) holds two stacked canvases (`c1` then `c2`).
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`; `ul` 0.9em `#333`. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes as given; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper returning `{ctx, w, h}`. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, dark slate `#2c3e50`, gray text `#555`/`#666`.

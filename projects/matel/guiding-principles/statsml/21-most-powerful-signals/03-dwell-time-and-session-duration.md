@@ -1,6 +1,6 @@
 # Dwell Time & Session Duration
 
-**Page type:** detail page (most-powerful-signals compact style: per-section two-column layout table, text left 45% with tag pills / labeled bullets / example / key-point, canvas right 55%; final full-width meta-point callout)
+**Page type:** detail page (most-powerful-signals compact style: per-section two-column layout table, text left 50% with tag pills / labeled bullets / example / key-point, canvas right 50%; final full-width meta-point callout)
 **HTML title tag:** Dwell Time & Session Duration
 
 **Subtitle:** How long a user stays — the strongest implicit signal of content quality, powering feed ranking at every major platform
@@ -241,7 +241,7 @@ Split-panel paired bars: single-page article vs 15-slide slideshow, dwell vs sat
 
 ## Regeneration instructions
 
-- **Layout:** one `.card-section` per section, each containing an `<h2>` (1.3rem `#1a5276`, bottom border `2px solid #2980b9`) and a `table.layout` with a single `<tr>`: left `td.text-col` (45%) holding `.tags` pills, `<ul>` bullets, `p.example`, `.key-point`; right `td.viz-col` (55%) with one `<canvas width="720" height="300">` styled `width:100%`, border `1px solid #e0e0e0`, radius 4px. After the last section, a standalone full-width `.key-point` div holds the meta-point paragraph.
+- **Layout:** one `.card-section` per section, each containing an `<h2>` (1.3rem `#1a5276`, bottom border `2px solid #2980b9`) and a `table.layout` with a single `<tr>`: left `td.text-col` (50%) holding `.tags` pills, `<ul>` bullets, `p.example`, `.key-point`; right `td.viz-col` (50%) with one `<canvas width="720" height="300">` styled `width:100%`, border `1px solid #e0e0e0`, radius 4px. After the last section, a standalone full-width `.key-point` div holds the meta-point paragraph.
 - **Page style:** body system-ui sans, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with bottom border `2px solid #2980b9`; `.subtitle` `#666` 0.95rem; `ul` 0.92rem; `li b` in `#1a5276`.
 - **Tag pills:** `.tag` inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px; blue `rgba(26,82,118,0.12)`/`#1a5276`, green `rgba(39,174,96,0.15)`/`#27ae60`, red `rgba(231,76,60,0.12)`/`#e74c3c`, orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Key-point callout:** background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example` italic `#555` 0.9rem.

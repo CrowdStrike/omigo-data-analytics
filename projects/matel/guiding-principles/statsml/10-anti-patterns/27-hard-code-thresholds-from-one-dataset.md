@@ -1,6 +1,6 @@
 # Hard-Code Thresholds from One Dataset
 
-**Page type:** detail page (anti-pattern-pair layout: two card-sections, each a two-column table — text left 45%, canvas right 55%)
+**Page type:** detail page (anti-pattern-pair layout: two card-sections, each a two-column table — text left 50%, canvas right 50%)
 **HTML title tag:** Hard-Code Thresholds from One Dataset
 
 **Subtitle:** "Anomaly if > 1000" works on THIS dataset. Deploy to new client: normal values are 5000+
@@ -56,7 +56,7 @@ Side-by-side distribution curves, each with its own p99 threshold line derived f
 
 ## Regeneration instructions
 
-- **Template/layout:** anti-pattern-pair detail page. h1 with `border-bottom: 2px solid #2980b9`, `.subtitle` paragraph, then two `.card-section` divs ("The Anti-Pattern", "The Design Pattern"). Each section: `h2` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` with one `<tr>`: left `td.text-col` (45%) holding paragraph + `.key-point` callout + `.example` label ("Domain examples:" / "Steps:") + `<ul>`; right `td.viz-col` (55%) holding one `<canvas>`.
+- **Template/layout:** anti-pattern-pair detail page. h1 with `border-bottom: 2px solid #2980b9`, `.subtitle` paragraph, then two `.card-section` divs ("The Anti-Pattern", "The Design Pattern"). Each section: `h2` (1.3rem, `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` with one `<tr>`: left `td.text-col` (50%) holding paragraph + `.key-point` callout + `.example` label ("Domain examples:" / "Steps:") + `<ul>`; right `td.viz-col` (50%) holding one `<canvas>`.
 - **Page CSS:** universal reset; body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; `.subtitle` `#666` 0.95rem, margin-bottom 32px; `.card-section` margin-bottom 40px; table cells `vertical-align: top`, padding 12px; canvas `width: 100%`, `1px solid #e0e0e0` border, radius 4px; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; ul 0.92rem with 20px left margin. No nav bar, no back/home links.
 - **Canvas:** each canvas drawn at intrinsic 720×300 and scaled via `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) through a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; band/curve fills use rgba variants including `rgba(26,82,118,0.35)`.

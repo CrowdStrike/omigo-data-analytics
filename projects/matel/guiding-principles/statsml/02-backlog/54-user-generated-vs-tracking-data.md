@@ -1,6 +1,6 @@
 # User Generated vs Tracking Data
 
-**Page type:** detail page (kusto-style 2-col text/viz layout: one `.card-section` per topic, text left 45%, canvas right 55%)
+**Page type:** detail page (kusto-style 2-col text/viz layout: one `.card-section` per topic, text left 50%, canvas right 50%)
 **HTML title tag:** User Generated vs Tracking Data
 
 **Subtitle:** Two fundamentally different data origins — one created by intent, one collected by observation — with different compliance regimes and analytical implications.
@@ -195,7 +195,7 @@ Tier flow boxes with a signal-retention bar chart below.
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog/kusto-style detail page. Body: h1, `.subtitle`, then six `.card-section` divs each with an h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (45%) with paragraphs, `<ul>` bullets, `.key-point` callout and optional `.example` line; right `td.viz-col` (55%) with one canvas.
+- **Template/layout:** backlog/kusto-style detail page. Body: h1, `.subtitle`, then six `.card-section` divs each with an h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (50%) with paragraphs, `<ul>` bullets, `.key-point` callout and optional `.example` line; right `td.viz-col` (50%) with one canvas.
 - **Page CSS:** body system-ui/-apple-system sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem. `.key-point`: background `#f8f9fa`, left border 3px `#e74c3c`, 0.9rem. `.example`: italic `#555` 0.9rem. `ul` 0.92rem. Canvases: 1px `#e0e0e0` border, 4px radius, `width: 100%`.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, secondary blue `#2980b9`, amber `#f39c12`, bar fills `rgba(39,174,96,0.5)` / `rgba(231,76,60,0.5)` / `rgba(26,82,118,0.5)`.
 - **Canvas:** a shared `setup(id)` helper sizes the backing store at 720×300 × `window.devicePixelRatio` and calls `ctx.scale` so drawing stays in logical coordinates; canvases c5 and c6 use inline sizing code with 720×380.

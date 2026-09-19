@@ -1,6 +1,6 @@
 # Twitter/X Tweets API (v2)
 
-**Page type:** detail page (single two-column obj-table row: text left 45%, JSON payload + canvas right 55%; followed by a references section)
+**Page type:** detail page (single two-column obj-table row: text left 50%, JSON payload + canvas right 50%; followed by a references section)
 **HTML title tag:** Twitter/X Tweets API (v2) — Platform APIs
 
 **Subtitle:** Lets you read and search public posts on X (Twitter) — but meaningful read access now starts at a paid tier.
@@ -69,7 +69,7 @@ Top-down tree diagram of the Tweet object structure: rounded-rectangle nodes (20
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, then a single-row `.obj-table` (full width, border-collapse): left `<td>` 45% with `.section-head` headings + bullet lists + one `.key-point` callout; right `<td>` 55% with a `.section-head` ("What a post looks like", margin-top 0), a `.payload` JSON block, another `.section-head`, and the canvas. After the table, an `h2` "Official API References" with a link list.
+- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, then a single-row `.obj-table` (full width, border-collapse): left `<td>` 50% with `.section-head` headings + bullet lists + one `.key-point` callout; right `<td>` 50% with a `.section-head` ("What a post looks like", margin-top 0), a `.payload` JSON block, another `.section-head`, and the canvas. After the table, an `h2` "Official API References" with a link list.
 - **Page CSS:** universal `* { margin:0; padding:0; box-sizing:border-box; }` reset; body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, white background, padding 40px; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em, margin-bottom 18px; `.verified` inline-block, background `#f0f8ff`, border `1px solid #2980b9`, color `#1a5276`, padding 2px 8px, radius 4px, 0.8em; table cells `1px solid #ddd`, padding 16px; `.section-head` bold `#1a5276`, block; `.payload` background `#f8f9fa`, left border `3px solid #1a5276`, monospace 0.78em, padding 14px, radius 4px, pre whitespace; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em; `li` 0.93em; links `#1a5276`; canvas `display:block`, `width:100%`, margin `16px auto 0`.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; tree levels use blue shades `#2980b9` and `#5dade2`.
 - **Canvas:** declared with `height="400"` attribute and `width:100%` CSS; scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates), redrawn on resize.

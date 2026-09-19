@@ -1,6 +1,6 @@
 # Feature Type Detection
 
-**Page type:** detail page (two-column `.obj-table` with header row: type/characteristics text left 40%, canvas right 60%, one row per feature type; followed by an output-schema table and a footer callout)
+**Page type:** detail page (two-column `.obj-table` with header row: type/characteristics text left 50%, canvas right 50%, one row per feature type; followed by an output-schema table and a footer callout)
 **HTML title tag:** Feature Type Detection
 
 **Subtitle:** Before analyzing any distribution, determine feature type. Type dictates bucketing, shape detection, and applicable tests.
@@ -142,7 +142,7 @@ Bar chart: percentage of records per claim count, dominated by zero.
 
 ## Regeneration instructions
 
-- **Layout:** detail page built around a full-width `.obj-table` with a `<thead>` row ("Type & Characteristics" | "Visualization") and one `<tr>` per feature type. Left `<td>` (40%): a `.metric-domain` colored badge span, a bold `.metric-title` line, and a `.metric-desc` `<ul>` of labeled bullets. Right `<td>` (60%): the canvas. After the table: an h2 "Output of Type Detection" and the `.output-table`, then a `.philosophy` footer callout whose "Step 2 →" link points to `06-profiling-value-mapping.html` in regenerated HTML (`.md` sibling in this spec).
+- **Layout:** detail page built around a full-width `.obj-table` with a `<thead>` row ("Type & Characteristics" | "Visualization") and one `<tr>` per feature type. Left `<td>` (50%): a `.metric-domain` colored badge span, a bold `.metric-title` line, and a `.metric-desc` `<ul>` of labeled bullets. Right `<td>` (50%): the canvas. After the table: an h2 "Output of Type Detection" and the `.output-table`, then a `.philosophy` footer callout whose "Step 2 →" link points to `06-profiling-value-mapping.html` in regenerated HTML (`.md` sibling in this spec).
 - **Page CSS:** body -apple-system sans-serif, background `#fafafa`, text `#1a1a1a`, 15px, padding 20px 10px. h1 `#1a5276`; `.subtitle` `#333` 1.1em. `.obj-table` th background `#1a5276` white text; all cell borders 1px solid `#2980b9`, padding 14px 16px; even rows background `#f0f8ff`. `.metric-title` bold 1.1em `#1a5276`. Badge colors: `.domain-cat` `#6a1b9a`, `.domain-disc` `#1565c0`, `.domain-cont` `#2e7d32`, `.domain-edge` `#e65100` (white text, 2px 8px padding, 3px radius, 0.85em). `.output-table`: th background `#e8eef3` `#1a5276` text with 2px `#bbb` bottom border; td 1px `#e0e0e0` bottom border; `code` on `#eee` background. `.philosophy`: background `#f0f4f8`, 4px `#2980b9` left border, padding 12px 16px.
 - **Canvases:** all six are 720×200 CSS pixels (`display: block`); a shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Common chart padding: top 30, bottom 40, left 60, right 30 (right 140 on the discrete chart for its legend).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`; scatter dots `rgba(192,57,43,0.5)` (neg) and `rgba(30,132,73,0.5)` (pos); badge orange annotations `#e65100`, categorical annotation purple `#6a1b9a`.

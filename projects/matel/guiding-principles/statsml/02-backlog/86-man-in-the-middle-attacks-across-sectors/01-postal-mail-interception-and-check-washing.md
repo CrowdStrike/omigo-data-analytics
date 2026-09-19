@@ -1,6 +1,6 @@
 # Postal Mail Interception & Check Washing
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Postal Mail Interception & Check Washing
 
 **Subtitle:** The oldest man-in-the-middle — a letter travels through many hands, and a paper check is just an instruction anyone holding it can try to rewrite.
@@ -95,7 +95,7 @@ Horizontal bar chart of discovery lag under three habits — illustrative bar le
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is one non-wrapping line — a bold colored label plus a phrase of roughly 55 characters or fewer; in HTML the label is `<span class="pt-label" style="color:COLOR">Label:</span>` with `.pt-label { font-weight: bold; }`. Long ideas are split into more labeled bullets, never wrapped. Lead paragraphs are at most one short sentence.
 - **Label colors by meaning:** `#1a5276` blue = mechanism/fact (Fact, Mechanism); `#27ae60` green = defense/win (Defense, Win); `#e74c3c` red = risk/loss (Risk, Stolen); `#e67e22` orange = scene/context (Scene). Key-point boxes open with the same colored bold lead word followed by one short sentence.
 - **Tone:** the topic is inherently about crime — keep it mechanical and neutral; describe mechanism only, no drama words, no attributed intent. Hedges (usually, commonly) stay on unsourced claims; invented magnitudes are labeled "illustrative".

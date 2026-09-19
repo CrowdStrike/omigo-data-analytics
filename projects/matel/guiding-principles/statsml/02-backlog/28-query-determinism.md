@@ -1,6 +1,6 @@
 # Query Determinism & Time-Sensitive Queries
 
-**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column ~45% left and a canvas column ~55% right)
+**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column 50% left and a canvas column 50% right)
 **HTML title tag:** Query Determinism & Time-Sensitive Queries
 
 **Subtitle:** A query that reads the wall clock, an unordered top-N, or a table that is still being written is not a function of its parameters — it is a function of when you happened to run it. (Status pill: TO DISCUSS)
@@ -137,7 +137,7 @@ Vertical ladder diagram of four determinism rungs with badges and an upward arro
 
 ## Regeneration instructions
 
-- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph containing an inline `.status` pill, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (45%) with paragraphs, `<ul>` bullets, `.key-point`/`.questions` callouts and `.example` lines; right `td.viz-col` (55%) with the canvas. Section 3 additionally has a full-width `table.compare` below its layout table.
+- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph containing an inline `.status` pill, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (50%) with paragraphs, `<ul>` bullets, `.key-point`/`.questions` callouts and `.example` lines; right `td.viz-col` (50%) with the canvas. Section 3 additionally has a full-width `table.compare` below its layout table.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `strong` in `#1a5276`.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.questions` — same but left border `3px solid #e67e22`. `.example` — italic, `#555`, 0.9rem.
 - **Inline code:** background `#f8f9fa`, border `1px solid #e0e0e0`, padding 1px 5px, radius 3px, 0.82em, color `#1a5276`.

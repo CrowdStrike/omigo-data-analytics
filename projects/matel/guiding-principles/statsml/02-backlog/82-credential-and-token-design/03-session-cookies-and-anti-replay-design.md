@@ -1,6 +1,6 @@
 # Session Cookies & Anti-Replay Design
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Session Cookies & Anti-Replay Design
 
 **Subtitle:** A session cookie is a bearer credential — whoever presents it *is* the user. The design questions are where the state lives, what the cookie is bound to, and how often it is replaced.
@@ -128,7 +128,7 @@ Era Gantt: hardening practices over time.
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is one line that must not wrap in the 45% column — a bold colored label plus a phrase of ≤ ~55 characters. HTML form: `<li><span class="pt-label" style="color:COLOR">Label:</span> phrase</li>` with `.pt-label { font-weight: 600; }`. Long ideas are split into more labeled bullets, never wrapped. Lead paragraphs are at most one short sentence. Key-point boxes open with the same colored bold lead label followed by one short sentence.
 - **Label colors by meaning:** `#1a5276` blue = design/fact, `#27ae60` green = win/strength, `#e74c3c` red = flaw/risk, `#e67e22` orange = context/history/trend. On this page: blue — Random ID, Signed cookie, Encrypted cookie, Binding, IP binding, Fingerprint binding, User-agent binding, Idle timeout, Absolute timeout, Sliding expiry, HttpOnly flag, Secure flag, SameSite defaults; green — Win, Rotate on login, Rotate on elevation; red — Cost, Risk, Fixation, Leak paths; orange — URL session IDs, Status, Rotation default, Frontier. Key-point leads: "No row to delete" red, "Mobility trade-off" orange, "Exposure window" red, "One-way arc" orange. Intro-callout lead: "Three answers" blue.
 - **Page CSS:** body system-ui sans-serif, background `#fff`, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; h2 1.3rem `#1a5276`; `.subtitle` `#666` 0.95rem; `.intro` background `#f0f4f8` with `border-left: 3px solid #2980b9`; `.key-point` background `#f8f9fa` with `border-left: 3px solid #e74c3c`, 0.9rem; ul 0.92rem; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links.

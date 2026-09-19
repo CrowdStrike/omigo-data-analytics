@@ -1,6 +1,6 @@
 # EHR / FHIR
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, payload + canvas right 55%, single Overview row, followed by an API-references list)
+**Page type:** detail page (two-column obj-table layout: text left 50%, payload + canvas right 50%, single Overview row, followed by an API-references list)
 **HTML title tag:** EHR / FHIR — Platform APIs
 
 **Subtitle:** Lets approved apps pull patients' medical records — labs, diagnoses, medications — from hospital systems in a standard format.
@@ -81,7 +81,7 @@ Patient timeline over 90 days: an underlying (unobserved) serum-creatinine traje
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" with a single-row `.obj-table` (left `<td>` 45%: section labels + bullet lists + one `.key-point` callout; right `<td>` 55%: payload note + `<pre>` FHIR JSON + chart note + `<canvas>`), then `h2` "Official API References" with a link list.
+- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" with a single-row `.obj-table` (left `<td>` 50%: section labels + bullet lists + one `.key-point` callout; right `<td>` 50%: payload note + `<pre>` FHIR JSON + chart note + `<canvas>`), then `h2` "Official API References" with a link list.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, white background, padding 30px 40px. h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` inline badge — background `#eaf2f8`, border `1px solid #2980b9`, text `#1a5276`, padding 2px 10px, radius 4px, 0.8em. h2 1.3em `#1a5276` with `border-bottom: 2px solid #2980b9`. `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em. `.section-label` bold `#1a5276` block. Payload/chart notes are inline-styled 0.85em `#555` paragraphs. `li`/`p` 0.93em; links `#1a5276`; `code` background `#f4f4f4`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="fhirMissingnessChart" height="380">`, CSS `display:block; width:100%`; drawing code reads `getBoundingClientRect().width`, sets backing store to `rect.width * dpr` / `380 * dpr` using `window.devicePixelRatio`, fixes CSS height to 380px, `ctx.scale` back to logical coordinates, and re-renders on `resize`.
 - **Palette:** primary blue `#1a5276`, green `#27ae60` (unused here), red `#e74c3c`, orange `#e67e22`, band fill `rgba(26,82,118,0.14)`; grid `#e8e8e8`; text `#555`/`#2c3e50`/`#888`.

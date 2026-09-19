@@ -1,6 +1,6 @@
 # Schema Compliance Without Data Compliance
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvas right 60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Schema Compliance Without Data Compliance — Common Bad Practices
 
 **Subtitle:** Negligence — Data passes structural validation (correct types, non-null, within range) but is semantically incompatible with everything else. Can't JOIN, can't compare, can't integrate. Creates parallel data universes that require custom ETL to bridge.
@@ -85,7 +85,7 @@ Line chart with filled area: quadratic growth of ETL bridges as incompatible sys
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table with `border-collapse: collapse`, one `<tr>` per section; left `<td>` (40%) holds `.obj-title` + bullets or `.example-box` divs, right `<td>` (60%, centered) holds the canvas. Section 2's left cell uses four `.example-box` divs each with a `.ex-title` heading line.
+- **Layout:** standard detail-page `.obj-table`: full-width table with `border-collapse: collapse`, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets or `.example-box` divs, right `<td>` (50%, centered) holds the canvas. Section 2's left cell uses four `.example-box` divs each with a `.ex-title` heading line.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `ul` 0.9em `#333`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `.example-box` background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 12px 16px, margin 10px 0, 0.88em; `.ex-title` weight 700 `#1a5276`; `code` background `#f0f0f0`, padding 2px 5px, radius 3px, 0.85em. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; `canvas { display: block; margin: 0 auto; }`. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, gray text `#666`/`#333`.

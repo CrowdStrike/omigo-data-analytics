@@ -11,7 +11,7 @@
 - `.toc` box (optional, long hubs) — anchor links to sections.
 - **Sectioned mode:** repeated [`.section-title` (h2, `#d6e4ee` underline) + optional `.section-blurb` + `.grid`]. **Flat mode:** single `.grid`.
 - `.grid` — `repeat(3, 1fr)` (or 4), 16px gap; responsive collapse 3→2→1 at 1100/800/500px.
-- Card = `<a class="card">`: **`.card-label` at top** (0.72em bold uppercase, inline color per category — same category text always same color), `<h3>N. Title</h3>` (index matches file index), one-line `<p>`, **`.topics` row of `.topic-tag` pills at bottom**.
+- Card = `<a class="card">`: **`.card-label` at top** (0.72em bold uppercase, inline color per category — same category text always same color), `<h3>N. Title</h3>` (index matches file index), one-line `<p>`, **`.topics` row of `.topic-tag` pills at bottom** (`#f4ecf7` bg, `#d7bde2` border, `#6c3483` text, 0.75em weight 500 — purple-tinted so small tag text reads clearly; grey-on-grey does not).
 
 ## Numbering rule
 

@@ -1,6 +1,6 @@
 # 6. Pig Latin
 
-**Page type:** detail page (two-column layout table per section: text left 45%, viz right 55%; intro callout; closing key-point)
+**Page type:** detail page (two-column layout table per section: text left 50%, viz right 50%; intro callout; closing key-point)
 **HTML title tag:** 6. Pig Latin
 
 **Subtitle:** Dataflow DAGs for Hadoop — the transitional language between MapReduce and SQL-on-cluster.
@@ -92,7 +92,7 @@ Horizontal bar chart: 500-errors per URL, top 5, sorted descending.
 
 ## Regeneration instructions
 
-- **Template/layout:** data-query-languages detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, one `.intro-callout` (two paragraphs separated by `<br><br>`), then one `.section` per numbered section (h2 with 2px `#2980b9` bottom border), each containing a `table.layout` with one row: left `td.text-col` (45%) for paragraph/bullets/key-point/example, right `td.viz-col` (55%) for optional `<pre><code>` block and canvas. A standalone `.key-point` div at the bottom holds the meta-point.
+- **Template/layout:** data-query-languages detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, one `.intro-callout` (two paragraphs separated by `<br><br>`), then one `.section` per numbered section (h2 with 2px `#2980b9` bottom border), each containing a `table.layout` with one row: left `td.text-col` (50%) for paragraph/bullets/key-point/example, right `td.viz-col` (50%) for optional `<pre><code>` block and canvas. A standalone `.key-point` div at the bottom holds the meta-point.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; `.subtitle` `#666` 0.95rem; `.intro-callout` background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.95rem; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; ul 0.92rem; `pre` background `#f4f4f4`, padding 12px, radius 4px, 0.85em.
 - **Canvas:** intrinsic 720×300, CSS `width: 100%`, border `1px solid #e0e0e0`, radius 4px; scaled with `window.devicePixelRatio` via a shared `setup(id)` helper (backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, bar fill `rgba(26,82,118,0.35)`, text `#222`/`#444`.

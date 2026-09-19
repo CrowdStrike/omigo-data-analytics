@@ -1,6 +1,6 @@
 # Mobile Apps & Phone Sensors — A Sensor Platform in Every Pocket
 
-**Page type:** detail page (four titled sections, each a two-column row: text left 45%, canvas right 55%)
+**Page type:** detail page (four titled sections, each a two-column row: text left 50%, canvas right 50%)
 **HTML title tag:** Mobile Apps & Phone Sensors — A Sensor Platform in Every Pocket
 
 **Subtitle:** Ship an app and, with user permission, you can collect telemetry and sensor readings from a fleet of phones — location, motion, pressure, and in-app behavior from an instrument that is already in everyone's pocket.
@@ -120,7 +120,7 @@ Shrinking-cohort funnel: four horizontal bars from installs down to month-six ac
 
 ## Regeneration instructions
 
-- **Template:** backlog multi-section detail page. After h1, `.subtitle`, and `.intro` callout, one `.lang-section` per numbered section: `h2` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px padding-bottom), then a `table.layout` with one `<tr>`: left `<td class="text-col">` (45%) with lead paragraph, bullets, `.key-point`; right `<td class="viz-col">` (55%) with the canvas. Section h2 headings carry the "1.–4." numbers shown above.
+- **Template:** backlog multi-section detail page. After h1, `.subtitle`, and `.intro` callout, one `.lang-section` per numbered section: `h2` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px padding-bottom), then a `table.layout` with one `<tr>`: left `<td class="text-col">` (50%) with lead paragraph, bullets, `.key-point`; right `<td class="viz-col">` (50%) with the canvas. Section h2 headings carry the "1.–4." numbers shown above.
 - **Bullet style:** each bullet is a bold label plus a short one-line phrase ("**Label:** short phrase."); labels are colored via `li strong { color: #1a5276; }` in the page CSS; split content into more bullets rather than let a line wrap.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`; `.subtitle` `#666` 0.95rem; `.intro` — background `#f0f4f8`, `border-left: 3px solid #2980b9`, padding 8px 12px, 0.9rem, 32px margin-bottom; `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem; `ul` 0.92rem; `li strong` `#1a5276`; canvases `width: 100%`, `border: 1px solid #e0e0e0`, radius 4px; `.lang-section` 40px margin-bottom.
 - **Canvases:** intrinsic width 720, heights 420/380/340/400 as specified; shared `setupCanvas(id, h)` helper scales by `window.devicePixelRatio` (multiply backing store, `ctx.scale(dpr,dpr)`). Canvas fonts use `-apple-system, sans-serif`.

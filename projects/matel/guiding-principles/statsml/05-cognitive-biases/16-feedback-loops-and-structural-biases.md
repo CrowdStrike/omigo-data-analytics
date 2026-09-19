@@ -1,6 +1,6 @@
 # Feedback Loops & Structural Biases
 
-**Page type:** detail page (one `.bias-section` per bias, each a two-column layout table: text left 45%, canvas right 55%)
+**Page type:** detail page (one `.bias-section` per bias, each a two-column layout table: text left 50%, canvas right 50%)
 **HTML title tag:** Feedback Loops & Structural Biases
 
 **Subtitle:** How predictions, omissions, and structural position create self-reinforcing distortions that compound over time.
@@ -94,7 +94,7 @@ Circular feedback-loop diagram (same ring style as c1) with a starvation note at
 
 ## Regeneration instructions
 
-- **Layout:** single detail page; h1 with 2px `#2980b9` bottom border, `.subtitle`, then four `.bias-section` blocks (40px bottom margin). Each section: `<h2>` numbered title with 2px `#2980b9` bottom border, then a `table.layout` (border-collapse, one `<tr>`) with `.text-col` td (45%) holding paragraph + `<ul>` + `.key-point` box + italic `.example` paragraph, and `.viz-col` td (55%) holding the canvas.
+- **Layout:** single detail page; h1 with 2px `#2980b9` bottom border, `.subtitle`, then four `.bias-section` blocks (40px bottom margin). Each section: `<h2>` numbered title with 2px `#2980b9` bottom border, then a `table.layout` (border-collapse, one `<tr>`) with `.text-col` td (50%) holding paragraph + `<ul>` + `.key-point` box + italic `.example` paragraph, and `.viz-col` td (50%) holding the canvas.
 - **Boxes:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem, `strong` label inside. `.example` — italic, `#555`, 0.9rem, no box.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; h2 1.3rem `#1a5276`; subtitle `#666` 0.95rem; lists 0.92rem. Canvases `width: 100%`, `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links.
 - **Canvas:** intrinsic 720×300 each; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper drawing at 720×300 logical size. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

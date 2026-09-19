@@ -42,7 +42,7 @@ Colored labels and mixed fonts/colors CONVEY information; migration and regenera
 | Vocabulary | Where | Pattern |
 |------------|-------|---------|
 | Category card labels | grid cards, top of card | `.card-label` / `.card-num`, 0.72-0.75em bold uppercase, inline color per category; same category text = same color everywhere on the page |
-| Topic tags | grid cards, bottom of card | `.topic-tag` grey pill chips |
+| Topic tags | grid cards, bottom of card | `.topic-tag` purple-tinted pill chips (`#f4ecf7` bg, `#6c3483` text, 0.75em/500) |
 | Semantic chips | detail pages | `.tag.blue/.green/.red/.orange` pills (rgba tints); `.pt-label` Fact/Risk/Defense/Scene (digital-theft); `.lbl-*` purpose/effect chips; `.domain-*` badges (brainstorm) |
 | Bullet leads | detail pages | `li b` colored in the page accent — bold colored label + one-line phrase |
 | Pitfall labels | three-col distribution pages | `.pitfall-label` uppercase shape nickname, colored per concept |

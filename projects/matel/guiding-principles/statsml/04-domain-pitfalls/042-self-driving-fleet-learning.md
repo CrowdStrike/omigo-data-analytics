@@ -1,6 +1,6 @@
 # Self-Driving & Fleet Learning — Domain-Specific Pitfalls
 
-**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: labeled bullets left ~40%, canvas right ~60%)
+**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: labeled bullets left 50%, canvas right ~50%)
 **HTML title tag:** Self-Driving & Fleet Learning — Domain-Specific Pitfalls
 
 ## Long-Tail Scenario Collection
@@ -153,7 +153,7 @@ Annotator-disagreement panel: one scenario box, five annotator verdict boxes, an
 
 ## Regeneration instructions
 
-- **Layout:** standard domains detail page. h1, then one `h2` per pitfall (six total) followed by a `.obj-table` (full-width, border-collapse) with a single `<tr>`: left `<td>` (40%) holding `.obj-title` div + a `<ul>` of labeled bullets (each `<li>` starting with a bold `<strong>` label), right `<td>` (60%, centered) holding the canvas. No subtitle paragraph on this page. No nav bar, no back/home links, no thead, no badges.
+- **Layout:** standard domains detail page. h1, then one `h2` per pitfall (six total) followed by a `.obj-table` (full-width, border-collapse) with a single `<tr>`: left `<td>` (50%) holding `.obj-title` div + a `<ul>` of labeled bullets (each `<li>` starting with a bold `<strong>` label), right `<td>` (50%, centered) holding the canvas. No subtitle paragraph on this page. No nav bar, no back/home links, no thead, no badges.
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6. h1 1.8em `#1a5276`. h2 1.4em `#1a5276` with 2px bottom border `#2980b9`, padding-bottom 8px, margin 40px 0 15px. `ul` 0.9em `#333`. `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px; even rows background `#fafcfe`. `.obj-title` 1.05em weight 600 `#1a5276`. `strong` `#1a5276`. `.subtitle` and `.philosophy` styles defined but unused.
 - **Canvases:** each 720×200 with inline `style="width:720px;height:200px"`; shared `setupCanvas(id)` sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Font constants: 17px system titles (`CHART_FONT`), 13px (`SMALL_FONT`), 11px (`TINY_FONT`). The whole script is wrapped in one IIFE.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, yellow-orange `#f39c12`, purple `#8e44ad`, secondary blues `#2980b9`/`#3498db`, dark red `#c0392b`, axis dark `#2c3e50`, muted gray `#7f8c8d`.

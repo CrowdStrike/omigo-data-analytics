@@ -1,6 +1,6 @@
 # Clutch Players & the Mixture Problem
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Clutch Players & the Mixture Problem
 
 **Subtitle:** A handful of elite tennis players genuinely perform differently under pressure. You'll never find them by averaging over the entire tour — because the population isn't one population.
@@ -82,7 +82,7 @@ Side-by-side comparison panels: pooled test vs stratified test.
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, three `h2` sections (unnumbered) each holding a `.obj-table` (one `<tr>`: left `<td>` 45% with `.obj-title` + paragraphs/bullets/`.math-box`, right `<td>` 55% centered canvas), closing `.philosophy` callout.
+- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, three `h2` sections (unnumbered) each holding a `.obj-table` (one `<tr>`: left `<td>` 50% with `.obj-title` + paragraphs/bullets/`.math-box`, right `<td>` 50% centered canvas), closing `.philosophy` callout.
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; p 0.95em `#333`; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; obj-table cells `1px solid #e0e0e0`, padding 20px 24px. No nav bar, no back/home links.
 - **Component styles:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. `.math-box` — background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 16px 20px, 0.9em; `code` on `#eef2f7`, padding 2px 6px, radius 3px.
 - **Canvases:** three canvases with no width/height attributes in the markup; sizes are set in JS via `setupCanvas(canvas, 720, 380)`, which sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. All three are 720×380.

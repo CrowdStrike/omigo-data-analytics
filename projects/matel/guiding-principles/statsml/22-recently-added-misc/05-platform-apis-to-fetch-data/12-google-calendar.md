@@ -1,6 +1,6 @@
 # Google Calendar
 
-**Page type:** detail page (platform-API layout: h1 + subtitle + "Last verified" badge, one two-column obj-table row — text left 45%, example JSON + canvas right 55% — then an "Official API References" link list)
+**Page type:** detail page (platform-API layout: h1 + subtitle + "Last verified" badge, one two-column obj-table row — text left 50%, example JSON + canvas right 50% — then an "Official API References" link list)
 **HTML title tag:** Google Calendar — Platform APIs
 
 **Subtitle:** Read and manage calendar events, invitees, and busy/free availability in Google Calendar.
@@ -75,8 +75,8 @@ Grouped horizontal bar matrix: which Calendar endpoint returns which property. V
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. Body: h1, `.subtitle` paragraph, `.verified` badge span, one `table.obj-table` with a single `<tr>`; left `<td>` (45%) holds `.section-title` headings ("What you can get", "Watch out for") with `<ul>` lists and one `.key-point` callout between them; right `<td>` (55%) holds a `.section-title` example heading, a `<pre>` JSON block with an inline-styled gray caption `<p>`, and the canvas. After the table: `<h2>Official API References</h2>` with a `<ul>` of external links.
-- **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, padding 30px 40px, white background. h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge — background `#eaf2f8`, border `1px solid #e0e0e0`, text `#1a5276`, padding 2px 10px, radius 4px, 0.8em. h2 1.3em `#1a5276` with `border-bottom: 2px solid #2980b9`. `table.obj-table` full width, collapsed borders, td padding 16px, first td 45% / last td 55%. `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em. `.section-title` bold `#1a5276` 1.05em. `li` 0.93em. Links `#1a5276`. No nav bar, no back/home links.
+- **Layout:** platform-APIs detail page. Body: h1, `.subtitle` paragraph, `.verified` badge span, one `table.obj-table` with a single `<tr>`; left `<td>` (50%) holds `.section-title` headings ("What you can get", "Watch out for") with `<ul>` lists and one `.key-point` callout between them; right `<td>` (50%) holds a `.section-title` example heading, a `<pre>` JSON block with an inline-styled gray caption `<p>`, and the canvas. After the table: `<h2>Official API References</h2>` with a `<ul>` of external links.
+- **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, padding 30px 40px, white background. h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge — background `#eaf2f8`, border `1px solid #e0e0e0`, text `#1a5276`, padding 2px 10px, radius 4px, 0.8em. h2 1.3em `#1a5276` with `border-bottom: 2px solid #2980b9`. `table.obj-table` full width, collapsed borders, td padding 16px, first td 50% / last td 50%. `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em. `.section-title` bold `#1a5276` 1.05em. `li` 0.93em. Links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="endpointMatrix" height="380">`, CSS `display:block; width:100%`; script sizes backing store to cell width × 380 times `window.devicePixelRatio` and redraws on resize.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, grays `#666`/`#888`/`#eee`.
 - In regenerated HTML, any card/grid links pointing to this page use the `.html` extension.

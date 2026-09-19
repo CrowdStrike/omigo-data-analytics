@@ -1,6 +1,6 @@
 # Entropy
 
-**Page type:** detail page (card-section layout: Overview two-column table with text left 45% / canvas right 55%, then a full-width Real-World Examples section with canvas + callouts, then a Quick Decision Table)
+**Page type:** detail page (card-section layout: Overview two-column table with text left 50% / canvas right 50%, then a full-width Real-World Examples section with canvas + callouts, then a Quick Decision Table)
 **HTML title tag:** Entropy — Statistical Tests Reference
 
 **Back link (top of page):** "← Statistical Tests Reference" pointing to `../12-statistical-tests.md` (in regenerated HTML: `../12-statistical-tests.html`), styled `color:#2980b9`, no underline, 0.9em.
@@ -82,7 +82,7 @@ Model A (trained on 3 genres) reports entropy of 4.2 bits/token. Model B (traine
 
 ## Regeneration instructions
 
-- **Layout:** three `.card-section` blocks (Overview, Real-World Examples, Quick Decision Table), each with an `h2` underlined by `2px solid #2980b9`. Overview uses `table.layout` with `td.text-col` (45%) holding `.obj-title` headings + paragraphs/lists/callouts and `td.viz-col` (55%) holding canvas `c8`. Real-World Examples is full width: canvas `c8r` then two `.real-world` divs. Quick Decision Table holds the `.decision-table`.
+- **Layout:** three `.card-section` blocks (Overview, Real-World Examples, Quick Decision Table), each with an `h2` underlined by `2px solid #2980b9`. Overview uses `table.layout` with `td.text-col` (50%) holding `.obj-title` headings + paragraphs/lists/callouts and `td.viz-col` (50%) holding canvas `c8`. Real-World Examples is full width: canvas `c8r` then two `.real-world` divs. Quick Decision Table holds the `.decision-table`.
 - **Back link:** page opens with `<a href="../12-statistical-tests.html">← Statistical Tests Reference</a>` before the h1 (color `#2980b9`, no underline, 0.9em).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`; subtitle `#666` 0.95rem; `strong` and `code` in `#1a5276`, code on `#e8f0f8`; `.obj-title` 1.05em weight 600 `#1a5276`.
 - **Callout styles:** `.failure` — background `#fdedec`, left border `3px solid #e74c3c`, monospace ('SF Mono'/'Fira Code'), color `#922`, 0.85rem. `.alt-note` — background `#eafaf1`, left border `3px solid #27ae60`, color `#1a5276`, 0.85rem. `.real-world` — background `#fef9e7`, left border `4px solid #e67e22`, 0.88rem, `.domain` weight 600 `#7d6608`, `strong` `#e67e22`.

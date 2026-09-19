@@ -1,6 +1,6 @@
 # Mobile Swipe — Temporal Bias, Fatigue & Single-Result Framing
 
-**Page type:** detail page (numbered h2 sections, each with one two-column obj-table row: text left 40%, canvas right 60%)
+**Page type:** detail page (numbered h2 sections, each with one two-column obj-table row: text left 50%, canvas right 50%)
 **HTML title tag:** Mobile Swipe — Temporal Bias, Fatigue & Single-Result Framing
 
 **Subtitle:** TikTok-style single-result interfaces eliminate visual position bias but introduce different measurement problems: temporal decay, attention fatigue, and framing effects from no-comparison context.
@@ -74,7 +74,7 @@ Paired horizontal bars (hook % vs quality %) for four content archetypes.
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle` paragraph, then three numbered `<h2>` sections ("1.", "2.", "3.", 1.3em `#1a5276` with a 2px `#2980b9` bottom border, 6px padding-bottom). Each section holds one `.obj-table` (full width, single `<tr>`): left `<td>` (40%) with `.obj-title` (1.05em, weight 600, `#1a5276`), a `<ul>` (0.9em), and a closing **Fix:** `<p>` (0.95em); right `<td>` (60%, centered) with the canvas (explicit `width="720" height="300"` attributes). Cell borders `1px solid #e0e0e0`, padding 20px 24px, `vertical-align: middle`; even rows `#fafcfe`.
+- **Layout:** h1 + `.subtitle` paragraph, then three numbered `<h2>` sections ("1.", "2.", "3.", 1.3em `#1a5276` with a 2px `#2980b9` bottom border, 6px padding-bottom). Each section holds one `.obj-table` (full width, single `<tr>`): left `<td>` (50%) with `.obj-title` (1.05em, weight 600, `#1a5276`), a `<ul>` (0.9em), and a closing **Fix:** `<p>` (0.95em); right `<td>` (50%, centered) with the canvas (explicit `width="720" height="300"` attributes). Cell borders `1px solid #e0e0e0`, padding 20px 24px, `vertical-align: middle`; even rows `#fafcfe`.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; subtitle `#666` 1.05em; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** all 720×300; shared `setup(id)` helper reads width/height attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Chart titles are bold 14px `#1a5276`; annotations 10-12px.
 - **Palette:** primary blue `#1a5276`, chart blue `#2980b9`, green `#27ae60`, red `#e74c3c`, purple `#8e44ad`, grays `#666`/`#333`.

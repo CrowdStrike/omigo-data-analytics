@@ -1,6 +1,6 @@
 # High-Dimensional Datasets (100s–1000s of Columns)
 
-**Page type:** detail page (backlog kusto-style two-column layout: text left 45%, canvas right 55%, one table row per section)
+**Page type:** detail page (backlog kusto-style two-column layout: text left 50%, canvas right 50%, one table row per section)
 **HTML title tag:** High-Dimensional Datasets (100s–1000s of Columns) — Discussion Backlog
 
 **Subtitle:** Triage, cluster, profile — taming feature explosion before validation
@@ -64,7 +64,7 @@ Funnel chart: five centered horizontal bars narrowing by stage, connected by gra
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog kusto-style detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with a single `<tr>` — left `td.text-col` (45%) holds bullets/key-point, right `td.viz-col` (55%) holds the canvas. Note: Section 1 hosts canvas `c2` (320 tall) and Section 2 hosts canvas `c1` (300 tall) — keep these ids/placements. No index number in the h1.
+- **Template/layout:** backlog kusto-style detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with a single `<tr>` — left `td.text-col` (50%) holds bullets/key-point, right `td.viz-col` (50%) holds the canvas. Note: Section 1 hosts canvas `c2` (320 tall) and Section 2 hosts canvas `c1` (300 tall) — keep these ids/placements. No index number in the h1.
 - **Inline code style:** `code` — background `#e8f0f8`, padding 2px 6px, radius 3px, 0.85em, color `#1a5276`.
 - **Key-point callout:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem with 4px li spacing; canvases `width: 100%` with `1px solid #e0e0e0` border, radius 4px. No nav bar, no back/home links.

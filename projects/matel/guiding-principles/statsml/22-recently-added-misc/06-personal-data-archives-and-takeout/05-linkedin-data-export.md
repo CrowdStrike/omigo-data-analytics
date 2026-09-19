@@ -1,6 +1,6 @@
 # LinkedIn — Data Export
 
-**Page type:** detail page (two-column obj-table layout per section: bullets left 45%, code payloads or canvas right 55%)
+**Page type:** detail page (two-column obj-table layout per section: bullets left 45%, code payloads or canvas right 50%)
 **HTML title tag:** LinkedIn — Data Export
 
 **Meta line (`.last-verified`, gray):** Last verified: August 2026
@@ -107,7 +107,7 @@ The ad targeting categories are the most revealing — they show LinkedIn's comp
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, then `.last-verified` line. Three `h2` sections ("What's Included", "How to Request & Delivery", "What's Conspicuously Missing"), each followed by a one-row `table.obj-table` — left `<td>` (45%) with bullets, right `<td>` (55%) with `<pre><code>` blocks or the canvas. Ends with a `.key-point` callout div. In regenerated HTML, any links use .html extensions.
+- **Layout:** detail page. h1, then `.last-verified` line. Three `h2` sections ("What's Included", "How to Request & Delivery", "What's Conspicuously Missing"), each followed by a one-row `table.obj-table` — left `<td>` (50%) with bullets, right `<td>` (50%) with `<pre><code>` blocks or the canvas. Ends with a `.key-point` callout div. In regenerated HTML, any links use .html extensions.
 - **Page CSS:** body system sans-serif, `line-height: 1.6`, text `#2c3e50`, padding 30px 40px, white background. h1 1.8rem `#1a5276`; h2 1.3em `#1a5276`, `border-bottom: 2px solid #2980b9`, padding-bottom 6px, margin-top 32px. `table.obj-table` full width, collapsed borders, margin 16px 0; cells padding 16px, vertical-align top, **no cell borders** on this page. `li` 0.93em, 6px bottom margin.
 - **Blocks:** `pre` — background `#f4f6f7`, border `1px solid #dce1e4`, radius 4px, padding 12px 14px, 0.82em; `code` monospace (SF Mono/Consolas). `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em.8em, margin-left 12px.
 - **Canvas:** `display: block; margin: 0 auto; width: 100%`, height 400px; scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Member-dot ring jitter comes from the seeded Park-Miller generator (seed 20250205), so dot positions, cluster labels, and the caption total are byte-identical on every render.

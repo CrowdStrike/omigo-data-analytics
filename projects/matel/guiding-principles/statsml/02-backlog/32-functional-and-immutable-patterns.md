@@ -1,6 +1,6 @@
 # Functional Programming & Immutability in Data Systems
 
-**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column ~45% left and a canvas column ~55% right)
+**Page type:** detail page (backlog-style 2-column layout: `.card-section` per topic, each with a text column 50% left and a canvas column 50% right)
 **HTML title tag:** Functional Programming & Immutability in Data Systems
 
 **Subtitle:** Design discussion — pure functions, immutable data, and composition prevent whole classes of pipeline bugs. They also cost memory and allocation churn, so the question is where to spend them, not whether to adopt them everywhere.
@@ -284,7 +284,7 @@ Quadrant scatter plot: copy cost (x) vs value of history (y) with per-dataset pl
 
 ## Regeneration instructions
 
-- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (45%) with paragraphs, `<ul>` bullets, `<pre><code>` blocks, `.key-point`/`.questions`/`.philosophy` callouts and `.example` lines; right `td.viz-col` (55%) with the canvas. Section 5 additionally has a full-width paragraph plus `pre` code block below its layout table. No index number in the h1.
+- **Template:** backlog detail page (kusto-style 2-col text/viz layout). Page: h1, `.subtitle` paragraph, then one `.card-section` per numbered topic. Each `.card-section` has an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (50%) with paragraphs, `<ul>` bullets, `<pre><code>` blocks, `.key-point`/`.questions`/`.philosophy` callouts and `.example` lines; right `td.viz-col` (50%) with the canvas. Section 5 additionally has a full-width paragraph plus `pre` code block below its layout table. No index number in the h1.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `strong` in `#1a5276`; lists 0.92rem.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.questions` — same but left border `3px solid #e67e22`. `.philosophy` — same but left border `3px solid #1a5276`. `.example` — italic, `#555`, 0.9rem.
 - **Code:** inline `code` — background `#f8f9fa`, radius 3px, padding 1px 5px, 0.85em, color `#1a5276`. `pre` blocks — background `#f8f9fa`, left border `3px solid #1a5276`, padding 8px 10px, 0.78rem, line-height 1.45, inner code color `#2c3e50`.

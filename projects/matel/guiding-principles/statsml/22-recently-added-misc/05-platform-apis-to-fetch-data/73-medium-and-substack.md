@@ -1,6 +1,6 @@
 # Medium Stories API
 
-**Page type:** detail page (h1 + subtitle + verified badge, then h2 sections; one two-column obj-table row: text left 45%, code sample + canvas right 55%)
+**Page type:** detail page (h1 + subtitle + verified badge, then h2 sections; one two-column obj-table row: text left 50%, code sample + canvas right 50%)
 **HTML title tag:** Medium Stories API — Platform APIs
 
 **Subtitle:** Medium's API only ever let you publish posts in — and it is now closed to new users. Substack has no official API at all.
@@ -63,7 +63,7 @@ Grouped vertical bar chart: read vs write endpoint counts for six platforms, wit
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, h2 "API Overview" with a single-row two-column `table.obj-table` (left td 45% text with plain `<strong>` paragraph headings, right td 55% code sample + canvas), then h2 "Official API References" with a link list.
+- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, h2 "API Overview" with a single-row two-column `table.obj-table` (left td 50% text with plain `<strong>` paragraph headings, right td 50% code sample + canvas), then h2 "Official API References" with a link list.
 - **Page CSS:** body system sans-serif, `#2c3e50` text, white background, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; h2 1.3em `#1a5276` with 2px `#2980b9` bottom border; `.verified` badge — background `#eaf2f8`, border `1px solid #e0e0e0`, color `#1a5276`, padding 2px 10px, radius 4px, 0.8em; obj-table cells padding 16px, no borders; `pre` — background `#f4f4f4`, padding 14px, radius 6px, 0.82em; `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `width: 100%` CSS, height attribute 380; resize handler re-reads `getBoundingClientRect()` and redraws; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c` (dark-red variant `#c0392b`), orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`.

@@ -1,6 +1,6 @@
 # ServiceNow Table API
 
-**Page type:** detail page (single-row two-column obj-table: text left 45%, payload + canvas right 55%; followed by a references list)
+**Page type:** detail page (single-row two-column obj-table: text left 50%, payload + canvas right 50%; followed by a references list)
 **HTML title tag:** ServiceNow Table API — Platform APIs
 
 **Subtitle:** Read IT tickets, change records, and their edit history from a ServiceNow instance — every module is just a table behind one generic interface.
@@ -71,7 +71,7 @@ Horizontal answerability bar chart: one row per ServiceNow table, bar length = a
 
 ## Regeneration instructions
 
-- **Layout:** single-row `.obj-table` (full width, border-collapse): left `<td>` 45% with "What you can get" (`.obj-title` + `<ul>`), a `.key-point` callout, then "Watch out for" (`.obj-title` with `margin-top:18px` + `<ul>`); right `<td>` 55% (text-align center) with `.payload-note` (italic), a `<pre class="payload">` JSON block, and the canvas. After the table, an `h2` "Official API References" with a plain `<ul>` of external links.
+- **Layout:** single-row `.obj-table` (full width, border-collapse): left `<td>` 50% with "What you can get" (`.obj-title` + `<ul>`), a `.key-point` callout, then "Watch out for" (`.obj-title` with `margin-top:18px` + `<ul>`); right `<td>` 50% (text-align center) with `.payload-note` (italic), a `<pre class="payload">` JSON block, and the canvas. After the table, an `h2` "Official API References" with a plain `<ul>` of external links.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge — 0.8em `#888`, 1px solid `#ddd` border, inline-block, padding 2px 10px, radius 4px (a `<span>` right after the subtitle); h2 1.3em `#1a5276` with 2px solid `#2980b9` bottom border; `.obj-title` bold 1.1em `#1a5276`; table cell borders `1px solid #2980b9`, padding 16px; li 0.93em; links `#1a5276`.
 - **Payload / key-point style:** `.payload` — background `#f8f9fa`, left border `3px solid #1a5276`, monospace 0.78em, white-space pre, left-aligned; `.payload-note` — 0.82em italic `#666`, left-aligned; `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em.
 - **Canvas:** `<canvas id="c1" height="380">` with CSS `display:block; margin:16px auto 0; width:100%`; width taken from `canvas.offsetWidth` at draw time, backing store scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates), redrawn on window resize.

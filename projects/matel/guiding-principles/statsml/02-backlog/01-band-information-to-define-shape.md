@@ -1,6 +1,6 @@
 # Using Band Information to Define Shape
 
-**Page type:** detail page (backlog-style two-column layout table: text left 45%, viz right 55%, one `.lang-section` per section)
+**Page type:** detail page (backlog-style two-column layout table: text left 50%, viz right 50%, one `.lang-section` per section)
 **HTML title tag:** Using Band Information to Define Shape — Discussion Backlog
 
 **Subtitle:** The SE band as a rigorous threshold for real structure vs sampling noise
@@ -57,7 +57,7 @@ Histogram of a clearly bimodal distribution with a narrow SE band; the valley dr
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page (kusto-style 2-col). h1 (no index number) + `.subtitle` paragraph + `.intro` callout, then one `.lang-section` per section: `<h2>N. Title</h2>` followed by `<table class="layout">` with one `<tr>`: left `<td class="text-col">` (45%) holding bullets/paragraphs and optional `.key-point` div, right `<td class="viz-col">` (55%) holding the canvas plus an italic `.example` caption paragraph.
+- **Layout:** backlog detail page (kusto-style 2-col). h1 (no index number) + `.subtitle` paragraph + `.intro` callout, then one `.lang-section` per section: `<h2>N. Title</h2>` followed by `<table class="layout">` with one `<tr>`: left `<td class="text-col">` (50%) holding bullets/paragraphs and optional `.key-point` div, right `<td class="viz-col">` (50%) holding the canvas plus an italic `.example` caption paragraph.
 - **Page CSS:** body `system-ui, -apple-system, sans-serif`, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`; h2 1.3rem `#1a5276` with `border-bottom: 2px solid #2980b9`; `.subtitle` `#666` 0.95rem; `.intro` background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; `ul` 0.92rem; canvas `width: 100%`, 1px `#e0e0e0` border, 4px radius; `code` background `#e8f0f8`, `#1a5276`. No nav bar, no back/home links.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`.
 - **Canvas:** intrinsic 720×300; shared `setupCanvas(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates; CSS scales the canvas to 100% of the viz cell.

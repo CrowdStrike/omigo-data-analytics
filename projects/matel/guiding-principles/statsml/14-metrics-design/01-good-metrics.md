@@ -1,6 +1,6 @@
 # Good Metrics — 20 Real-World Examples by Domain
 
-**Page type:** detail page, metric-testing template (white background; one two-column obj-table per metric: text left 40%, canvas right 60%; obj-title heading; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
+**Page type:** detail page, metric-testing template (white background; one two-column obj-table per metric: text left 50%, canvas right 50%; obj-title heading; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
 **HTML title tag:** Good Metrics — 20 Real-World Examples by Domain
 
 **Subtitle:** Each row: one metric showing WHY it's good, with a visualization of the concept.

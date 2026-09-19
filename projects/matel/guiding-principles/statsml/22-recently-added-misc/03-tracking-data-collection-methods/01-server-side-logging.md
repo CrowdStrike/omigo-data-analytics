@@ -1,6 +1,6 @@
 # Tracking Data: Server-Side Logging
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section, three rows)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section, three rows)
 **HTML title tag:** Tracking Data: Server-Side Logging
 
 **Subtitle:** Every request a web server answers is written to a log — source address, path, timestamp, and client details. This is a byproduct of how HTTP works.
@@ -119,7 +119,7 @@ Bar chart: how many of 200 repeat visits are recognised as repeat, as a function
 
 ## Regeneration instructions
 
-- **Layout:** tracking-methods detail page. h1 + `.subtitle`, then a three-row `.obj-table` (left td 45%: `.obj-title` heading + `.lede`/bullets/`.lbl` pills/`.key-point` callouts; right td 55%, centered: canvas — row 2 also holds `.payload-note` + `.payload` pre below its canvas).
+- **Layout:** tracking-methods detail page. h1 + `.subtitle`, then a three-row `.obj-table` (left td 50%: `.obj-title` heading + `.lede`/bullets/`.lbl` pills/`.key-point` callouts; right td 50%, centered: canvas — row 2 also holds `.payload-note` + `.payload` pre below its canvas).
 - **Page CSS:** body system sans-serif, `#2c3e50` text, white background, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; obj-table cells `1px solid #2980b9`, padding 16px; `.obj-title` bold 1.1em `#1a5276`; `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em, leading `strong` in `#1a5276`; `.lede` 0.95em; `.lbl` pills — 0.7em bold uppercase, letter-spacing 0.05em, padding 2px 7px, radius 3px; `.lbl-purpose` background `#eaf2fb` color `#1a5276`; `.lbl-effect` background `#fdf0e6` color `#a8501c`; `li b` in `#1a5276` weight 600; `.payload` — background `#f8f9fa`, left border `3px solid #1a5276`, monospace 0.78em, padding 10px, line-height 1.45; `.payload-note` 0.82em italic `#666`. No nav bar, no back/home links.
 - **Canvases:** three fixed 720×320 canvases (`c1`, `c2`, `c3`); a shared `setupCanvas(id)` helper reads each element's own width/height attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates.
 - **Chart palette (CVD-validated tokens, declared once — red deliberately excluded from the series rotation, reserved for genuine error/alarm states):** blue `#2a78d6`, green `#008300`, magenta `#d55181`, yellow `#c98500`, aqua `#199e70`, orange `#d95926`, violet `#4a3aa7`; ink `#1a5276` (headings/axes only), text `#2c3e50`, mute `#6b7280`, grid `#e5e9ef`. Helpers: `tint(hex, alpha)` for translucent fills and a rounded-rect path function. Project-wide accents remain `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

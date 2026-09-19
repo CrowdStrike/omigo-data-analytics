@@ -1,6 +1,6 @@
 # Tracking Data: Head-Worn Cameras and Assistants
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas/payload right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas/payload right 50%, one row per section)
 **HTML title tag:** Tracking Data: Head-Worn Cameras and Assistants
 
 **Subtitle:** Eyewear with an outward-facing camera and a voice assistant. Every other mechanism in this set records the person who owns the device; this one records whoever is in front of it.
@@ -111,7 +111,7 @@ Two stacked panels reading the same distance two ways: the indicator light shrin
 
 ## Regeneration instructions
 
-- **Layout:** tracking-page `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + `.lede` + bullets + `.key-point` callouts, right `<td>` (55%, text-align center) holds the canvas, and in the "What does it collect?" row also the `.payload-note` and `.payload` `<pre>` (both left-aligned).
+- **Layout:** tracking-page `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + `.lede` + bullets + `.key-point` callouts, right `<td>` (50%, text-align center) holds the canvas, and in the "What does it collect?" row also the `.payload-note` and `.payload` `<pre>` (both left-aligned).
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold 1.1em `#1a5276`; li 0.93em with `li b` in `#1a5276` weight 600.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em, leading `<strong>` in `#1a5276`.
 - **Label pills:** `.lbl` inline-block uppercase 0.7em bold, padding 2px 7px, radius 3px; `.lbl-purpose` background `#eaf2fb` color `#1a5276`; `.lbl-effect` background `#fdf0e6` color `#a8501c`.

@@ -1,6 +1,6 @@
 # Distribution Matching
 
-**Page type:** detail page (TOC box, then two-column obj-table layout: text left 45%, canvas right 55%, one obj-table per section)
+**Page type:** detail page (TOC box, then two-column obj-table layout: text left 50%, canvas right 50%, one obj-table per section)
 **HTML title tag:** Distribution Matching
 
 **Subtitle:** Identifying which known distribution families fit a feature's data — multiple matches with confidence levels.
@@ -203,7 +203,7 @@ Routing list of six full-width rounded rows (30px tall, 37px pitch from y=45, x 
 
 ## Regeneration instructions
 
-- **Layout:** h1, subtitle, `.toc` box (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, `<ol>` of `#2980b9` anchor links), then six h2 sections (each with an `id` anchor). Each h2 is followed by one or more single-row `.obj-table`s: left `<td>` (45%) holds `.obj-title` + bullets/paragraphs, right `<td>` (55%, centered) holds the canvas. Section 2 has four obj-tables (one per family); section 4 has three (one per example); the rest have one each. Ends with the `.philosophy` callout.
+- **Layout:** h1, subtitle, `.toc` box (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, `<ol>` of `#2980b9` anchor links), then six h2 sections (each with an `id` anchor). Each h2 is followed by one or more single-row `.obj-table`s: left `<td>` (50%) holds `.obj-title` + bullets/paragraphs, right `<td>` (50%, centered) holds the canvas. Section 2 has four obj-tables (one per family); section 4 has three (one per example); the rest have one each. Ends with the `.philosophy` callout.
 - **obj-table:** full width, border-collapse; td border `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; even rows `#fafcfe`. `.obj-title` 1.05em, weight 600, `#1a5276`; `ul` 0.9em `#333`; `strong` `#1a5276`.
 - **Page style:** body -apple-system/system sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px solid `#2980b9` bottom border; subtitle `#666` 1.05em. `.philosophy`: background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. No nav bar, no back/home links.
 - **Canvases:** intrinsic `width`/`height` attributes as given (all 720 wide); scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Data via `mulberry32(seed)` + Box-Muller; histograms via the shared `drawHist` (25 bins, alpha-0.5 bars, `#1a5276` smoothed density line, `rgba(230,126,34,0.18)` SE band, `#999` baseline). Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

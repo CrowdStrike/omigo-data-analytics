@@ -1,6 +1,6 @@
 # Prisoner's Dilemma
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Prisoner's Dilemma
 
 **Subtitle:** Two people would both be better off cooperating. But rational self-interest leads both to betray. The result is worse for everyone — and neither player made a "mistake."
@@ -147,7 +147,7 @@ Canvas-drawn 4-column comparison table of real-world examples.
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, three numbered `h2` sections each holding a `.obj-table` (one `<tr>`: left `<td>` 45% with `.obj-title` + `.math-box` blocks + bullets, right `<td>` 55% centered canvas), closing `.philosophy` callout.
+- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, three numbered `h2` sections each holding a `.obj-table` (one `<tr>`: left `<td>` 50% with `.obj-title` + `.math-box` blocks + bullets, right `<td>` 50% centered canvas), closing `.philosophy` callout.
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; p 0.95em `#333`; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; obj-table cells `1px solid #e0e0e0`, padding 20px 24px. No nav bar, no back/home links.
 - **Component styles:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. `.math-box` — background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 16px 20px, 0.9em; `code` on `#eef2f7`, padding 2px 6px, radius 3px.
 - **Canvases:** three canvases, each 720×400 intrinsic; shared `setupCanvas(id, w, h)` helper scales backing store by `window.devicePixelRatio`, and calls `ctx.scale` so drawing stays in logical coordinates.

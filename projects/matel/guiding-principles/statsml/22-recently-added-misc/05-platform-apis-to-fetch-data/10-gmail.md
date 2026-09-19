@@ -1,6 +1,6 @@
 # Gmail API
 
-**Page type:** detail page (two-column obj-table: text left 45%, code sample + canvas right 55%, one row, bordered cells)
+**Page type:** detail page (two-column obj-table: text left 50%, code sample + canvas right 50%, one row, bordered cells)
 **HTML title tag:** Gmail API — Platform APIs
 
 **Subtitle:** Read, search, organize, and send email in a Gmail mailbox on the account owner's behalf.
@@ -72,7 +72,7 @@ Pie chart of typical email payload composition by size, with leader-line labels 
 
 ## Regeneration instructions
 
-- **Layout:** single page: h1, `.subtitle`, `.verified` badge, then the one-row `.obj-table` directly (no h2 before it): left `<td>` 45% with `.section-header` paragraph headings, bullet lists, and a `.key-point` callout; right `<td>` 55% with a `.section-header`, a `<pre class="payload">` code sample, and the canvas. Then `h2` "Official API References" with a link list. Unlike the sibling pages, this page uses a global `* { margin:0; padding:0; box-sizing:border-box; }` reset and bordered table cells.
+- **Layout:** single page: h1, `.subtitle`, `.verified` badge, then the one-row `.obj-table` directly (no h2 before it): left `<td>` 50% with `.section-header` paragraph headings, bullet lists, and a `.key-point` callout; right `<td>` 50% with a `.section-header`, a `<pre class="payload">` code sample, and the canvas. Then `h2` "Official API References" with a link list. Unlike the sibling pages, this page uses a global `* { margin:0; padding:0; box-sizing:border-box; }` reset and bordered table cells.
 - **Page style:** body system sans-serif, `#2c3e50` text, white background, padding 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; h2 1.3em `#1a5276` with 2px `#2980b9` bottom border; `.verified` inline badge — background `#f0f8ff`, border 1px `#2980b9`, color `#1a5276`, 0.8em, radius 4px, padding 2px 8px; `.obj-table td` bordered `1px solid #e0e0e0`, padding 16px; `.section-header` bold `#1a5276` 0.95em; `pre.payload` background `#f8f9fa`, left border 3px `#1a5276`, monospace 0.78em, padding 16px, radius 4px; `.key-point` background `#f8f9fa`, left border 3px `#e74c3c`, padding 10px 14px, 0.93em; li 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="pieChart" height="400">`, CSS `width: 100%`; redraws on window resize using `getBoundingClientRect()` width; sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and `ctx.scale` back to logical coordinates.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, grays `#666`/`#999`/`#2c3e50`.

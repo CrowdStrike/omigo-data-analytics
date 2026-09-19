@@ -56,7 +56,7 @@ A `<script>` block at the bottom maps category badge text to colors and applies 
 - **Section header:** `#1a5276`, 1.2em, margin `35px 0 15px 0`, `border-bottom: 2px solid #d0d0d0`, padding-bottom 8px.
 - **Grid:** CSS grid `repeat(auto-fit, minmax(300px, 1fr))`, 16px gap, margin-top 15px.
 - **Card:** background `#ffffff`, border `1px solid #d8d8d8`, radius 10px, padding 20px, shadow `0 2px 4px rgba(0,0,0,0.05)`; hover border `#2980b9` + `translateY(-2px)`; h3 `#1a3a4a` 1em; `.card-num` default `#2980b9`, 0.75em bold, margin-bottom 4px (colored per category by the script); description p `#555` 0.85em.
-- **Topic tags:** `.topics` flex-wrap row with 4px gap, margin-top 8px; `.topic-tag` background `#f0f0f0`, border `1px solid #ccc`, radius 4px, padding 2px 6px, 0.7em `#666`.
+- **Topic tags:** `.topics` flex-wrap row with 4px gap, margin-top 8px; `.topic-tag` background `#f4ecf7`, border `1px solid #d7bde2`, radius 4px, padding 2px 7px, 0.75em weight 500 `#6c3483` — a tinted purple pill, not grey-on-grey, so tag text stays legible at small size.
 - **Card numbering convention:** h3 uses unpadded "N. Title" matching the target file's index number; `.card-num` holds the colored uppercase category label.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange; category badge palette also includes `#795548 #2980b9 #8e44ad #16a085 #d35400 #c0392b #1abc9c #f39c12`.
 - No canvases on this page; pages in this family that add canvases scale them with `window.devicePixelRatio`. In regenerated HTML, card links use `.html` extensions (here they are `#` placeholders). No nav bar, no back/home links.

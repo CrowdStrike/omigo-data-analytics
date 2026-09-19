@@ -1,6 +1,6 @@
 # Google Takeout — Your Data Export
 
-**Page type:** detail page (two-column obj-table layout: bullets left 45%, code sample or canvas right 55%, one h2 + table per section; last-verified line under the h1)
+**Page type:** detail page (two-column obj-table layout: bullets left 45%, code sample or canvas right 50%, one h2 + table per section; last-verified line under the h1)
 **HTML title tag:** Google Takeout — Your Data Export
 
 **Last verified:** Last verified: August 2026
@@ -87,7 +87,7 @@ The ad personalization profile is the closest Google gives you to seeing how the
 
 ## Regeneration instructions
 
-- **Layout:** h1, `.last-verified` line, then one `<h2>` + full-width `.obj-table` per section (one `<tr>` each): left `<td>` (45%) holds a `<ul>` of bullets, right `<td>` (55%) holds a `<pre><code>` JSON sample (sections 1 and 3) or the treemap canvas (section 2). The `.key-point` callout follows the last table.
+- **Layout:** h1, `.last-verified` line, then one `<h2>` + full-width `.obj-table` per section (one `<tr>` each): left `<td>` (50%) holds a `<ul>` of bullets, right `<td>` (50%) holds a `<pre><code>` JSON sample (sections 1 and 3) or the treemap canvas (section 2). The `.key-point` callout follows the last table.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; h2 1.3em `#1a5276` with bottom border `2px solid #2980b9`, padding-bottom 6px; table cells `vertical-align: top`, padding 12px, no borders; list items 0.93em with 5px bottom margin.
 - **Code blocks:** `pre` background `#f4f6f7`, border `1px solid #dce1e4`, radius 4px, padding 12px 14px, 0.82em, monospace ('SF Mono', 'Fira Code', 'Fira Mono', Menlo).
 - **Callout:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em.

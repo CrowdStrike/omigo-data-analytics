@@ -1,6 +1,6 @@
 # Bluetooth Exposure Notification — A Join Without a Database
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one h2 + table per aspect, plus philosophy callouts and a summary table)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one h2 + table per aspect, plus philosophy callouts and a summary table)
 **HTML title tag:** Bluetooth Exposure Notification — A Join Without a Database
 
 **Subtitle:** During COVID, phones answered the question "was I recently near someone who has now tested positive?" — with no location data, no names, and no server that ever learns who met whom.
@@ -123,7 +123,7 @@ Summary table (`.summary-table`, header row + 6 rows):
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, then per aspect: `<h2>N. Title</h2>` (h2 1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a one-row `.obj-table` — left `<td>` (45%) holds `.obj-title`, paragraph, `.math-box`, bullets; right `<td>` (55%, centered) holds the canvas. Section 4 is a `.summary-table`; page closes with a `.philosophy` callout.
+- **Layout:** detail page. h1, `.subtitle`, opening `.philosophy` callout, then per aspect: `<h2>N. Title</h2>` (h2 1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a one-row `.obj-table` — left `<td>` (50%) holds `.obj-title`, paragraph, `.math-box`, bullets; right `<td>` (50%, centered) holds the canvas. Section 4 is a `.summary-table`; page closes with a `.philosophy` callout.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; subtitle `#666` 1.05em; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; ul 0.9em `#333`. No nav bar, no back/home links.
 - **Callout style:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.
 - **Math box:** `.math-box` — background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 16px 20px, 0.9em; `code` background `#eef2f7`, padding 2px 6px, radius 3px.

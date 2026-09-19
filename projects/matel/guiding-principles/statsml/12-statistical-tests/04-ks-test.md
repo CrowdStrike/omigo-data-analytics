@@ -1,6 +1,6 @@
 # KS test — Statistical Tests Reference
 
-**Page type:** detail page (single-row two-column obj-table: text + real-world boxes left 45%, two stacked canvases right 55%; followed by a Quick Decision Table section)
+**Page type:** detail page (single-row two-column obj-table: text + real-world boxes left 50%, two stacked canvases right 50%; followed by a Quick Decision Table section)
 **HTML title tag:** KS test — Statistical Tests Reference
 
 **Subtitle:** Tests whether two samples come from the same continuous distribution
@@ -74,7 +74,7 @@ Credit-score drift CDF chart: Q1 vs Q2 CDFs with highlighted drift zone and resu
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle`, then a single-row `.obj-table` (full width, one `<tr>`): left `<td>` (45%) holds `.obj-title` headings, paragraphs, bullets, `.failure`, `.alt-note`, and both `.real-world` boxes; right `<td>` (55%, centered) holds canvases `c4` and `c4r` stacked (`c4r` with 20px top margin). Below the table, an h2 "Quick Decision Table" with a `.decision-table`.
+- **Layout:** h1 + `.subtitle`, then a single-row `.obj-table` (full width, one `<tr>`): left `<td>` (50%) holds `.obj-title` headings, paragraphs, bullets, `.failure`, `.alt-note`, and both `.real-world` boxes; right `<td>` (50%, centered) holds canvases `c4` and `c4r` stacked (`c4r` with 20px top margin). Below the table, an h2 "Quick Decision Table" with a `.decision-table`.
 - **Page CSS:** body -apple-system/'Segoe UI' sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6, 0.95em base; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; `.obj-table` td 1px `#e0e0e0` border, padding 20px 24px, even rows `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; `code` on `#e8f0f8`; canvases block-centered.
 - **Callout boxes:** `.failure` — background `#fdedec`, left border 3px `#e74c3c`, monospace ('SF Mono'/'Fira Code'), color `#922`, 0.85em. `.alt-note` — background `#eafaf1`, left border 3px `#27ae60`, color `#1a5276`, 0.85em. `.real-world` — background `#fef9e7`, left border 4px `#e67e22`, 0.88em; `.domain` heading weight 600 `#7d6608`; `strong` inside `#e67e22`.
 - **Decision table:** `.decision-table` — th background `#1a5276` white text; td 1px `#e0e0e0` border; even rows `#fafcfe`; column 3 text `#e74c3c`, column 4 text `#27ae60` weight 500.

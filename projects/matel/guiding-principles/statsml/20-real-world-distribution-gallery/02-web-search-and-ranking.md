@@ -160,7 +160,7 @@ Jittered dot-strip plot separating the two populations around a 12-second classi
 - **Background zones:** left of boundary `rgba(231,76,60,0.08)`; right of boundary `rgba(39,174,96,0.08)`.
 - **Dots:** data split at 12s; gaps ≤12s drawn as red `rgba(231,76,60,0.7)` 3px dots jittered around an upper strip (25% plot height); gaps >12s as green `rgba(39,174,96,0.7)` 3px dots jittered around a lower strip (65% plot height); each strip subsampled to ~150 dots.
 - **Zone labels (bold 11px, centered):** red "FAILURE" / "(same query)" over the left zone; green "NEW INTENT" / "(different topic)" over the right zone.
-- **Counts annotation (bold 13px, near bottom of plot):** red "NN%" in left zone and green "NN%" in right zone (computed shares, roughly 45%/55%).
+- **Counts annotation (bold 13px, near bottom of plot):** red "NN%" in left zone and green "NN%" in right zone (computed shares, roughly 50%/50%).
 - **Bottom insight (`#8e44ad` bold 10px, centered):** "Spike mass ≈ share of quick retries".
 - **Axes:** x ticks at 0, 30, 60, 90, 120, 150, 180 (labeled with "s") plus title "Time Between Queries" (`#1a5276`); padding top 45, right 20, bottom 55, left 45; white background.
 

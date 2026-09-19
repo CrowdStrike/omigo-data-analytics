@@ -1,6 +1,6 @@
 # Separation Scenarios
 
-**Page type:** detail page (TOC box + numbered h2 sections, each a two-column obj-table row with verdict badge: text left 45%, canvas right 55%; plus a summary table)
+**Page type:** detail page (TOC box + numbered h2 sections, each a two-column obj-table row with verdict badge: text left 50%, canvas right 50%; plus a summary table)
 **HTML title tag:** Separation Scenarios
 
 **Subtitle:** How pos and neg class distributions relate — 8 patterns that cover the real world.
@@ -215,7 +215,7 @@ Category bar chart of pos rate with per-bar n labels.
 
 ## Regeneration instructions
 
-- **Layout:** single long page. h1, `.subtitle`, a `.toc` box (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, bold "Table of Contents" heading + ordered anchor list `#a`–`#h`, `#summary`), then eight numbered h2 sections, each a one-row `.obj-table`: left `<td>` (45%) holds a `.verdict` pill + `.obj-title` + bullets + Example paragraph, right `<td>` (55%, centered) holds the canvas. Section 9 is a plain `.summary-table` (not obj-table). Page ends with a `.philosophy` callout.
+- **Layout:** single long page. h1, `.subtitle`, a `.toc` box (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, bold "Table of Contents" heading + ordered anchor list `#a`–`#h`, `#summary`), then eight numbered h2 sections, each a one-row `.obj-table`: left `<td>` (50%) holds a `.verdict` pill + `.obj-title` + bullets + Example paragraph, right `<td>` (50%, centered) holds the canvas. Section 9 is a plain `.summary-table` (not obj-table). Page ends with a `.philosophy` callout.
 - **Verdict pills:** `.verdict` inline-block, padding 3px 10px, radius 12px, 0.85em bold. `.v-use` background `#d4efdf` / text `#1e8449`; `.v-partial` background `#fef9e7` / text `#b57d00`; `.v-reject` background `#fadbd8` / text `#c0392b`.
 - **Summary table:** `.summary-table` full width, 0.9em; `th` background `#eaf2f8`, padding 10px 12px, left-aligned, `#1a5276`, bottom border `2px solid #bbb`; `td` padding 8px 12px, bottom border `1px solid #e0e0e0`; Decision cells inline-colored as noted above.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with `border-bottom: 2px solid #2980b9`; subtitle `#666` 1.05em; `strong` in `#1a5276`; obj-table cell borders `1px solid #e0e0e0`, padding 20px 24px, even rows `#fafcfe`; `.obj-title` 1.05em, weight 600, `#1a5276`; `.philosophy` background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. No nav bar, no back/home links.

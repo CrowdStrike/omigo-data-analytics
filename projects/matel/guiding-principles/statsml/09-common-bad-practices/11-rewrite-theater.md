@@ -1,6 +1,6 @@
 # Rewrite Theater
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvases right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvases right ~50%, one row per section)
 **HTML title tag:** Rewrite Theater — Common Bad Practices
 
 **Subtitle:** Complexity as Job Security — Declare system 'unmaintainable,' rewrite it, own the new version.
@@ -56,7 +56,7 @@ Sawtooth of team understanding across three rewrite cycles over 9 years.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, two `<tr>` rows (The Practice / The Key Distinction); left `<td>` (40%) holds `.obj-title` + bullets, right `<td>` (60%, centered) holds the canvas(es) — row 2 stacks `c2` and `c3`.
+- **Layout:** standard detail-page `.obj-table`: full-width table, two `<tr>` rows (The Practice / The Key Distinction); left `<td>` (50%) holds `.obj-title` + bullets, right `<td>` (50%, centered) holds the canvas(es) — row 2 stacks `c2` and `c3`.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` `#333` 0.95em; `ul` 0.9em `#333`, `li` margin 6px 0; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; `canvas { display: block; margin: 0 auto; }`. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, gray text `#666`/`#333`.

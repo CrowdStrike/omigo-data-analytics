@@ -130,7 +130,7 @@ Paired horizontal bar chart: engagement vs actual value per metric.
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle`, then one `h2` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px), each followed by a `.obj-table` with a single `<tr>`: left `<td>` (40%) holds `.obj-title` (repeating the section title, 1.05em, weight 600, `#1a5276`), a `<ul>` of bullets, and an **Example** paragraph; right `<td>` (60%, centered) holds the canvas. This page has no philosophy callout (the `.philosophy` CSS class is defined but unused).
+- **Layout:** h1 + `.subtitle`, then one `h2` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px), each followed by a `.obj-table` with a single `<tr>`: left `<td>` (50%) holds `.obj-title` (repeating the section title, 1.05em, weight 600, `#1a5276`), a `<ul>` of bullets, and an **Example** paragraph; right `<td>` (50%, centered) holds the canvas. This page has no philosophy callout (the `.philosophy` CSS class is defined but unused).
 - **Table style:** full width, border-collapse; cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; even rows background `#fafcfe`.
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; paragraphs `#333` 0.95em; `ul` 0.9em `#333`; `strong` `#1a5276`. No nav bar, no back/home links.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9` / `rgba(41,128,185,0.4-0.5)`, green `#27ae60` / `rgba(39,174,96,0.4)`, red `#e74c3c` / `rgba(231,76,60,0.5)`, gray text `#666`/`#999`/`#333`.

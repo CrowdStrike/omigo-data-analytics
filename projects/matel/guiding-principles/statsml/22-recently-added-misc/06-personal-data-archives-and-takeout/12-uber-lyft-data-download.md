@@ -1,6 +1,6 @@
 # Uber / Lyft Data Download
 
-**Page type:** detail page (single-row two-column obj-table: request/contents text left ~45%, payload sample + canvas right ~55%)
+**Page type:** detail page (single-row two-column obj-table: request/contents text left ~50%, payload sample + canvas right ~50%)
 **HTML title tag:** Uber / Lyft Data Download
 
 **Subtitle:** Personal trip history, fare breakdowns, and surge pricing data via GDPR/CCPA export
@@ -88,7 +88,7 @@ Grouped bar chart: trip frequency by hour of day, weekday vs weekend, 24 hour gr
 
 ## Regeneration instructions
 
-- **Layout:** single `.obj-table` (full width, collapsed borders, `1px solid #e0e0e0` cell borders, 16px cell padding) with one `<tr>`: left `<td>` (45%) holds `.obj-title` headings + bullet lists + `.key-point` and `.missing` callouts; right `<td>` (55%, text-align center) holds `.payload-note`, `.payload` code block, and the canvas.
+- **Layout:** single `.obj-table` (full width, collapsed borders, `1px solid #e0e0e0` cell borders, 16px cell padding) with one `<tr>`: left `<td>` (50%) holds `.obj-title` headings + bullet lists + `.key-point` and `.missing` callouts; right `<td>` (50%, text-align center) holds `.payload-note`, `.payload` code block, and the canvas.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276` with 4px bottom margin; `.subtitle` `#666` 1.05em; `.verified` 0.85em `#888`; `.obj-title` bold `#1a5276` 1.1em (subsequent ones get `margin-top: 18px` inline); li 0.93em.
 - **Callout styles:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em. `.missing` — background `#fdf2f2`, left border `3px solid #e74c3c`, same padding/size. `.payload` — background `#f8f9fa`, left border `3px solid #1a5276`, monospace (ui-monospace/Menlo) 0.78em, `white-space: pre`, left-aligned, line-height 1.45. `.payload-note` — 0.82em `#666` italic, left-aligned.
 - **Canvas:** `style="width: 100%; height: 340px;"`; script reads `getBoundingClientRect()`, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), fixes CSS height to 340px, and calls `ctx.scale` so drawing stays in logical coordinates.

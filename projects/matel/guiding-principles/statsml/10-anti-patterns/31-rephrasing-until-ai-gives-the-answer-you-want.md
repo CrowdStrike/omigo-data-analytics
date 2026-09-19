@@ -1,6 +1,6 @@
 # Rephrasing Until AI Gives the Answer You Want
 
-**Page type:** detail page (two card-sections, each a two-column layout table: text left 45%, canvas right 55%)
+**Page type:** detail page (two card-sections, each a two-column layout table: text left 50%, canvas right 50%)
 **HTML title tag:** Rephrasing Until AI Gives the Answer You Want
 
 **Subtitle:** Tried multiple phrasings until AI confirmed your bias — you p-hacked the AI
@@ -53,7 +53,7 @@ Flowchart: neutral prompt → AI disagrees → green "investigate" path vs cross
 
 ## Regeneration instructions
 
-- **Layout:** two `.card-section` blocks ("Anti-Pattern", "Design Pattern"), each an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) followed by a `table.layout` with a single `<tr>`: left `td.text-col` (45%) holds a `<ul>`, a `.key-point` div, and a `.example` paragraph; right `td.viz-col` (55%) holds the canvas.
+- **Layout:** two `.card-section` blocks ("Anti-Pattern", "Design Pattern"), each an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) followed by a `table.layout` with a single `<tr>`: left `td.text-col` (50%) holds a `<ul>`, a `.key-point` div, and a `.example` paragraph; right `td.viz-col` (50%) holds the canvas.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; ul 0.92rem. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="cN" height="300">` styled `width: 100%`, border `1px solid #e0e0e0`, radius 4px; drawn at intrinsic 720×300 and scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; grays `#666`/`#555`/`#333`; dark text `#2c3e50`.

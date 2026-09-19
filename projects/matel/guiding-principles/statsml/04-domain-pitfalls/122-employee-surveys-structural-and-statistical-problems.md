@@ -1,6 +1,6 @@
 # Employee Surveys — Structural & Statistical Problems
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one row per section)
 **HTML title tag:** 122. Employee Surveys — Structural & Statistical Problems
 
 **Subtitle:** Mandatory employee surveys produce compliant, re-identifiable, and politically filtered data rather than honest signal.
@@ -199,7 +199,7 @@ Rising reported-score line vs flat dashed reality line, annotated with methodolo
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a single-row full-width table; left `<td>` (40%) holds `.obj-title` + bullet list + bold-labeled example/summary paragraph, right `<td>` (60%, centered) holds the canvas. Even rows background `#fafcfe`. The last two sections use bold-labeled bullets (`<strong>` lead-in per bullet) instead of plain bullets.
+- **Layout:** standard detail-page `.obj-table`: one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a single-row full-width table; left `<td>` (50%) holds `.obj-title` + bullet list + bold-labeled example/summary paragraph, right `<td>` (50%, centered) holds the canvas. Even rows background `#fafcfe`. The last two sections use bold-labeled bullets (`<strong>` lead-in per bullet) instead of plain bullets.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; bullets 0.9em `#333`. No nav bar, no back/home links.
 - **Canvas:** 10 canvases with HTML attributes `width="720" height="300"`; each chart's IIFE individually sets backing store to 720×200 × `window.devicePixelRatio` to 720px × 200px, and calls `ctx.scale` so drawing stays in logical coordinates. Base chart font variable `fontSize = 17` px -apple-system; canvases c9/c10 use `textAlign` (center/left/right) explicitly.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`/`#f39c12`, purple `#8e44ad`, gray `#555`/`#333`/`#666`.

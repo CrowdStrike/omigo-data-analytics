@@ -1,6 +1,6 @@
 # Tracking Data: Hidden Page Content
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Tracking Data: Hidden Page Content
 
 **Subtitle:** The document a browser downloads and the page a person reads are not the same thing. The difference is written for machines.
@@ -117,7 +117,7 @@ Horizontal funnel bar chart: pages remaining after each declared field a dataset
 
 ## Regeneration instructions
 
-- **Layout:** tracking-page `.obj-table`: full-width table, `border-collapse: collapse`, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + `.lede` paragraph, bullets, `.key-point` callouts, and (row 2) an inner `.cat-table`; right `<td>` (55%, centered) holds the canvas, plus (row 2 only) the `.payload-note` caption and `.payload` pre block, both left-aligned.
+- **Layout:** tracking-page `.obj-table`: full-width table, `border-collapse: collapse`, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + `.lede` paragraph, bullets, `.key-point` callouts, and (row 2) an inner `.cat-table`; right `<td>` (50%, centered) holds the canvas, plus (row 2 only) the `.payload-note` caption and `.payload` pre block, both left-aligned.
 - **Inner table:** `.cat-table` — full width, collapsed borders `1px solid #cdd`, 0.86em, cell padding 7px 9px; `th` background `#eef4f8`, color `#1a5276`, left-aligned.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; subtitle `#666` 1.05em; outer table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `p` 0.95em; `li` 0.93em with bold lead terms `li b` in `#1a5276` weight 600; `.key-point` background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em, leading `strong` in `#1a5276`; `.lbl` uppercase pill labels 0.7em bold — `.lbl-purpose` background `#eaf2fb` color `#1a5276`, `.lbl-effect` background `#fdf0e6` color `#a8501c`; `.payload` monospace 0.78em, background `#f8f9fa`, left border `3px solid #1a5276`, `white-space: pre`; `.payload-note` 0.82em italic `#666`. No nav bar, no back/home links.
 - **Canvas:** each canvas declares intrinsic `width`/`height` attributes (720×320); a shared `setupCanvas(id)` helper reads those attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Helper: `rr(ctx, x, y, w, h, r)` rounded-rect path. All chart data is hardcoded literal arrays — no random values.

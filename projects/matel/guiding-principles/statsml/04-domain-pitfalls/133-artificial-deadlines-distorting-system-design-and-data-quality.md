@@ -1,6 +1,6 @@
 # Artificial Deadlines Distorting System Design & Data Quality
 
-**Page type:** detail page (h2 section heading per pitfall, each followed by a one-row two-column obj-table: text left ~40%, canvas right ~60%)
+**Page type:** detail page (h2 section heading per pitfall, each followed by a one-row two-column obj-table: text left ~50%, canvas right ~50%)
 **HTML title tag:** 133. Artificial Deadlines Distorting System Design & Data Quality
 
 **Subtitle:** Deadline pressure turns "temporary" shortcuts into permanent holes in data quality, metrics, and system architecture.
@@ -145,7 +145,7 @@ Rising quality curve with a shaded degraded stabilization zone at the start.
 
 ## Regeneration instructions
 
-- **Layout:** for each of the 8 pitfalls, an `<h2>` section heading (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a one-row `.obj-table`: full-width table, left `<td>` (40%) holds `.obj-title` + `<ul>` bullets + an `<p><strong>Example:</strong> ...</p>` paragraph, right `<td>` (60%, centered) holds the canvas. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px. Arrows in bullets are HTML entities (&rarr;) in the source; the h1 uses `&amp;` for "&".
+- **Layout:** for each of the 8 pitfalls, an `<h2>` section heading (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by a one-row `.obj-table`: full-width table, left `<td>` (50%) holds `.obj-title` + `<ul>` bullets + an `<p><strong>Example:</strong> ...</p>` paragraph, right `<td>` (50%, centered) holds the canvas. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px. Arrows in bullets are HTML entities (&rarr;) in the source; the h1 uses `&amp;` for "&".
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; `ul` 0.9em `#333`; `strong` `#1a5276`; `.obj-title` 1.05em weight 600 `#1a5276`. Unused `.philosophy` class: background `#f0f4f8`, left border `4px solid #2980b9`. No nav bar, no back/home links.
 - **Canvas:** HTML attributes declare `width="720" height="300"` but each chart's IIFE sets the canvas to a 720×200 logical size — backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), CSS size fixed at 720×200 px, `ctx.scale` back to logical coordinates. (This page uses per-chart setup IIFEs rather than one shared loop.) All chart coordinates above are in the 720×200 space. Chart titles 17px, labels 11–13px, `-apple-system, sans-serif`.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`/`#3498db`, green `#27ae60`, red `#e74c3c`, orange `#f39c12`, purple `#8e44ad`, gray text `#7f8c8d`/`#2c3e50`.

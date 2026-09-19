@@ -1,6 +1,6 @@
 # maps platform / Navigation / Driving Directions
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one h2 + one-row table per pitfall)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one h2 + one-row table per pitfall)
 **HTML title tag:** 107. maps platform / Navigation / Driving Directions
 
 **Subtitle:** Real-time routing where the prediction changes reality, traffic data is always stale, and the map is never the territory.
@@ -178,7 +178,7 @@ Stacked bars: shown time vs hidden time per travel mode.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table` layout — one `h2` per pitfall followed by a single-row table: left `<td>` (40%) with `.obj-title` div (repeating the section title), a `<ul>` of bullets, and one example `<p>`, right `<td>` (60%, centered) with one `<canvas width="720" height="300">`. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
+- **Layout:** standard detail-page `.obj-table` layout — one `h2` per pitfall followed by a single-row table: left `<td>` (50%) with `.obj-title` div (repeating the section title), a `<ul>` of bullets, and one example `<p>`, right `<td>` (50%, centered) with one `<canvas width="720" height="300">`. Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
 - **Page CSS:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; ul 0.9em `#333`; p 0.95em `#333`. `.philosophy` callout style defined but unused. No nav bar, no back/home links.
 - **Canvas:** one shared IIFE scales all canvases by `window.devicePixelRatio` using their width/height attributes (720×300) and calls `ctx.scale` so drawing stays in logical coordinates; each chart IIFE then draws within a 720×200 coordinate region, 17px system font for titles.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c` (dark red `#c0392b`), orange `#f39c12`/`#e67e22`, purple `#8e44ad`, gray `#333`/`#555`/`#666`.

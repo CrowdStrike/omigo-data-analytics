@@ -1,6 +1,6 @@
 # STATSML — Intuition & Key Objectives
 
-**Page type:** detail page (intro h2 sections, then two-column obj-table layout: text left 45%, canvas right 55%, one row per objective, plus a closing philosophy callout)
+**Page type:** detail page (intro h2 sections, then two-column obj-table layout: text left 50%, canvas right 50%, one row per objective, plus a closing philosophy callout)
 **HTML title tag:** STATSML — Intuition & Key Objectives
 
 **Subtitle:** Don't assume. Verify. Then — and only then — apply the right tool.
@@ -234,7 +234,7 @@ Format-progression rows plus a type-distribution bar.
 
 ## Regeneration instructions
 
-- **Layout:** single page: h1, `.subtitle`, two intro h2 sections ("The Core Problem" with bullets, "The Core Intuition" paragraph), then an h2 "Key Objectives" followed by one `.obj-table` (full-width, border-collapse) with one `<tr>` per objective — left `<td>` (45%) holds `.obj-title` ("N. Title") + paragraphs/bullets, right `<td>` (55%, centered) holds the canvas. Ends with a `.philosophy` callout.
+- **Layout:** single page: h1, `.subtitle`, two intro h2 sections ("The Core Problem" with bullets, "The Core Intuition" paragraph), then an h2 "Key Objectives" followed by one `.obj-table` (full-width, border-collapse) with one `<tr>` per objective — left `<td>` (50%) holds `.obj-title` ("N. Title") + paragraphs/bullets, right `<td>` (50%, centered) holds the canvas. Ends with a `.philosophy` callout.
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; ul 0.9em `#333`; `code` background `#e8f0f8`, `#1a5276`, radius 3px; `strong` `#1a5276`; table cells `1px solid #e0e0e0`, padding 20px 24px, even rows `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; `.philosophy` background `#f0f4f8`, left border 4px solid `#2980b9`, padding 16px 20px, 1em. No nav bar, no back/home links.
 - **Canvases:** all 540×220 intrinsic size; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setupCanvas(id)` helper.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, bar fill `rgba(26,82,118,0.35)`.

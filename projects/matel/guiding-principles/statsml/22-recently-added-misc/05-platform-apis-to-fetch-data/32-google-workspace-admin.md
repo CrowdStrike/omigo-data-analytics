@@ -1,6 +1,6 @@
 # Google Workspace Admin
 
-**Page type:** detail page (single obj-table row: text left 45%, payload + canvas right 55%; verified badge under subtitle; "Official API References" section below)
+**Page type:** detail page (single obj-table row: text left 50%, payload + canvas right 50%; verified badge under subtitle; "Official API References" section below)
 **HTML title tag:** Google Workspace Admin — Platform APIs
 
 **Subtitle:** Pull activity logs, usage statistics, and the employee directory from a company's Google Workspace (Gmail, Drive, Meet).
@@ -71,7 +71,7 @@ Horizontal range-bar chart on a log scale: indicative ingestion lag band per act
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. h1, `.subtitle`, `.verified` badge span, then one `.obj-table` (full width, border-collapse) with a single `<tr>`: left `<td>` (45%) holds two `.obj-title` blocks ("What you can get", "Watch out for" with `margin-top: 18px`) with bullet lists and a `.key-point` callout between them; right `<td>` (55%, text-align center) holds `.payload-note`, `<pre class="payload">`, and `<canvas id="c1" height="380">`. Below the table, an h2 "Official API References" with a link list.
+- **Layout:** platform-APIs detail page. h1, `.subtitle`, `.verified` badge span, then one `.obj-table` (full width, border-collapse) with a single `<tr>`: left `<td>` (50%) holds two `.obj-title` blocks ("What you can get", "Watch out for" with `margin-top: 18px`) with bullet lists and a `.key-point` callout between them; right `<td>` (50%, text-align center) holds `.payload-note`, `<pre class="payload">`, and `<canvas id="c1" height="380">`. Below the table, an h2 "Official API References" with a link list.
 - **Page CSS:** body system sans-serif, line-height 1.6, color `#2c3e50`, padding 30px 40px, white background; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` 0.8em `#888`, 1px `#ddd` border, inline-block, padding 2px 10px, radius 4px; h2 `#1a5276` 1.3em with 2px `#2980b9` bottom border; `.obj-title` bold `#1a5276` 1.1em; `.obj-table td` 16px padding, `1px solid #e0e0e0` border, vertical-align top; li 0.93em; links `#1a5276`; `.payload` `#f8f9fa` background, 3px `#1a5276` left border, monospace 0.78em, pre whitespace, left-aligned; `.payload-note` 0.82em `#666` italic left-aligned; `.key-point` `#f8f9fa` background, 3px `#1a5276` left border, padding 10px 14px, 0.93em; canvas block, `width: 100%`, margin 16px auto 0.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.
 - **Canvas:** responsive — width from `canvas.offsetWidth` (fallback 600), fixed 380px CSS height, backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.scale` back to logical coordinates, redrawn on window resize.

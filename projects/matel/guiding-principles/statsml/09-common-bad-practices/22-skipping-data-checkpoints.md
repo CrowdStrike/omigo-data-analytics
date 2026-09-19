@@ -1,6 +1,6 @@
 # Skipping Intermediate Logging
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, single row containing four titled blocks)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, single row containing four titled blocks)
 **HTML title tag:** Missing Instrumentation — Common Bad Practices
 
 **Subtitle:** Negligent Practice — Not collecting data at every significant pipeline step. When things go wrong, you cannot trace what happened, when it diverged, or why. Debug cost: weeks instead of minutes.
@@ -52,7 +52,7 @@ Two-panel pipeline trace: same 10-step pipeline, per-step row-total checksum, wi
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (40%) holds four `.obj-title` blocks (the ones after the first get `style="margin-top:14px;"`) each followed by a `<ul>`, then the two `<p><strong>` paragraphs ("Why it persists:", "The tell:"); right `<td>` (60%, centered, `vertical-align: middle`) holds canvas `c1`.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (50%) holds four `.obj-title` blocks (the ones after the first get `style="margin-top:14px;"`) each followed by a `<ul>`, then the two `<p><strong>` paragraphs ("Why it persists:", "The tell:"); right `<td>` (50%, centered, `vertical-align: middle`) holds canvas `c1`.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` 0.95em `#333`; `ul` 0.9em `#333`, `li` margin 6px 0; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width="720" height="400"`; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, gray text `#666`/`#333`.

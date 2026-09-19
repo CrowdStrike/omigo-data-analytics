@@ -1,6 +1,6 @@
 # T-Test Precondition Verification
 
-**Page type:** detail page (TOC box, then two-column obj-table layout: text left 45%, canvas right 55%, one row per section)
+**Page type:** detail page (TOC box, then two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** T-Test Precondition: Multi-Candidate Verification
 
 **Subtitle:** Treat precondition checking as a research problem, not a binary gate.
@@ -283,7 +283,7 @@ Bimodal histogram, mean in the valley.
 ## Regeneration instructions
 
 - **Layout:** h1, subtitle, `.toc` box (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, `<ol>` of `#2980b9` anchor links), "The Problem" h2 with two paragraphs, "The Multi-Candidate Approach" h2, then one `.obj-table` with rows for sections 1–9 (each `<tr>` has an `id` anchor). Then h2 "11. Real-World Example: Medical Claims Data" with an intro paragraph and a second `.obj-table` with rows for Features A/B/C. Finally the `.philosophy` callout.
-- **obj-table:** full width, border-collapse; each `<td>` border `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; left cell 45% with `.obj-title` (1.05em, weight 600, `#1a5276`) + bullets (`ul` 0.9em `#333`) / paragraphs; right cell 55%, centered, holds the canvas. Even rows background `#fafcfe`. `strong` renders `#1a5276`.
+- **obj-table:** full width, border-collapse; each `<td>` border `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; left cell 50% with `.obj-title` (1.05em, weight 600, `#1a5276`) + bullets (`ul` 0.9em `#333`) / paragraphs; right cell 55%, centered, holds the canvas. Even rows background `#fafcfe`. `strong` renders `#1a5276`.
 - **Page style:** body -apple-system/system sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px solid `#2980b9` bottom border; subtitle `#666` 1.05em. `.philosophy`: background `#f0f4f8`, left border `4px solid #2980b9`, padding 16px 20px, 1em. No nav bar, no back/home links.
 - **Canvases:** intrinsic `width`/`height` attributes as given per chart (all 720 wide); scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setupCanvas(id)` helper. Density overlays use the shared Gaussian-smoothed-bins approach (sigma in bin units, kernel radius 3σ, winsorize at 2× bar height, SE band = 1.96·smoothed/√effN with effN clamped to [30, 200]).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; extras `#c0392b`, `#8e44ad`, `#5b2c6f`, `#922b21`, `#1e8449`, gray text `#555`/`#333`.

@@ -1,6 +1,6 @@
 # A/B Test as Launch Justification
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one row per section)
 **HTML title tag:** A/B Test as Launch Justification — Common Bad Practices
 
 **Subtitle:** Process — Every feature must pass an A/B test, not to learn, but to produce a green slide for the launch review.
@@ -52,7 +52,7 @@ Capacity-allocation diagram: two horizontal capacity bars (current vs ideal) plu
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (40%) holds `.obj-title` + bullets, right `<td>` (60%, centered) holds the canvas. Single table with two rows.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets, right `<td>` (50%, centered) holds the canvas. Single table with two rows.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; ul 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes (720×400 for both); scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, gray text `#555`/`#333`.

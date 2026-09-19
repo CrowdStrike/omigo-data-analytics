@@ -1,6 +1,6 @@
 # Political / Contextual Ads — Domain Pitfalls
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one table per h2 section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one table per h2 section)
 **HTML title tag:** Political / Contextual Ads - Domain Pitfalls
 
 **Subtitle:** Data and measurement pitfalls in political and contextual advertising.
@@ -126,7 +126,7 @@ Status matrix (platforms × jurisdictions) plus an obscured attribution chain.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page structure — h1, `.subtitle` paragraph, then per pitfall an `<h2>` section heading followed by a one-row `.obj-table`: left `<td>` (40%) with `.obj-title` div (same text as the h2) + `<ul>` of labeled bullets, right `<td>` (60%, centered) with a `<canvas>` (HTML attributes `width="720" height="300"`). H1 uses an em dash (`&mdash;`) between "Political / Contextual Ads" and "Domain Pitfalls".
+- **Layout:** standard detail-page structure — h1, `.subtitle` paragraph, then per pitfall an `<h2>` section heading followed by a one-row `.obj-table`: left `<td>` (50%) with `.obj-title` div (same text as the h2) + `<ul>` of labeled bullets, right `<td>` (50%, centered) with a `<canvas>` (HTML attributes `width="720" height="300"`). H1 uses an em dash (`&mdash;`) between "Political / Contextual Ads" and "Domain Pitfalls".
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; `ul` 0.9em `#333`; `strong` `#1a5276`; `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px, even rows background `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; `.philosophy` callout class defined (background `#f0f4f8`, left border `4px solid #2980b9`) though unused on this page. No nav bar, no back/home links.
 - **Canvas:** shared `setupCanvas(id)` helper scales by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates), default font `17px -apple-system, BlinkMacSystemFont, sans-serif`. Note the drawn size (720×200) overrides the 720×300 HTML attribute.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`/`#f39c12`, dark slate `#2c3e50`, gray `#7f8c8d`/`#bdc3c7`.

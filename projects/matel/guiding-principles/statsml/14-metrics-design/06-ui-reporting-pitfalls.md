@@ -1,6 +1,6 @@
 # UI Reporting Pitfalls — How Dashboards Create Wrong Decisions
 
-**Page type:** detail page, metric-testing template (white background; one two-column obj-table per pitfall: text left 40%, canvas right 60%; obj-title heading; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
+**Page type:** detail page, metric-testing template (white background; one two-column obj-table per pitfall: text left 50%, canvas right 50%; obj-title heading; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
 **HTML title tag:** UI Reporting Pitfalls — How Dashboards Create Wrong Decisions
 
 **Subtitle:** Visual design choices that make stakeholders reach wrong conclusions from correct data.
@@ -124,7 +124,7 @@ Two metric lists: shown (all green) vs hidden (all red).
 
 ## Regeneration instructions
 
-- **Layout:** single `table.obj-table` (full width, border-collapse, `2px solid #2980b9` outer border) with a `<thead>` header row: `<th>` cells "Pitfall & Explanation" and "Visualization" (background `#1a5276`, white text, padding 12px 15px, left-aligned). Body: one `<tr>` per pitfall; left `<td>` (40%) holds `.example-title` (bold `#1a5276` 1.05em, numbered "N. Title") + `.example-desc` paragraph (`#333`, line-height 1.6); right `<td>` (60%) holds the canvas with its inline drawing script. Cell borders `1px solid #2980b9`, padding 15px, vertical-align top; even rows background `#f0f8ff`.
+- **Layout:** single `table.obj-table` (full width, border-collapse, `2px solid #2980b9` outer border) with a `<thead>` header row: `<th>` cells "Pitfall & Explanation" and "Visualization" (background `#1a5276`, white text, padding 12px 15px, left-aligned). Body: one `<tr>` per pitfall; left `<td>` (50%) holds `.example-title` (bold `#1a5276` 1.05em, numbered "N. Title") + `.example-desc` paragraph (`#333`, line-height 1.6); right `<td>` (50%) holds the canvas with its inline drawing script. Cell borders `1px solid #2980b9`, padding 15px, vertical-align top; even rows background `#f0f8ff`.
 - **Page style:** body -apple-system/Segoe UI/Roboto sans-serif, background `#fafafa`, text `#2c3e50`, padding 20px 10px; h1 `#1a5276`; `.subtitle` `#555` 1.1em. No nav bar, no back/home links.
 - **Canvas:** each declares `width="720" height="300"` but the script draws at 720×200; each script sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Most charts are split into a left "bad" panel (0–350px) and right "good" panel (360–710px).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; this page also uses dark red `#c0392b`, mid blue `#3498db` / `#2980b9`, amber `#f39c12`, slate `#2c3e50`, and dark panels `#1a1a2e` / `#2c2c2c`.

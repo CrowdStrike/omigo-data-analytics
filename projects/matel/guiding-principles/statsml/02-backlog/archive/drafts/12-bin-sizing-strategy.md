@@ -1,6 +1,6 @@
 # Bin Sizing Strategy
 
-**Page type:** detail page (TOC box + two-column obj-table layout: text left 45%, canvas right 55%, one table per section)
+**Page type:** detail page (TOC box + two-column obj-table layout: text left 50%, canvas right 50%, one table per section)
 **HTML title tag:** Bin Sizing Strategy
 
 **Subtitle:** How bin width affects shape perception — and why we run at multiple scales.
@@ -147,7 +147,7 @@ Three mini histograms of hours/week at increasing resolution; the tallest (spike
 
 ## Regeneration instructions
 
-- **Layout:** TOC-reference detail page: h1, `.subtitle`, a `.toc` box (bold "Table of Contents" + ordered anchor list linking to `#problem`, `#formulas`, `#strategies`, `#persistence`, `#examples`), then one h2 per section each followed by one or more `.obj-table` blocks (full-width table; left `<td>` 45% with `.obj-title` + bullets/paragraphs, right `<td>` 55% centered holding the canvas; even rows background `#fafcfe`). Section 5 has two consecutive obj-tables. A `.philosophy` callout closes the page before the script.
+- **Layout:** TOC-reference detail page: h1, `.subtitle`, a `.toc` box (bold "Table of Contents" + ordered anchor list linking to `#problem`, `#formulas`, `#strategies`, `#persistence`, `#examples`), then one h2 per section each followed by one or more `.obj-table` blocks (full-width table; left `<td>` 50% with `.obj-title` + bullets/paragraphs, right `<td>` 50% centered holding the canvas; even rows background `#fafcfe`). Section 5 has two consecutive obj-tables. A `.philosophy` callout closes the page before the script.
 - **Page CSS:** body system sans-serif, white `#ffffff` background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px bottom border `#2980b9`; `.subtitle` `#666` 1.05em; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; ul 0.9em `#333`; `.toc` background `#f8fafb`, border `1px solid #e0e0e0`, radius 4px, links `#2980b9`; `.philosophy` background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes as given per chart; a shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. All chart text 17px -apple-system. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35-0.4)`, secondary blue `#2980b9`, purple `#8e44ad`, gray text `#666`/`#333`.

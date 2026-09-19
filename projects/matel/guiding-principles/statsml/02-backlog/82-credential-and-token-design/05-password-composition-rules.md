@@ -1,6 +1,6 @@
 # Password Composition Rules
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Password Composition Rules
 
 **Subtitle:** How password rules evolved from storage-era length caps through mandatory-complexity checklists to the modern length-first reversal — and why human behavior, not combinatorics, drove every turn.
@@ -134,7 +134,7 @@ Line chart: entropy in bits vs password length for three models.
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for bullets/`.key-point`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for bullets/`.key-point`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is a single non-wrapping line — a bold colored label rendered as `<span class="pt-label" style="color:#…">Label:</span>` followed by a phrase of at most ~55 characters; no multi-sentence bullets. Label colors by meaning: `#1a5276` blue = design/fact, `#27ae60` green = win/strength, `#e74c3c` red = flaw/risk, `#e67e22` orange = context/history/trend. The `(color)` note after each md label gives the exact color. The intro callout and key-point boxes open with a bold lead word in the same color scheme (`<strong style="color:#…">Word:</strong>`) followed by one short sentence.
 - **Page CSS:** body system-ui sans-serif, background `#fff`, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; h2 1.3rem `#1a5276`; `.subtitle` `#666` 0.95rem; `.intro` background `#f0f4f8` with `border-left: 3px solid #2980b9`; `.key-point` background `#f8f9fa` with `border-left: 3px solid #e74c3c`, 0.9rem; `.pt-label` font-weight bold; ul 0.92rem; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links.
 - **Canvas:** intrinsic sizes `c1` 720×300, `c2` 720×300, `c3` 720×300, `c4` 720×320; a shared `setupCanvas(id, w, h)` helper sizes the backing store from the displayed width × `window.devicePixelRatio` and calls `ctx.scale`.

@@ -1,6 +1,6 @@
 # Chi-squared test
 
-**Page type:** detail page (card-sections: Overview two-column layout table with text 45% / canvas 55%, full-width Real-World Examples canvas + callout boxes, Quick Decision table)
+**Page type:** detail page (card-sections: Overview two-column layout table with text 50% / canvas 50%, full-width Real-World Examples canvas + callout boxes, Quick Decision table)
 **HTML title tag:** Chi-squared test — Statistical Tests Reference
 
 **Subtitle:** Tests whether observed frequencies differ from expected frequencies
@@ -77,7 +77,7 @@ A GWAS study tests association between a rare SNP (minor allele frequency 1.2%) 
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle`, then three `.card-section` blocks each with an h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border): "Overview" (a `table.layout` row: `td.text-col` 45% with `.obj-title` headings, bullets, `.failure`, `.alt-note`; `td.viz-col` 55% with canvas `c3`), "Real-World Examples" (full-width canvas `c3r` followed by two `.real-world` boxes), "Quick Decision" (`.decision-table`).
+- **Layout:** h1 + `.subtitle`, then three `.card-section` blocks each with an h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border): "Overview" (a `table.layout` row: `td.text-col` 50% with `.obj-title` headings, bullets, `.failure`, `.alt-note`; `td.viz-col` 50% with canvas `c3`), "Real-World Examples" (full-width canvas `c3r` followed by two `.real-world` boxes), "Quick Decision" (`.decision-table`).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; `code` on `#e8f0f8`; canvases `width:100%`, 1px `#e0e0e0` border, 4px radius.
 - **Callout boxes:** `.failure` — background `#fdedec`, left border 3px `#e74c3c`, monospace ('SF Mono'/'Fira Code'), color `#922`, 0.85rem. `.alt-note` — background `#eafaf1`, left border 3px `#27ae60`, color `#1a5276`, 0.85rem. `.real-world` — background `#fef9e7`, left border 4px `#e67e22`, 0.88rem; `.domain` heading weight 600 `#7d6608`; `strong` inside `#e67e22`.
 - **Decision table:** `.decision-table` — th background `#1a5276` white text; td 1px `#e0e0e0` border; even rows `#fafcfe`; column 3 text `#e74c3c`, column 4 text `#27ae60` weight 500.

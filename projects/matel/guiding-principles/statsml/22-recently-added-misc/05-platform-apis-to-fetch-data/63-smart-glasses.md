@@ -1,6 +1,6 @@
 # Smart Glasses
 
-**Page type:** detail page (single two-column obj-table row: text left 45%, code snippet + canvas right 55%; followed by a references section)
+**Page type:** detail page (single two-column obj-table row: text left 50%, code snippet + canvas right 50%; followed by a references section)
 **HTML title tag:** Smart Glasses — Platform APIs
 
 **Subtitle:** The short answer: consumer smart glasses (Ray-Ban Meta, Snap Spectacles) offer no way for outside developers to fetch what the wearer captures.
@@ -74,7 +74,7 @@ Capability matrix (grid of colored cells): 6 rows × 4 columns, cell value 0 = n
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, then a single-row `.obj-table` (full width, border-collapse): left `<td>` 45% with `.section-head` headings + bullet lists + one `.key-point` callout; right `<td>` 55% with a `.section-head`, a `pre` code block, another `.section-head`, and the canvas. After the table, an `h2` "Official API References" with a link list.
+- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, then a single-row `.obj-table` (full width, border-collapse): left `<td>` 50% with `.section-head` headings + bullet lists + one `.key-point` callout; right `<td>` 50% with a `.section-head`, a `pre` code block, another `.section-head`, and the canvas. After the table, an `h2` "Official API References" with a link list.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, white background, padding 30px 40px; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` inline-block, background `#eaf2f8`, border `1px solid #2980b9`, color `#1a5276`, padding 2px 10px, radius 4px, 0.8em; h2 1.3em `#1a5276` with `2px solid #2980b9` bottom border; table cells `1px solid #ddd`, padding 16px; `.section-head` bold `#1a5276` 0.95em; `pre` background `#f8f9fa`, left border `3px solid #1a5276`, monospace 0.78em, padding 12px, radius 4px; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em; `li` 0.93em; links `#1a5276`; canvas `display:block`, `width:100%`, margin `16px auto 0`.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple accent `#8e44ad`.
 - **Canvas:** declared with `height="380"` attribute and `width:100%` CSS; scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates), redrawn on resize.

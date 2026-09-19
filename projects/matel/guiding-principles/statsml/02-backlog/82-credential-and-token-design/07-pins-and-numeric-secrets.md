@@ -1,6 +1,6 @@
 # PINs & Numeric Secrets
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** PINs & Numeric Secrets
 
 **Subtitle:** The deliberately tiny credential — a secret so small it is only safe inside a system that counts and limits guesses, which makes it the clearest case of security living outside the secret.
@@ -125,7 +125,7 @@ Dumbbell chart: historical vs current default PIN length by context.
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for bullets/`.key-point`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for bullets/`.key-point`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every text-column bullet is a labeled one-liner — `- **Label [color]:** phrase` in the md, where the phrase must fit on one line in the ~45% text column (roughly ≤55 characters). Never wrap a bullet; split long content into more labeled bullets instead. In HTML each bullet renders as `<li><span class="pt-label" style="color:COLOR">Label:</span> phrase</li>` (the `[color]` tag is dropped from visible text).
 - **Label colors by meaning:** `#1a5276` blue = design/fact, `#27ae60` green = win/strength, `#e74c3c` red = flaw/risk, `#e67e22` orange = context/history/trend. The `[blue]`/`[green]`/`[red]`/`[orange]` tags in the md map to these hex values.
 - **Intro / key-point boxes:** keep the callout boxes, but each opens with a bold colored lead word (same `pt-label` span and color scheme) followed by one short sentence.

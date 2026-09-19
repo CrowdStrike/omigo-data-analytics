@@ -1,6 +1,6 @@
 # Drones & UAV
 
-**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: labeled bullets left ~40%, canvas right ~60%)
+**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: labeled bullets left 50%, canvas right ~50%)
 **HTML title tag:** Drones & UAV — Domain-Specific Pitfalls
 
 **Subtitle:** Domain-specific data and modeling pitfalls in drone and UAV operations.
@@ -145,7 +145,7 @@ Second-order step responses to an altitude command at three payload weights.
 
 ## Regeneration instructions
 
-- **Layout:** standard domains detail page. h1, `.subtitle` paragraph, then one `h2` per pitfall (six total) followed by a `.obj-table` (full-width, border-collapse) with a single `<tr>`: left `<td>` (40%) holding `.obj-title` div + a `<ul>` of labeled bullets (each `<li>` starting with a bold `<strong>` label), right `<td>` (60%, centered) holding the canvas. No nav bar, no back/home links, no thead, no badges.
+- **Layout:** standard domains detail page. h1, `.subtitle` paragraph, then one `h2` per pitfall (six total) followed by a `.obj-table` (full-width, border-collapse) with a single `<tr>`: left `<td>` (50%) holding `.obj-title` div + a `<ul>` of labeled bullets (each `<li>` starting with a bold `<strong>` label), right `<td>` (50%, centered) holding the canvas. No nav bar, no back/home links, no thead, no badges.
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6. h1 1.8em `#1a5276`. h2 1.4em `#1a5276` with 2px bottom border `#2980b9`, padding-bottom 8px, margin 40px 0 15px. `.subtitle` `#666` 1.05em. `ul` 0.9em `#333`. `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px; even rows background `#fafcfe`. `.obj-title` 1.05em weight 600 `#1a5276`. `strong` `#1a5276`. `.philosophy` style defined but unused.
 - **Canvases:** each 720×200 with inline `style="width:720px;height:200px"`; shared `setupCanvas(id)` sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Chart titles 17px system font. Random trajectories use seeded LCG generators (multiplier 1664525, increment 1013904223) for determinism.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, yellow-orange `#f39c12`, purple `#8e44ad`/`#9b59b6`, secondary blues `#2980b9`/`#3498db`, teal `#1abc9c`, bright green `#2ecc71`, dark red `#c0392b`, gray text `#555`/`#666`/`#888`.

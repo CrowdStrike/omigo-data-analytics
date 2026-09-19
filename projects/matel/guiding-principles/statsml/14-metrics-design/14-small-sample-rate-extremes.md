@@ -1,6 +1,6 @@
 # Small-Sample Rate Extremes — Lucky Sale & Low-N Metrics
 
-**Page type:** detail page (h2 section headings, each followed by a two-column obj-table row: text left 40%, canvas right 60%)
+**Page type:** detail page (h2 section headings, each followed by a two-column obj-table row: text left 50%, canvas right 50%)
 **HTML title tag:** Small-Sample Rate Extremes — Lucky Sale & Low-N Metrics
 
 **Subtitle:** When items have few impressions, rate metrics (CTR, conversion rate, sales/impression) become noise masquerading as signal. One lucky event creates an extreme rate that the system treats as truth.
@@ -74,7 +74,7 @@ Paired horizontal bars: raw rate vs Bayesian-shrunk estimate per item.
 
 ## Regeneration instructions
 
-- **Layout:** each section is an `<h2>` heading ("1. …", "2. …", "3. …", 1.3em `#1a5276` with 2px `#2980b9` bottom border) followed by a single-row `.obj-table`: full-width, border-collapse, one `<tr>`; left `<td>` (40%) holds `.obj-title` div + `<ul>` bullets + a `<p>` Fix line, right `<td>` (60%, centered) holds the canvas. Even rows background `#fafcfe`.
+- **Layout:** each section is an `<h2>` heading ("1. …", "2. …", "3. …", 1.3em `#1a5276` with 2px `#2980b9` bottom border) followed by a single-row `.obj-table`: full-width, border-collapse, one `<tr>`; left `<td>` (50%) holds `.obj-title` div + `<ul>` bullets + a `<p>` Fix line, right `<td>` (50%, centered) holds the canvas. Even rows background `#fafcfe`.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; `ul` 0.9em `#333`, li margin 4px 0; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width="720" height="300"` per chart; a shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`, gray text `#666`/`#333`.

@@ -1,6 +1,6 @@
 # Strava API
 
-**Page type:** detail page (two-column obj-table layout: descriptive text left 45%, payload + canvas right 55%, two rows)
+**Page type:** detail page (two-column obj-table layout: descriptive text left 50%, payload + canvas right 50%, two rows)
 **HTML title tag:** Strava API
 
 **Subtitle:** Activities, GPS streams, heart rate, power data, and segment efforts — the dominant platform for endurance sport tracking.
@@ -103,7 +103,7 @@ From October 2018 to October 2019, Strava overhauled API scopes and forced all a
 
 ## Regeneration instructions
 
-- **Layout:** platform-API detail page. h1 + `.subtitle`, then a `.obj-table` with two `<tr>` rows. Row 1: left `<td>` (45%) with "What it provides" (ul), Authentication, Granularity, Rate limit; right `<td>` (55%) with `.payload` block, canvas `c1`, and centered caption paragraph. Row 2: left `<td>` with Business scenarios (ul), Restrictions, API changes, and a `.key-point` callout; right `<td>` empty. After the table, `<h2>Official API References</h2>` with a `<ul>` of links.
+- **Layout:** platform-API detail page. h1 + `.subtitle`, then a `.obj-table` with two `<tr>` rows. Row 1: left `<td>` (50%) with "What it provides" (ul), Authentication, Granularity, Rate limit; right `<td>` (50%) with `.payload` block, canvas `c1`, and centered caption paragraph. Row 2: left `<td>` with Business scenarios (ul), Restrictions, API changes, and a `.key-point` callout; right `<td>` empty. After the table, `<h2>Official API References</h2>` with a `<ul>` of links.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em, margin-bottom 24px. `ul` padding-left 20px; `li` 0.93em, margin-bottom 6px. Sub-headings after the first use inline `style="margin-top: 16px;"`. No nav bar, no back/home links.
 - **Table style:** `.obj-table td` vertical-align top, padding 16px, border `1px solid #2980b9`; `.obj-title` bold `#1a5276` 1.1em, margin-bottom 8px.
 - **Payload block:** `.payload` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px, ui-monospace/Menlo 0.78em, `white-space: pre`, `overflow-x: auto`, line-height 1.45.

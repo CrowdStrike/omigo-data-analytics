@@ -1,6 +1,6 @@
 # Personal Location History
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, code + canvas right 55%, one Overview row)
+**Page type:** detail page (two-column obj-table layout: text left 50%, code + canvas right 50%, one Overview row)
 **HTML title tag:** Personal Location History — Platform APIs
 
 **Subtitle:** A negative finding: no API on either platform returns where a person has been — Google moved location history onto the phone, and Apple never offered it at all.
@@ -76,7 +76,7 @@ Horizontal reachability band chart: six location data sources, each with a bar e
 
 ## Regeneration instructions
 
-- **Layout:** platform-apis detail page. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" followed by a full-width `.obj-table` with one `<tr>`: left `<td>` (45%) with `.section-head` headings ("What you can get", "Watch out for"), bullet lists, and one `.key-point` callout; right `<td>` (55%) with `.section-head` labels above a `<pre>` code block and the canvas. Then `h2` "Official API References" with a link list.
+- **Layout:** platform-apis detail page. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" followed by a full-width `.obj-table` with one `<tr>`: left `<td>` (50%) with `.section-head` headings ("What you can get", "Watch out for"), bullet lists, and one `.key-point` callout; right `<td>` (50%) with `.section-head` labels above a `<pre>` code block and the canvas. Then `h2` "Official API References" with a link list.
 - **Page CSS:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge inline-block, background `#eaf2f8`, border `1px solid #e0e0e0`, text `#1a5276`, padding 2px 10px, radius 4px, 0.8em; h2 1.3em `#1a5276` with `2px solid #2980b9` bottom border; obj-table cells `1px solid #e0e0e0` border, padding 16px; `.section-head` bold `#1a5276` 0.95em; `pre` background `#f8f9fa`, left border `3px solid #1a5276`, monospace 0.78em, padding 16px, radius 4px; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em; list items 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="availChart" height="380">`, CSS `display:block; width:100%`; drawing script measures `getBoundingClientRect()`, scales backing store by `window.devicePixelRatio` via `setTransform(dpr,0,0,dpr,0,0)`, fixes CSS height to 380px, and redraws on window resize.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`, gray text `#666`/`#555`/`#777`.

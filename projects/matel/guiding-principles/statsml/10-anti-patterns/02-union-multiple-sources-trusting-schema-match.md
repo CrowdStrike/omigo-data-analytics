@@ -1,6 +1,6 @@
 # UNION Multiple Sources Trusting Schema Match
 
-**Page type:** detail page (card-section layout: h2 section headings, two-column layout table with text left 45% / canvas right 55%)
+**Page type:** detail page (card-section layout: h2 section headings, two-column layout table with text left 50% / canvas right 50%)
 **HTML title tag:** UNION Multiple Sources Trusting Schema Match
 
 **Subtitle:** Same column names + same types ≠ same semantics — 'amount' in USD vs cents vs local currency
@@ -50,7 +50,7 @@ Side-by-side per-source histograms with a scale-mismatch annotation between them
 
 ## Regeneration instructions
 
-- **Layout:** anti-pattern-pairs detail page: h1 with 2px `#2980b9` bottom border, `.subtitle`, then two `.card-section` blocks ("The Anti-Pattern", "The Design Pattern"), each an h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) above a `table.layout` with one row: `td.text-col` (45%) and `td.viz-col` (55%).
+- **Layout:** anti-pattern-pairs detail page: h1 with 2px `#2980b9` bottom border, `.subtitle`, then two `.card-section` blocks ("The Anti-Pattern", "The Design Pattern"), each an h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) above a `table.layout` with one row: `td.text-col` (50%) and `td.viz-col` (50%).
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `ul` 0.92rem; `.example` italic `#555` 0.9rem. No nav bar, no back/home links.
 - **Callout style:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem.
 - **Canvas:** intrinsic 720×300, CSS `width: 100%`, border `1px solid #e0e0e0`, radius 4px; sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and `ctx.scale` back to logical coordinates via a shared `setup(id)` helper.

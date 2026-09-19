@@ -1,6 +1,6 @@
 # Partial Ordering of Events & Replication Lag
 
-**Page type:** detail page (backlog-style 2-col layout: numbered h2 sections, text left 45%, canvas right 55%, one layout table per section)
+**Page type:** detail page (backlog-style 2-col layout: numbered h2 sections, text left 50%, canvas right 50%, one layout table per section)
 **HTML title tag:** Partial Ordering & Replication Lag
 
 **Subtitle:** In a distributed system, a total order over events is something the infrastructure invents, not something that exists. Only causally related events have a real "happened before" — everything else is genuinely unordered, and pipelines that assume otherwise break silently under replication lag.
@@ -193,7 +193,7 @@ Staircase diagram of four consistency models, descending from strongest to weake
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page. h1 with bottom border `2px solid #2980b9`, `.subtitle` paragraph, `.status` badge pill ("TO DISCUSS": inline-block, background `#f8f9fa`, border `1px solid #1a5276`, color `#1a5276`, padding 2px 10px, radius 12px, 0.8rem bold). Then one `.card-section` per numbered section, each with an h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`) and a `table.layout` (full width, border-collapse) with one `<tr>`: left `td.text-col` (45%) for text, right `td.viz-col` (55%) for the canvas. The `.questions` callout (background `#f8f9fa`, left border `3px solid #e67e22`, padding 10px 14px, 0.9rem) sits inside the last card-section after the table.
+- **Layout:** backlog detail page. h1 with bottom border `2px solid #2980b9`, `.subtitle` paragraph, `.status` badge pill ("TO DISCUSS": inline-block, background `#f8f9fa`, border `1px solid #1a5276`, color `#1a5276`, padding 2px 10px, radius 12px, 0.8rem bold). Then one `.card-section` per numbered section, each with an h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`) and a `table.layout` (full width, border-collapse) with one `<tr>`: left `td.text-col` (50%) for text, right `td.viz-col` (50%) for the canvas. The `.questions` callout (background `#f8f9fa`, left border `3px solid #e67e22`, padding 10px 14px, 0.9rem) sits inside the last card-section after the table.
 - **Callout styles:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example` — italic, `#555`, 0.9rem. `code` — background `#f8f9fa`, border `1px solid #e0e0e0`, padding 1px 5px, radius 3px, 0.85em, `#1a5276`.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `strong` in `#1a5276`; ul 0.92rem with 20px left margin. Canvases styled `width: 100%`, border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
 - **Canvas:** each canvas declares intrinsic `width`/`height` attributes as specced; a shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates; a shared `arrowHead(ctx, x1, y1, x2, y2, color)` helper draws 7px arrowheads. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

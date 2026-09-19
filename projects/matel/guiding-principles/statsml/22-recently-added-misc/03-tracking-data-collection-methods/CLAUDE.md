@@ -10,7 +10,7 @@ true about the mechanism.
 
 ## Page Structure
 
-2-column layout (`<table class="obj-table">`, 45%/55%). Three rows, these headings:
+2-column layout (`<table class="obj-table">`, 50%/50%). Three rows, these headings:
 
 1. **What is it?**
 2. **What does it collect?** — bullets, then the example payload (right column, under that row's canvas)

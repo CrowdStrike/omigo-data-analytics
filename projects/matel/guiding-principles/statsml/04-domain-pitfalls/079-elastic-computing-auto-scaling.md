@@ -1,6 +1,6 @@
 # Elastic Computing / Auto-Scaling
 
-**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: text left ~40%, canvas right ~60%)
+**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: text left ~50%, canvas right ~50%)
 **HTML title tag:** 79. Elastic Computing / Auto-Scaling
 
 **Subtitle:** Auto-scaling reacts in minutes while demand spikes in seconds. The non-representative data collected during scaling events — latency spikes, timeouts, degraded features — silently contaminates your pipeline.
@@ -142,7 +142,7 @@ Expected vs actual demand lines with unexpected spikes.
 
 ## Regeneration instructions
 
-- **Layout:** domains detail-page style — h1, `.subtitle` paragraph, then one `<h2>` per pitfall (unnumbered, with `border-bottom: 2px solid #2980b9`), each followed by a single-row `.obj-table`: left `<td>` (40%) with `.obj-title` div + `<ul>` of labeled one-sentence bullets, right `<td>` (60%, centered) with the canvas. Even table rows have background `#fafcfe`. No thead, no nav, no badges, no cross-page links.
+- **Layout:** domains detail-page style — h1, `.subtitle` paragraph, then one `<h2>` per pitfall (unnumbered, with `border-bottom: 2px solid #2980b9`), each followed by a single-row `.obj-table`: left `<td>` (50%) with `.obj-title` div + `<ul>` of labeled one-sentence bullets, right `<td>` (50%, centered) with the canvas. Even table rows have background `#fafcfe`. No thead, no nav, no badges, no cross-page links.
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276`; `.subtitle` `#666` 1.05em; `ul` 0.9em `#333`; `strong` `#1a5276`; `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `.philosophy` callout style available (background `#f0f4f8`, left border `4px solid #2980b9`) though unused on this page.
 - **Canvas:** each declares intrinsic `width="720" height="240"`; a shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, secondary blues `#2471a3`/`#3498db`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, gray text `#555`/`#666`/`#333`.

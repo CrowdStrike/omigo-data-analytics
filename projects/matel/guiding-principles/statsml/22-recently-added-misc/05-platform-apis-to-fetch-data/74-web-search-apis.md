@@ -1,6 +1,6 @@
 # Web Search APIs
 
-**Page type:** detail page (h1 + subtitle + verified badge, then h2 sections; one two-column obj-table row: text left 45%, code sample + canvas right 55%)
+**Page type:** detail page (h1 + subtitle + verified badge, then h2 sections; one two-column obj-table row: text left 50%, code sample + canvas right 50%)
 **HTML title tag:** Web Search APIs — Platform APIs
 
 **Subtitle:** APIs that let a program run web searches and get results back — plus Google's private report of how your own site performs in search.
@@ -75,7 +75,7 @@ Stacked monthly bar chart over 24 months showing the ~16-month retention window,
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, h2 "Overview" with a single-row two-column `table.obj-table` (left td 45% text, right td 55% code sample + canvas), then h2 "Official API References" with a link list.
+- **Layout:** platform-APIs detail page. h1, `.subtitle` paragraph, `.verified` badge span, h2 "Overview" with a single-row two-column `table.obj-table` (left td 50% text, right td 50% code sample + canvas), then h2 "Official API References" with a link list.
 - **Section heads inside cells:** `.section-head` — `#1a5276`, bold, 0.95em, 16px top margin (0 for first).
 - **Page CSS:** body system sans-serif, `#2c3e50` text, white background, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; h2 1.3em `#1a5276` with 2px `#2980b9` bottom border; `.verified` badge — background `#eaf2f8`, border `1px solid #e0e0e0`, color `#1a5276`, padding 2px 10px, radius 4px, 0.8em; obj-table cells `1px solid #e0e0e0`, padding 16px; `pre` — background `#f8f9fa`, left border `3px solid #1a5276`, monospace 0.78em, padding 16px, radius 4px; `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `width: 100%` CSS, height attribute 380; redraw on window resize using `getBoundingClientRect().width`; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).

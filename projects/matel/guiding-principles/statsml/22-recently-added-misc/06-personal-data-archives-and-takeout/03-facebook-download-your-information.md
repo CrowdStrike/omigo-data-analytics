@@ -1,6 +1,6 @@
 # Facebook — Download Your Information
 
-**Page type:** detail page (two-column obj-table layout per section: bullets left 45%, JSON payload or canvas right 55%)
+**Page type:** detail page (two-column obj-table layout per section: bullets left 45%, JSON payload or canvas right 50%)
 **HTML title tag:** Facebook — Download Your Information
 
 **Meta line (`.last-verified`, gray):** Last verified: August 2026
@@ -104,7 +104,7 @@ Off-Facebook Activity is the most revealing section. It shows every website and 
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, then `.last-verified` line. Three `h2` sections ("What's Included", "How to Request & Delivery", "What's Conspicuously Missing"), each followed by a one-row `table.obj-table` — left `<td>` (45%) with bullets, right `<td>` (55%) with a `<pre><code>` JSON block or the canvas. Ends with a `.key-point` callout div. In regenerated HTML, any links use .html extensions.
+- **Layout:** detail page. h1, then `.last-verified` line. Three `h2` sections ("What's Included", "How to Request & Delivery", "What's Conspicuously Missing"), each followed by a one-row `table.obj-table` — left `<td>` (50%) with bullets, right `<td>` (50%) with a `<pre><code>` JSON block or the canvas. Ends with a `.key-point` callout div. In regenerated HTML, any links use .html extensions.
 - **Page CSS:** body system sans-serif, `line-height: 1.6`, text `#2c3e50`, padding 30px 40px, white background. h1 1.8rem `#1a5276`; h2 1.3em `#1a5276`, `border-bottom: 2px solid #2980b9`, padding-bottom 6px, margin-top 32px. `table.obj-table` full width, collapsed borders, margin 16px 0; cells padding 16px, vertical-align top, **no cell borders** on this page. `li` 0.93em, 6px bottom margin.
 - **Blocks:** `pre` — background `#f4f6f8`, border `1px solid #dce1e6`, radius 4px, padding 12px 14px, 0.82em; `code` monospace (SF Mono/Consolas/Menlo). `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em.8em, margin-left 12px.
 - **Canvas:** `display: block; margin: 0 auto; width: 100%`, height 420px; scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).

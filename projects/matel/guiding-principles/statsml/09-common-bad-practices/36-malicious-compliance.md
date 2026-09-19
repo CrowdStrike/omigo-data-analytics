@@ -1,6 +1,6 @@
 # Malicious Compliance
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvas right 60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Malicious Compliance — Common Bad Practices
 
 **Subtitle:** Organizational Anti-Pattern — Follow the directive to the letter while deliberately ignoring its spirit. The literal execution is technically correct but produces the opposite of the intended outcome. "You told me exactly what to do. I did exactly that."
@@ -112,7 +112,7 @@ Grouped before/after bar chart ("\"Ensure Fairness Across Groups\" — Literal E
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (40%) holds `.obj-title` + bullets or `.example-box` divs, right `<td>` (60%, centered) holds the canvas. Section 2 uses six `.example-box` divs (background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 12px 16px, 0.88em; `.ex-title` bold 700 `#1a5276`) instead of a bullet list.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets or `.example-box` divs, right `<td>` (50%, centered) holds the canvas. Section 2 uses six `.example-box` divs (background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 12px 16px, 0.88em; `.ex-title` bold 700 `#1a5276`) instead of a bullet list.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; ul 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, gray text `#666`/`#333`.

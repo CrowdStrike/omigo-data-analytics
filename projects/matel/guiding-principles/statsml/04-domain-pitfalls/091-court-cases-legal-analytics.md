@@ -1,6 +1,6 @@
 # Court Cases / Legal Analytics: Data Pitfalls
 
-**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: bullets + example callout left ~40%, canvas right ~60%)
+**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: bullets + example callout left ~40%, canvas right ~50%)
 **HTML title tag:** Court Cases / Legal Analytics - Data Pitfalls
 
 **Subtitle:** Litigation data records only what survives to a public verdict — settlements, pleas, seals, and appeals silently remove or rewrite most of the distribution.
@@ -140,7 +140,7 @@ Waffle chart of 100 cases (10×10 grid) plus sealing-rate mini-bars on the right
 
 ## Regeneration instructions
 
-- **Layout:** one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px), each followed by its own single-row `.obj-table`: left `<td>` (40%) with `.obj-title`, `<ul>` bullets, and an `.example` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 10px 14px, 0.9em, bold "Example:" lead in `#1a5276`); right `<td>` (60%, centered) with the canvas. Even table rows background `#fafcfe`.
+- **Layout:** one `<h2>` per pitfall (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px), each followed by its own single-row `.obj-table`: left `<td>` (50%) with `.obj-title`, `<ul>` bullets, and an `.example` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 10px 14px, 0.9em, bold "Example:" lead in `#1a5276`); right `<td>` (50%, centered) with the canvas. Even table rows background `#fafcfe`.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; `.subtitle` `#666` 1.05em; `ul` 0.9em `#333`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px. A `.philosophy` callout style is defined but unused. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width="720" height="240"` per chart; a shared `setupCanvas(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`/`#f39c12`, purple `#8e44ad`, yellow `#f1c40f`, grays `#7f8c8d`/`#2c3e50`/`#bdc3c7`/`#ecf0f1`.

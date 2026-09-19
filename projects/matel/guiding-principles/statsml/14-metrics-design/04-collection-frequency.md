@@ -1,6 +1,6 @@
 # Collection Frequency — When Timing Creates Blind Spots
 
-**Page type:** detail page, metric-testing template (white background; one two-column obj-table per scenario: text left 40%, canvas right 60%; obj-title heading; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
+**Page type:** detail page, metric-testing template (white background; one two-column obj-table per scenario: text left 50%, canvas right 50%; obj-title heading; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
 **HTML title tag:** Collection Frequency — When Timing Creates Blind Spots
 
 **Subtitle:** Real-world cases where the collection frequency was wrong for the decision speed, causing preventable damage.
@@ -140,7 +140,7 @@ Line chart of a sharp 30-second traffic spike vs the slow auto-scaler capacity r
 
 ## Regeneration instructions
 
-- **Layout:** detail-page `.obj-table`: full-width table with `border-collapse: collapse` and a 2px solid `#2980b9` outer border; a `<thead>` row with two `<th>` cells "Scenario" / "Visualization" (background `#1a5276`, white text, padding 12px 16px, left-aligned); one `<tr>` per scenario in `<tbody>`; left `<td>` (40%) holds an `<h3>` title (1.05em `#1a5276`) plus one paragraph (0.95em, line-height 1.6); right `<td>` (60%) holds the canvas. Cell borders `1px solid #2980b9`, padding 16px, `vertical-align: top`; even rows background `#f0f8ff`.
+- **Layout:** detail-page `.obj-table`: full-width table with `border-collapse: collapse` and a 2px solid `#2980b9` outer border; a `<thead>` row with two `<th>` cells "Scenario" / "Visualization" (background `#1a5276`, white text, padding 12px 16px, left-aligned); one `<tr>` per scenario in `<tbody>`; left `<td>` (50%) holds an `<h3>` title (1.05em `#1a5276`) plus one paragraph (0.95em, line-height 1.6); right `<td>` (50%) holds the canvas. Cell borders `1px solid #2980b9`, padding 16px, `vertical-align: top`; even rows background `#f0f8ff`.
 - **Page style:** body system sans-serif (-apple-system stack), background `#fafafa`, text `#2c3e50`, padding 20px 10px; h1 2em `#1a5276`; `h2.subtitle` `#555`, weight 400, 1.1em, line-height 1.5. No nav bar, no back/home links.
 - **Canvas:** each canvas styled `display: block; width: 720px; height: 200px; margin-top: 8px`; backing store sized 720×200 multiplied by `window.devicePixelRatio`, with `ctx.scale` back to logical coordinates in each per-canvas IIFE.
 - **Fonts inside canvases:** -apple-system stack; 12-13px for axis labels/small annotations, bold 15-17px for headline annotations and legends.

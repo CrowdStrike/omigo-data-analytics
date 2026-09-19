@@ -1,6 +1,6 @@
 # Monitoring Metrics & Assumption Validation
 
-**Page type:** detail page (backlog kusto-style 2-col layout: text left 45%, canvas right 55%, one `.lang-section` per numbered section)
+**Page type:** detail page (backlog kusto-style 2-col layout: text left 50%, canvas right 50%, one `.lang-section` per numbered section)
 **HTML title tag:** Monitoring Metrics & Assumption Validation
 
 **Subtitle:** Continuous validation of the assumption stack beneath every metric
@@ -107,7 +107,7 @@ Canvas-drawn registry table with live status column.
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page. Body → h1 → `.subtitle` → `.intro` callout → one `.lang-section` per numbered section, each containing an `<h2>` and a `table.layout` with a single `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/callouts, right `td.viz-col` (55%) for the canvas. Section 5 (Open Questions) is a `.lang-section` with only an `<h2>` and a full-width `<ul>` — no table, no canvas.
+- **Layout:** backlog detail page. Body → h1 → `.subtitle` → `.intro` callout → one `.lang-section` per numbered section, each containing an `<h2>` and a `table.layout` with a single `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/callouts, right `td.viz-col` (50%) for the canvas. Section 5 (Open Questions) is a `.lang-section` with only an `<h2>` and a full-width `<ul>` — no table, no canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, padding-bottom 8px. `.subtitle` `#666` 0.95rem. `.intro` background `#f0f4f8`, `border-left: 3px solid #2980b9`, padding 8px 12px, 0.9rem. h2 1.3rem `#1a5276` with 2px solid `#2980b9` bottom border. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example` italic `#555` 0.9rem. `ul` 0.92rem, margin 8px 0 8px 20px. `pre` background `#f4f4f4` (defined, unused). Canvas: `width: 100%`, border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links, no index number in h1.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fill `rgba(26,82,118,0.35)`.
 - **Canvas:** each declares intrinsic width/height attributes (all 720×300 here); a shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

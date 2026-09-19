@@ -1,6 +1,6 @@
 # STATSML — Statistical and ML Capabilities
 
-**Page type:** other (single-page long reference doc: TOC box, 13 numbered h2 sections each with a two-column obj-table row — text left 45%, canvas right 55% — plus two full-width comparison tables)
+**Page type:** other (single-page long reference doc: TOC box, 13 numbered h2 sections each with a two-column obj-table row — text left 50%, canvas right 50% — plus two full-width comparison tables)
 **HTML title tag:** STATSML — Statistical and ML Capabilities
 
 **Subtitle:** Statistical Analysis + ML with Verified Assumptions on Every Feature
@@ -397,7 +397,7 @@ Bimodal histogram splitting by gender into two clean bells.
 
 ## Regeneration instructions
 
-- **Template/layout:** TOC-reference style long doc (see `docs/statsml/ui-templates/03-toc-reference`). Order: h1, `.subtitle`, `.philosophy` callout, `.toc` box with an ordered list of in-page anchor links, then 13 `h2` sections (each with `id` anchor and numbered title). Each section holds one `.obj-table` (full-width table, one row: first `td` 45% text with `.obj-title` heading, second `td` 55% centered canvas). Sections 5 and 6 are each followed by a full-width `.comparison-table`.
+- **Template/layout:** TOC-reference style long doc (see `docs/statsml/ui-templates/03-toc-reference`). Order: h1, `.subtitle`, `.philosophy` callout, `.toc` box with an ordered list of in-page anchor links, then 13 `h2` sections (each with `id` anchor and numbered title). Each section holds one `.obj-table` (full-width table, one row: first `td` 50% text with `.obj-title` heading, second `td` 50% centered canvas). Sections 5 and 6 are each followed by a full-width `.comparison-table`.
 - **Page CSS:** body -apple-system/BlinkMacSystemFont/'Segoe UI' sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6. h1 1.8em `#1a5276`. h2 1.4em `#1a5276` with 2px `#2980b9` bottom border, margins 40px 0 15px. `.subtitle` `#666` 1.05em. `strong` `#1a5276`. `code` background `#e8f0f8`, `#1a5276`, 2px 6px padding, 3px radius. `.philosophy`: background `#f0f4f8`, left border `4px solid #2980b9`, padding 16px 20px. `.toc`: background `#f8fafb`, `1px solid #e0e0e0`, padding 20px 30px, 4px radius; links `#2980b9`, underline on hover. `.obj-table` td: `1px solid #e0e0e0` border, 20px 24px padding, middle-aligned; even rows `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`. `.comparison-table` 0.88em: th background `#1a5276` white 10px 14px; td `1px solid #e0e0e0` 8px 14px; even rows `#f8fafb`, hover `#eef4fa`.
 - **Canvas:** all 13 canvases intrinsic 720×280, `display: block; margin: 0 auto`; scaled by `window.devicePixelRatio` via a shared `setupCanvas(id)` helper that multiplies the backing store, and calls `ctx.scale` so drawing stays in logical coordinates.
 - **Palette:** `#1a5276` primary blue, `#2980b9` secondary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `#8e44ad` purple, bar fill `rgba(26,82,118,0.35)`.

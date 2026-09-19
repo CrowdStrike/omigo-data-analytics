@@ -1,6 +1,6 @@
 # Visual Machine-Readable Codes
 
-**Page type:** detail page (backlog-style two-column layout: text left 45%, canvas right 55%, one `.card-section` per code format; no status pill on this page)
+**Page type:** detail page (backlog-style two-column layout: text left 50%, canvas right 50%, one `.card-section` per code format; no status pill on this page)
 **HTML title tag:** Visual Machine-Readable Codes — Discussion Backlog
 
 **Subtitle:** Encode binary/structured data into scannable visual patterns — from 1D barcodes to 2D matrices to circular formats.
@@ -239,7 +239,7 @@ Device-linking diagram: browser monitor showing a rotating QR, phone scanning it
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page without a status pill. `h1` (2rem `#1a5276`, bottom border `2px solid #2980b9`); `.subtitle` (`#666`, 0.95rem); `.intro-callout` (background `#f8f9fa`, left border `3px solid #2980b9`, 10px 14px padding, 0.93rem). One `.card-section` per numbered h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`); inside each, `table.layout` with `td.text-col` 45% and `td.viz-col` 55%, both `vertical-align: top`, 12px padding. A final full-width `.key-point` div (30px top margin) closes the page.
+- **Layout:** backlog detail page without a status pill. `h1` (2rem `#1a5276`, bottom border `2px solid #2980b9`); `.subtitle` (`#666`, 0.95rem); `.intro-callout` (background `#f8f9fa`, left border `3px solid #2980b9`, 10px 14px padding, 0.93rem). One `.card-section` per numbered h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`); inside each, `table.layout` with `td.text-col` 50% and `td.viz-col` 50%, both `vertical-align: top`, 12px padding. A final full-width `.key-point` div (30px top margin) closes the page.
 - **Text blocks per section:** lead `<p>`, `<ul>` of four labeled bullets (0.92rem), a "How it's decoded" paragraph (0.9rem, bold lead-in), `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, 8px 12px padding, 0.9rem, bold label), and an italic `.example` line (`#555`, 0.9rem). HTML entities used in source: `&mdash;`, `&rsquo;`, `&ldquo;`/`&rdquo;`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. Canvases `width: 100%`, `1px solid #e0e0e0` border, 4px radius.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange; purple `#8e44ad`; code-black `#1a1a1a`; brand colors Spotify `#1db954` and Snapchat `#fffc00` in section 8 only; gray captions `#666`.

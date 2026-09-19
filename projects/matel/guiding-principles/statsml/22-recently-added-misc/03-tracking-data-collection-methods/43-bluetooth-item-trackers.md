@@ -1,6 +1,6 @@
 # Tracking Data: Bluetooth Item Trackers
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, three rows: What is it? / What does it collect? / Why is it collected?)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, three rows: What is it? / What does it collect? / Why is it collected?)
 **HTML title tag:** Tracking Data: Bluetooth Item Trackers
 
 **Subtitle:** A coin-sized tag with no GPS and no cellular radio. It is located by other people's phones, which supply the position it cannot measure itself.
@@ -108,7 +108,7 @@ Timeline of report arrivals over 90 minutes carrying one bag through three zones
 
 ## Regeneration instructions
 
-- **Layout:** tracking-page `.obj-table`: full-width bordered table, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + `.lede` + bullets + `.key-point` callouts + `.lbl` pills, right `<td>` (55%, centered) holds the canvas; the "What does it collect?" row also carries the `.payload-note` caption and `.payload` pre block under its canvas (both left-aligned). HTML-escape the angle-bracket placeholders in the payload (`&lt;…&gt;`).
+- **Layout:** tracking-page `.obj-table`: full-width bordered table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + `.lede` + bullets + `.key-point` callouts + `.lbl` pills, right `<td>` (50%, centered) holds the canvas; the "What does it collect?" row also carries the `.payload-note` caption and `.payload` pre block under its canvas (both left-aligned). HTML-escape the angle-bracket placeholders in the payload (`&lt;…&gt;`).
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; subtitle `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `li b` `#1a5276` weight 600, li 0.93em. No nav bar, no back/home links.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em, leading `<strong>` in `#1a5276`.
 - **Label pills:** `.lbl` inline-block uppercase 0.7em bold, padding 2px 7px, radius 3px; `.lbl-purpose` background `#eaf2fb` color `#1a5276`; `.lbl-effect` background `#fdf0e6` color `#a8501c`.

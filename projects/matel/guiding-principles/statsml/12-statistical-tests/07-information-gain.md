@@ -1,6 +1,6 @@
 # Information Gain — Statistical Tests Reference
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, two stacked canvases right 55%, plus a Quick Decision Table below)
+**Page type:** detail page (two-column obj-table layout: text left 50%, two stacked canvases right 50%, plus a Quick Decision Table below)
 **HTML title tag:** Information Gain — Statistical Tests Reference
 
 **Subtitle:** Measures reduction in entropy after splitting on a feature
@@ -78,7 +78,7 @@ Two-panel figure: left, feature-ranking bars; right, train/test accuracy compari
 
 ## Regeneration instructions
 
-- **Layout:** h1 + subtitle, then `h2 id="infogain"` "Information Gain" above a standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (45%) holds `.obj-title` headings, paragraph, bullet lists, `.failure`, `.alt-note`, and both `.real-world` callouts; right `<td>` (55%, centered) holds canvas `c7` stacked above canvas `c7r` (`margin-top:20px`). Then `h2 id="decision"` "Quick Decision Table" and the `.decision-table`. No nav bar, no back/home links.
+- **Layout:** h1 + subtitle, then `h2 id="infogain"` "Information Gain" above a standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (50%) holds `.obj-title` headings, paragraph, bullet lists, `.failure`, `.alt-note`, and both `.real-world` callouts; right `<td>` (50%, centered) holds canvas `c7` stacked above canvas `c7r` (`margin-top:20px`). Then `h2 id="decision"` "Quick Decision Table" and the `.decision-table`. No nav bar, no back/home links.
 - **Page CSS:** body -apple-system/'Segoe UI' sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6, font-size 0.95em; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with `border-bottom: 2px solid #2980b9`; subtitle `#666` 1.05em; `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px, vertical-align top; even rows `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; `code` on `#e8f0f8` in `#1a5276`; `strong` `#1a5276`.
 - **Callout styles:** `.failure` — background `#fdedec`, left border `3px solid #e74c3c`, monospace, color `#922`, 0.85em. `.alt-note` — background `#eafaf1`, left border `3px solid #27ae60`, color `#1a5276`, 0.85em. `.real-world` — background `#fef9e7`, left border `4px solid #e67e22`, 0.88em, `.domain` weight 600 `#7d6608`, `strong` `#e67e22`.
 - **Decision table:** `.decision-table` — header background `#1a5276` white text; cell borders `1px solid #e0e0e0`; even rows `#fafcfe`; 3rd column `#e74c3c`, 4th column `#27ae60` weight 500.

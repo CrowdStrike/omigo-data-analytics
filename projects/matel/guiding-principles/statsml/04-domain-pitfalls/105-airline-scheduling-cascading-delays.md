@@ -1,6 +1,6 @@
 # Airline Scheduling / Cascading Delays
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one h2 + one-row table per pitfall)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one h2 + one-row table per pitfall)
 **HTML title tag:** 105. Airline Scheduling / Cascading Delays
 
 **Subtitle:** Aircraft, crew, and passengers are shared resources — one delay propagates through the entire network, and the data records symptoms far from their causes.
@@ -168,7 +168,7 @@ Recursive branching tree illustrating combinatorial explosion.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table` layout — one `h2` per pitfall followed by a single-row table: left `<td>` (40%) with `.obj-title` + bullet list, right `<td>` (60%, centered) with one `<canvas width="720" height="300">` (the setup script draws at 720×200 logical size and fixes CSS size to 720×200). Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
+- **Layout:** standard detail-page `.obj-table` layout — one `h2` per pitfall followed by a single-row table: left `<td>` (50%) with `.obj-title` + bullet list, right `<td>` (50%, centered) with one `<canvas width="720" height="300">` (the setup script draws at 720×200 logical size and fixes CSS size to 720×200). Even rows background `#fafcfe`; cell borders `1px solid #e0e0e0`, padding 20px 24px.
 - **Page CSS:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; ul 0.9em `#333`. `.philosophy` callout style defined but unused. No nav bar, no back/home links.
 - **Canvas:** shared `setupCanvas(id)` helper scales the backing store by `window.devicePixelRatio`, sets CSS size 720×200, `ctx.scale` back to logical coordinates, default font 17px system sans.
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#f39c12`/`#e67e22`, gray `#333`/`#666`.

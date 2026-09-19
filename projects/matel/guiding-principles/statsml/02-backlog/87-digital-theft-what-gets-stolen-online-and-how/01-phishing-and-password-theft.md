@@ -1,6 +1,6 @@
 # Phishing & Password Theft
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Phishing & Password Theft
 
 **Subtitle:** A convincing copy of a familiar sign-in page collects whatever is typed into it — the thief signs in minutes later, from somewhere else.
@@ -93,7 +93,7 @@ Layered-defense rows: one row per setup, item text and sub-line on the left, out
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #6a1b9a`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also underlined in `#6a1b9a`). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #6a1b9a`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also underlined in `#6a1b9a`). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is one non-wrapping line — a bold colored label plus a phrase of roughly 55 characters or fewer; in HTML the label is `<span class="pt-label" style="color:COLOR">Label:</span>` with `.pt-label { font-weight: bold; }`. Long ideas are split into more labeled bullets, never wrapped. Lead paragraphs are at most one short sentence.
 - **Label colors by meaning:** `#4527a0` primary = mechanism/fact (Fact, Mechanism); `#00695c` green = defense/win (Defense, Win); `#c62828` red = risk/loss (Risk, Seen); `#ef6c00` orange = scene/context (Scene). Key-point boxes open with the same colored bold lead word (Risk, Win) followed by one short sentence.
 - **Page CSS:** body system-ui sans-serif, background `#fff`, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#4527a0`; h2 1.3rem `#4527a0`; `.subtitle` `#666` 0.95rem; `.intro` background `#f0f4f8` with `border-left: 3px solid #6a1b9a`; `.key-point` background `#f8f9fa` with `border-left: 3px solid #c62828`, 0.9rem; `.pt-label` bold; ul 0.92rem; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links.

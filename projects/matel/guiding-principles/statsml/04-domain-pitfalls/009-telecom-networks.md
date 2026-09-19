@@ -144,7 +144,7 @@ Horizontal bar chart of compute time vs scale.
 
 ## Regeneration instructions
 
-- **Layout:** standard detail page. h1 + `.subtitle`, then one `<h2>` per pitfall followed by an `.obj-table` (full-width, border-collapse) with a single `<tr>`: left `<td>` (40%) holds `.obj-title`, bullet `<ul>`, and an `.example` box; right `<td>` (60%, centered) holds the canvas. Even rows background `#fafcfe`.
+- **Layout:** standard detail page. h1 + `.subtitle`, then one `<h2>` per pitfall followed by an `.obj-table` (full-width, border-collapse) with a single `<tr>`: left `<td>` (50%) holds `.obj-title`, bullet `<ul>`, and an `.example` box; right `<td>` (50%, centered) holds the canvas. Even rows background `#fafcfe`.
 - **Example box:** `.example` — background `#eaf2f8`, padding 10px, border-radius 5px, italic 0.9em, with a leading `<strong>Example:</strong>` label.
 - **Page CSS:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; `.philosophy` callout style available (background `#f0f4f8`, left border 4px `#2980b9`) though unused on this page. No nav bar, no back/home links.
 - **Canvases:** each 720×240 intrinsic; each chart IIFE sets backing store to rendered width × dpr via `window.devicePixelRatio`, and calls `ctx.scale` so drawing stays in logical coordinates. Base chart font 17px -apple-system.

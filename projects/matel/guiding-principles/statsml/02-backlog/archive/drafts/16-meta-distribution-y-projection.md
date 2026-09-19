@@ -1,6 +1,6 @@
 # Meta-Distribution: Y-Axis Projection
 
-**Page type:** detail page (TOC box + two-column obj-table layout: text left 45%, canvas right 55%, one table per section)
+**Page type:** detail page (TOC box + two-column obj-table layout: text left 50%, canvas right 50%, one table per section)
 **HTML title tag:** Meta-Distribution: Y-Axis Projection
 
 **Subtitle:** Take a histogram. Make a histogram of the bin heights. What does that second-order distribution tell you?
@@ -385,7 +385,7 @@ Four stacked rounded method rows (0.1-alpha fill + 2px stroke in method color; b
 
 ## Regeneration instructions
 
-- **Layout:** TOC-reference detail page: h1, `.subtitle`, `.toc` box (bold "Table of Contents" + ordered anchor list to ids `#idea`, `#two-methods`, `#what-it-encodes`, `#metrics`, `#ex-income`, `#ex-age`, `#ex-capital`, `#ex-hours`, `#summary`, `#unique`), then h2 sections each with one or more `.obj-table` blocks (left `<td>` 45% with `.obj-title` + bullets/paragraphs, right `<td>` 55% centered canvas; even rows `#fafcfe`). Note: the source page numbers both "What It Encodes" and "Useful Metrics" sections as "3." and examples E-H are extra obj-tables inside the Hours/Week section without their own h2. The `.philosophy` callout sits between sections 8 and 9.
+- **Layout:** TOC-reference detail page: h1, `.subtitle`, `.toc` box (bold "Table of Contents" + ordered anchor list to ids `#idea`, `#two-methods`, `#what-it-encodes`, `#metrics`, `#ex-income`, `#ex-age`, `#ex-capital`, `#ex-hours`, `#summary`, `#unique`), then h2 sections each with one or more `.obj-table` blocks (left `<td>` 50% with `.obj-title` + bullets/paragraphs, right `<td>` 50% centered canvas; even rows `#fafcfe`). Note: the source page numbers both "What It Encodes" and "Useful Metrics" sections as "3." and examples E-H are extra obj-tables inside the Hours/Week section without their own h2. The `.philosophy` callout sits between sections 8 and 9.
 - **Triple-panel helper:** examples use a shared `drawTriple(id, bins, title, color, gini, maxMean, occLabel)` — three equal panels separated by `#ddd` lines: (1) original histogram in the given color, log-scaled when max > 5000 with a gray "(log scale)" note; (2) frontier meta = 10-bin histogram of the heights, `rgba(230,126,34,0.5)`, labeled "Frontier Meta" + "Gini=…"; (3) occupancy profile bars `rgba(39,174,96,0.5)` over 10 levels (log-spaced levels when max/min > 100), labeled "Occupancy Profile" + shape note.
 - **Page CSS:** body system sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px bottom border `#2980b9`; `.subtitle` `#666` 1.05em; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; `.toc` background `#f8fafb` border `#e0e0e0` radius 4px, links `#2980b9`; `.philosophy` background `#f0f4f8`, left border `4px solid #2980b9`, 0.9em. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` per chart; shared `setup(id)` helper scales by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). All chart text 17px -apple-system.

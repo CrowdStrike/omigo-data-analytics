@@ -1,6 +1,6 @@
 # Synthetic Data — LLMs & Simulation
 
-**Page type:** detail page (four titled sections, each a two-column row: text left 45%, canvas right 55%)
+**Page type:** detail page (four titled sections, each a two-column row: text left 50%, canvas right 50%)
 **HTML title tag:** Synthetic Data — LLMs & Simulation: Generating Data When the Real Thing Is Scarce
 
 **Subtitle:** The newest acquisition channel skips collection entirely: prompt a model, render a scene, or interpolate what you already have, and a dataset appears — cheap, perfectly labeled, and bounded by what the generator already believes.
@@ -111,7 +111,7 @@ Model-collapse series: four bell curves over one axis, narrowing and rising gene
 
 ## Regeneration instructions
 
-- **Template:** backlog multi-section detail page. After h1, `.subtitle`, and `.intro` callout, one `.lang-section` per numbered section: `h2` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px padding-bottom), then a `table.layout` with one `<tr>`: left `<td class="text-col">` (45%) with lead paragraph, bullets, `.key-point`; right `<td class="viz-col">` (55%) with the canvas. Section h2 headings carry the "1.–4." numbers shown above.
+- **Template:** backlog multi-section detail page. After h1, `.subtitle`, and `.intro` callout, one `.lang-section` per numbered section: `h2` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px padding-bottom), then a `table.layout` with one `<tr>`: left `<td class="text-col">` (50%) with lead paragraph, bullets, `.key-point`; right `<td class="viz-col">` (50%) with the canvas. Section h2 headings carry the "1.–4." numbers shown above.
 - **Bullet style:** each bullet is a bold label + short phrase that fits on one line at normal page width — no wrapping, no full-sentence bullets; split dense content into more bullets rather than longer ones. Bullet `<strong>` labels are colored `#1a5276` (via `li strong { color: #1a5276; }`).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`; `.subtitle` `#666` 0.95rem; `.intro` — background `#f0f4f8`, `border-left: 3px solid #2980b9`, padding 8px 12px, 0.9rem, 32px margin-bottom; `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem; `ul` 0.92rem; `li` `white-space: nowrap` is NOT used — one-line fit comes from keeping phrases short; canvases `width: 100%`, `border: 1px solid #e0e0e0`, radius 4px; `.lang-section` 40px margin-bottom.
 - **Canvases:** intrinsic width 720, heights 340/360/380/360 as specified; shared `setupCanvas(id, h)` helper scales by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates). Canvas fonts use `-apple-system, sans-serif`.

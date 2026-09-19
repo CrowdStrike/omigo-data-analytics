@@ -1,6 +1,6 @@
 # Cherry-Picking Time Windows / Subgroups
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvases right 60%, single section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvases right 50%, single section)
 **HTML title tag:** Cherry-Picking Time Windows — Pseudoscience in Data Analysis
 
 **Subtitle:** Conclusion determined first, then data window chosen to confirm it
@@ -38,7 +38,7 @@ Wavy line with three overlapping analyst windows, each with its own bold segment
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: one full-width table with a single `<tr>`; left `<td>` (40%) holds `.obj-title` + `<ul>` bullets + trailing `<p>` paragraph, right `<td>` (60%, centered) holds both canvases (`c1` then `c2`) stacked.
+- **Layout:** standard detail-page `.obj-table`: one full-width table with a single `<tr>`; left `<td>` (50%) holds `.obj-title` + `<ul>` bullets + trailing `<p>` paragraph, right `<td>` (50%, centered) holds both canvases (`c1` then `c2`) stacked.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` 0.95em `#333`; `ul` 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Each chart drawn in its own IIFE. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, grays `#555`/`#7f8c8d`/`#bdc3c7`.

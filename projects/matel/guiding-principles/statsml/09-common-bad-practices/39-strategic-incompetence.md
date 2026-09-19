@@ -1,6 +1,6 @@
 # Strategic Incompetence
 
-**Page type:** detail page (two-column obj-table layout: text left ~38%, two stacked canvases right ~62%, single row)
+**Page type:** detail page (two-column obj-table layout: text left ~38%, two stacked canvases right ~50%, single row)
 **HTML title tag:** Strategic Incompetence — Common Bad Practices
 
 **Subtitle:** Institutional Sabotage — Do unwanted work badly enough that someone else takes it from you.
@@ -62,7 +62,7 @@ Conceptual scatter/line plot showing the competence penalty. Background `#f9f9f9
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (38%) holds `.obj-title` headings + bullet lists + closing `<p><strong>` paragraphs, right `<td>` (62%, centered) holds the two canvases stacked.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (38%) holds `.obj-title` headings + bullet lists + closing `<p><strong>` paragraphs, right `<td>` (50%, centered) holds the two canvases stacked.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` 0.95em `#333`; `ul` 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276` (subsequent ones get inline `margin-top:14px`); `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; `canvas { display:block; margin:0 auto; }`. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, star yellow `#f1c40f`, gray text `#666`/`#555`/`#333`.

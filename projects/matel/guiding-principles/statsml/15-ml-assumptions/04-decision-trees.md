@@ -1,6 +1,6 @@
 # Decision Trees
 
-**Page type:** detail page (two-column obj-table layout: text left 42%, canvas right 58%, one row per assumption)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per assumption)
 **HTML title tag:** Decision Trees - ML Assumptions
 
 **Subtitle:** Greedy, axis-aligned splits with no built-in statistical validation. Fits noise as eagerly as signal.
@@ -103,7 +103,7 @@ Stacked class-distribution bar, Gini computation, and an accuracy-vs-recall comp
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width `border-collapse` table, one `<tr>` per section; left `<td>` (42%) holds `.obj-title` + `.obj-desc` paragraph + `.obj-detail` lines, right `<td>` (58%, centered) holds the canvas. Even rows have background `#fafcfe`.
+- **Layout:** standard detail-page `.obj-table`: full-width `border-collapse` table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + `.obj-desc` paragraph + `.obj-detail` lines, right `<td>` (50%, centered) holds the canvas. Even rows have background `#fafcfe`.
 - **Detail-line markup:** "Breaks:" uses `<span class="bad">` (red `#e74c3c`, weight 600); "Verify:" uses `<span class="tag tag-check">` (pill: background `#eafaf1`, color `#1e8449`); "Fix:" uses `<span class="tag tag-fix">` (pill: background `#fef9e7`, color `#b7950b`). Tag pills: inline-block, 0.75em, padding 2px 8px, radius 4px. Also defined: `.good` `#27ae60`, `.warn` `#e67e22`, `.tag-break` (background `#fdeaea`, color `#c0392b`).
 - **Page style:** global reset (`* { margin:0; padding:0; box-sizing:border-box }`); body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px solid `#2980b9` bottom border and 8px bottom padding; `.subtitle` `#666` 0.95rem, 32px bottom margin; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em weight 600 `#1a5276`; `.obj-desc` 0.9em `#333`; `.obj-detail` 0.85em `#555`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** each canvas declares intrinsic `width="720" height="300"`; `canvas { display:block; margin:0 auto; }`; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setupCanvas(id)` helper; charts drawn with vanilla canvas 2D in IIFEs.

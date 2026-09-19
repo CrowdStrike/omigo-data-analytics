@@ -1,6 +1,6 @@
 # Mathematical Costume
 
-**Page type:** detail page (four separate obj-table blocks, each a two-column row: text left 40%, canvas right 60%)
+**Page type:** detail page (four separate obj-table blocks, each a two-column row: text left 50%, canvas right 50%)
 **HTML title tag:** Mathematical Costume — Common Bad Practices
 
 **Subtitle:** Taking a metric everyone already understands, applying a monotonic transformation (logs, powers, constants), and presenting it as a novel signal. The ranking doesn't change. The decisions don't change. Only the formula gets longer.
@@ -125,7 +125,7 @@ Side-by-side rank-comparison diagram: costume (same order) vs real (different or
 
 ## Regeneration instructions
 
-- **Layout:** four separate `.obj-table` tables, each containing a single two-column `<tr>`: left `<td>` (40%) with `.obj-title` + paragraphs/bullets (Section 1 also uses `.formula` blocks, `.arrow` lines, and `.plain` blocks), right `<td>` (60%, centered) with one canvas.
+- **Layout:** four separate `.obj-table` tables, each containing a single two-column `<tr>`: left `<td>` (50%) with `.obj-title` + paragraphs/bullets (Section 1 also uses `.formula` blocks, `.arrow` lines, and `.plain` blocks), right `<td>` (50%, centered) with one canvas.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#1a1a1a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#444` 1.0em; `p` `#222` 0.95em; `ul` 0.9em `#222`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`. Note this page uses slightly darker body text (`#1a1a1a`/`#222`/`#444`) than sibling pages.
 - **Special classes:** `.formula` — 'Courier New' monospace, background `#f4f4f4`, padding 8px 14px, radius 4px, inline-block, border `1px solid #ddd`, color `#111`, 0.95em. `.plain` — background `#e8f8e8`, padding 6px 12px, radius 4px, inline-block, border `1px solid #c3e6c3`, color `#1a5a1a`, 0.93em. `.arrow` — display block, centered, color `#e67e22`, 1.1em.
 - **Canvas:** intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; `canvas { display: block; margin: 0 auto; }`. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

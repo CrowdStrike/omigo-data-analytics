@@ -1,6 +1,6 @@
 # Temporal Dataset Scenarios
 
-**Page type:** detail page (TOC box followed by numbered h2 sections, each an obj-table row: text left 45%, canvas right 55%; closing philosophy callout)
+**Page type:** detail page (TOC box followed by numbered h2 sections, each an obj-table row: text left 50%, canvas right 50%; closing philosophy callout)
 **HTML title tag:** Temporal Dataset Scenarios
 
 **Subtitle:** Distributions aren't static. Data collected over time shifts, drifts, and cycles — here's how to handle it.
@@ -192,7 +192,7 @@ Four rounded-rectangle window cards (Q1–Q4) connected by arrows, each showing 
 
 ## Regeneration instructions
 
-- **Layout:** long-form detail page: h1, `.subtitle`, boxed `.toc` (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, ordered list of `#anchor` links in `#2980b9`), then numbered `h2` sections each with an `id` matching its TOC anchor. Each section is a one-row `.obj-table`: full-width, border-collapse, cells `1px solid #e0e0e0` with 20px 24px padding; first `<td>` 45% (`.obj-title` + bullets/paragraphs), last `<td>` 55% centered holding the canvas; even rows background `#fafcfe`. Page ends with a `.philosophy` callout (background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em).
+- **Layout:** long-form detail page: h1, `.subtitle`, boxed `.toc` (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, ordered list of `#anchor` links in `#2980b9`), then numbered `h2` sections each with an `id` matching its TOC anchor. Each section is a one-row `.obj-table`: full-width, border-collapse, cells `1px solid #e0e0e0` with 20px 24px padding; first `<td>` 50% (`.obj-title` + bullets/paragraphs), last `<td>` 50% centered holding the canvas; even rows background `#fafcfe`. Page ends with a `.philosophy` callout (background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em).
 - **Page style:** body `-apple-system` sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with `2px solid #2980b9` bottom border and 8px padding-bottom; `.subtitle` `#666` 1.05em; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; ul 0.9em `#333`. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes as given per chart; shared `setup(id)` helper sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Chart text uses 17px `-apple-system` (bold 17px for titles/emphasis).
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; bar fills at 0.4 alpha (`rgba(41,128,185,0.4)`, `rgba(39,174,96,0.4)`, `rgba(231,76,60,0.4)`); grays `#666`/`#555`/`#333`/`#999`/`#bbb`.

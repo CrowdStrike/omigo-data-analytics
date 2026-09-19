@@ -1,6 +1,6 @@
 # Java
 
-**Page type:** detail page (single two-column layout row: text left 45% with bullets/key-point/tags, viz right 55% with canvas + code block)
+**Page type:** detail page (single two-column layout row: text left 50% with bullets/key-point/tags, viz right 50% with canvas + code block)
 **HTML title tag:** Java
 
 **Subtitle:** Write once, run anywhere. Bytecode + JIT + GC. Safety over flexibility.
@@ -56,7 +56,7 @@ public class BankAccount {
 
 ## Regeneration instructions
 
-- **Layout:** compact-signals style detail page: h1 with bottom border, `.subtitle`, then one `table.layout` with a single `<tr>`: `td.text-col` (45%) holds a bullet `<ul>`, a `.key-point` callout, and a `.tags` pill row; `td.viz-col` (55%) holds the canvas followed by an inline-styled `<pre><code>` block (background `#f4f6f8`, border `1px solid #e0e0e0`, radius 4px, padding 12px 14px, 0.82rem, line-height 1.5, margin-top 12px).
+- **Layout:** compact-signals style detail page: h1 with bottom border, `.subtitle`, then one `table.layout` with a single `<tr>`: `td.text-col` (50%) holds a bullet `<ul>`, a `.key-point` callout, and a `.tags` pill row; `td.viz-col` (50%) holds the canvas followed by an inline-styled `<pre><code>` block (background `#f4f6f8`, border `1px solid #e0e0e0`, radius 4px, padding 12px 14px, 0.82rem, line-height 1.5, margin-top 12px).
 - **Page style:** universal reset; body `system-ui, -apple-system, sans-serif`, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9` and 8px bottom padding; `.subtitle` `#666` 0.95rem; `table.layout` full width, `border-collapse: collapse`, cells vertical-align top with 12px padding; `ul` 0.92rem. No nav bar, no back/home links.
 - **Callout:** `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem.
 - **Tags:** `.tags` flex row with 8px gap; `.tag` padding 4px 10px, radius 4px, 0.78rem, weight 600; `.tag-green` `#eafaf1`/`#1e8449`, `.tag-red` `#fdedec`/`#c0392b`, `.tag-blue` `#eaf2f8`/`#1a5276`, `.tag-orange` `#fef9e7`/`#b7540c`.

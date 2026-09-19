@@ -1,6 +1,6 @@
 # Stakeholder Favorite Examples
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, two stacked canvases right 60%, single row)
+**Page type:** detail page (two-column obj-table layout: text left 50%, two stacked canvases right 50%, single row)
 **HTML title tag:** Stakeholder Favorite Examples — Common Bad Practices
 
 **Subtitle:** Exploiting the Boss's Confirmation Bias — Learn which specific example the decision-maker always tests, then optimize for exactly that input. They walk away "validated." The system barely works on everything else.
@@ -59,7 +59,7 @@ Line chart: how representative the stakeholder's favorite example remains over 1
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table with `border-collapse: collapse`, a single `<tr>`; left `<td>` (40%) holds one `.obj-title` ("The Practice") followed by two paragraphs, a `<ul>` of four bullets, and five bold-lead paragraphs; right `<td>` (60%, centered) holds the two canvases stacked vertically.
+- **Layout:** standard detail-page `.obj-table`: full-width table with `border-collapse: collapse`, a single `<tr>`; left `<td>` (50%) holds one `.obj-title` ("The Practice") followed by two paragraphs, a `<ul>` of four bullets, and five bold-lead paragraphs; right `<td>` (50%, centered) holds the two canvases stacked vertically.
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` `#333` 0.95em; `ul` 0.9em `#333`; `strong` `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic `width`/`height` attributes as given per chart (720×460 and 720×380); scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; `canvas { display: block; margin: 0 auto; }`. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, bar fills `rgba(39,174,96,0.5)` and `rgba(231,76,60,0.3)`, gray text `#666`/`#999`.

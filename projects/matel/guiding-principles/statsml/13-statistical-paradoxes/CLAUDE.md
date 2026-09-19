@@ -13,11 +13,19 @@ Anything the template does not do, do not do.
 ## Page Shape
 
 - `<h1>` = `Paradox Name: <layman punchline>` + one-line `.subtitle`. No index numbers anywhere.
-- Four `.card-section` blocks, one canvas each. Roles: the mechanism, a second domain, a real
-  documented case, when it is safe. Name the content, don't label the role.
+- **Grid card summary = one line stating the SITUATION, not the resolution.** The reader has not
+  read the page yet, so the summary must set up the puzzle from nothing: "You pick one of three
+  doors; a host who knows what is behind them opens an empty one." Never open with the mechanism
+  or the answer ("the survivors carry more weight…", "Easiest to see with 1,000 doors instead of
+  3") — those name props and conclusions the reader has no way to picture. One sentence, ~65–90
+  characters, no statistics.
+- As many `.card-section` blocks as the paradox needs, one canvas each — three is often enough.
+  Roles to draw from: the mechanism, a second domain, a real documented case, when it is safe.
+  Name the content, don't label the role.
+- Do not pad to a section count. If two sections would run the same computation twice, cut one.
 - The boundary section is mandatory.
-- Text column: `.tags` → 6–8 bullets → one italic `.example` → one `.key-point`. Each bullet is
-  one non-wrapping line (~≤100 chars) and a complete thought.
+- Text column: `.tags` → 5–8 bullets → one italic `.example` → one `.key-point`. Each bullet is
+  one non-wrapping line (~≤100 chars) and a complete thought. Simple concepts take 5.
 
 ## Language
 

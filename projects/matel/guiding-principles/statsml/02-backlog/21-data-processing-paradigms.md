@@ -1,6 +1,6 @@
 # Data Processing Paradigms — Runtime Awareness and Execution Modes
 
-**Page type:** detail page (backlog-style: intro callout, numbered h2 sections, two-column layout table with text left ~45% and canvas right ~55%)
+**Page type:** detail page (backlog-style: intro callout, numbered h2 sections, two-column layout table with text left ~50% and canvas right ~50%)
 **HTML title tag:** Data Processing Paradigms — Discussion Backlog
 
 **Subtitle:** Hard constraints that execution paradigms impose on statistical profiling
@@ -86,7 +86,7 @@ Two-column reducible vs non-reducible statistics comparison, on light gray `#f8f
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style. `<h1>` (2rem, `#1a5276`, 2px solid `#2980b9` bottom border), `.subtitle` (`#666`, 0.95rem), `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem). Each section is a `.lang-section` (40px bottom margin) with an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (45%) with bullets/callouts, right `td.viz-col` (55%) with the canvas.
+- **Layout:** backlog detail-page style. `<h1>` (2rem, `#1a5276`, 2px solid `#2980b9` bottom border), `.subtitle` (`#666`, 0.95rem), `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem). Each section is a `.lang-section` (40px bottom margin) with an `<h2>` (1.3rem `#1a5276`, 2px solid `#2980b9` bottom border) and a `table.layout` with one `<tr>`: left `td.text-col` (50%) with bullets/callouts, right `td.viz-col` (50%) with the canvas.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; `ul` 0.92rem with 20px left margin; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange.

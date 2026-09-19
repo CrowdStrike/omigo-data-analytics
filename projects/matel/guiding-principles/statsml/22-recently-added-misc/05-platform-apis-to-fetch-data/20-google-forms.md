@@ -1,6 +1,6 @@
 # Google Forms
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, code sample + canvas right 55%, single row under an Overview h2)
+**Page type:** detail page (two-column obj-table layout: text left 50%, code sample + canvas right 50%, single row under an Overview h2)
 **HTML title tag:** Google Forms API — Platform APIs
 
 **Subtitle:** Build Google Forms from a program and pull in the responses people submit.
@@ -75,7 +75,7 @@ Gantt-style timeline chart: questionId lifetimes (horizontal bars over a 12-week
 
 ## Regeneration instructions
 
-- **Layout:** platform-apis-fetch detail page. h1, `.subtitle` paragraph, `.verified` badge span, h2 "Overview", then one `.obj-table` (full width) with a single `<tr>`: left `<td>` (45%) holds `.section-head` headings ("What You Can Get", "Watch Out For") + bullets + one `.key-point` callout; right `<td>` (55%) holds a `.section-head` + `<pre>` JSON sample, another `.section-head` + the canvas. After the table, h2 "Official API References" with a link list.
+- **Layout:** platform-apis-fetch detail page. h1, `.subtitle` paragraph, `.verified` badge span, h2 "Overview", then one `.obj-table` (full width) with a single `<tr>`: left `<td>` (50%) holds `.section-head` headings ("What You Can Get", "Watch Out For") + bullets + one `.key-point` callout; right `<td>` (50%) holds a `.section-head` + `<pre>` JSON sample, another `.section-head` + the canvas. After the table, h2 "Official API References" with a link list.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, padding 30px 40px, white background; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge — background `#eaf2f8`, border `1px solid #2980b9`, color `#1a5276`, padding 2px 10px, radius 4px, 0.8em; h2 1.3em `#1a5276` with 2px `#2980b9` bottom border; `.section-head` bold 0.95em `#1a5276`; `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em; `pre` — background `#f4f4f4`, padding 14px, radius 6px, 0.8em, ui-monospace; `li`/`p` 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="driftChart" height="380">`, CSS `display:block; width:100%`; JS resizes on window resize, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), fixes CSS height to 380px, and applies `ctx.setTransform(dpr,0,0,dpr,0,0)` before drawing.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, bar fill `rgba(26,82,118,0.35)`, gray text `#888`/`#666`/`#2c3e50`.

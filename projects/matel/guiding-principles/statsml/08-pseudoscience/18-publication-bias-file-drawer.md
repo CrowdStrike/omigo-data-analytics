@@ -1,6 +1,6 @@
 # Publication Bias / File Drawer Effect
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, two stacked canvases right ~60%, single row)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, two stacked canvases right ~50%, single row)
 **HTML title tag:** Publication Bias / File Drawer Effect — Pseudoscience in Data Analysis
 
 **Subtitle:** Only Positive Results Get Published, Creating Systematically Distorted Literature
@@ -38,7 +38,7 @@ Two pie charts with a filter arrow between them: all studies vs published litera
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (40%) holds `.obj-title` + bullet list + closing "Why it's pseudoscience" paragraph, right `<td>` (60%, centered) holds two stacked canvases (`c1` 720×340, `c2` 720×300).
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (50%) holds `.obj-title` + bullet list + closing "Why it's pseudoscience" paragraph, right `<td>` (50%, centered) holds two stacked canvases (`c1` 720×340, `c2` 720×300).
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; p `#333` 0.95em; ul 0.9em `#333`, li margin 6px 0; `strong` in `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, dark slate `#2c3e50`, gray `#95a5a6`/`#999`/`#555`/`#333`.

@@ -1,6 +1,6 @@
 # Security Questions & KBA
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Security Questions & KBA
 
 **Subtitle:** The knowledge factor that outsourced its secret to your biography — and what happened when biographies became searchable.
@@ -148,7 +148,7 @@ Two-line time chart: prevalence of recovery methods at major providers over time
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/`.key-point`/`.example`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/`.key-point`/`.example`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is one line — a bold colored label naming the concept plus a phrase short enough not to wrap in the 45% text column (roughly ≤55 characters). Never merge clauses into one bullet; split long content into more labeled bullets. Lead paragraphs are at most one short sentence.
 - **Bullet label markup:** in HTML each bullet renders as `<li><span class="pt-label" style="color:COLOR">Label:</span> phrase</li>` with `.pt-label { font-weight: 600; }`. In this md, each bullet carries its color tag as `- **Label:** [color] phrase`; drop the `[color]` tag in the rendered HTML.
 - **Label color scheme (by meaning):** `#1a5276` blue = design/fact, `#27ae60` green = win/strength, `#e74c3c` red = flaw/risk, `#e67e22` orange = context/history/trend.

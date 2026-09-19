@@ -1,6 +1,6 @@
 # Unqualified Percentage Reporting
 
-**Page type:** detail page (two-column obj-table layout: text left 40%, canvas right 60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section)
 **HTML title tag:** Unqualified Percentage Reporting — Common Bad Practices
 
 **Subtitle:** Publishing normalized rates (accuracy, conversion, improvement) without sample size, confidence intervals, or dataset provenance — making results on 100 examples indistinguishable from results on 100,000.
@@ -154,7 +154,7 @@ Scatter plot: the five related practices positioned by where in the reporting pi
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section (6 rows); left `<td>` (40%) holds `.obj-title` + bullets/paragraphs or `.example-box` divs, right `<td>` (60%, centered) holds the canvas. Section 4 uses four `.example-box` divs (background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 12px 16px, 0.88em; `.ex-title` bold 700 `#1a5276`).
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section (6 rows); left `<td>` (50%) holds `.obj-title` + bullets/paragraphs or `.example-box` divs, right `<td>` (50%, centered) holds the canvas. Section 4 uses four `.example-box` divs (background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 12px 16px, 0.88em; `.ex-title` bold 700 `#1a5276`).
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; ul 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c` (dark `#c0392b`), orange `#e67e22`, purple `#8e44ad`, gray text `#666`/`#333`.

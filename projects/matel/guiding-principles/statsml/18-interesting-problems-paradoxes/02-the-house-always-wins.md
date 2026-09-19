@@ -1,6 +1,6 @@
 # The House Always Wins
 
-**Page type:** detail page (h2-sectioned two-column obj-table layout: text left 45%, canvas right 55%; one summary-table section; philosophy callouts at top and bottom)
+**Page type:** detail page (h2-sectioned two-column obj-table layout: text left 50%, canvas right 50%; one summary-table section; philosophy callouts at top and bottom)
 **HTML title tag:** The House Always Wins — Case Study
 
 **Subtitle:** People say this all the time. But what does it actually mean mathematically? There are two distinct mechanisms at work — and both are provable.
@@ -106,7 +106,7 @@ Summary table (`.summary-table`, header row + 6 rows):
 
 ## Regeneration instructions
 
-- **Layout:** case-study detail page. h1, `.subtitle`, `.philosophy` callout, then per numbered section: `<h2>` (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by an `.obj-table` (full-width, one `<tr>`; left `<td>` 45% with `.obj-title` + intro paragraph + `.math-box` blocks + bullets, right `<td>` 55% centered holding the canvas). Section 3 uses a plain `.summary-table` instead of obj-table/canvas. Closing `.philosophy` callout at the end. No nav bar, no back/home links.
+- **Layout:** case-study detail page. h1, `.subtitle`, `.philosophy` callout, then per numbered section: `<h2>` (1.4em `#1a5276`, bottom border `2px solid #2980b9`, padding-bottom 8px) followed by an `.obj-table` (full-width, one `<tr>`; left `<td>` 50% with `.obj-title` + intro paragraph + `.math-box` blocks + bullets, right `<td>` 50% centered holding the canvas). Section 3 uses a plain `.summary-table` instead of obj-table/canvas. Closing `.philosophy` callout at the end. No nav bar, no back/home links.
 - **Summary table style:** `.summary-table` full width, 0.9em; th background `#f0f4f8`, `#1a5276` text, left-aligned; th/td borders `1px solid #e0e0e0`, padding 10px 14px.
 - **Math boxes:** `.math-box` — background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 16px 20px, 0.9em; inline `code` on `#eef2f7`, padding 2px 6px, radius 3px.
 - **Callout style:** `.philosophy` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.

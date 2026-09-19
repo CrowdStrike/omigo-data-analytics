@@ -208,7 +208,7 @@ Rise-plateau-decline productivity curve with shaded zones.
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1 + `.subtitle`, then one `<h2>` per pitfall followed by a one-row `.obj-table`: left `<td>` (40%) holds `.obj-title` div + an intro `<p>` + `<ul>` of bullets, right `<td>` (60%, centered) holds the canvas. No philosophy callout on this page. Even table rows have background `#fafcfe`.
+- **Layout:** detail page. h1 + `.subtitle`, then one `<h2>` per pitfall followed by a one-row `.obj-table`: left `<td>` (50%) holds `.obj-title` div + an intro `<p>` + `<ul>` of bullets, right `<td>` (50%, centered) holds the canvas. No philosophy callout on this page. Even table rows have background `#fafcfe`.
 - **Page CSS:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; p 0.95em `#333`; ul 0.9em `#333`; `strong` `#1a5276`; `.obj-title` 1.05em weight 600 `#1a5276`; table cell borders `1px solid #e0e0e0`, padding 20px 24px. No nav bar, no back/home links.
 - **Canvas:** intrinsic size 580×300 for all charts. This page's `setup(id)` uses an extra `vizScale = 1.3` on top of `window.devicePixelRatio`: backing store = w×1.3×dpr, CSS size = w×1.3 px, `ctx.scale(dpr×1.3, dpr×1.3)` — so charts render 1.3× larger than their declared size. Chart text is 11-14px -apple-system.
 - **Palette:** primary blue `#1a5276` / `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, gray text `#555`/`#333`.

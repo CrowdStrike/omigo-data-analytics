@@ -1,6 +1,6 @@
 # Spotify Playlists API
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, code sample + canvas right 55%, one Overview row, plus reference list)
+**Page type:** detail page (two-column obj-table layout: text left 50%, code sample + canvas right 50%, one Overview row, plus reference list)
 **HTML title tag:** Spotify Playlists API — Platform APIs
 
 **Subtitle:** Lets an app read and edit a signed-in user's playlists, saved tracks and saved albums.
@@ -69,8 +69,8 @@ Scatter plot: a "mood map" of tracks on valence (x) vs energy (y), split into fo
 
 ## Regeneration instructions
 
-- **Layout:** single-page platform-API detail doc. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" with a `table.obj-table` (one `<tr>`: left `<td>` 45% text, right `<td>` 55% with pre-formatted JSON sample and canvas), then `h2` "Official API References" with a link list.
-- **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, color `#2c3e50`, padding 30px 40px, white background. h1 `#1a5276` 1.8rem; `.subtitle` `#666` 1.05em; `.verified` inline-block badge — background `#eaf2f8`, border `1px solid #e0e0e0`, color `#1a5276`, padding 2px 10px, radius 4px, 0.8em. h2 `#1a5276` 1.3em with `border-bottom: 2px solid #2980b9`. `table.obj-table` full width, collapsed borders, td padding 16px (no cell borders on this page), first td 45%, last td 55%. `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em, left-aligned. `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em. Links `#1a5276`. Canvas `display: block; margin: 16px auto 0; width: 100%`.
+- **Layout:** single-page platform-API detail doc. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" with a `table.obj-table` (one `<tr>`: left `<td>` 50% text, right `<td>` 50% with pre-formatted JSON sample and canvas), then `h2` "Official API References" with a link list.
+- **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, color `#2c3e50`, padding 30px 40px, white background. h1 `#1a5276` 1.8rem; `.subtitle` `#666` 1.05em; `.verified` inline-block badge — background `#eaf2f8`, border `1px solid #e0e0e0`, color `#1a5276`, padding 2px 10px, radius 4px, 0.8em. h2 `#1a5276` 1.3em with `border-bottom: 2px solid #2980b9`. `table.obj-table` full width, collapsed borders, td padding 16px (no cell borders on this page), first td 50%, last td 50%. `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em, left-aligned. `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em. Links `#1a5276`. Canvas `display: block; margin: 16px auto 0; width: 100%`.
 - **Palette:** #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange, bar/point fill rgba(26,82,118,0.35).
 - **Canvas scaling:** uses `window.devicePixelRatio` — backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.scale` back to logical coordinates, redraw on window resize.
 - No nav bar, no back/home links. In regenerated HTML, any card/page links use `.html` extensions.

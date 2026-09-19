@@ -1,6 +1,6 @@
 # CNN Shape Classification
 
-**Page type:** detail page (TOC box, then one h2 + two-column obj-table row per section: text left 45%, canvas right 55%, closing philosophy callout)
+**Page type:** detail page (TOC box, then one h2 + two-column obj-table row per section: text left 50%, canvas right 50%, closing philosophy callout)
 **HTML title tag:** CNN Shape Classification
 
 **Subtitle:** MNIST for distributions — classify histogram shapes visually using a trained CNN.
@@ -171,7 +171,7 @@ Horizontal difficulty bar chart.
 
 ## Regeneration instructions
 
-- **Layout:** single page: h1, `.subtitle`, a `.toc` box (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, bold "Table of Contents" heading + `<ol>` of anchor links in `#2980b9`), then one h2 (with `id` anchor) per section, each followed by its own single-row `.obj-table`: left `<td>` (45%) holds `.obj-title` + bullets/paragraphs, right `<td>` (55%, centered) holds the canvas. Ends with a `.philosophy` callout.
+- **Layout:** single page: h1, `.subtitle`, a `.toc` box (background `#f8fafb`, border `1px solid #e0e0e0`, padding 20px 30px, radius 4px, bold "Table of Contents" heading + `<ol>` of anchor links in `#2980b9`), then one h2 (with `id` anchor) per section, each followed by its own single-row `.obj-table`: left `<td>` (50%) holds `.obj-title` + bullets/paragraphs, right `<td>` (50%, centered) holds the canvas. Ends with a `.philosophy` callout.
 - **Page CSS:** body system sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px `#2980b9` bottom border; subtitle `#666` 1.05em; table cell borders `1px solid #e0e0e0`, padding 20px 24px, even rows `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; `strong` `#1a5276`; `.philosophy` background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. No nav bar, no back/home links.
 - **Canvases:** intrinsic sizes as given per chart (c1 720×240, c2 720×340, c3 720×240, c4 720×280, c5 720×280, c6 720×240); scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper; c3 uses a seeded mulberry32 PRNG for reproducible noise. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, gold `#f39c12`, purple `#8e44ad`, gray `#7f8c8d`, bar fill `rgba(26,82,118,0.4)`.

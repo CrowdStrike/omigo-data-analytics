@@ -1,6 +1,6 @@
 # AI Agent Cluster Data Pitfalls
 
-**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: text left ~40% with intro paragraph, bullets, and example callout; canvas right ~60%)
+**Page type:** detail page (one h2 per pitfall, each followed by a two-column obj-table row: text left ~50% with intro paragraph, bullets, and example callout; canvas right ~50%)
 **HTML title tag:** AI Agent Cluster Data Pitfalls
 
 **Subtitle:** When multiple AI agents collaborate, communicate, and compete for resources, they create statistical pitfalls — credit ambiguity, error propagation, emergent failures — that single-agent systems never face.
@@ -178,7 +178,7 @@ Histogram of a bimodal score distribution across 50 runs, with mean line and sin
 
 ## Regeneration instructions
 
-- **Layout:** domains detail-page style — h1, `.subtitle` paragraph, then one `<h2>` per pitfall (unnumbered, `border-bottom: 2px solid #2980b9`), each followed by a single-row `.obj-table`: left `<td>` (40%) with `.obj-title` div, intro `<p>`, `<ul>` of bold-labeled bullets, and an `.example` callout div (`background: #f0f4f8; border-left: 3px solid #2980b9; padding: 10px 12px; font-size: 0.9em`, starting with `<strong>Example:</strong>`); right `<td>` (60%, centered) with the canvas. Even table rows have background `#fafcfe`. No thead, no nav, no cross-page links.
+- **Layout:** domains detail-page style — h1, `.subtitle` paragraph, then one `<h2>` per pitfall (unnumbered, `border-bottom: 2px solid #2980b9`), each followed by a single-row `.obj-table`: left `<td>` (50%) with `.obj-title` div, intro `<p>`, `<ul>` of bold-labeled bullets, and an `.example` callout div (`background: #f0f4f8; border-left: 3px solid #2980b9; padding: 10px 12px; font-size: 0.9em`, starting with `<strong>Example:</strong>`); right `<td>` (50%, centered) with the canvas. Even table rows have background `#fafcfe`. No thead, no nav, no cross-page links.
 - **Page CSS:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276`; `.subtitle` `#666` 1.05em; `p` 0.95em `#333`; `ul` 0.9em `#333`; `strong` `#1a5276`; `.obj-table td` border `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em weight 600 `#1a5276`; `.philosophy` callout style defined (background `#f0f4f8`, left border `4px solid #2980b9`) though unused.
 - **Canvas:** each declares intrinsic `width="720" height="240"`; each chart IIFE sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and calls `ctx.scale` so drawing stays in logical coordinates. Note: this page inlines the dpr setup per chart rather than using a shared `setup(id)` helper, and charts have no `#f9f9f9` background fill (white).
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, dark slate `#34495e`/`#2c3e50` for axes and labels, green `#27ae60`, red `#e74c3c`, orange `#e67e22`.

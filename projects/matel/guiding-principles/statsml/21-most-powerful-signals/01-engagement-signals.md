@@ -1,6 +1,6 @@
 # Engagement Signals — Likes, Shares, Comments, Saves
 
-**Page type:** detail page (ten card-sections, each a two-column layout table: text left 45%, canvas right 55%)
+**Page type:** detail page (ten card-sections, each a two-column layout table: text left 50%, canvas right 50%)
 **HTML title tag:** Engagement Signals — Likes, Shares, Comments, Saves
 
 **Subtitle:** The explicit actions users take that reveal intent and preference — how feeds capture, weight, and exploit them for recommendation and ranking
@@ -273,7 +273,7 @@ Two-panel chart split by a dashed divider: fake vs organic engagement curves on 
 
 ## Regeneration instructions
 
-- **Layout:** ten `.card-section` blocks, each an h2 with blue bottom border followed by a `table.layout` with one row: left `td.text-col` (45%) holding `.tags` pills, a `ul` of labeled bullets, an italic `.example` paragraph, and a `.key-point` callout; right `td.viz-col` (55%) holding one 720×300 canvas (`c1`–`c10`).
+- **Layout:** ten `.card-section` blocks, each an h2 with blue bottom border followed by a `table.layout` with one row: left `td.text-col` (50%) holding `.tags` pills, a `ul` of labeled bullets, an italic `.example` paragraph, and a `.key-point` callout; right `td.viz-col` (50%) holding one 720×300 canvas (`c1`–`c10`).
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem. h2 1.3rem `#1a5276` with 2px `#2980b9` bottom border. `ul` 0.92rem; `li b` in `#1a5276`.
 - **Tag pills:** `.tag` inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px. Colors: blue `rgba(26,82,118,0.12)`/`#1a5276`; green `rgba(39,174,96,0.15)`/`#27ae60`; red `rgba(231,76,60,0.12)`/`#e74c3c`; orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Key-point callout:** background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `strong` in `#1a5276`. `.example` italic `#555` 0.9rem.

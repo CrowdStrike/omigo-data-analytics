@@ -1,6 +1,6 @@
 # Log Transformation: Dangers and Interpretability
 
-**Page type:** detail page (backlog kusto-style two-column layout: text left 45%, canvas right 55%, one table row per section)
+**Page type:** detail page (backlog kusto-style two-column layout: text left 50%, canvas right 50%, one table row per section)
 **HTML title tag:** Log Transformation: Dangers and Interpretability — Discussion Backlog
 
 **Subtitle:** The most common fix for skew changes more than the shape
@@ -55,7 +55,7 @@ Two-box semantics diagram plus a concrete-example callout box.
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog kusto-style detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with a single `<tr>` — left `td.text-col` (45%) holds bullets/example/key-point, right `td.viz-col` (55%) holds the canvas. No index number in the h1.
+- **Template/layout:** backlog kusto-style detail page. h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, padding 8px 12px, 0.9rem), then one `.lang-section` per numbered section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) + `table.layout` with a single `<tr>` — left `td.text-col` (50%) holds bullets/example/key-point, right `td.viz-col` (50%) holds the canvas. No index number in the h1.
 - **Key-point callout:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example` — italic, `#555`, 0.9rem.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem with 4px li spacing; canvases `width: 100%` with `1px solid #e0e0e0` border, radius 4px. No nav bar, no back/home links.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `rgba(26,82,118,0.35)` bar fill, accents `#2980b9`.

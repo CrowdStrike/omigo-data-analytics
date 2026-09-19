@@ -1,6 +1,6 @@
 # Model Rot & Refresh Theater
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvases right ~60%, single row)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvases right ~50%, single row)
 **HTML title tag:** 1. Model Rot & Refresh Theater — Common Bad Practices
 
 **Subtitle:** Manufactured Win — Deliberately not refreshing a model so you can claim a big improvement later.
@@ -44,7 +44,7 @@ Two-year sawtooth line chart: accuracy decays 0.3%/week from 94%, gets "refreshe
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (40%) holds `.obj-title` + `ul` bullets + two `<p><strong>…</strong></p>` paragraphs, right `<td>` (60%, centered) holds the two canvases stacked.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>`; left `<td>` (50%) holds `.obj-title` + `ul` bullets + two `<p><strong>…</strong></p>` paragraphs, right `<td>` (50%, centered) holds the two canvases stacked.
 - **Page style:** body `-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`; `ul` 0.9em; canvases `display: block; margin: 0 auto`.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart text uses `-apple-system` at 16–17px. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, secondary blue `#2980b9`, green `#27ae60`, red `#e74c3c`, gray text `#555`/`#666`.

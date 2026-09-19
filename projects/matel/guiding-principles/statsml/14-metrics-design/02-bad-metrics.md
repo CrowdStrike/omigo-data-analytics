@@ -1,6 +1,6 @@
 # Bad Metrics — 27 Real-World Disasters by Domain
 
-**Page type:** detail page, metric-testing template (white background; one two-column obj-table per metric: text left 40%, canvas right 60%; numbered obj-title with domain in parentheses; labeled bullets; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
+**Page type:** detail page, metric-testing template (white background; one two-column obj-table per metric: text left 50%, canvas right 50%; numbered obj-title with domain in parentheses; labeled bullets; canvases 720×200 with devicePixelRatio scaling and redraw on resize)
 **HTML title tag:** Bad Metrics — 27 Real-World Disasters by Domain
 
 **Subtitle:** Each row: one metric that looked good on a dashboard but caused real damage. Why it fails and what it hides.
@@ -461,7 +461,7 @@ Paired bar chart: megapixel count vs perceptual image quality for five cameras.
 
 ## Regeneration instructions
 
-- **Layout:** single-page `.obj-table` catalog: h1, `.subtitle` paragraph, then one full-width table with a `<thead>` header row ("The Bad Metric & What Went Wrong" | "Visualization") and one `<tr>` per metric. Left `<td>` (40%): `.metric-domain` badge + `.metric-title` ("N. Title", unpadded index) + `.metric-desc` bullet list with bold lead-in labels. Right `<td>` (60%): the canvas.
+- **Layout:** single-page `.obj-table` catalog: h1, `.subtitle` paragraph, then one full-width table with a `<thead>` header row ("The Bad Metric & What Went Wrong" | "Visualization") and one `<tr>` per metric. Left `<td>` (50%): `.metric-domain` badge + `.metric-title` ("N. Title", unpadded index) + `.metric-desc` bullet list with bold lead-in labels. Right `<td>` (50%): the canvas.
 - **Page style:** body `-apple-system` sans-serif, background `#fafafa`, text `#222`, padding 20px 10px; h1 `#1a5276` (4px bottom margin); `.subtitle` `#555`, 1.1em, 30px bottom margin.
 - **Table style:** `border-collapse: collapse`; th background `#1a5276`, white text, padding 12px 16px, border `1px solid #2980b9`; td border `1px solid #2980b9`, padding 14px 16px, `vertical-align: top`; even rows tinted `#f0f8ff`.
 - **Text styles:** `.metric-title` bold 1.05em `#1a5276`; `.metric-domain` inline-block badge, background `#2980b9`, white text, padding 2px 8px, radius 3px, 0.8em; `.metric-desc ul` 0.93em, line-height 1.7, margin `4px 0 0 16px`. No nav bar, no back/home links.

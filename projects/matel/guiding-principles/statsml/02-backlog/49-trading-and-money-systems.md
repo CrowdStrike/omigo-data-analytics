@@ -1,6 +1,6 @@
 # Trading & Money-Making Systems
 
-**Page type:** detail page (backlog-style two-column layout: text left 45%, canvas right 55%, one `.lang-section` per topic; BACKLOG status badge in h1)
+**Page type:** detail page (backlog-style two-column layout: text left 50%, canvas right 50%, one `.lang-section` per topic; BACKLOG status badge in h1)
 **HTML title tag:** Trading & Money-Making Systems
 
 **Status badge:** BACKLOG (inline in h1; on this page the badge is orange `#e67e22` background with white text)
@@ -121,7 +121,7 @@ Horizontal gradient spectrum bar with tick-marked system labels alternating abov
 
 ## Regeneration instructions
 
-- **Template/layout:** backlog kusto-style detail page. `<h1>` with inline `<span class="status">BACKLOG</span>` badge, `.subtitle` paragraph, `.intro` callout, then four `.lang-section` blocks. Sections 1, 3, 4 use `table.layout` with one row: left `td.text-col` (45%) with a `<ul>` of bold-labeled bullets, right `td.viz-col` (55%) with the canvas. Section 2 contains only a `table.data`.
+- **Template/layout:** backlog kusto-style detail page. `<h1>` with inline `<span class="status">BACKLOG</span>` badge, `.subtitle` paragraph, `.intro` callout, then four `.lang-section` blocks. Sections 1, 3, 4 use `table.layout` with one row: left `td.text-col` (50%) with a `<ul>` of bold-labeled bullets, right `td.viz-col` (50%) with the canvas. Section 2 contains only a `table.data`.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with 2px `#2980b9` bottom border. h2 1.3rem `#1a5276`, 2px `#2980b9` bottom border. `.subtitle` `#666` 0.95rem. `.intro` background `#f0f4f8`, left border 3px `#2980b9`, 0.9rem. `.status` badge on this page: background `#e67e22`, white text, radius 3px, 0.7em bold. `table.data`: th background `#1a5276` white text, all cells bordered 1px `#ddd`, 0.85rem, first column bold nowrap. `ul` 0.92rem. Canvases `width: 100%`, border 1px `#e0e0e0`, radius 4px.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `rgba(26,82,118,0.35)` bar fill.
 - **Canvas rendering:** canvases declare intrinsic 720×N size and are scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id, hgt)` helper; fonts are system-ui.

@@ -1,6 +1,6 @@
 # Shape Classifier — Results Report
 
-**Page type:** detail page (two-column `.two-col` table layout: text/tables left 40%, canvas right 60%, one row per section; blue note callout at top)
+**Page type:** detail page (two-column `.two-col` table layout: text/tables left 50%, canvas right 50%, one row per section; blue note callout at top)
 **HTML title tag:** Shape Classifier — Results Report
 
 Top callout (`.note`, blue background `#d6eaf8`, border `#85c1e9`):
@@ -100,7 +100,7 @@ Canvas-drawn comparison table, "3-Class PoC → 11-Class: Key Upgrades" (bold 11
 
 ## Regeneration instructions
 
-- **Layout:** report page of four numbered h2 sections (`id`s s1-s4), each a `.two-col` table with one `<tr>`: left `<td>` (40%) holds bullets/tables/callouts, right `<td>` (60%) holds one canvas. Cells are white cards (background `#fff`, border `1px solid #ddd`, radius 8px, padding 16px, border-spacing 12px) on a page background of `#f8f9fa`.
+- **Layout:** report page of four numbered h2 sections (`id`s s1-s4), each a `.two-col` table with one `<tr>`: left `<td>` (50%) holds bullets/tables/callouts, right `<td>` (50%) holds one canvas. Cells are white cards (background `#fff`, border `1px solid #ddd`, radius 8px, padding 16px, border-spacing 12px) on a page background of `#f8f9fa`.
 - **Page CSS:** body system sans-serif, margin 40px, text `#2c3e50`, background `#f8f9fa`. h1 `#1a5276` with bottom border `3px solid #1a5276`; h2 `#1a5276` with bottom border `2px solid #2980b9`. `.note` blue callout (background `#d6eaf8`, border `#85c1e9`, radius 8px, 0.88em); `.note-warn` variant yellow (background `#fef9e7`, border `#f9e79f`). `.metric` bold `#1a5276`. `ul` 0.9em, line-height 1.8. `table.data` 0.82em, header background `#1a5276` white text, row bottom borders `#eee`, hover `#f0f8ff`. `.badge` rounded pill 0.75em bold; `.badge-green` `#d4efdf`/`#1e8449`; `.badge-orange` `#fdebd0`/`#d35400` (defined but unused).
 - **Canvas:** each `<canvas>` declared with `height="280"` and CSS `width:100%`; a shared `setup(id, w, h)` helper sets 420×280 logical size with `window.devicePixelRatio` scaling (backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
 - **Palette:** #1a5276 primary blue, #27ae60 green, #e74c3c red, #e67e22 orange, plus the 11-class color map listed at the top of this spec.

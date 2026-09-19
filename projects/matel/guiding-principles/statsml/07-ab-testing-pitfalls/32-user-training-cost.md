@@ -1,6 +1,6 @@
 # User Training Cost
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one row per section)
 **HTML title tag:** User Training Cost — A/B Testing Pitfalls
 
 **Subtitle:** Design Flaw — Tenured users aren't judging your new design. They're paying the cost of relearning it.
@@ -121,7 +121,7 @@ Timeline chart: treatment effect over 24 weeks with the feasible test window sha
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (40%) holds `.obj-title` + math-box + bullets, right `<td>` (60%, centered) holds the canvas.
+- **Layout:** standard detail-page `.obj-table`: full-width table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + math-box + bullets, right `<td>` (50%, centered) holds the canvas.
 - **Density elements:** each section opens with a `.math-box` (bare example list, `code` pills, `<br>`-separated lines); bullets are one-line labeled items with a bold lead label (`strong`, house blue); **Correct approach** and **The tell** are bold-labeled single lines.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; ul 0.95em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`; `.math-box` background `#f8fafb`, border `1px solid #e0e0e0`, radius 6px, padding 12px 16px, 0.95em, `code` pills background `#eef2f7` at 1em. No nav bar, no back/home links.
 - **Canvas:** declare intrinsic `width`/`height` attributes as given per chart; a shared `setup(id)` helper sizes the backing store to displayed CSS width × `window.devicePixelRatio`, scales the context, and all charts redraw on window resize (debounced).

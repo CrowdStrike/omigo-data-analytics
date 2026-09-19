@@ -1,6 +1,6 @@
 # YAML
 
-**Page type:** detail page (single card-section with two-column layout table: text left 45%, canvas right 55%)
+**Page type:** detail page (single card-section with two-column layout table: text left 50%, canvas right 50%)
 **HTML title tag:** YAML
 
 **Subtitle:** Configuration format readable by humans.
@@ -42,7 +42,7 @@ Wrote-vs-parsed comparison table (4 rows with arrows) plus an indentation-hazard
 
 ## Regeneration instructions
 
-- **Layout:** single-page detail doc: h1 with `2px solid #2980b9` bottom border, `.subtitle` paragraph, `.intro-callout` div, then one `.card-section` containing an h2 (also `2px solid #2980b9` bottom border) and a `table.layout` with one `<tr>`: left `<td class="text-col">` (45%) holding intro paragraph, `<ul>` bullets, "How it's parsed" paragraph, `.key-point` div, `.example` paragraph; right `<td class="viz-col">` (55%) holding the canvas.
+- **Layout:** single-page detail doc: h1 with `2px solid #2980b9` bottom border, `.subtitle` paragraph, `.intro-callout` div, then one `.card-section` containing an h2 (also `2px solid #2980b9` bottom border) and a `table.layout` with one `<tr>`: left `<td class="text-col">` (50%) holding intro paragraph, `<ul>` bullets, "How it's parsed" paragraph, `.key-point` div, `.example` paragraph; right `<td class="viz-col">` (50%) holding the canvas.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; h2 1.3rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem; `.intro-callout` background `#f8f9fa`, left border `3px solid #2980b9`, padding 10px 14px, 0.93rem; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `.example` italic `#555` 0.9rem; `code` background `#f0f4f8`, 2px 6px padding, 3px radius. Canvas `width: 100%`, `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links.
 - **Palette:** primary blue `#1a5276`, accent blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`; row tints `rgba(231,76,60,0.06)` and `rgba(39,174,96,0.08)`.
 - **Canvas:** intrinsic 720×300, scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).

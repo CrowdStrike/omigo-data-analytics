@@ -1,6 +1,6 @@
 # Revocation & Lifetime Semantics
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Revocation & Lifetime Semantics
 
 **Subtitle:** Whether a credential can be killed before its expiry is decided by one design choice — does the server look it up on every request, or trust it on sight.
@@ -121,7 +121,7 @@ Trade-off curves: revocation latency vs refresh traffic as a function of TTL.
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/tables/`.key-point`, right `td.viz-col` (55%) for the canvas. Section 2's markdown table renders as a compact HTML table in the text column (0.85rem, `#ddd` bottom borders, bold `#1a5276` header row).
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #2980b9`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also blue-underlined). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/tables/`.key-point`, right `td.viz-col` (50%) for the canvas. Section 2's markdown table renders as a compact HTML table in the text column (0.85rem, `#ddd` bottom borders, bold `#1a5276` header row).
 - **Bullet style:** every text-column bullet is exactly one non-wrapping line — a bold colored label naming the concept plus a phrase short enough for the 45% column (roughly ≤55 characters). Never merge facts back into paragraphs; split long content into more labeled bullets. Markdown form `- **Label:** phrase` renders as `<li><span class="pt-label" style="color:COLOR">Label:</span> phrase</li>` with `.pt-label { font-weight: 600; }`.
 - **Label colors by meaning:** `#1a5276` blue = design/fact, `#27ae60` green = win/strength, `#e74c3c` red = flaw/risk, `#e67e22` orange = context/history/trend. Per label — §1: Opaque design, Signed design blue; Instant kill green; No kill switch, Hidden cost red; Standard patch orange. §3: Split design, Refresh rotation, One live token, Reuse detection blue; Lookup-free path, Damage cap green; Red flag, Safe response red. §4: Historical, Current norm, Why minutes orange; Forgotten chore, Leak exposure, Short-TTL cost red; Load shift, Cost knee blue; Short-TTL win green.
 - **Callout/key-point style:** the `.intro` callout and each `.key-point` box open with the same bold colored lead word (`.pt-label` span — intro `#2980b9` blue, key points `#e74c3c` red) followed by one short sentence. In markdown the lead word is the second bold segment, e.g. `**Key point:** **No free lunch:** sentence`.

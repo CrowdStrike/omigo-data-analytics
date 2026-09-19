@@ -1,6 +1,6 @@
 # Apple Screen Time
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, payload/canvas/callouts right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, payload/canvas/callouts right 50%, one row per section)
 **HTML title tag:** Apple Screen Time
 
 **Subtitle:** Per-app usage duration, pickups, and notification counts. No public API — data stays on-device unless Family Sharing or MDM is configured.
@@ -98,7 +98,7 @@ Stacked bar chart of screen-time minutes per clock hour, split into five categor
 
 ## Regeneration instructions
 
-- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + bullets, right `<td>` (55%, `text-align: center`) holds — row 1: the `.payload` block with its own `.obj-title`; row 2: an `.obj-title` + the single canvas; rows 3 and 4: `.key-point` callouts only (no canvases). After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links. Uses `* { box-sizing: border-box; }`.
+- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets, right `<td>` (50%, `text-align: center`) holds — row 1: the `.payload` block with its own `.obj-title`; row 2: an `.obj-title` + the single canvas; rows 3 and 4: `.key-point` callouts only (no canvases). After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links. Uses `* { box-sizing: border-box; }`.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `li` 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Callout style:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em. `.payload` — same background/border, monospace (ui-monospace/Menlo) 0.78em, `white-space: pre`, left-aligned.
 - **Canvas:** `display: block; width: 100%`; intrinsic height 420; sized from `getBoundingClientRect().width` (fallback 720), backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), CSS height fixed, `ctx.scale` back to logical coordinates.

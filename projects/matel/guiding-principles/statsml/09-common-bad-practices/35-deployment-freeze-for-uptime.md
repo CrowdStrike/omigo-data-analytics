@@ -1,6 +1,6 @@
 # Deployment Freeze for Uptime
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one table per section; multiple `.obj-title` sub-blocks per cell)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one table per section; multiple `.obj-title` sub-blocks per cell)
 **HTML title tag:** Deployment Freeze for Uptime — Common Bad Practices
 
 **Subtitle:** Gaming SLOs by refusing to deploy — you "meet" your uptime target by making the system useless. The metric improves while the business starves.
@@ -136,7 +136,7 @@ Scatter plot of deploy frequency vs incident severity across many team-quarters:
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table` layout, one single-row `<table class="obj-table">` per section (4 tables total); left `<td>` (40%) holds one or more `.obj-title` blocks (subsequent ones get `style="margin-top:14px"`) each followed by bullets or paragraphs; right `<td>` (60%, centered) holds the canvas. This page uses cell padding 14px 18px and `vertical-align: top` (slightly tighter than sibling pages).
+- **Layout:** standard detail-page `.obj-table` layout, one single-row `<table class="obj-table">` per section (4 tables total); left `<td>` (50%) holds one or more `.obj-title` blocks (subsequent ones get `style="margin-top:14px"`) each followed by bullets or paragraphs; right `<td>` (50%, centered) holds the canvas. This page uses cell padding 14px 18px and `vertical-align: top` (slightly tighter than sibling pages).
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; p 0.95em `#333`; ul 0.9em `#333`; table cell borders `1px solid #e0e0e0`; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic sizes c1 720×380, c2 720×320, c3 720×360, c4 720×320; scale by `window.devicePixelRatio` via a shared `setup(id)` helper. Charts use a `#f9f9f9` plot background fill.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, dark red `#c0392b`, purple `#8e44ad`, bar fill `rgba(26,82,118,0.5)`, greys `#333`/`#555`/`#666`/`#999`.

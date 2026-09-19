@@ -1,6 +1,6 @@
 # Silence After Noticing Data Issues
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%; four separate one-row tables, each row pairing one or more titled text blocks with a canvas)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%; four separate one-row tables, each row pairing one or more titled text blocks with a canvas)
 **HTML title tag:** Silence After Noticing Data Issues — Common Bad Practices
 
 **Subtitle:** Deliberate Inaction — You see the problem. You say nothing. Because raising it would delay YOUR project, reset YOUR timeline, or invalidate YOUR previous results.
@@ -129,7 +129,7 @@ Cost-crossover line chart: total cost of fixing the data issue vs time since dis
 
 ## Regeneration instructions
 
-- **Layout:** four separate `.obj-table` tables, each with a single `<tr>`; left `<td>` (40%) holds one or more `.obj-title` blocks (subsequent ones get `style="margin-top:14px;"`) with `<ul>` lists (Row 4 also has a plain `<p>` "Every example shares the same structure:" before its final list); right `<td>` (60%, centered) holds the canvas. Note: on this page `.obj-table td` uses padding 14px 18px and `vertical-align: top` (tighter than the usual 20px 24px middle-aligned variant).
+- **Layout:** four separate `.obj-table` tables, each with a single `<tr>`; left `<td>` (50%) holds one or more `.obj-title` blocks (subsequent ones get `style="margin-top:14px;"`) with `<ul>` lists (Row 4 also has a plain `<p>` "Every example shares the same structure:" before its final list); right `<td>` (50%, centered) holds the canvas. Note: on this page `.obj-table td` uses padding 14px 18px and `vertical-align: top` (tighter than the usual 20px 24px middle-aligned variant).
 - **Page style:** body system sans-serif (-apple-system, BlinkMacSystemFont, 'Segoe UI'), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; `.subtitle` `#666` 1.0em; `p` 0.95em `#333`; `ul` 0.9em `#333`, `li` margin 6px 0; table cell borders `1px solid #e0e0e0`; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic sizes per chart (c1 720×340, c2 720×320, c3 720×320, c4 720×320), all with `#f9f9f9` full-canvas background fills; scale by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setup(id)` helper. Chart draw functions are registered in a `__charts` array and re-run on window resize (debounced 150ms).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, dark red `#c0392b`, purple `#8e44ad`, neutral gray `#95a5a6`, yellow accent `rgba(241,196,15,0.5)`, gray text `#666`/`#333`/`#555`.

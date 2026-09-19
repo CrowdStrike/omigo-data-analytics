@@ -1,6 +1,6 @@
 # Device & Environment Context Signals
 
-**Page type:** detail page (compact card-sections: one h2 per section, two-column layout table with tag pills + labeled bullets left ~45%, canvas right ~55%; closing meta-point callout)
+**Page type:** detail page (compact card-sections: one h2 per section, two-column layout table with tag pills + labeled bullets left ~45%, canvas right ~50%; closing meta-point callout)
 **HTML title tag:** Device & Environment Context
 
 **Subtitle:** Time of day, device model, OS, battery, network, locale — the ambient context that predicts behavior before any behavioral signal is observed
@@ -246,7 +246,7 @@ Three-series line chart over a 14-day rollout. Title (bold 14px `#1a5276`): "The
 
 ## Regeneration instructions
 
-- **Layout:** most-powerful-signals compact style. One `.card-section` per topic: `<h2>` (unnumbered, 1.3rem `#1a5276`, 2px solid `#2980b9` bottom border), then a `table.layout` with one row — left `td.text-col` (45%) holding `.tags` pill row, a `<ul>` of labeled bullets (`<li><b>Label</b> — text`), an italic `.example` paragraph, and a `.key-point` callout; right `td.viz-col` (55%) holding one `<canvas width="720" height="300">` scaled to `width: 100%` with 1px `#e0e0e0` border, 4px radius. After the last section, a standalone full-width `.key-point` div holds the closing meta-point callout.
+- **Layout:** most-powerful-signals compact style. One `.card-section` per topic: `<h2>` (unnumbered, 1.3rem `#1a5276`, 2px solid `#2980b9` bottom border), then a `table.layout` with one row — left `td.text-col` (50%) holding `.tags` pill row, a `<ul>` of labeled bullets (`<li><b>Label</b> — text`), an italic `.example` paragraph, and a `.key-point` callout; right `td.viz-col` (50%) holding one `<canvas width="720" height="300">` scaled to `width: 100%` with 1px `#e0e0e0` border, 4px radius. After the last section, a standalone full-width `.key-point` div holds the closing meta-point callout.
 - **Tag pills:** `.tag` inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px. Colors: blue `rgba(26,82,118,0.12)`/`#1a5276`; green `rgba(39,174,96,0.15)`/`#27ae60`; red `rgba(231,76,60,0.12)`/`#e74c3c`; orange `rgba(230,126,34,0.15)`/`#e67e22`.
 - **Key-point callout:** background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem; `<strong>` lead-in label.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with 2px `#2980b9` bottom border; `.subtitle` `#666` 0.95rem; `ul` 0.92rem with `li b` in `#1a5276`; `.example` italic `#555` 0.9rem. No nav bar, no back/home links.

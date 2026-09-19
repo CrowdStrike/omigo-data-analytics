@@ -1,6 +1,6 @@
 # Mobile Analytics SDKs
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, code + canvas right 55%, one Overview row)
+**Page type:** detail page (two-column obj-table layout: text left 50%, code + canvas right 50%, one Overview row)
 **HTML title tag:** Mobile Analytics SDKs — Platform APIs
 
 **Subtitle:** Analytics tools (Firebase/GA4, Amplitude, Mixpanel) that record what users do inside your own app — you choose what to track, and you can export every raw event.
@@ -77,7 +77,7 @@ Multi-series retention line chart: four cohort retention curves over days since 
 
 ## Regeneration instructions
 
-- **Layout:** platform-apis detail page. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" followed by a full-width `.obj-table` with one `<tr>`: left `<td>` (45%) holds `.section-label` bold headings ("What you can get", "Watch out for"), bullet lists, and one `.key-point` callout; right `<td>` (55%) holds small gray-bold intro paragraphs (0.85em, `#555`) above a `<pre>` code block and the canvas. Then `h2` "Official API References" with a link list. Note: on this page the obj-table cells have padding 16px and no visible cell borders; heading class is `.section-label` (bold, `#1a5276`, display block).
+- **Layout:** platform-apis detail page. h1, `.subtitle` paragraph, `.verified` badge span, then `h2` "Overview" followed by a full-width `.obj-table` with one `<tr>`: left `<td>` (50%) holds `.section-label` bold headings ("What you can get", "Watch out for"), bullet lists, and one `.key-point` callout; right `<td>` (50%) holds small gray-bold intro paragraphs (0.85em, `#555`) above a `<pre>` code block and the canvas. Then `h2` "Official API References" with a link list. Note: on this page the obj-table cells have padding 16px and no visible cell borders; heading class is `.section-label` (bold, `#1a5276`, display block).
 - **Page CSS:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge inline-block, background `#eaf2f8`, border `1px solid #2980b9`, text `#1a5276`, padding 2px 10px, radius 4px, 0.8em; h2 1.3em `#1a5276` with `2px solid #2980b9` bottom border; `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em; `.key-point` background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em; list items 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="fidelityCanvas" height="380">`, CSS `display:block; width:100%`; drawing script measures `getBoundingClientRect()`, scales backing store by `window.devicePixelRatio`, fixes CSS height to 380px, and redraws on window resize.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, bar fill `rgba(26,82,118,0.35)`, gray text `#666`/`#555`.

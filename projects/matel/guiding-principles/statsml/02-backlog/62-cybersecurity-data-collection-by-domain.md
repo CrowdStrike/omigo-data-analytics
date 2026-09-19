@@ -1,6 +1,6 @@
 # Cybersecurity Data Collection — By Domain
 
-**Page type:** detail page (backlog-style two-column layout: text left 45%, canvas + sample-payload code block right 55%, one `.lang-section` per topic; h1 carries a BACKLOG status pill)
+**Page type:** detail page (backlog-style two-column layout: text left 50%, canvas + sample-payload code block right 50%, one `.lang-section` per topic; h1 carries a BACKLOG status pill)
 **HTML title tag:** Cybersecurity Data Collection — By Domain
 
 **Subtitle:** Explicit, purpose-built data collection across security product categories — what they ingest, how they capture it, and what telemetry feeds detection and response.
@@ -326,7 +326,7 @@ Horizontal funnel of processing stages, each a bar whose width is the fraction o
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page. `h1` (2rem `#1a5276`, bottom border `2px solid #2980b9`) with inline `.status` pill "BACKLOG" (background `#fef9e7`, border `1px solid #f39c12`, text `#b7950b`, 4px radius, 0.8rem); `.subtitle` (`#666`, 0.95rem); `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, 8px 12px padding, 0.9rem). One `.lang-section` per numbered h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`); inside each, `table.layout` with `td.text-col` 45% and `td.viz-col` 55%, both `vertical-align: top`, 12px padding. Sections 2–7 place the canvas plus a `.sample-payload` block in the viz column. No index number in the h1.
+- **Layout:** backlog detail page. `h1` (2rem `#1a5276`, bottom border `2px solid #2980b9`) with inline `.status` pill "BACKLOG" (background `#fef9e7`, border `1px solid #f39c12`, text `#b7950b`, 4px radius, 0.8rem); `.subtitle` (`#666`, 0.95rem); `.intro` callout (background `#f0f4f8`, left border `3px solid #2980b9`, 8px 12px padding, 0.9rem). One `.lang-section` per numbered h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`); inside each, `table.layout` with `td.text-col` 50% and `td.viz-col` 50%, both `vertical-align: top`, 12px padding. Sections 2–7 place the canvas plus a `.sample-payload` block in the viz column. No index number in the h1.
 - **Text blocks:** lead `<p>`, `<ul>` bullets (0.92rem) with `<strong>` lead-ins, `.key-point` callout (background `#f8f9fa`, left border `3px solid #e74c3c`, 0.9rem), and a trailing 0.9em paragraph with a bold lead-in (Architecture / What gets logged / Data sources / Collection method / Log volume).
 - **Sample payload style:** `.sample-payload` — background `#f8f9fa`, border `1px solid #dce1e6`, 6px radius, 12px 14px padding, monospace ('SF Mono', 'Fira Code', Consolas) 0.78em, `white-space: pre`, inline-block; `.payload-title` bold `#1a5276`; syntax spans: `.key` `#1a5276`, `.str` `#27ae60`, `.num` `#e74c3c`, `.comment` italic `#7f8c8d`. JSON keys colored blue, string values green, numbers/booleans red.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6. Canvases `width: 100%`, `1px solid #e0e0e0` border, 4px radius.

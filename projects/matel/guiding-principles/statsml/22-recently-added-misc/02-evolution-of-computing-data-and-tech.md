@@ -1,6 +1,6 @@
 # Evolution of Computing, Data & Tech
 
-**Page type:** other (single-page long doc: h1, subtitle, intro callout, legend paragraph, then one two-column `.obj-table` with one row per strand — text left 42%, timeline canvas right)
+**Page type:** other (single-page long doc: h1, subtitle, intro callout, legend paragraph, then one two-column `.obj-table` with one row per strand — text left 50%, timeline canvas right)
 **HTML title tag:** Evolution of Computing, Data & Tech
 
 **Subtitle:** Every strand on one page, on one shared timeline — so overlaps between them are visible at a glance.
@@ -415,7 +415,7 @@ Shared-scale timeline (see Regeneration instructions). Rows `[label, start, end,
 
 ## Regeneration instructions
 
-- **Layout:** h1, `.subtitle`, `.intro` callout, `.legend` paragraph, then one full-width `.obj-table` (`border-collapse: collapse`) with one `<tr>` per strand. Left `<td>` (42%, background `#fbfdff`) holds `.sec-label` (0.76em bold uppercase `#1f618d`, letter-spacing 0.6px), `.sec-title` (bold `#1a5276` 1.16em, numbered "N. Title" matching the section index), `.sec-span` (0.86em `#4a4a4a`, weight 600), and `.sec-bullets` `<ul>` (0.93em `#333`). Right `<td>` holds `.viz-wrap` (overflow-x auto) with one `<canvas data-i="N">`. Cell borders `1px solid #cfe0f0`, padding 16px 18px, vertical-align top.
+- **Layout:** h1, `.subtitle`, `.intro` callout, `.legend` paragraph, then one full-width `.obj-table` (`border-collapse: collapse`) with one `<tr>` per strand. Left `<td>` (50%, background `#fbfdff`) holds `.sec-label` (0.76em bold uppercase `#1f618d`, letter-spacing 0.6px), `.sec-title` (bold `#1a5276` 1.16em, numbered "N. Title" matching the section index), `.sec-span` (0.86em `#4a4a4a`, weight 600), and `.sec-bullets` `<ul>` (0.93em `#333`). Right `<td>` holds `.viz-wrap` (overflow-x auto) with one `<canvas data-i="N">`. Cell borders `1px solid #cfe0f0`, padding 16px 18px, vertical-align top.
 - **Canvas order note:** the `data-i` index into the shared `SECTIONS` data array does not follow table order everywhere — section 11 (Delivery) uses `data-i="11"`, section 14 (Networking) uses `data-i="10"`, section 15 uses `data-i="14"`, section 16 uses `data-i="15"`, section 17 uses `data-i="16"`; all others match their position.
 - **Intro callout style:** `.intro` — background `#f0f4f8`, left border `4px solid #2980b9`, padding 14px 18px, 0.95em. `.legend` — plain paragraph, 0.86em `#444`.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 40px 20px, line-height 1.6, base font 15px; h1 1.9em `#1a5276`; subtitle `#555` 1.05em; `strong` in `#1a5276`. No nav bar, no back/home links.

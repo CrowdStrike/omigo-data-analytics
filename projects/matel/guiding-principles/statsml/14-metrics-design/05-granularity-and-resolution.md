@@ -1,6 +1,6 @@
 # Metric Granularity — Right Denominator & Aggregation Level
 
-**Page type:** detail page (numbered h2 sections, each with a two-column obj-table row: text left 40%, canvas right 60%; closing philosophy callout)
+**Page type:** detail page (numbered h2 sections, each with a two-column obj-table row: text left 50%, canvas right 50%; closing philosophy callout)
 **HTML title tag:** Metric Granularity — Choosing the Right Denominator & Aggregation Level
 
 **Subtitle:** The SAME metric computed at different levels (page, session, user, day) gives different numbers AND different conclusions. Choosing wrong = wrong decisions.
@@ -234,7 +234,7 @@ Formula walkthrough plus a naive-vs-true confidence-interval comparison.
 
 ## Regeneration instructions
 
-- **Layout:** h1 + `.subtitle` paragraph, then eleven numbered `<h2>` sections ("1." through "11.", 1.4em `#1a5276` with a 2px `#2980b9` bottom border). Each section holds one `.obj-table` (full width, `border-collapse: collapse`) with a single `<tr>`: left `<td>` (40%) contains `.obj-title` (1.05em, weight 600, `#1a5276`) plus a `<ul>` (0.9em) and a closing `<p>` (0.95em); right `<td>` (60%, centered) contains the canvas with explicit `width`/`height` attributes. Cell borders `1px solid #e0e0e0`, padding 20px 24px, `vertical-align: middle`; even rows `#fafcfe`. Page ends with a `.philosophy` callout — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.
+- **Layout:** h1 + `.subtitle` paragraph, then eleven numbered `<h2>` sections ("1." through "11.", 1.4em `#1a5276` with a 2px `#2980b9` bottom border). Each section holds one `.obj-table` (full width, `border-collapse: collapse`) with a single `<tr>`: left `<td>` (50%) contains `.obj-title` (1.05em, weight 600, `#1a5276`) plus a `<ul>` (0.9em) and a closing `<p>` (0.95em); right `<td>` (50%, centered) contains the canvas with explicit `width`/`height` attributes. Cell borders `1px solid #e0e0e0`, padding 20px 24px, `vertical-align: middle`; even rows `#fafcfe`. Page ends with a `.philosophy` callout — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; subtitle `#666` 1.05em; `strong` in `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** intrinsic sizes vary per chart (720×300, 720×240, 720×220); shared `setup(id)` helper reads the width/height attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Most visuals are text-diagram style (17px `-apple-system` text, bold 17px titles) rather than data plots.
 - **Palette:** primary blue `#1a5276`, chart blue `#2980b9`, green `#27ae60`, red `#e74c3c`, purple `#8e44ad`, grays `#555`/`#333`/`#aaa`.

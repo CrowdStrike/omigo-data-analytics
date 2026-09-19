@@ -1,6 +1,6 @@
 # LinkedIn Analytics API
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, payload/canvas right 55%, one row per section)
+**Page type:** detail page (two-column obj-table layout: text left 50%, payload/canvas right 50%, one row per section)
 **HTML title tag:** LinkedIn Analytics API
 
 **Subtitle:** Organization analytics, share statistics, and campaign metrics — with partner-level access gates and deliberate restrictions on personal profile data.
@@ -147,7 +147,7 @@ Horizontal timeline with alternating above/below event labels.
 
 ## Regeneration instructions
 
-- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` + bullets + `.key-point` callout, right `<td>` (55%, `text-align: center`) holds the `.payload` pre (row 1 only) and one canvas per row. After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links.
+- **Layout:** detail page with `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` + bullets + `.key-point` callout, right `<td>` (50%, `text-align: center`) holds the `.payload` pre (row 1 only) and one canvas per row. After the table, an `<h2>Official API References</h2>` with a plain `<ul>` of links.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; table cell borders `1px solid #2980b9`, padding 16px; `.obj-title` bold `#1a5276` 1.1em; `li` 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Callout style:** `.key-point` — background `#f8f9fa`, left border `3px solid #1a5276`, padding 10px 14px, 0.93em. `.payload` — same background/border, monospace (ui-monospace/Menlo) 0.78em, `white-space: pre`, left-aligned.
 - **Canvas:** `display: block; width: 100%`; intrinsic `height` attribute per chart (380/340/380/340); a shared `setupCanvas(id)` helper reads `getBoundingClientRect().width`, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), fixes CSS height, and calls `ctx.scale` so drawing stays in logical coordinates.

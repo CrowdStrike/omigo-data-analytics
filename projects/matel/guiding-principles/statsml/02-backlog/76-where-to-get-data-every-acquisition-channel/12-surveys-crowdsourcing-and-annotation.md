@@ -1,6 +1,6 @@
 # Surveys, Crowdsourcing & Annotation
 
-**Page type:** detail page (four titled sections, each a two-column row: text left 45%, canvas right 55%)
+**Page type:** detail page (four titled sections, each a two-column row: text left 50%, canvas right 50%)
 **HTML title tag:** Surveys, Crowdsourcing & Annotation — Paying People to Produce Data
 
 **Subtitle:** Every other acquisition channel finds data that someone already generated; this one manufactures it on demand. When the data does not exist, you ask humans to produce it — answers, opinions, and labels are all purchasable, from free web forms to million-dollar annotation contracts.
@@ -121,7 +121,7 @@ Gate-sequence diagram: submissions flow left to right through three quality gate
 
 ## Regeneration instructions
 
-- **Template:** backlog multi-section detail page. After h1, `.subtitle`, and `.intro` callout, one `.lang-section` per numbered section: `h2` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px padding-bottom), then a `table.layout` with one `<tr>`: left `<td class="text-col">` (45%) with lead paragraph, bullets, `.key-point`; right `<td class="viz-col">` (55%) with the canvas. Section h2 headings carry the "1.–4." numbers shown above.
+- **Template:** backlog multi-section detail page. After h1, `.subtitle`, and `.intro` callout, one `.lang-section` per numbered section: `h2` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px padding-bottom), then a `table.layout` with one `<tr>`: left `<td class="text-col">` (50%) with lead paragraph, bullets, `.key-point`; right `<td class="viz-col">` (50%) with the canvas. Section h2 headings carry the "1.–4." numbers shown above.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`; `.subtitle` `#666` 0.95rem; `.intro` — background `#f0f4f8`, `border-left: 3px solid #2980b9`, padding 8px 12px, 0.9rem, 32px margin-bottom; `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem; `ul` 0.92rem; `li strong` colored `#1a5276`; canvases `width: 100%`, `border: 1px solid #e0e0e0`, radius 4px; `.lang-section` 40px margin-bottom.
 - **Bullets:** each bullet is a bold `#1a5276` label plus a short phrase that fits on one line — no wrapping; split dense content into more bullets rather than longer ones.
 - **Canvases:** intrinsic width 720, heights 380/340/360/380 as specified; shared `setupCanvas(id, h)` helper scales by `window.devicePixelRatio` (multiply backing store, `ctx.scale(dpr,dpr)`). Canvas fonts use `-apple-system, sans-serif`.

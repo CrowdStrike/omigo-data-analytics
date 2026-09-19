@@ -1,6 +1,6 @@
 # Tracking Data: Badge Access Control
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, canvas right 55%, one row per section; each row carries its own accent hue)
+**Page type:** detail page (two-column obj-table layout: text left 50%, canvas right 50%, one row per section; each row carries its own accent hue)
 **HTML title tag:** Tracking Data: Badge Access Control
 
 **Subtitle:** A badge reader decides whether to unlock one door. Each decision is logged, and the log of many doors is a movement trail nobody set out to build.
@@ -109,7 +109,7 @@ Gantt-style comparison: six people's actual hours in the building (gray band) vs
 
 ## Regeneration instructions
 
-- **Layout:** tracking-page `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (45%) holds `.obj-title` heading + `.lede` + bullets + `.key-point` callouts, right `<td>` (55%, centered) holds the canvas (and, in the "What does it collect?" row, the `.payload-note` + `.payload` block below the canvas, left-aligned).
+- **Layout:** tracking-page `.obj-table`: full-width `border-collapse: collapse` table, one `<tr>` per section; left `<td>` (50%) holds `.obj-title` heading + `.lede` + bullets + `.key-point` callouts, right `<td>` (50%, centered) holds the canvas (and, in the "What does it collect?" row, the `.payload-note` + `.payload` block below the canvas, left-aligned).
 - **Per-row accent hues (this page's variation):** the grid is neutral (`1px solid #e5e9ef` cell borders) and each `<tr>` sets `--accent` — row 1 `#2a78d6`, row 2 `#199e70`, row 3 `#4a3aa7`, (row 4 `#d95926` defined). The accent drives: left `<td>` `border-left: 4px solid var(--accent)`, `.obj-title` color, `.key-point` left border (4px) and leading `<strong>` color, and `li b` color.
 - **Page style:** body system sans-serif, white background, text `#2c3e50`, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; li 0.93em.
 - **Callouts:** `.key-point` — background `#f8f9fa`, left border `4px solid var(--accent)`, padding 10px 14px, 0.93em.

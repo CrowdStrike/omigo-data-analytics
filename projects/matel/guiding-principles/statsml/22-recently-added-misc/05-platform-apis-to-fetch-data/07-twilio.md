@@ -1,6 +1,6 @@
 # Twilio
 
-**Page type:** detail page (two-column obj-table: text left 45%, code sample + canvas right 55%, one row)
+**Page type:** detail page (two-column obj-table: text left 50%, code sample + canvas right 50%, one row)
 **HTML title tag:** Twilio — Platform APIs
 
 **Subtitle:** Send and track text messages and phone calls — each one comes back as a record with its status and cost attached.
@@ -79,7 +79,7 @@ State-machine flow diagram of SMS message statuses, with solid vs dashed edges d
 
 ## Regeneration instructions
 
-- **Layout:** single page: h1, `.subtitle`, `.verified` badge, then `h2` "Overview" followed by a one-row `.obj-table` (left `<td>` 45% with `.section-title` headings, bullet lists, and a `.key-point` callout; right `<td>` 55% with a `.section-title`, a `<pre>` code sample, and the canvas), then `h2` "Official API References" with a link list.
+- **Layout:** single page: h1, `.subtitle`, `.verified` badge, then `h2` "Overview" followed by a one-row `.obj-table` (left `<td>` 50% with `.section-title` headings, bullet lists, and a `.key-point` callout; right `<td>` 50% with a `.section-title`, a `<pre>` code sample, and the canvas), then `h2` "Official API References" with a link list.
 - **Page style:** body system sans-serif, `#2c3e50` text, white background, padding 30px 40px, line-height 1.6; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; h2 1.3em `#1a5276` with 2px `#2980b9` bottom border; `.verified` inline badge — background `#eaf2f8`, border 1px `#2980b9`, color `#1a5276`, 0.8em, radius 4px, padding 2px 10px; `.section-title` bold `#1a5276` 1.05em; `pre` background `#f4f4f4`, padding 14px, radius 6px, 0.82em; `.key-point` background `#f8f9fa`, left border 3px `#e74c3c`, padding 10px 14px, 0.93em; li 0.93em; links `#1a5276`. No nav bar, no back/home links.
 - **Canvas:** `<canvas id="smsLifecycle" height="380">`, CSS `width: 100%`; redraws on window resize using `getBoundingClientRect()` width; sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`) and `ctx.scale` back to logical coordinates (with `setTransform` reset before scaling).
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, grays `#666`/`#888`/`#2c3e50`.

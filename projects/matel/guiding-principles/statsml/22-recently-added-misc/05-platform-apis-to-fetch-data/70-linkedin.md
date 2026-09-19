@@ -1,6 +1,6 @@
 # LinkedIn
 
-**Page type:** detail page (two-column obj-table layout under an "Overview" h2: text left 45%, payload + canvas right 55%, one row)
+**Page type:** detail page (two-column obj-table layout under an "Overview" h2: text left 50%, payload + canvas right 50%, one row)
 **HTML title tag:** LinkedIn — Platform APIs
 
 **Subtitle:** Lets an app sign people in, post content, and report on the pages and ad campaigns you own — it does not give out profiles, people search, or the professional network.
@@ -83,7 +83,7 @@ Two-column expectation-vs-reality matrix: 15 data-item rows × 2 columns ("assum
 
 ## Regeneration instructions
 
-- **Layout:** single detail page: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview", one `.obj-table` (full-width, border-collapse, one `<tr>`): left `<td>` 45% with `.section-head` headings ("What you can get", "Watch out for"), bullet lists and a `.key-point` callout; right `<td>` 55% with a `.section-head`, a `<pre>` JSON payload and the canvas (`height="380"` attribute). Then an `h2` "Official API References" with a two-link list. Links in HTML are external URLs as given.
+- **Layout:** single detail page: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview", one `.obj-table` (full-width, border-collapse, one `<tr>`): left `<td>` 50% with `.section-head` headings ("What you can get", "Watch out for"), bullet lists and a `.key-point` callout; right `<td>` 50% with a `.section-head`, a `<pre>` JSON payload and the canvas (`height="380"` attribute). Then an `h2` "Official API References" with a two-link list. Links in HTML are external URLs as given.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, white background, padding 30px 40px; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge — background `#eaf2f8`, border `1px solid #2980b9`, color `#1a5276`, 2px 10px padding, 4px radius, 0.8em; h2 1.3em `#1a5276` with `2px solid #2980b9` bottom border; table cells `1px solid #ddd` border, 16px padding, top-aligned; `.section-head` bold `#1a5276` 0.95em; li 0.93em; links `#1a5276`.
 - **Pre style:** background `#f8f9fa`, left border `3px solid #1a5276`, ui-monospace 0.78em, 12px padding, 4px radius.
 - **Key-point style:** background `#f8f9fa`, left border `3px solid #e74c3c`, padding 10px 14px, 0.93em.

@@ -1,6 +1,6 @@
 # Manufactured Engagement Through Psychological Coercion
 
-**Page type:** detail page (two-column obj-table layout: text left ~40%, canvas right ~60%, one table per section)
+**Page type:** detail page (two-column obj-table layout: text left ~50%, canvas right ~50%, one table per section)
 **HTML title tag:** Manufactured Engagement Through Psychological Coercion — Common Bad Practices
 
 **Subtitle:** Red badges, urgent notifications, forced-login emails, and other mechanisms that exploit cognitive reflexes to inflate engagement metrics — creating the illusion of user interest where none exists.
@@ -136,7 +136,7 @@ Histogram of sessions-per-day per user showing a bimodal distribution with a val
 
 ## Regeneration instructions
 
-- **Layout:** standard detail-page `.obj-table` layout, but this page uses one single-row `<table class="obj-table">` per section (5 tables total); left `<td>` (40%) holds `.obj-title`, paragraphs, bullets, and optional `.philosophy` callout; right `<td>` (60%, centered) holds the canvas.
+- **Layout:** standard detail-page `.obj-table` layout, but this page uses one single-row `<table class="obj-table">` per section (5 tables total); left `<td>` (50%) holds `.obj-title`, paragraphs, bullets, and optional `.philosophy` callout; right `<td>` (50%, centered) holds the canvas.
 - **Page style:** body system sans-serif, white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.6em `#1a5276`; subtitle `#666` 1.0em; p 0.95em `#333`; ul 0.9em `#333`; table cell borders `1px solid #e0e0e0`, padding 20px 24px, vertical-align middle; `.obj-title` 1.05em, weight 600, `#1a5276`; `strong` in `#1a5276`; `.philosophy` callout — background `#f0f4f8`, left border `4px solid #2980b9`, padding 12px 16px, 0.9em. Also defines an unused `.formula` class (monospace, `#f8f8f8` background, 4px radius, `1px solid #e0e0e0`). No nav bar, no back/home links.
 - **Canvas:** intrinsic size 720×380 for all five; scale by `window.devicePixelRatio` via a shared `setup(id)` helper.
 - **Palette:** primary blue `#1a5276`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, bar fill `rgba(26,82,118,0.35)`, grays `#666`/`#999`/`#333`.

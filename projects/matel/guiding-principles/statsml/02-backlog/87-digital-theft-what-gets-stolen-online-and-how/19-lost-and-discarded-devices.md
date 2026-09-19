@@ -1,6 +1,6 @@
 # Lost & Discarded Devices
 
-**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~45%, canvas right ~55%)
+**Page type:** detail page (backlog kusto-style two-column layout: one `.lang-section` per numbered h2, text left ~50%, canvas right ~50%)
 **HTML title tag:** Lost & Discarded Devices
 
 **Subtitle:** Phones, laptops, USB sticks, and old drives walk away with everything on them — and deleted files come back in a lab.
@@ -97,7 +97,7 @@ Layered-checks rows: one row per preparation, item text and sub-line on the left
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #607d8b`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also underlined in `#607d8b`). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (45%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (55%) for the canvas.
+- **Layout:** backlog detail-page style — h1 with `border-bottom: 2px solid #607d8b`, `.subtitle`, one `.intro` callout, then one `.lang-section` per numbered h2 (also underlined in `#607d8b`). Each section holds a `table.layout` (border-collapse, full width) with one `<tr>`: left `td.text-col` (50%) for paragraphs/bullets/`.key-point`, right `td.viz-col` (50%) for the canvas.
 - **Bullet style:** every bullet is one non-wrapping line — a bold colored label plus a phrase of roughly 55 characters or fewer; in HTML the label is `<span class="pt-label" style="color:COLOR">Label:</span>` with `.pt-label { font-weight: bold; }`. Long ideas are split into more labeled bullets, never wrapped. Lead paragraphs are at most one short sentence.
 - **Label colors by meaning:** `#455a64` primary = mechanism/fact (Fact, Mechanism); `#00796b` green = defense/win (Defense, Win); `#bf360c` red = risk/loss (Risk); `#f57c00` orange = scene/context (Scene). Key-point boxes open with the same colored bold lead word (Risk, Win) followed by one short sentence.
 - **Page CSS:** body system-ui sans-serif, background `#fff`, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#455a64`; h2 1.3rem `#455a64`; `.subtitle` `#666` 0.95rem; `.intro` background `#f0f4f8` with `border-left: 3px solid #607d8b`; `.key-point` background `#f8f9fa` with `border-left: 3px solid #bf360c`, 0.9rem; `.pt-label` bold; ul 0.92rem; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius. No nav bar, no back/home links.

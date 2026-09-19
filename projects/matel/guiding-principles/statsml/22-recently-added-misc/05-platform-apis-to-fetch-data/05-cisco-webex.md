@@ -1,6 +1,6 @@
 # Cisco Webex
 
-**Page type:** detail page (two-column obj-table layout: text left 45%, caption + canvas right 55%, one Overview row; second h2 section with reference links)
+**Page type:** detail page (two-column obj-table layout: text left 50%, caption + canvas right 50%, one Overview row; second h2 section with reference links)
 **HTML title tag:** Cisco Webex — Platform APIs
 
 **Subtitle:** Read Webex messages, meetings, recordings and meeting-quality data — how much you can see depends entirely on who you sign in as.
@@ -62,7 +62,7 @@ Horizontal bar chart: how much of the org each Webex API surface exposes (reach 
 
 ## Regeneration instructions
 
-- **Layout:** single detail page: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" with a full-width `.obj-table` (one `<tr>`; left `<td>` 45% text, right `<td>` 55% italic caption + canvas — no code block on this page), then `h2` "Official API References" with a plain `<ul>` of links. No nav bar, no back/home links.
+- **Layout:** single detail page: h1, `.subtitle` paragraph, `.verified` badge span, `h2` "Overview" with a full-width `.obj-table` (one `<tr>`; left `<td>` 50% text, right `<td>` 50% italic caption + canvas — no code block on this page), then `h2` "Official API References" with a plain `<ul>` of links. No nav bar, no back/home links.
 - **Page CSS:** body system sans-serif (-apple-system stack), line-height 1.6, text `#2c3e50`, white background, padding 30px 40px; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` badge — background `#eaf2f8`, border `1px solid #e0e0e0`, text `#1a5276`, padding 2px 10px, radius 4px, 0.8em; h2 1.3em `#1a5276` with `border-bottom: 2px solid #2980b9`; obj-table cells padding 16px, top-aligned (no cell borders); `.section-title` bold `#1a5276` 1.05em; li 0.93em; links `#1a5276`; right-column caption uses inline style `font-size:0.85em; color:#666; font-style:italic`.
 - **Callout:** `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em.
 - **Canvas:** `display:block; width:100%`, `height` attribute 380; sized from `getBoundingClientRect().width`, scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates), redrawn on resize.

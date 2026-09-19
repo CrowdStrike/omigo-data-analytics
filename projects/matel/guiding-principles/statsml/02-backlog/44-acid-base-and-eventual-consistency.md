@@ -1,6 +1,6 @@
 # ACID, BASE & Eventual Consistency
 
-**Page type:** detail page (backlog-style 2-col text/viz layout: h2 sections with text left ~45%, canvas right ~55%; two full-width tables and a closing key-point)
+**Page type:** detail page (backlog-style 2-col text/viz layout: h2 sections with text left ~50%, canvas right ~50%; two full-width tables and a closing key-point)
 **HTML title tag:** ACID, BASE & Eventual Consistency — Discussion Backlog
 
 **Subtitle:** Consistency models and what they mean for data pipelines, profiling correctness, and analytical reproducibility.
@@ -155,7 +155,7 @@ Full-width `.data` table (no canvas):
 
 ## Regeneration instructions
 
-- **Template:** backlog detail-page layout — h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro-callout` (background `#f8f9fa`, left border `3px solid #2980b9`, 10px 14px padding, 0.93rem), then one `.card-section` per section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` row with `td.text-col` (45%) and `td.viz-col` (55%) holding the canvas. The Anti-Patterns and Questions to Resolve sections are `.card-section`s containing only a full-width `table.data` (no canvas). The closing key-point is a standalone `.key-point` div with 30px top margin.
+- **Template:** backlog detail-page layout — h1 with 2px `#2980b9` bottom border, `.subtitle`, `.intro-callout` (background `#f8f9fa`, left border `3px solid #2980b9`, 10px 14px padding, 0.93rem), then one `.card-section` per section: h2 (1.3rem `#1a5276`, 2px `#2980b9` bottom border) followed by a `table.layout` row with `td.text-col` (50%) and `td.viz-col` (50%) holding the canvas. The Anti-Patterns and Questions to Resolve sections are `.card-section`s containing only a full-width `table.data` (no canvas). The closing key-point is a standalone `.key-point` div with 30px top margin.
 - **Callout styles:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, 8px 12px padding, 0.9rem. `.example` — italic, `#555`, 0.9rem.
 - **Table style:** `table.data` — collapsed borders, full width; th/td `1px solid #ddd`, 6px 10px padding, left-aligned, 0.9rem; th background `#f8fafb`, weight 600.
 - **Page CSS:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; `ul` 0.92rem; canvases `width: 100%` with `1px solid #e0e0e0` border, 4px radius.

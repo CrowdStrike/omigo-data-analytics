@@ -1,6 +1,6 @@
 # Stripe
 
-**Page type:** detail page (h2 "Overview" then single obj-table row: text left 45%, payload + canvas right 55%; verified badge under subtitle; "Official API References" section below)
+**Page type:** detail page (h2 "Overview" then single obj-table row: text left 50%, payload + canvas right 50%; verified badge under subtitle; "Official API References" section below)
 **HTML title tag:** Stripe — Platform APIs
 
 **Subtitle:** Lets you pull payments, subscriptions, invoices, refunds, and payouts out of Stripe.
@@ -73,7 +73,7 @@ State-transition diagram (node-and-arrow graph) of Stripe subscription statuses;
 
 ## Regeneration instructions
 
-- **Layout:** platform-APIs detail page. h1, `.subtitle`, `.verified` badge span, h2 "Overview", then one `.obj-table` (full width, border-collapse) with a single `<tr>`: left `<td>` (45%) holds two `<span class="section-label">` headings ("What you can get", "Watch out for") with bullet lists and a `.key-point` callout (inline style `border-left-color:#e74c3c`) between them; right `<td>` (55%) holds `.payload-note`, `<pre class="payload">`, and `<canvas id="subChart" height="380">`. Below the table, an h2 "Official API References" with a link list.
+- **Layout:** platform-APIs detail page. h1, `.subtitle`, `.verified` badge span, h2 "Overview", then one `.obj-table` (full width, border-collapse) with a single `<tr>`: left `<td>` (50%) holds two `<span class="section-label">` headings ("What you can get", "Watch out for") with bullet lists and a `.key-point` callout (inline style `border-left-color:#e74c3c`) between them; right `<td>` (50%) holds `.payload-note`, `<pre class="payload">`, and `<canvas id="subChart" height="380">`. Below the table, an h2 "Official API References" with a link list.
 - **Page CSS:** body system sans-serif, line-height 1.6, color `#2c3e50`, padding 30px 40px, white background; h1 1.8rem `#1a5276`; `.subtitle` `#666` 1.05em; `.verified` 0.8em `#888`, 1px `#ddd` border, inline-block, padding 2px 10px, radius 4px; h2 `#1a5276` 1.3em with 2px `#2980b9` bottom border; `.section-label` bold `#1a5276`, block, margin-top 16px (0 for first); `.obj-table td` 16px padding, `1px solid #e0e0e0` border, vertical-align top; li 0.93em; p 0.93em; links `#1a5276`; `pre.payload` `#f8f9fa` background, 3px `#1a5276` left border, monospace 0.78em, pre whitespace, radius 4px, left-aligned; `.payload-note` 0.82em `#666` italic; `.key-point` `#f8f9fa` background, 3px `#1a5276` left border (overridden to `#e74c3c` on this page), padding 10px 14px, 0.93em; canvas block, `width: 100%`, margin-top 12px.
 - **Palette:** `#1a5276` primary blue, `#27ae60` green, `#e74c3c` red, `#e67e22` orange, `#8e44ad` purple, `rgba(26,82,118,0.55)` solid edge blue.
 - **Canvas:** responsive — width from `canvas.getBoundingClientRect().width`, fixed 380px CSS height, backing store sized to rendered width × `window.devicePixelRatio` (display capped via `style.maxWidth`), `ctx.setTransform` reset then `ctx.scale` back to logical coordinates, redrawn on window resize.

@@ -95,7 +95,7 @@ Domino-block stack (left) plus NOI step-collapse chart vs a gradual-decline mode
   - "Tenant D: rent cut 50%" — orange
   - "Tenant E: terminates" — red
   - "Tenant F: terminates" — red
-- **NOI step chart (right ~55%):** y-axis $3M–$8M with "$...M" labels and gridlines `#ecf0f1`; red step line (`#e74c3c`, width 2.5) stepping down across 6 equal intervals through values $8M → $7M → $5.5M → $4.5M → $3.2M.
+- **NOI step chart (right ~50%):** y-axis $3M–$8M with "$...M" labels and gridlines `#ecf0f1`; red step line (`#e74c3c`, width 2.5) stepping down across 6 equal intervals through values $8M → $7M → $5.5M → $4.5M → $3.2M.
 - **Model line:** gray dashed (`#7f8c8d`, dash 5/3, width 1.5) from $8M gently down to $6.5M.
 - **Labels (10px, centered):** red "Reality: cascade collapse" below the final step; gray "Model: gradual decline" above the dashed line.
 
@@ -148,7 +148,7 @@ Before/after diagram: two building icons with a value-destruction arrow between 
 
 ## Regeneration instructions
 
-- **Layout:** per pitfall, an `<h2>` section heading followed by a single-row `.obj-table`: full-width table, left `<td>` (40%) with `.obj-title` (repeating the h2 text), a `<ul>` of bullets, and an `.example` callout div (`<strong>Example:</strong>` + text); right `<td>` (60%, centered) holds one canvas 720×300.
+- **Layout:** per pitfall, an `<h2>` section heading followed by a single-row `.obj-table`: full-width table, left `<td>` (50%) with `.obj-title` (repeating the h2 text), a `<ul>` of bullets, and an `.example` callout div (`<strong>Example:</strong>` + text); right `<td>` (50%, centered) holds one canvas 720×300.
 - **Page style:** body system sans-serif (-apple-system stack), white background, text `#2a2a2a`, padding 20px 10px, line-height 1.6; h1 1.8em `#1a5276`; h2 1.4em `#1a5276` with 2px solid `#2980b9` bottom border; subtitle `#666` 1.05em; table cell borders `1px solid #e0e0e0`, padding 20px 24px, even rows `#fafcfe`; `.obj-title` 1.05em weight 600 `#1a5276`; bullets 0.9em `#333`; `strong` `#1a5276`; `.example` background `#eaf2f8`, padding 10px 14px, radius 6px, 0.92em. A `.philosophy` style (background `#f0f4f8`, left border `4px solid #2980b9`) is defined but unused. No nav bar, no back/home links.
 - **Canvas:** each canvas declares intrinsic `width="720" height="300"`; scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates) via a shared `setupCanvas(id)` helper. Chart titles are bold 17px, centered.
 - **Palette:** primary blue `#1a5276`, mid blue `#2980b9`, green `#27ae60`, red `#e74c3c`, orange `#e67e22`, purple `#8e44ad`, dark text `#2c3e50`, gray `#7f8c8d`, gridlines `#ecf0f1`.

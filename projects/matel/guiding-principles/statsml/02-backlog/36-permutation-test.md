@@ -1,6 +1,6 @@
 # Permutation Test
 
-**Page type:** detail page (backlog-style 2-col layout: h2 sections, text left 45%, canvas right 55%, one layout table per section)
+**Page type:** detail page (backlog-style 2-col layout: h2 sections, text left 50%, canvas right 50%, one layout table per section)
 **HTML title tag:** Permutation Test
 
 **Subtitle:** Non-parametric significance testing via label shuffling — no distributional assumptions required
@@ -93,7 +93,7 @@ Convergence line chart: estimated p-value vs number of permutations on a log x s
 
 ## Regeneration instructions
 
-- **Layout:** backlog detail page. h1 with bottom border `2px solid #2980b9`, `.subtitle` paragraph (no status badge, no intro box). One `.card-section` per section, each with an h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`) and a `table.layout` (full width) with one `<tr>`: left `td.text-col` (45%) text, right `td.viz-col` (55%) canvas.
+- **Layout:** backlog detail page. h1 with bottom border `2px solid #2980b9`, `.subtitle` paragraph (no status badge, no intro box). One `.card-section` per section, each with an h2 (1.3rem `#1a5276`, bottom border `2px solid #2980b9`) and a `table.layout` (full width) with one `<tr>`: left `td.text-col` (50%) text, right `td.viz-col` (50%) canvas.
 - **Callout styles:** `.key-point` — background `#f8f9fa`, left border `3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.example` — italic, `#555`, 0.9rem.
 - **Page style:** body system-ui sans-serif, white background, text `#2c3e50`, padding 40px, line-height 1.6; h1 2rem `#1a5276`; subtitle `#666` 0.95rem; ul 0.92rem with 20px left margin. Canvases styled `width: 100%`, border `1px solid #e0e0e0`, radius 4px. No nav bar, no back/home links.
 - **Canvas:** each canvas declares intrinsic `width="720" height="340"`; shared `setup(id)` helper reads the width/height attributes, sizes the backing store to the rendered width × `window.devicePixelRatio` (display capped at the logical width via `style.maxWidth`), and calls `ctx.scale` so drawing stays in logical coordinates. Chart fonts use the `system-ui, sans-serif` stack.

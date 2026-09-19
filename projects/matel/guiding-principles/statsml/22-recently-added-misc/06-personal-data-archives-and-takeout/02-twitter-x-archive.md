@@ -1,6 +1,6 @@
 # Twitter/X Archive — Your Data Export
 
-**Page type:** detail page (two-column obj-table layout per section: bullets left 45%, JSON payload or canvas right 55%)
+**Page type:** detail page (two-column obj-table layout per section: bullets left 45%, JSON payload or canvas right 50%)
 **HTML title tag:** Twitter/X Archive — Your Data Export
 
 **Meta line (`.last-verified`, gray):** Last verified: August 2026
@@ -90,7 +90,7 @@ The inferred interest topics file is the most revealing — it shows Twitter's c
 
 ## Regeneration instructions
 
-- **Layout:** detail page. h1, then `.last-verified` line. Three `h2` sections ("What's Included", "How to Request & Delivery", "What's Conspicuously Missing"), each followed by a one-row `.obj-table` — left `<td>` (45%) with a `<ul>` of bullets, right `<td>` (55%) with either a `<pre class="payload">` JSON block or a canvas. Ends with a `.key-point` callout div. In regenerated HTML there are no card links; any links would use .html extensions.
+- **Layout:** detail page. h1, then `.last-verified` line. Three `h2` sections ("What's Included", "How to Request & Delivery", "What's Conspicuously Missing"), each followed by a one-row `.obj-table` — left `<td>` (50%) with a `<ul>` of bullets, right `<td>` (50%) with either a `<pre class="payload">` JSON block or a canvas. Ends with a `.key-point` callout div. In regenerated HTML there are no card links; any links would use .html extensions.
 - **Page CSS:** body system sans-serif, `line-height: 1.6`, text `#2c3e50`, padding 30px 40px, white background. h1 1.8rem `#1a5276`; h2 1.3em `#1a5276` with `border-bottom: 2px solid #2980b9`, padding-bottom 6px. `.obj-table` full width, collapsed borders; cells `border: 1px solid #e0e0e0`, padding 16px, vertical-align top. `li` 0.93em, 6px bottom margin.
 - **Blocks:** `.payload` — background `#f8f9fa`, `border-left: 3px solid #1a5276`, padding 10px, monospace (ui-monospace/Menlo) 0.78em, `white-space: pre`. `.key-point` — background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 10px 14px, 0.93em.8em.
 - **Canvas:** `display: block; margin: 0 auto; width: 100%`; width computed as max(720, parent width − 24), height 400; scaled by `window.devicePixelRatio` (cap display at the logical width via `style.maxWidth`, backing store = rendered width × dpr, `ctx.scale` back to logical coordinates).
