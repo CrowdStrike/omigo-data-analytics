@@ -14,7 +14,6 @@
 **Bullets:**
 - **The measure** — the share of parcels a depot got there on time, one figure for each month
 - **What happened** — the year opened a little higher than it closed, drifting down in between
-- **The honest size** — the slip is slight, a sliver of where the depot stood in January
 - **The panel on the left** — its scale starts just under the worst month and stops just over the best
 - **What that does** — the line dives almost the whole height of the panel and reads as collapse
 - **The panel on the right** — the same months on a scale running from nothing at all up to perfect
@@ -41,118 +40,42 @@ Two line panels side by side plotting one identical twelve-value series, differi
 
 ---
 
-## Section 2 — Where Somebody Put the Red Line
+## Section 2 — Where Somebody Put the Target
 
-**Tags:** `red and green` (red), `chosen cut-off` (green), `alarm first` (orange)
+**Tags:** `red and green` (red), `chosen target` (green), `alarm first` (orange)
 
 **Bullets:**
-- **The board** — twelve branches, each bar showing how its sales moved against last month
-- **The rule** — a bar below the line is painted red, a bar at or above it is painted green
-- **With the line at no change** — a handful go red, and the room asks what went wrong in those places
-- **Nudge the line up a little** — most of the board goes red and the same year looks like a broad failure
-- **Nudge the line down a little** — almost everything goes green and the same year looks like a clean run
-- **The numbers never moved** — all three rows carry the identical figures, branch for branch
-- **What red does to a reader** — it hands over alarm before anyone has judged a single size
-- **Who put the line there** — a person, once, usually with nothing written down about why
-- **The thing no colouring shows** — the typical branch was modestly up, a middling but real year
+- **The board** — eight branches, each bar its sales as a percent of last month
+- **The rule** — a branch under the target is painted red, one at or over it green
+- **Top row, target at 100** — hold last month's sales and you pass, so three go red
+- **Bottom row, target at 103** — the same eight bars, and now six of them go red
+- **The bars never changed** — both rows are drawn from one list, same heights, same labels
+- **What the room does** — reads the red count as how the region did, and panics at the second row
+- **What red actually marks** — which side of somebody's chosen number a branch fell on
+- **The figure neither row shows** — the typical branch beat last month, a modest but real result
 
-**Key point:** Colour is not a summary of the data, it is a summary of somebody's cut-off. Red arrives as a verdict already reached, so the reader spends their attention defending or attacking a threshold they never saw chosen.
+**Key point:** A target is a choice, not a measurement, and colour hides that it was ever made. Red arrives as a verdict already reached, so the reader argues about branches instead of asking who set the number and why.
 
-**Source note (`.src`):** Illustrative Example — twelve constructed branch figures; each row's red count is tallied in the draw function against that row's line.
+**Source note (`.src`):** Illustrative Example — eight constructed branch figures; each row's red count and the average are computed in the draw function from the plotted bars.
 
 ### Visualization — canvas `c2`, 720×340
 
-The same twelve bars drawn in three stacked rows. Only the threshold changes between rows; the red/green count under each row is tallied from the array. Red and green appear here because red/green framing is the section's subject.
+The same eight bars drawn twice, one row above the other. The bars are identical in both rows — same list, same axis, same heights, every one labelled. Only the dashed target line moves, and with it the colour. Red and green appear here because red/green framing is the section's subject.
 
-- **Data (literal array):** `CH = [3.2, 1.4, −0.6, 2.1, 0.3, −1.8, 1.9, 0.8, −0.2, 2.6, 1.1, −1.3]`.
-- **Thresholds:** `TH = [0, 1.5, −1.5]` in that visual order — the ordinary rule first, then the two nudges.
-- **Computed in the draw function:** the red count per row is tallied as `CH[i] < t`, giving 4, 8 and 1; `avg = mean(CH) = 0.79`, printed to one decimal as +0.8. Bar heights come straight from the array.
-- **Title (bold 15px `P.ink`, centered, y=22):** "Twelve Branches, One Set of Figures, Three Paint Jobs"
-- **Rows:** three bands with baselines at `y = 72, 162, 252`. Twelve bar slots across `x = 156 … 690`; bar width `min(30, slot − 8)`; one unit of movement is 11px.
-- **Bars:** drawn from the row's threshold line to the value, so a bar's own length shifts with the threshold as well as its colour. Below the line: fill `rgba(231,76,60,0.45)`, stroke `#e74c3c` — the only place on the page hard red is used, licensed because the alarm colour is this section's subject. At or above: fill `rgba(0,131,0,0.40)`, stroke `P.green`.
-- **Threshold line:** 1.5px dashed (5/4) `P.text` across the band, labelled to its left in bold 12px `P.text` as "line at 0", "line at +1.5", "line at −1.5", printed from the threshold value.
-- **Row tally,** left of each band in bold 12px: `#e74c3c` `red + ' red'` above the line label and `P.green` `(12 − red) + ' green'` below it, both from the tally.
-- **Value labels:** 12px `P.mute` at each bar's tip in row one only, so the reader can confirm the figures are one list; rows two and three carry no labels, which is the point.
-- **Foot note (y = 312):** 12px `P.mute` left-aligned "the same twelve figures in every row — only the line moved"; right-aligned bold 12px `P.orange` "average branch: +0.8", printed from `avg`.
-- **Caption (bold 13px `P.orange`, centered, `h−10`):** "Red is a statement about the line, not about the branch."
-
----
-
-## Section 3 — Moving the Colour Ramp's Middle Repaints the Map
-
-**Tags:** `shaded map` (aqua), `where the ramp turns` (orange), `four minutes total` (yellow)
-
-**Bullets:**
-- **The map** — sixteen districts, each shaded by the average wait at its walk-in clinic
-- **The waits** — the quickest clinic and the slowest are only a few minutes apart end to end
-- **The shading** — cool blue-green at the quick end, warm orange at the slow end
-- **Turn the ramp warm early** — most of the districts come out warm and the map looks sick
-- **Turn the ramp warm later** — only a few stay warm and the very same map looks mostly healthy
-- **The true middle** — sits halfway between the quickest district and the slowest, and neither map uses it
-- **What the eye reads** — warm as failing, cool as fine, without ever reading a waiting time
-- **The tell** — nothing on the map says how little waiting the whole span of colour covers
-
-**Key point:** A shaded map hands the reader a verdict per district without ever handing over a scale. Two maps that disagree about which half of a city is failing can be drawn from one identical set of waits.
-
-**Source note (`.src`):** Illustrative Example — sixteen constructed district waits; both warm counts and the range are computed in the draw function from the shaded values.
-
-### Visualization — canvas `c3`, 720×330
-
-The same sixteen district waits drawn as two four-by-four shaded maps that differ only in where the colour ramp turns from cool to warm.
-
-- **Data (literal array, minutes):** `W = [17.2, 18.0, 19.6, 20.4, 18.6, 21.0, 17.8, 19.1, 20.8, 19.4, 18.3, 17.5, 19.9, 18.9, 20.1, 21.2]` laid out row-major into 4×4.
-- **Computed in the draw function:** `lo = 17.2`, `hi = 21.2`, `span = 4.0`, `trueMid = (lo + hi) / 2 = 19.2`; the warm count per map is tallied as `W[i] > m` for `m = 18.5` (gives 11) and `m = 20.0` (gives 5).
-- **Shading:** a diverging ramp about whichever midpoint that map uses. Above the midpoint `rgba(217,89,38,α)` (orange, warm), below it `rgba(25,158,112,α)` (aqua, cool), with `α = 0.15 + 0.60 × min(1, |v − m| / (span / 2))` — so a district's own shade shifts between the two maps, not just its side of the ramp.
-- **Title (bold 15px `P.ink`, centered, y=22):** "Sixteen Clinics, One Set of Waits, Two Colour Ramps"
-- **Maps:** two 4×4 grids, cell 42px, left grid at `x = 76`, right at `x = 404`, both starting `y = 66`. Each cell stroked 1px `#dfe4ea` and carrying its wait in bold 12px `P.text`, so the figure stays readable even where the colour disagrees with the other map.
-- **Map headers (bold 13px, centered above each grid, y=52):** left in `P.orange`, right in `P.aqua`, each reading "RAMP TURNS AT " + `mid.toFixed(1)` + " MIN" from that map's midpoint variable.
-- **Warm tallies (bold 12px, centered under each grid):** `n + ' of 16 painted warm'` in the map's hue, `n` from the tally.
-- **Verdict strips (12px `P.mute`, centered, one line lower):** left "reads as: most of the city is slow"; right "reads as: a few slow pockets".
-- **Range bar** at `y = 294`, `x = 200 … 520`: a 10px gradient strip, aqua at 0 through white at 0.5 to orange at 1, stroked `#dfe4ea`. `lo.toFixed(1)` and `hi.toFixed(1)` printed 12px `P.mute` at its ends; bold 12px `P.yellow` above it reads `span.toFixed(1)` + " minutes covers the whole ramp — true middle " + `trueMid.toFixed(1)`.
-- **Caption (bold 13px `P.aqua`, centered, `h−10`):** "The ramp's middle, not the waiting time, decides which districts look bad."
+- **Data (literal array, percent of last month's sales):** `CH = [104, 97, 101, 99, 106, 95, 102, 100]`.
+- **Rows:** two, distinguished only by target — `{target: 100, y: 130}` then `{target: 103, y: 268}`. Two rows, not three: three rows of twelve bars asked the reader to hold too much at once, and the third row (a lowered line turning everything green) only restated the second.
+- **Computed in the draw function:** the red count per row is tallied as `CH[i] < target`, giving 3 of 8 at target 100 and 6 of 8 at target 103; `avg = mean(CH) = 100.5`, printed to one decimal. Nothing about the bars is derived from the target.
+- **Title (bold 15px `P.ink`, centered, y=22):** "Eight Branches, One Set of Sales, Two Targets"
+- **Bars:** eight slots across `x = 150 … 690`, bar width `min(34, slot − 10)`. Both rows share one axis, 90 to 108, and every bar runs from that row's baseline up to its value — so a bar's height is a function of its value alone and cannot shift when the target moves. Under the target: fill `rgba(231,76,60,0.45)`, stroke `#e74c3c` — the only place on the page hard red is used as a chart colour, licensed because the alarm colour is this section's subject. At or over: fill `rgba(0,131,0,0.40)`, stroke `P.green`.
+- **Value labels:** 12px `P.mute` above every bar in **both** rows. The earlier version labelled only the first row, which left the reader taking "the figures are identical" on trust — the claim the chart exists to prove.
+- **Target line:** 1.5px dashed (5/4) `P.text` across the row at that target's height, labelled to its left in bold 13px `P.text` as "target 100" / "target 103", printed from the target value.
+- **Row annotations,** right-aligned left of each row: bold 12px `#e74c3c` `miss + ' of 8 red'` above the target label, and 12px `P.mute` beneath it reading "a couple of branches to look at" (top row) / "the whole region is failing" (bottom row).
+- **Foot note (y = 314):** 12px `P.mute` left-aligned "same eight branches, same eight bars — only the target moved"; right-aligned bold 12px `P.orange` "typical branch: 100.5", printed from `avg`.
+- **Caption (bold 13px `P.orange`, centered, `h−10`):** "Red tells you where the target was put, not how a branch did."
 
 ---
 
-## Section 4 — Scoring Yourself on the Questions You Already Looked Up
-
-**Tags:** `self-scoring` (violet), `tuned against` (yellow), `familiarity` (blue)
-
-**Bullets:**
-- **The setup** — Alice drills for a driving theory test on the same fifty practice questions
-- **Round one** — she scores the same on the practice set as she does on questions she has never seen
-- **What she does after each round** — looks up the answers she got wrong, which is sensible
-- **By the last round on the practice set** — she is near full marks, so she books the test feeling ready
-- **The same round on unseen questions** — barely above where she started back in round one
-- **The gap between the two lines** — every bit of it is memory of these particular fifty questions
-- **Why the score had to climb** — by the end she had looked up nearly every answer in the pool
-- **What the practice score measures** — how familiar those fifty are, which is not what the test asks
-- **The unseen score is the flat one** — her actual driving knowledge never moved all month
-
-**Key point:** A score taken on the material you have already adjusted yourself against measures familiarity, not ability. It has to rise, whatever happens to the skill underneath it, and it rises fastest right before it is most trusted.
-
-**Source note (`.src`):** Illustrative Example — a seeded practice-and-lookup routine at a fixed underlying ability; both lines and the gap are computed in the draw function.
-
-### Visualization — canvas `c4`, 720×320
-
-Two lines over eight rounds of drilling: the practice-set score climbing to nearly full marks, and the score on unseen questions staying put. The shaded band between them is the part of the score that is memory.
-
-- **Construction, seeded Park–Miller LCG, seed 77.** Fixed underlying ability 0.62 throughout — nothing about Alice improves. Practice pool 50 questions with a `known` flag per question, initially all false. Each of 8 rounds, in this exact order:
-  1. For each of the 50 practice questions: if `known`, it is correct; otherwise correct when `rng() < 0.62`, and if wrong the question is recorded as missed. Practice score = `round(100 × right / 50)`.
-  2. Every missed question is marked `known` — she looks the answer up.
-  3. 400 unseen questions, each correct when `rng() < 0.62`. Unseen score = `round(100 × right / 400)`.
-- **Resulting series (regenerate, do not hardcode):** practice `[62, 80, 82, 88, 96, 96, 98, 98]`; unseen `[62, 65, 65, 60, 61, 64, 64, 64]`; `known` after each round `[19, 29, 38, 44, 46, 48, 49, 50]`; final gap `98 − 64 = 34`. The 400-question unseen set keeps that line steady enough that the climb is unmistakably the practice set's.
-- **Title (bold 15px `P.ink`, centered, y=22):** "Eight Rounds on the Same Fifty Questions"
-- **Plot:** `x = 62 … 556`, `y = 54 … 232`. Y range 50–100, gridlines every 10 in `P.grid` labelled 12px `P.mute`, x ticks at each round 1–8, 12px `P.mute` axis title "round".
-- **Gap band:** the area between the two lines filled `rgba(74,58,167,0.10)` — visually, the part of the practice score that is memory.
-- **Practice line:** 2.5px `P.violet`, points radius 3.5 filled `rgba(74,58,167,0.70)`. Label bold 12px `P.violet` "practice set" above the round-4 point.
-- **Unseen line:** 2.5px `P.yellow`, points radius 3.5 filled `rgba(201,133,0,0.70)`, drawn first so the practice line sits on top. Label bold 12px `P.yellow` "unseen questions" below the round-4 point.
-- **Gap bracket** at round 8: a 2px `P.violet` bracket spanning `Y(prac[7])` to `Y(unseen[7])`, labelled bold 12px `P.violet` with `gap + ' points'` — differenced from the two plotted end points, never typed.
-- **Right panel** at `x = 584`: bold 13px `P.ink` "BY ROUND EIGHT"; bold 19px `P.violet` `prac[7]` over 12px `P.mute` "on the fifty / she has drilled"; bold 19px `P.yellow` `unseen[7]` over 12px `P.mute` "on questions / she has not seen"; then bold 12px `P.blue` `knownBefore + ' of 50 answers'` over 12px `P.mute` "already looked up", where `knownBefore` is the count standing at the start of round 8 (49).
-- **Caption (bold 13px `P.violet`, centered, `h−10`):** "The score she trusted was the one she had been quietly correcting all month."
-
----
-
-## Section 5 — When Cutting the Scale Is Honest and When It Is Not
+## Section 3 — When Cutting the Scale Is Honest and When It Is Not
 
 **Tags:** `the boundary` (green), `legitimate crop` (aqua), `where it turns` (red)
 
@@ -162,17 +85,15 @@ Two lines over eight rounds of drilling: the practice-set score climbing to near
 - **Drawn on a wide scale** — the fever is a faint wobble near the top and looks like nothing at all
 - **Drawn on a scale cropped to the fever** — the illness fills the panel, the picture a doctor needs
 - **Why cropping is right here** — a couple of degrees separates resting at home from a hospital bed
-- **Same with pond acidity** — a small shift changes what can live there, and barely shows on a wide scale
 - **Where it turns** — a bar chart, because a reader takes bar height as how much there is
 - **Cut the base off a bar chart** — 100.5 beside 102.0 draws the second bar four times as tall
-- **What that pair really is** — one and a half percent bigger, so the drawing overstates it wildly
 - **The working rule** — crop a line when the band is the story, never crop a bar the eye measures
 
 **Key point:** The test is not whether the scale starts at zero, it is what the reader's eye is being invited to measure. A line asks how the value moved, so cropping to the band it moved in is honest. A bar asks how much there is, so a cut base makes the eye read a ratio that does not exist.
 
 **Source note (`.src`):** Illustrative Example — eight constructed temperature readings and two constructed bar values; every panel share and height ratio is computed in the draw function.
 
-### Visualization — canvas `c5`, 720×340
+### Visualization — canvas `c3`, 720×340
 
 Two blocks. On the left, one temperature series drawn on a full scale and on a cropped scale, where cropping is the only way to see the illness. On the right, two bar values drawn off a cut base and off zero, where cropping invents a ratio.
 
@@ -197,20 +118,21 @@ Two blocks. On the left, one temperature series drawn on a full scale and on a c
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, matching the converted `05-clustering-illusion.html` and `01-confirmation-bias.html` in this folder. One `.card-section` per section, each holding an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) and a `table.layout` with `td.text-col` 50% / `td.viz-col` 50%.
 - **Canvas placement:** `td.viz-col` gets `text-align: center` and the canvas `display: block; width: 100%; margin: 0 auto`. The canvas is capped at 720px, so a wide cell leaves slack — centering puts the chart in the middle of the right half.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` callout → `.src` note. Every section on this page is a constructed example, so every section carries a `.src`. No paragraph blocks, no data tables, no philosophy box.
-- **Bullet form:** each is ONE line that does not wrap at 50% column width (≤105 characters including the bold label). Bullet counts follow the content: 8, 9, 8, 9, 10. No padding, no line that restates another.
+- **Bullet form:** each is ONE line that does not wrap at 50% column width (≤105 characters including the bold label). Bullet counts follow the content: 7, 8, 8. No padding, no line that restates another.
 - **Numbers live in the charts, not the prose** — at most a couple of figures in bullets, and only where the figure is the argument. Bullets state the idea in plain words ("a slight slip", "most of the board goes red"); the exact values, shares, counts and ratios are computed and printed on the canvas. No bullet opens with a count, a size or a percentage, and no decimal percentages or precise averages appear in prose.
 - **Section titles name the content**, never a role. No index number appears anywhere on the page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` in `#1a5276`. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links, no cross-page links.
-- **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `.green` `.red` `.orange` `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06c00`.
-- **Colour, per section:** 1 magenta versus blue (misleading view versus honest view), 2 hard red versus green — the one section where `#e74c3c` is licensed, because red/green framing is that section's subject, 3 an aqua-to-orange diverging ramp with a yellow range bar, 4 violet versus yellow, 5 aqua and green for the legitimate crop against magenta and red for the misleading one. No two consecutive sections share a dominant hue.
-- **Canvas:** CSS `width: 100%`, `border: 1px solid #e0e0e0`, radius 4px. Intrinsic `width="720"` plus the per-chart height (330, 340, 330, 320, 340). `setup(id)` caches the logical size in `dataset` on the first call (because `canvas.width` overwrites the attribute), sets `style.maxWidth = 720px`, computes `scale = (cssW/720) × devicePixelRatio`, sizes the backing store to `logical × scale`, and `ctx.scale(scale, scale)` back to logical coordinates. Draws registered in `__charts`, re-run on debounced (150ms) resize.
+- **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `.green` `.red` `.orange` `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`.
+- **Colour, per section:** 1 magenta versus blue (misleading view versus honest view), 2 hard red versus green — the one section where `#e74c3c` is licensed as a chart colour, because red/green framing is that section's subject, 3 aqua and green for the legitimate crop against magenta and red for the misleading one.
+- **Canvas:** CSS `width: 100%`, `border: 1px solid #e0e0e0`, radius 4px. Intrinsic `width="720"` plus the per-chart height (330, 340, 340). `setup(id)` caches the logical size in `dataset` on the first call (because `canvas.width` overwrites the attribute), sets `style.maxWidth = 720px`, computes `scale = (cssW/720) × devicePixelRatio`, sizes the backing store to `logical × scale`, and `ctx.scale(scale, scale)` back to logical coordinates. Draws registered in `__charts`, re-run on debounced (150ms) resize.
 - **Canvas font sizes:** chart title bold 15px; in-chart header bold 12–13px; body and axis labels 12px floor; the big callout figure bold 19px; caption bold 13px. No table is drawn on any canvas.
-- **Palette** (shared `P` object): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `yellow #c98500`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`. Hard red `#e74c3c` appears only in section 2's bars and section 5's verdict strip.
-- **Determinism:** no `Math.random()`. Sections 1, 2, 3 and 5 use literal arrays; section 4 uses the seeded Park–Miller LCG (`s = (s × 16807) % 2147483647`) with seed 77. Every panel share, red count, warm count, gap, height ratio and average is computed in the draw function from the plotted data and printed from that variable.
+- **Palette** (shared `P` object): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`. Hard red `#e74c3c` appears only in section 2's bars and section 3's verdict strip.
+- **Determinism:** no `Math.random()`. All three sections use literal arrays, so no PRNG is needed on this page and the `lcg()` helper is absent. Every panel share, red count, height ratio and average is computed in the draw function from the plotted data and printed from that variable.
 - **Shared helpers:** `mean(a)`, and `tick(v)` which returns `String(parseFloat(v.toFixed(2)))`. Axis labels go through `tick()` because two panels here have derived midpoints — a gridline drawn at 89.15 or 37.85 must not be labelled "89.2" or "37.9", or the label contradicts the line beside it.
-- **The lead chart must show one dataset drawn two ways with the impression flipping.** The page is about display choice, so the first canvas has to put both renderings on screen at once; describing the effect in prose does not make the case. Both panels in sections 1 and 5 are drawn by a single helper called twice, so a change to one rendering cannot silently fail to reach the other.
-- **Corrections and changes from the old page:**
-  - The old page had two sections and two canvases and asserted its figures. It now has five sections, five canvases, and every figure is computed at render time.
-  - The old dashboard canvas hardcoded "+5.2%", a 95% interval of [−2.1%, +12.5%], "n=200 / 625 required" and a 32% progress bar with none of them derived from anything and no data behind them. That construction is dropped; the red/green point is now made by repainting one real array under three thresholds, and the interval vocabulary is gone in line with the layman rule.
-  - The old second canvas plotted `78 + 11·(1 − exp(−i/18))` against `81 + 0.3·sin(0.3i)` and labelled the difference "8% self-deception" while the curves actually reach 88.8 and 81.0 at iteration 42, a gap of 7.8 — and the legend's "Test set accuracy (89%)" was never attained by the drawn curve. The self-assessment idea survives as section 4, where the climb is produced by an explicit lookup mechanism rather than a chosen formula, and the gap is differenced from the plotted points.
-  - The old page's framing was ML-pipeline vocabulary — test set, holdout, overfitting, confidence intervals. All of it is gone; the same ideas are carried by a depot, a branch board, a clinic map and a driving-theory drill.
+- **The lead chart must show one dataset drawn two ways with the impression flipping.** The page is about display choice, so the first canvas has to put both renderings on screen at once; describing the effect in prose does not make the case. Both panels in sections 1 and 3 are drawn by a single helper called twice, so a change to one rendering cannot silently fail to reach the other.
+- **Scope, and what was cut:**
+  - The page is deliberately three sections. An earlier five-section version added a shaded clinic map (moving the colour ramp's midpoint) and a self-scoring drill (practice score climbing because missed answers were looked up). Both were dropped as harder to read than the point they carried — the map required holding two ramps and sixteen values at once, and the drill was closer to leakage than to framing.
+  - The remaining three are the y-axis pair (the core demonstration), the target repaint (the same trick applied to colour rather than scale), and the honest-versus-misleading boundary (which stops the page reading as "never crop an axis").
+  - **Section 2 was rebuilt once for legibility** and must not drift back. The first version drew twelve bars in three rows, plotted each bar *from the threshold line to its value* so bar lengths changed between rows, and labelled only the first row. Nothing on screen then held still, so the claim "these are the same figures" was unverifiable by looking — the reader had to take it on trust. The rebuild fixes all three: eight bars, two rows, one shared axis with every bar running from the baseline, and labels on both rows.
+  - An older version of this page asserted its figures rather than computing them: a hardcoded "+5.2%" with an interval of [−2.1%, +12.5%], an "n=200 / 625 required" progress bar with no data behind it, and a curve pair labelled "8% self-deception" whose plotted ends actually differed by 7.8. All of that is gone; every figure on every canvas now derives from the plotted points.
+  - The old page's framing was ML-pipeline vocabulary — test set, holdout, overfitting, confidence intervals. All of it is gone; the ideas are carried by a depot, a branch board, a patient's temperature and a pair of bars.

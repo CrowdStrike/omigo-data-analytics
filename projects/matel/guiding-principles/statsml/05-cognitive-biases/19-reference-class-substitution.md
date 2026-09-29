@@ -3,41 +3,73 @@
 **Page type:** detail page — card-section template (see `statistical-paradoxes/03-berksons-paradox.html`)
 **HTML title tag:** Reference-Class Substitution — Cognitive Biases
 
-**Subtitle:** Show a person sixty real examples out of six hundred and they will tell you what is typical. They will be describing the sixty, and they will believe they are describing the six hundred.
+**Subtitle:** Show someone nine real bikes out of twenty-five and they will tell you what a bike costs. They are describing the nine and they think they are describing the twenty-five.
 
 ---
 
-## Section 1 — Six Hundred Bikes for Sale, Sixty in the Window
+## The one dataset behind all three charts
+
+Every chart draws the same twenty-five bikes, written out as literal arrays so a reader can count them on screen and check every figure by hand. Nothing on this page is generated.
+
+```js
+// 14 ordinary bikes for sale around town
+var PLAIN    = [70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 190, 200, 220];
+// 11 shop-restored bikes for sale
+var RESTORED = [180, 240, 280, 300, 320, 340, 360, 380, 400, 430, 450];
+// the 9 restored ones the shop has room to display
+var WINDOW   = [180, 280, 320, 340, 360, 380, 400, 430, 450];
+```
+
+Derived in code, never typed in as prose:
+
+| Quantity | Value | How it checks out |
+|---|---|---|
+| Bikes for sale in town | 25 | 14 plain + 11 restored |
+| Town middle | $190 | 13th of 25 sorted prices |
+| Window middle | $360 | 5th of 9 sorted prices |
+| The gap | $170 | $360 − $190 |
+| Restored middle | $340 | 6th of 11 sorted prices |
+| Window's miss on restored | $20 | $360 − $340 |
+| Alice's budget | $190 | set to the town middle in code |
+| In reach, in town | 13 of 25 | prices ≤ $190 |
+| In reach, in the window | 1 of 9 | only the $180 bike |
+| Restored but not on show | 2 | $240 and $300 |
+
+All twenty-five prices are distinct, so dots never collide and no vertical jitter is needed.
+
+---
+
+## Section 1 — Twenty-Five Bikes for Sale, Nine in the Window
 
 **Tags:** `core idea` (violet), `a slice, not the whole` (blue), `every price is real` (magenta)
 
 **Bullets:**
-- **The town** — every second-hand bike for sale, from rusty runabouts up to shop-restored ones
-- **The shop window** — a small display, and every bike in it has been restored by the shop
-- **Nothing is hidden** — every price in the window is real and not one of them is a lie
-- **What the window leaves out** — hundreds of cheaper bikes exist and not one of them is on show
-- **Middle of the window** — walk past it for a fortnight and that becomes "what a bike costs"
-- **Middle of the town** — a good deal lower, and it is the price Alice actually needed to know
-- **The gap** — a hundred dollars of it, put there by the choosing rather than by the market
+- **The town** — twenty-five second-hand bikes for sale, rusty runabouts up to restored ones
+- **The shop window** — nine bikes on display, and every one has been restored by the shop
+- **Nothing is hidden** — every price in the window is real, and not one of them is a lie
+- **What is left out** — eleven bikes cost less than the cheapest one on show
+- **Middle of the window** — walk past for a fortnight and that becomes "what a bike costs"
+- **Middle of the town** — far lower, and it is the price Alice needed to know
+- **The gap** — put there by the choosing, not by the market
 
-**Key point:** No false price was ever shown. The window's whole effect comes from which bikes it had room for, and the sense of "normal" it installs is a fact about the window that gets stored as a fact about the town.
+**Key point:** No false price was ever shown. The whole effect comes from which bikes the window had room for, and the sense of "normal" it installs is a fact about the window that gets stored as a fact about the town.
 
-**Source note (`.src`):** Illustrative Example — 600 seeded bike prices and a seeded draw of 60 restored ones; every middle price and count on the chart is computed from the plotted data.
+**Source note (`.src`):** Illustrative Example — 25 bikes listed as fixed prices in the page source; both middles are computed from those arrays at render time.
 
-### Visualization — canvas `c1`, 720×340
+### Visualization — canvas `c1`, 720×270
 
-Two overlaid price histograms on one shared axis — the whole town in flat grey, the sixty on show in violet — with each group's middle price marked as a vertical line. The violet mass sits visibly to the right of the grey mass, and the two middle lines are $100 apart on screen.
+**One number line, twenty-five dots, two middles.** The nine on display are the filled violet dots; the rest are hollow grey. The violet ones are all bunched at the right-hand end, so the slice is visible before any number is read.
 
-- **Data:** seeded Park–Miller LCG, seed 42. 600 bikes; each is shop-restored with chance 0.25, and its price is `round(m · exp(sg · g) / 5) · 5` where `m = 340, sg = 0.26` for restored and `m = 190, sg = 0.36` otherwise, and `g` is a sum-of-four-uniforms bell approximation. This gives 170 restored bikes. The window is 60 of those 170, drawn without replacement by a second seeded stream (seed 31).
-- **Computed and printed from the arrays:** town price range $65–$655; town middle $225; window middle $325; gap $100; 177 town bikes priced under the cheapest one on show; 475 of 600 town bikes (79%) priced under the window's middle.
-- **Title (bold 15px `P.ink`, centered, y=22):** "Every Bike for Sale, and the Sixty on Display"
-- **Plot box:** `PX = 50` to `PR = 500` (the right strip from x=528 carries the callouts), baseline `y = 246`, bar tops floor at `TOP = 92`. Price 0–700, bin width $50, 14 bins. Ticks and 12px `P.mute` labels every $100 formatted "$0" … "$700" via a shared `priceAxis()` helper. Axis title 12px `P.mute` centered below at `BASE + 37`: "asking price".
-- **Bars:** each bin drawn as a share of its own group so the two are comparable, with the y scale running 0 to the larger of the two peak shares — town peaks at 124/600 in the $150 bin, window at 14/60 in the $250 bin. Town bars fill the full bin width, `rgba(107,114,128,0.28)` stroked `P.mute` 1px. Window bars are drawn inset (centred, 54% of bin width) in `rgba(74,58,167,0.60)` stroked `P.violet` 1.5px, so both are readable at once.
-- **Middle-price lines:** town middle a dashed 2px `P.green` vertical (dash 5/4) from `y = 70` to the baseline; window middle a solid 2px `P.violet` vertical over the same span. Bold 12px labels at `y = 44`: "town middle $225" in `P.green` centred 34px left of its line, "window middle $325" in `P.violet` centred 46px right of its line, so the two never touch.
-- **Gap bracket:** a 2px `P.magenta` horizontal segment at `y = 60` between the two lines with 5px end caps, labelled bold 12px `P.magenta` "$100 apart" 10px to the right of the window line — the figure computed as the difference of the two middles.
-- **Right strip (left-aligned at x=528):** bold 13px `P.ink` "NO ROOM IN THE WINDOW"; bold 19px `P.mute` "177" with 12px `P.mute` "bikes in town cost" / "less than anything" / "on display" on three lines; then bold 13px `P.ink` "TOWN UNDER THE" / "WINDOW'S MIDDLE", bold 19px `P.violet` "79%" with 12px `P.mute` "475 of 600" beside it; then 12px `P.mute` "town prices run" / "$65 to $655".
-- **Legend (12px, at `y = 298`):** a 12×12 `rgba(107,114,128,0.28)` swatch with "all 600 bikes for sale" in `P.mute`, and a 12×12 `rgba(74,58,167,0.60)` swatch with "the 60 in the window" in `P.violet`.
-- **Caption (bold 13px `P.violet`, centered, `h − 10`):** "Real prices, honestly shown, describing a town they were never drawn from."
+- **Data:** the `PLAIN`, `RESTORED` and `WINDOW` literals. No generation, no jitter — all prices distinct.
+- **Computed at render time:** town middle $190, window middle $360, gap $170.
+- **Title (bold 15px `P.ink`, centered, y=22):** "Twenty-Five Bikes for Sale, Nine of Them on Display"
+- **Axis:** price $0–$500 across `PX = 60` to `PR = 660`, baseline `y = 170`. This chart has no right-hand labels, so it keeps the full width. Ticks and 12px `P.mute` labels every $100 via the shared `priceAxis()` helper; axis title 12px `P.mute` centered at `BASE + 37`: "asking price".
+- **The single dot row (`cy = 126`, radius 6):** all twenty-five prices on one line. $1 spans 1.2px, so the $10 price steps put adjacent dots edge-to-edge and every dot stays countable. On display → filled `rgba(74,58,167,0.60)` stroked `P.violet` 1.5px. Not on display → filled `rgba(107,114,128,0.15)` stroked `P.mute` 1px.
+- **Two middle lines:** town middle a dashed 2px `P.green` vertical (dash 5/4) from `y = 82` to the baseline; window middle a solid 2px `P.violet` vertical over the same span. Labels bold 12px at `y = 74`, each centred on its own line — at this scale they sit 204px apart and need no nudging.
+- **Gap bracket:** a 2px `P.magenta` horizontal segment at `y = 52` between the two lines with 5px end caps, labelled bold 12px `P.magenta` "$170 apart" centred above at `y = 40` — computed as the difference of the two middles.
+- **Legend (12px, swatches at `y = 226`, text baseline `y = 236`):** a 12×12 `rgba(107,114,128,0.15)` swatch with "not in the window" in `P.mute` at `PX`, and a 12×12 `rgba(74,58,167,0.60)` swatch with "the 9 on display" in `P.violet` at `PX + 200`.
+- **Caption (bold 13px `P.violet`, centered, `y = 260`):** "Real prices, honestly shown, describing a town they were never drawn from."
+- **Deliberately absent:** no second row, no right-hand callout strip, no counting instructions, no histogram. The lesson is "the filled dots are all on one side", and one row of dots says it.
 
 ---
 
@@ -46,163 +78,93 @@ Two overlaid price histograms on one shared axis — the whole town in flat grey
 **Tags:** `judging yourself` (magenta), `the median feels poor` (blue), `it feeds itself` (red)
 
 **Bullets:**
-- **Alice's budget** — she can spend exactly the middle price of every bike for sale in town
-- **Against the town** — about half of them are within her reach, so she is a middling buyer
-- **Against the window** — almost nothing on show is within reach, so she reads as nearly broke
+- **Alice's budget** — exactly the middle price of every bike for sale in town
+- **Against the town** — about half are within reach, so she is a middling buyer
+- **Against the window** — one bike of nine is in reach, so she reads as nearly broke
 - **What she concludes** — "I cannot afford a decent bike", which is false about her town
-- **Why it lands** — she is measuring herself against a reference that was assembled for her
-- **The self-feeding part** — feeling short, she stretches up to the window and becomes part of it
-- **Nobody quoted her a price** — there is no figure she could have argued herself down from
+- **Why it lands** — she is measuring herself against a crowd that was assembled for her
+- **The self-feeding part** — feeling short, she stretches up to the window and joins it
+- **Nobody quoted her a price** — there is no figure she could have argued down from
 
 **Key point:** She has not misjudged her own budget — she has misjudged the crowd she is standing in. Swap the crowd and the identical budget goes from ordinary to inadequate, which is why the conclusion feels like self-knowledge rather than an error about the town.
 
-**Source note (`.src`):** Illustrative Example — the same seeded town and window as the previous section; both counts are scanned from the plotted dots.
+**Source note (`.src`):** Illustrative Example — the same 25 listed prices; both counts are tallied from the arrays in the draw function.
 
-### Visualization — canvas `c2`, 720×330
+### Visualization — canvas `c2`, 720×270
 
-The same budget line drawn through two different crowds. In the top row half the dots are on the affordable side of the line; in the bottom row two dots are. Nothing about Alice changes between the rows.
+**One budget line through two crowds.** Blue dots are the bikes she can afford. The top row is half blue, the bottom row has one blue dot. Nothing about Alice changes between the rows — only who she is standing next to.
 
-- **Data:** the town and window arrays rebuilt from the same seeds as section 1. Her budget is set in code to the town's own middle, so the framing cannot drift from the data.
-- **Computed and printed from the arrays:** 304 of 600 town bikes at or under $225 (51%); 2 of 60 window bikes at or under $225 (3%); the window's middle sits $100 above her budget.
-- **Title (bold 15px `P.ink`, centered, y=22):** "One Budget of $225, Two Crowds to Stand In"
-- **Axis:** price 0–700 across `PX = 146` to `w − 40`, baseline `y = 250`, shared `priceAxis()` helper — ticks and 12px `P.mute` labels every $100, axis title 12px `P.mute` centered below: "asking price".
-- **Rows:** centres at `y = 92` (all 600 bikes for sale) and `y = 184` (the 60 in the window), each a 54px band with vertical position spread by one seeded stream (seed 13) so overlapping prices stay visible. Town dots radius 2.6, window dots radius 4.
-- **Dot colour by side of the line:** at or under $225 filled `rgba(42,120,214,0.55)` stroked `P.blue`; above it filled `rgba(107,114,128,0.20)` stroked `P.mute` — so the affordable half of the top row is a solid blue block and the bottom row has two blue dots on the far left.
-- **Row labels (bold 12px, right-aligned at `PX − 12`, two lines each):** "all 600 bikes" / "for sale in town" in `P.blue`; "the 60 bikes" / "in the window" in `P.magenta`.
-- **Budget line:** solid 2.5px `P.ink` vertical at $225 from `y = 44` to the baseline, labelled bold 12px `P.ink` centred at `y = 38`: "Alice can spend $225".
-- **Per-row counts (left-aligned at `PX + 4`, one line below each band):** bold 19px in the row's hue — "51%" then "3%" — followed at `PX + 56` by 12px `P.mute` "of the town is within reach — 304 of 600" and "of the window is — 2 of 60". Both percentages tallied in the draw function.
-- **Stretch arrow:** a 2px `P.magenta` arrow along `y = 234` from $225 to the window middle $325, labelled bold 12px `P.magenta` 14px past its head: "she stretches $100 to feel ordinary again".
-- **Caption (bold 13px `P.magenta`, centered, `h − 10`):** "Her budget did not shrink. The crowd she was shown did the shrinking."
-
----
-
-## Section 3 — Fifteen Dull Prices Outrun One Shocking One
-
-**Tags:** `volume beats intensity` (orange), `the forgettable ones` (yellow), `opposite of one big number` (magenta)
-
-**Bullets:**
-- **Her own year of looking** — bikes seen around town, and a settled private sense of the middle
-- **One shocking bike** — a racer turns up priced far above anything she had ever seen for sale
-- **What it does to normal** — her middle barely budges, and the racer is filed away as a story
-- **A cluster of dull bikes** — each only mildly over her middle, forgettable one at a time
-- **What they do to normal** — her middle moves several times further than the shocking one moved it
-- **Same total excess** — the identical dollars added either way, and the mild many win easily
-- **Why** — one freak price is filed as a freak; the ordinary ones quietly become the pile
-- **The reversal** — the single memorable figure is the weaker mover here, not the stronger
-
-**Key point:** A price so far out that you remember it gets stored as an exception and barely moves your sense of normal. Prices dull enough to forget cannot be quarantined as exceptions, so they quietly become the pile the next price is compared against.
-
-**Source note (`.src`):** Illustrative Example — 40 seeded bikes drawn from the same town, with two additions carrying an identical total excess; every middle price is computed in the draw function.
-
-### Visualization — canvas `c3`, 720×330
-
-Three rows of the same forty prices with the same total excess added in two different shapes, and each row's middle price marked. The single shocking bike is drawn off the right edge as an arrow, so the eye can see it is one dot while the mild fifteen are a visible cluster — and the middle marker moves further for the cluster.
-
-- **Data:** seeded LCG, seed 99, draws 40 bikes without replacement from the same seeded 600-bike town. Row 1 is those 40 alone. Row 2 adds one bike at $1,510. Row 3 adds fifteen bikes at $320.
-- **Computed and printed from the arrays:** row 1 middle $235 (range $70–$420); row 2 middle $245, a shift of $10; row 3 middle $275, a shift of $40. Excess above the row-1 middle: `1510 − 235 = 1275` for the single bike and `15 × (320 − 235) = 1275` for the fifteen — identical, asserted by an equality check in the draw function that drives the "SAME EXCESS BOTH WAYS" header. Shift ratio 4×.
-- **Title (bold 15px `P.ink`, centered, y=22):** "Forty Prices, Then $1,275 of Excess Added Two Ways"
-- **Axis:** price 0–600 across `PX = 152` to `PR = 600` (the strip past x=620 carries the row notes), baseline `y = 250`, shared `priceAxis()` helper. Axis title 12px `P.mute` centered below: "asking price".
-- **Rows:** centres at `y = 78, 146, 214`, each a 40px band with seeded vertical spread (seed 5, restarted per row so the forty base dots land identically in all three). Base dots radius 4, filled `rgba(107,114,128,0.30)` stroked `P.mute`.
-- **Added marks:** row 2's single bike is beyond the axis, so it is drawn as a 2.5px `P.yellow` arrow running from `PR − 26` out to `PR + 14`, with bold 12px `P.yellow` "$1,510" and 12px `P.mute` "one bike," / "off the scale" beyond it. Row 3's fifteen bikes are drawn at $320 in the band with seeded spread (seed 23), radius 4.5, filled `rgba(217,89,38,0.60)` stroked `P.orange` — a visible vertical cluster — annotated bold 12px `P.orange` "15 dull bikes," over 12px `P.mute` "all in view".
-- **Row labels (bold 12px, right-aligned at `PX − 12`, two lines each):** "the forty she" / "already knew" in `P.mute`; "plus one bike" / "at $1,510" in `P.yellow`; "plus 15" / "bikes at $320" in `P.orange`.
-- **Reference line:** dashed 1.5px `P.mute` vertical (dash 5/4) at the row-1 middle $235 spanning all three bands, labelled bold 12px `P.mute` centred at `y = 42`: "her old middle $235".
-- **Middle markers:** a filled diamond (7px half-width) in the row's hue at each row's middle, on the band's lower edge. Rows 2 and 3 also get a 2px arrow in the row's hue from $235 to that middle, and a bold 13px label to the right of the diamond combining the new middle and the shift: "$245   +$10" and "$275   +$40". Row 1 shows "$235" alone.
-- **Bottom strip:** bold 12px `P.mute` "SAME EXCESS BOTH WAYS" at x=20, `y = 288` — the wording chosen by the equality check, not fixed — with 12px `P.mute` "$1,275 above her old middle" beneath; then bold 19px `P.orange` "4×" at x=300, `y = 300` with 12px `P.mute` "further, and it was the dull ones that did it" beside it. The ratio is computed from the two shifts.
-- **Caption (bold 13px `P.orange`, centered, `h − 10`):** "The price you would repeat at dinner moved you least."
+- **Data:** the same literals. Her budget is set in code to the town's own middle, so the framing cannot drift from the data.
+- **Computed at render time:** 13 of 25 town bikes at or under $190; 1 of 9 window bikes at or under $190.
+- **Title (bold 15px `P.ink`, centered, y=22):** "One Budget of $190, Two Crowds to Stand In"
+- **Axis:** price $0–$500 across `PX = 140` to `PR = 560`, baseline `y = 200`, shared `priceAxis()` helper, axis title "asking price". The box stops at 560 so the per-row count labels fit inside the 720 box.
+- **Rows:** town at `cy = 90`, window at `cy = 150`, dots radius 4, no jitter — $10 price steps land 8.4px apart here, so radius 4 keeps neighbours separable.
+- **Dot colour by side of the line:** at or under $190 filled `rgba(42,120,214,0.55)` stroked `P.blue`; above it filled `rgba(107,114,128,0.15)` stroked `P.mute`. The top row reads blue-then-grey; the bottom row is one blue dot then all grey.
+- **Row labels (bold 12px, right-aligned at `PX − 12`, two lines each):** "all 25 bikes" / "for sale in town" in `P.blue`; "the 9 bikes" / "in the window" in `P.magenta`.
+- **Budget line:** solid 2.5px `P.ink` vertical at $190 from `y = 46` to the baseline, labelled bold 12px `P.ink` centred at `y = 38`: "Alice can spend $190".
+- **Per-row counts (left-aligned at `PR + 14` = 574, past the axis end):** bold 13px in the row's hue — "13 of 25" then "1 of 9" — each with 12px `P.mute` "in reach" on the line beneath. Both tallies computed in the draw function.
+- **Caption (bold 13px `P.magenta`, centered, `y = 260`):** "Her budget did not shrink. The crowd she was shown did the shrinking."
+- **Deliberately absent:** no percentages beside the counts (two small integers are already the comparison), and no "she stretches $170" arrow — that idea is a bullet, and drawing it added a third annotation layer to a chart whose whole point is one vertical line.
 
 ---
 
-## Section 4 — The Prices She Can Name Are Not the Ones That Moved Her
-
-**Tags:** `why it resists` (aqua), `nothing to discount` (yellow), `the quiet majority` (blue)
-
-**Bullets:**
-- **The gap to close** — the distance between what the window says a bike costs and what one costs
-- **The prices she can name** — the handful at the very top of the window, the ones that stood out
-- **Throwing those out** — the window's middle barely moves, so almost none of the gap closes
-- **Throwing out a third of them** — still only a small corner of the gap, for a drastic correction
-- **Why so little** — nearly half the prices sat close to the middle and left no trace to correct for
-- **What actually closes it** — the ordinary bikes she never saw, put back into the pile
-- **The remedy that fails** — discounting the loud prices, since the quiet ones did the work
-- **The remedy that works** — going out and finding the cases the window had no reason to show
-
-**Key point:** Correcting for a number you remember works because you can name it. Here the shift was done by prices too unremarkable to recall, so introspection has nothing to grab: the only repair is to go and collect the examples that were never put in front of you.
-
-**Source note (`.src`):** Illustrative Example — the same seeded window of 60 prices; each repair is applied to the array in the draw function and its middle price recomputed.
-
-### Visualization — canvas `c4`, 720×330
-
-The sixty window prices as a tick strip on top, with the four loudest flagged and the quiet middle band shaded, and underneath a bar for how much of the $100 gap each repair actually closes. Three yellow stubs and one full aqua bar.
-
-- **Data:** the same seeded 60-price window as sections 1 and 2. "Loudest" is defined in code as furthest from the window's own middle, so the flagged prices are read off a sort rather than picked by hand.
-- **Computed and printed from the arrays:** window middle $325, town middle $225, gap $100. Dropping the 4 loudest leaves 56 prices with middle $322.50 — $2.50 closed, 3%. Dropping the 8 loudest leaves 52 with middle $320 — $5, 5%. Dropping the 20 loudest leaves 40 with middle $305 — $20, 20%. Restoring the town's missing ordinary bikes gives $225 — $100, 100%. The four loudest prices are $620, $610, $585, $580; 27 of the 60 lie within $60 of the window's middle.
-- **Title (bold 15px `P.ink`, centered, y=22):** "Sixty Prices She Saw, Four She Could Repeat"
-- **Tick strip:** price axis $150–$650 across `SX = 56` to `w − 36`, strip at `y = 62` height 30. The band within $60 of the window middle is shaded `rgba(42,120,214,0.12)` first, labelled 12px `P.blue` centred below at `y = 110`: "27 of the 60 sat in this band and left no trace". Each price is a 2px vertical tick spanning the strip in `rgba(107,114,128,0.55)`; the four loudest are 2.5px `P.yellow`. The window middle is a 2px `P.magenta` tick overhanging the strip by 5px, labelled bold 12px `P.magenta` "window middle $325" centred at `y = 51`.
-- **Loud-price callout:** a 1.5px `P.yellow` horizontal bracket at `y = 42` spanning the four flagged ticks, with bold 12px `P.yellow` above it at `y = 35` reading "the 4 she can name: $620, $610, $585, $580" — the prices taken from the sort, so the label cannot drift from the flagged ticks.
-- **Bars:** header bold 13px `P.ink` at `SX`, `y = 138`: "SHARE OF THE $100 GAP EACH REPAIR CLOSES". Four horizontal bars, `BX = 262`, full width `BW = w − 118 − BX` representing the whole $100 gap, pitch 38, first bar top `y = 148`, height 22. Track `rgba(107,114,128,0.12)` full width; fill proportional to dollars closed, floored at 2px so a near-zero repair is still visible. The three discounting repairs fill `rgba(201,133,0,0.45)` stroked `P.yellow`; the last fills `rgba(25,158,112,0.50)` stroked `P.aqua`.
-- **Bar labels (right-aligned at `BX − 12`, two lines each):** 12px `P.mute` name over 12px `P.mute` resulting middle — "drop the 4 loudest prices" / "middle becomes $322.50"; "drop the 8 loudest" / "middle becomes $320"; "drop the 20 loudest" / "middle becomes $305"; "add back the bikes she never saw" / "middle becomes $225".
-- **Bar values (left-aligned 8px past each fill):** bold 12px in the bar's hue giving dollars closed and share — "$2.50 · 3%", "$5 · 5%", "$20 · 20%", "$100 · 100%" — every figure derived from the recomputed middle.
-- **Callout:** bold 19px `P.aqua` "$100" at `SX`, `y = 304` with 12px `P.mute` "closed only by the examples nobody put in the window" at `SX + 58`.
-- **Caption (bold 13px `P.aqua`, centered, `h − 6`):** "You cannot subtract prices you never noticed — only add the ones you missed."
-
----
-
-## Section 5 — One Window, Two Questions, One Right Answer
+## Section 3 — One Window, Two Questions, One Right Answer
 
 **Tags:** `the boundary` (green), `sometimes it is the right reference` (aqua), `silent substitution` (magenta)
 
 **Bullets:**
-- **One window, two questions** — the same restored bikes on show, asked to answer both of them
-- **What does a restored bike cost** — the window is right, near enough that the miss does not matter
-- **What does a bike in town cost** — the window is out by the whole gap, hundreds apart from truth
+- **One window, two questions** — the same nine bikes, asked to answer both of them
+- **What does a restored bike cost** — the window is close, and the miss does not matter
+- **What does a bike in town cost** — the window is out by the whole gap
 - **The window never changed** — the same prices answer one question well and one badly
 - **When it is the right reference** — when the group you asked about is the group on show
-- **When it quietly substitutes** — when you wanted the town and got the restored corner of it
-- **The test** — name the group your question is about, then ask who was left out of the display
-- **Restored bikes are real** — a genuine slice of the town is restored, so the window is no fiction
+- **When it quietly substitutes** — when you wanted the town and got its restored corner
+- **The test** — name the group your question is about, then ask who was left out
+- **Restored bikes are real** — eleven of the twenty-five really are restored, so this is no fiction
 
-**Key point:** A curated stream is not a distortion by nature — asked what a restored bike costs, a window of restored bikes is exactly the reference you want and lands on the truth. It becomes the bias only when it stands in for a group it was never drawn from, and the tell is that the substitution is silent: the window looks identical in both cases.
+**Key point:** A curated display is not a distortion by nature — asked what a restored bike costs, a window of restored bikes is the reference you want and lands near the truth. It becomes the bias only when it stands in for a group it was never drawn from, and the tell is that the substitution is silent: the window looks identical in both cases.
 
-**Source note (`.src`):** Illustrative Example — the same seeded town and window; both true middles and both misses are computed in the draw function.
+**Source note (`.src`):** Illustrative Example — the same 25 listed prices; both true middles and both misses are computed in the draw function.
 
-### Visualization — canvas `c5`, 720×320
+### Visualization — canvas `c3`, 720×260
 
-One vertical line for what the window says, held fixed, with two rows for the two questions. In the top row the truth marker sits almost on the line; in the bottom row it sits $100 away. The line never moves — only the question does.
+**One fixed line, two questions, two distances.** The window's answer is a single vertical line that never moves. Each question gets a green diamond at its true middle and a bracket showing how far off the line is — a stub for one question, a long span for the other.
 
-- **Data:** the same seeded 600-bike town and 60-bike window. Row 1's population is the 170 restored bikes, row 2's is all 600.
-- **Computed and printed from the arrays:** window middle $325. Restored middle $330 — miss $5, 2%. Town middle $225 — miss $100, 44%. Restored count 170 of 600 (28%).
+- **Data:** the same literals. Row 1's truth is the median of the 11 `RESTORED` prices, row 2's is the median of all 25.
+- **Computed at render time:** window says $360. Restored middle $340 — miss $20. Town middle $190 — miss $170. Verdicts assigned by comparing the two misses in code, never hardcoded.
 - **Title (bold 15px `P.ink`, centered, y=22):** "The Same Window Answering Two Different Questions"
-- **Axis:** price 0–700 across `PX = 176` to `w − 118`, baseline `y = 236`, shared `priceAxis()` helper — ticks and 12px `P.mute` labels every $100, axis title 12px `P.mute` centered below: "asking price".
-- **Window line:** solid 2.5px `P.magenta` vertical at $325 from `y = 44` to the baseline, labelled bold 12px `P.magenta` centred at `y = 38`: "the window says $325".
-- **Rows:** centres at `y = 94` and `y = 176`, each a 48px band. Row 1 plots the 170 restored prices, row 2 the 600 town prices, both as dots of radius 2.8 with seeded vertical spread (seed 17, restarted per row), filled `rgba(107,114,128,0.24)` stroked `P.mute` — the population the question is about, drawn faintly so the markers read on top.
-- **Row labels (bold 12px, right-aligned at `PX − 14`, three lines each so nothing runs off the left edge):** "if the question is" / "what a restored" / "bike costs" in `P.aqua`; "if the question is" / "what a bike in" / "town costs" in `P.magenta`.
-- **Truth markers:** a filled `P.green` diamond (8px half-width) at each row's true middle — $330 and $225 — each with a bold 13px `P.green` label below the band: "truth $330", "truth $225".
-- **Miss brackets:** a 2px horizontal segment from the truth marker to the window line at `cy + 30` with 5px end caps — row 1 in `P.aqua`, row 2 in `P.magenta`. Row 1's is a stub labelled bold 12px `P.aqua` "$5 off" just past it; row 2's spans the gap and is labelled bold 12px `P.magenta` "$100 off".
-- **Right strip (left-aligned at `w − 104`):** per row a bold 19px figure in the row's hue — "2% off" then "44% off" — each vertically aligned with its band, with a bold 12px verdict beneath: `P.aqua` "the right" / "reference" for row 1 and `P.magenta` "the wrong" / "group" for row 2. The verdicts are assigned in the draw function by comparing the two misses, never hardcoded.
-- **Bottom note (12px `P.mute`, centered, `y = 288`):** "170 of the 600 bikes in town really are shop-restored — the window is a true slice of something".
-- **Caption (bold 13px `P.green`, centered, `h − 10`):** "Name the group your question is about before trusting the examples in front of you."
+- **Axis:** price $0–$500 across `PX = 190` to `PR = 530`, baseline `y = 190`, shared `priceAxis()` helper, axis title "asking price". The box stops at 530 so the three-line row labels clear the left edge and the verdict labels fit on the right.
+- **Window line:** solid 2.5px `P.magenta` vertical at $360 from `y = 48` to the baseline, labelled bold 12px `P.magenta` centred at `y = 40`: "the window says $360".
+- **Rows:** `cy = 90` (restored question, `P.aqua`) and `cy = 150` (town question, `P.magenta`). Each carries a filled `P.green` diamond (8px half-width) at its true middle, labelled bold 12px `P.green` centred at `cy + 26`: "truth $340", "truth $190".
+- **Miss brackets:** a 2px horizontal segment in the row's hue from the diamond to the window line, drawn at `cy` with 5px end caps by the shared `bracket()` helper. Row 1's spans 14px on screen, row 2's spans 116px — the honest ratio, and the reason the two rows read differently at a glance.
+- **Verdicts (left-aligned at `PR + 14` = 544):** bold 13px in the row's hue giving the miss — "$20 off" then "$170 off" — with the verdict beneath in 12px of the same hue: "the right group" and "the wrong group". No percentage restatement of the miss; the bracket lengths already carry the comparison.
+- **Caption (bold 13px `P.green`, centered, `y = 250`):** "Name the group your question is about before trusting the examples in front of you."
+- **Deliberately absent:** the two population dot clouds. Plotting 11 and 25 faint dots behind the markers restated section 1's figure and buried the only thing this chart is for — the two distances from one line.
 
 ---
 
 ## Regeneration instructions
 
-- **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, matching the approved conversions in `05-clustering-illusion.html` and `01-confirmation-bias.html`. Five `.card-section` blocks, each an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) plus a `table.layout` with one row: `td.text-col` 50% / `td.viz-col` 50%. One canvas per section. No index number anywhere on the page.
-- **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` → `.src` note. Every section carries a `.src` note because every figure on the page is constructed. No paragraph blocks, no `.example` lines, no data tables, no philosophy box.
-- **Numbers live in the charts, not the prose** — at most a couple of figures in bullets, and only where the figure is the argument.
-- **Bullet form:** each bullet is ONE line that does not wrap at 50% column width — verified at ≤105 characters including the bold label. Counts follow content: 7, 7, 8, 8, 8. Nothing padded, nothing restated between a bullet and the key point.
-- **Language:** layman-first. No jargon from the banned list. No recommender, algorithm, feed-ranking, engagement, impression, ad-revenue or platform-incentive vocabulary — the whole page runs on a shop window, a town full of bikes, and one buyer named Alice.
-- **Scope boundary against `02-anchoring-bias`:** that page covers a single salient number, consciously seen at one moment, pulling one estimate. This page is the accumulated volume-based version, and the distinction is made load-bearing rather than mentioned. Section 3 is the argument: with the total excess held identical at $1,275, fifteen forgettable prices move the sense of normal four times as far as one unforgettable price does, which reverses the direction anchoring would predict. Section 4 completes it — an anchor can be named and discounted, and here the discounting repair recovers 3% of the gap because the movers were the prices too dull to recall. No cross-links of any kind.
-- **Chart shapes deliberately unlike `02-anchoring-bias`:** that page opens on two swarms split by an arbitrary number and uses a gap bracket between two group averages as its signature. This page opens on two overlaid histograms of a population against a slice of it, and its other charts are a shared budget line through two crowds, three rows sharing one reference line with off-scale marking, a repair-effectiveness bar set with a tick strip above it, and one fixed line answering two questions. No swarm-pair-with-gap-bracket figure appears.
-- **Section titles name content**, never a role. The old page's "The Mechanism", "Differs From Classical Anchoring", "The Exposure → Belief → Action Pipeline", "Domains of Application" and "Why It Persists" are all replaced.
-- **Last section is the boundary case** and must stay precise. It does not claim curated exposure is always misleading: asked what a shop-restored bike costs, the window lands within $5 of the truth and is the correct reference. The bias is the silent substitution of one group for another, and the discriminator is whether the population your question names is the population the examples were drawn from — not how strongly the examples moved you.
+- **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, matching the approved conversions in `05-clustering-illusion.html` and `01-confirmation-bias.html`. Three `.card-section` blocks, each an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) plus a `table.layout` with one row: `td.text-col` 50% / `td.viz-col` 50%. One canvas per section. No index number anywhere on the page.
+- **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` → `.src` note. No paragraph blocks, no `.example` lines, no data tables on the page, no philosophy box.
+- **One idea per chart, and this is the tightest constraint on the page.** Chart 1 is a single row of dots with two middles. Chart 2 is one vertical line through two rows. Chart 3 is one fixed line and two distances from it. Each earlier revision of this page failed by *adding* to these figures — right-hand callout strips with three stacked statistics, a duplicate "window only" row above the town row, a stretch arrow, faint population clouds behind markers, share-normalised twin histograms. Every one of those was defensible on its own and collectively they buried a simple point. **If a figure needs a second annotation layer to make its case, the case belongs in a bullet.**
+- **The example is deliberately countable.** Twenty-five bikes as literal price arrays, all distinct. A reader can count the dots, find the middle by eye, and verify the gap without trusting the page. An earlier version generated 600 prices from a seeded lognormal and plotted share-normalised histograms — reproducible, but no reader could check a single figure on it. Do not reintroduce generated data here: if a chart on this page needs a number, the number must be countable on the chart.
+- **No PRNG on this page at all.** No `Math.random()` and no seeded LCG either — nothing is generated, so nothing needs seeding. Distinct prices mean dots never collide, so there is no jitter and therefore no jitter seeds. A future edit that adds a generated series must add the canonical `lcg()` helper rather than reaching for `Math.random()`.
+- **Dot radius is set by the price spacing, not by taste.** The prices step by $10 in the dense stretch, so each chart's radius is chosen against its own `$1 → px` scale to keep neighbours touching-but-distinct: radius 6 at 1.20px/$ on chart 1 (12px gap, 12px diameter), radius 4 at 0.84px/$ on chart 2 (8.4px gap, 8px diameter). Narrowing a plot box to make room for labels means rechecking the radius — that is exactly why chart 2 is radius 4 and not 5.
+- **Three sections only, and two were cut on purpose.** A five-section version added a "same excess two ways" chart (forty prices plus either one $1,510 bike or fifteen $320 bikes, three medians compared through an equality check) and a "which repair closes the gap" chart (four repairs as share-of-gap bars). Both asked the reader to hold several medians in their head to reach a point the three remaining sections already make. Do not reinstate them here; the volume-beats-intensity argument deserves its own page if it is wanted.
+- **Numbers live in the charts, not the prose.** Bullets name quantities in words — "about half", "one bike of nine", "the gap" — and the dollar figures appear on the canvas. The exceptions are counts small enough to check instantly ("eleven bikes cost less than the cheapest one on show").
+- **Bullet form:** each bullet is ONE line that does not wrap at 50% column width — verified at ≤95 characters including the bold label. Counts: 7, 7, 8. Nothing padded, nothing restated between a bullet and the key point.
+- **Language:** layman-first. No recommender, algorithm, feed-ranking, engagement, impression, ad-revenue or platform-incentive vocabulary — the page runs on a shop window, a town with twenty-five bikes for sale, and one buyer named Alice. "Reference class" appears in the title and nowhere in the body.
+- **Scope boundary against `02-anchoring-bias`:** that page covers a single salient number, consciously seen at one moment, pulling one estimate. This page is the accumulated-exposure version — no figure is ever quoted to Alice, which is why "nobody quoted her a price" is a load-bearing bullet in section 2 rather than an aside. The distinction is carried by that bullet and by the chart shapes, not by a comparison section. No cross-links of any kind.
+- **Chart shapes deliberately unlike `02-anchoring-bias`:** that page opens on two swarms split by an arbitrary number and uses a gap bracket between two group averages as its signature. This page opens on a single countable dot row with its displayed members filled in; its other charts are one budget line through two rows and one fixed line with two distances.
+- **Section titles name content**, never a role. "The Mechanism", "The Exposure → Belief → Action Pipeline", "Domains of Application" and "Why It Persists" are banned as headings here.
+- **Last section is the boundary case** and must stay precise. It does not claim curated exposure is always misleading: asked what a shop-restored bike costs, the window lands $20 from the truth and is the correct reference. The bias is the silent substitution of one group for another, and the discriminator is whether the population your question names is the population the examples were drawn from — not how strongly the examples moved you.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, td vertical-align top padding 12px, `.text-col`/`.viz-col` 50% each, `.viz-col` `text-align: center`. `canvas` `display:block; width:100%; margin:0 auto; border:1px solid #e0e0e0; border-radius:4px`. `ul` 0.92rem margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` `#1a5276`. `.key-point` `#f8f9fa` background, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links.
-- **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `rgba(26,82,118,0.12)`/`#1a5276`, `.green` `rgba(39,174,96,0.15)`/`#27ae60`, `.red` `rgba(231,76,60,0.12)`/`#e74c3c`, `.orange` `rgba(230,126,34,0.15)`/`#e67e22`, `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06b00`.
-- **Colour rotation across sections is a requirement:** section 1 violet slice over a mute population with a green truth line, section 2 blue crowd against a magenta window, section 3 yellow single against an orange cluster over mute, section 4 yellow failing repairs against one aqua repair with a blue quiet band, section 5 green truth with aqua-versus-magenta verdicts. Hard red `#e74c3c` appears only as the `.key-point` left border.
-- **Canvas:** intrinsic `width="720"` plus per-chart height (340, 330, 330, 330, 320). `setup(id)` caches the logical size in `dataset` on first call (because `canvas.width` overwrites the attribute), sets `style.maxWidth = 720px`, computes `scale = (cssW / 720) × devicePixelRatio`, sizes the backing store to `logical × scale`, and `ctx.scale(scale, scale)` back to logical coordinates. Draws are registered in `__charts` and re-run on a debounced (150ms) resize.- **Canvas fonts:** chart title bold 15px; in-chart headers and inline labels bold 12–13px; plain labels 12px floor; one big callout figure per chart at bold 19px; caption bold 13px ending every chart. No tables drawn on canvas.
-- **Palette** (shared `P` object): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `yellow #c98500`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`.
-- **Determinism:** no `Math.random()`. Seeded Park–Miller LCG (`s = (s × 16807) % 2147483647`) with a sum-of-four-uniforms bell helper. Seed 42 builds the town, seed 31 draws the window, seed 99 draws Alice's forty, seeds 5/13/17/23 provide vertical jitter only. Three shared builders — `buildTown()`, `buildWindow()` and `buildSeen()` — plus `restoredPrices()`, `median()`, `money()` and a shared `priceAxis()` are called by every chart, so all five describe one town. Changing the draw order in one place silently breaks the numbers in the others.
-- **Shared helpers:** `money(v)` prints half-dollars honestly (a median of an even-sized set lands on $322.50) and inserts a thousands comma, so $1,510 and $1,275 read correctly. `priceAxis()` draws the $100 ticks and the "asking price" title on all five charts.
-- **Lead chart shows the effect, not a description of it.** Two overlaid price histograms with their middles $100 apart; the violet slice sitting to the right of the grey population is readable before any number. No second-order construction is used as the opening figure.
-- **Non-degenerate constructions checked.** The window is not disjoint from the town's cheap end — its cheapest bike at $175 still has 177 town bikes below it, so the overlap is partial rather than total. Alice's window count is 2 of 60, not 0, so no share is exactly 0% or 100%. The two excess totals in section 3 are equal to the dollar (1,275 both ways) and both shifts are non-zero, so the 4× ratio is neither undefined nor trivial. In section 4 the weakest repair closes $2.50 rather than $0, so its bar is drawn rather than absent.
-- **Label geometry verified.** Every `fillText` on all five canvases was checked against the 720-wide logical box: nothing overflows either edge, nothing falls below the canvas height, no label sits under 12px, and no two labels on the same canvas overlap. Section 5's row labels are split across three lines for this reason, and section 3's off-scale note is kept short enough to sit in the right margin.
-- **Corrections applied to the old version of this page:** every number on the old page was asserted, not computed. Its first chart hardcoded two proportion arrays as "actual market" and "what the user was shown", so the "$100 is typical" claim had no data behind it and the two series did not come from one population. Its second, third, fourth and fifth charts drew no data at all — they were text boxes, a flow diagram, a table rendered on canvas (banned) and a decorative circle, none of which showed the effect. The `.example` paragraph and duplicated `.key-point` blocks in sections 2 and 4 of the old HTML were literal copy-paste defects. The recommender/engagement/ad-revenue framing has been dropped in favour of the shop window, and the anchoring comparison is now a computed result rather than a side-by-side list of adjectives.
+- **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `rgba(26,82,118,0.12)`/`#1a5276`, `.green` `rgba(39,174,96,0.15)`/`#27ae60`, `.red` `rgba(231,76,60,0.12)`/`#e74c3c`, `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`. Only these six are defined.
+- **Colour rotation across sections is a requirement:** section 1 violet slice over grey with a green truth line, section 2 blue affordable against magenta window, section 3 green truth with aqua-versus-magenta verdicts. Hard red `#e74c3c` appears only as the `.key-point` left border.
+- **Canvas:** intrinsic `width="720"` plus per-chart height (270, 270, 260). `setup(id)` caches the logical size in `dataset` on first call (because `canvas.width` overwrites the attribute), sets `style.maxWidth = 720px`, computes `scale = (cssW / 720) × devicePixelRatio`, sizes the backing store to `logical × scale`, and `ctx.scale(scale, scale)` back to logical coordinates. Draws are registered in `__charts` and re-run on a debounced (150ms) resize.
+- **Canvas fonts:** chart title bold 15px; inline labels and row labels bold 12–13px; plain labels 12px floor; caption bold 13px ending every chart. No 19px callout figures — the numbers on this page are small integers and dollar amounts that read fine at 12–13px, and a giant figure was part of what made the old charts busy. No tables drawn on canvas.
+- **Palette** (shared `P` object): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `aqua #199e70`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`.
+- **Shared helpers:** `median()`, `money()` (thousands comma, half-dollars printed honestly), `dot()`, `diamond()`, `bracket()` (a span with 5px end caps, used for the gap on chart 1 and both misses on chart 3), and `priceAxis()` which draws the $100 ticks and the "asking price" title on all three charts. `TOWN` is built once as `PLAIN.concat(RESTORED)` sorted, so all three charts describe one town by construction. No `arrow()` helper — nothing on the page draws an arrow any more.
+- **Non-degenerate constructions checked.** The window is a *strict* subset of the restored bikes — $240 and $300 are for sale but not displayed — so "curated" does not collapse into "all restored bikes". Alice's window count is 1 of 9, not 0, so no share is 0% or 100%. Section 3's restored miss is $20 rather than $0, so the "right reference" row is close without being a suspicious exact hit, and its bracket is 14px wide rather than invisible.
+- **Label geometry verified.** Every `fillText` on all three canvases was checked against the 720-wide logical box: nothing overflows either edge, nothing falls below the canvas height, no label sits under 12px, and no two labels on the same canvas overlap. Chart 1's two middle labels sit 204px apart and need no horizontal offset — the nudges the old version used are gone. Charts 2 and 3 end their plot boxes at 560 and 530 precisely to leave a label column inside the canvas; widening either one pushes those labels off the right edge.
