@@ -7,22 +7,22 @@
 
 ---
 
-## Section 1 — A Coin Flip Drew This Chart
+## Section 1 — A Coin Flip Drew This Price Series
 
 **Tags:** `core idea` (violet), `written afterwards` (blue), `explains everything` (magenta)
 
 **Bullets:**
 - **How it was built** — each day's direction came from one coin flip, and nothing else
-- **What the shape looks like** — a slide, a recovery up to a peak, then a slow correction
+- **What the shape looks like** — a slide to 94.7 by day 9, a climb to 108.6 by day 32, then 97.9
 - **The story that writes itself** — worry, then relief, then the market thinking better of it
-- **Where the story was written** — on day sixty, with all sixty days already on the screen
-- **What it explains** — every turn on the chart, which is how you know it explains nothing
-- **Up days against down** — twenty-eight against thirty-two, near enough to an even split
-- **What happened next** — the level kept sliding, so the story looked confirmed for months
+- **Where the story was written** — on day 60, with all 60 days already in hand and none left to come
+- **What it explains** — every one of those three legs, which is how you know it explains nothing
+- **Up days against down** — 28 against 32 across the 60 days, near enough to an even split
+- **What happened next** — the level slid 7.4 more points by day 240, so the story looked confirmed
 
-**Key point:** A shape this readable needs no cause. Sixty coin flips produce a slide, a recovery and a correction on their own, and the story arrives afterwards to join them up.
+**Key point:** A shape this readable needs no cause. Sixty coin flips produce a 5.3-point slide, a 13.9-point recovery and a 10.7-point correction on their own, and the story arrives afterwards to join them up.
 
-**Source note (`.src`):** Illustrative Example — one seeded coin-flip series; the up and down counts are read off the plotted data.
+**Source note (`.src`):** Illustrative Example — one seeded coin-flip series; the up and down counts and every level come from those sixty flips.
 
 ### Visualization — canvas `c1`, 720×330
 
@@ -50,14 +50,14 @@ The full 240-day seeded series as a line, with the first sixty days highlighted 
 **Bullets:**
 - **The honest test** — a story earns its keep on days it never saw, not the days it was built from
 - **Eight candidate stories** — each one a rule that says which way tomorrow goes
-- **Scored twice** — once on the sixty days that made them, once on the next hundred eighty
-- **The winner in the window** — a slide feeds on itself, right eighty per cent of the time
-- **The same rule afterwards** — right forty-eight per cent of the time, twenty calls in forty-two
-- **The five that sounded true** — pooled, they got forty-seven per cent of their later calls right
-- **The ranking inverts** — the stories that scored worst in the window did best afterwards
+- **Scored twice** — once on the 60 days that made them, once on the next 180 days
+- **The winner in the window** — "a slide feeds on itself" was right 16 times in 20, an 80% hit rate
+- **The same rule afterwards** — right 20 times in 42, a 48% hit rate, which is a coin flip
+- **The five that sounded true** — the five above 60% in the window went 137 of 292 later, just 47%
+- **The ranking inverts** — the three worst in the window went 33 of 55 afterwards, a 60% hit rate
 - **Why fitting cannot fail** — with eight rules on offer, one lands high by arithmetic alone
 
-**Key point:** Fitting a story to a stretch of data is guaranteed to succeed, so the fit carries no information. The only number worth reading is how the story does on days it was not built from — and here that number is a coin flip.
+**Key point:** Fitting a story to a stretch of data is guaranteed to succeed, so the fit carries no information. The only number worth reading is how the story does on days it was not built from — and for the winner here that number is 48%, a coin flip.
 
 **Source note (`.src`):** Illustrative Example — the eight rules and both of their scores are computed in the draw function from the same seeded series.
 
@@ -91,18 +91,18 @@ A dumbbell chart: eight story rows, each with a magenta dot for its score inside
 **Tags:** `where it bites` (orange), `searched afterwards` (red), `stated first` (green)
 
 **Bullets:**
-- **The season** — thirty games, each decided by a coin flip, eighteen wins in all
-- **What the write-up finds** — a turning point after game twenty, and the team catches fire
-- **Before the cut** — ten wins and ten losses, an exactly ordinary half-season
-- **After the cut** — eight wins in ten, a thirty-point jump in the win rate
+- **The season** — 30 games, each decided by a coin flip, 18 wins in all
+- **What the write-up finds** — a turning point after game 20, and the team catches fire
+- **Before the cut** — 10 wins and 10 losses, an even 50% across the first 20 games
+- **After the cut** — 8 wins in the last 10, an 80% rate and a 30-point jump
 - **How the cut was chosen** — by trying every cut and keeping the one with the biggest jump
-- **A jump that big by chance** — turns up in roughly one fair season in four
-- **If the cut had been named first** — chance delivers it in under one fair season in ten
-- **What the search buys** — picking the cut later makes such a jump nearly three times likelier
+- **A jump that big by chance** — about 24% of fair seasons hand you one, roughly one season in four
+- **If the cut had been named first** — just under 9% of fair seasons reach it, fewer than one in ten
+- **What the search buys** — choosing the cut afterwards makes such a jump three times likelier
 
-**Key point:** A turning point found by scanning for the biggest gap is not a finding — it is the largest gap the search was permitted to keep. Name the cut before the season and the same gap becomes roughly three times harder to reach.
+**Key point:** A turning point found by scanning for the biggest gap is not a finding — it is the largest gap the search was permitted to keep. Name the cut before the season and the chance of the same gap falls from about 24% to just under 9%.
 
-**Source note (`.src`):** Illustrative Example — one seeded thirty-game season; both chances come from four thousand seeded seasons.
+**Source note (`.src`):** Illustrative Example — one seeded 30-game season; both chances come from 4,000 seeded seasons.
 
 ### Visualization — canvas `c3`, 720×320
 
@@ -128,15 +128,16 @@ The thirty games as a strip of win/loss squares with the searched cut marked, ab
 - **Not every explanation is a story** — real causes exist, and describing one is the whole job
 - **The first question** — was the account on the record before the stretch of days it explains
 - **The second question** — does it forbid anything, or would it have fitted the opposite result
-- **The story series** — half its later days went down, right inside what chance alone delivers
-- **A real tilt** — sixty-two per cent of later days went down, which chance rarely reaches
-- **How rare** — chance produces a stretch that lopsided about once in sixteen hundred tries
+- **What chance alone delivers** — 19 fair stretches in 20 land between 43% and 57% down days
+- **The story series** — 90 of its 180 later days went down, 50%, inside the 43-to-57% chance band
+- **A real tilt** — a second series fell on 112 of its 180 later days, 62%, clear outside that band
+- **How rare** — 112 or more down days in 180 fair days turns up about once in 1,600 tries
 - **What makes it an account** — it was stated first, and a balanced stretch would have killed it
 - **The decoration test** — if no result could have embarrassed the story, it was never a claim
 
-**Key point:** The line does not run between causes and coincidences. It runs between an account stated in advance that some result would have refuted, and one assembled afterwards to fit whatever turned up.
+**Key point:** The line does not run between causes and coincidences. It runs between an account stated in advance that some result would have refuted — a 62% tilt that chance reaches about once in 1,600 — and one assembled afterwards to fit whatever turned up.
 
-**Source note (`.src`):** Illustrative Example — the second series is constructed to fall on fifty-eight per cent of days; both later stretches are one hundred eighty days long.
+**Source note (`.src`):** Illustrative Example — the second series is constructed to fall on 58% of days; both later stretches are 180 days long.
 
 ### Visualization — canvas `c4`, 720×330
 
@@ -162,7 +163,7 @@ One horizontal scale of "share of later days that went down", with the band chan
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, matching `05-clustering-illusion.html` in this folder. One `.card-section` per section, each an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) followed by a `table.layout` with one row: `td.text-col` 50% / `td.viz-col` 50%.
 - **Canvas placement:** `td.viz-col` gets `text-align: center`; the canvas is `display: block; width: 100%; margin: 0 auto` and capped at 720px by `style.maxWidth`, so it sits centred in the right half.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` → `.src` note where the figures are constructed. No paragraph blocks, no data tables, no `.example` line restating a bullet.
-- **Bullet form:** ONE line that does not wrap at 50% column width (≤95 characters of visible text). Bullet counts follow the content — 7, 8, 8, 8 here — never a quota.
+- **Bullet form:** ONE line that does not wrap at 50% column width (≤95 characters of visible text). Bullet counts follow the content — 7, 8, 8, 9 here — never a quota.
 - **Section titles name the content.** No role labels ("The Trap", "Where It Strikes", "Pipeline Defense") and no phrasing that would fit another page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` `#1a5276`. `.key-point` `#f8f9fa` background, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links, no cross-page links.
 - **Tag pills:** inline-block, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `.green` `.red` `.orange` plus `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`.
@@ -170,7 +171,8 @@ One horizontal scale of "share of later days that went down", with the band chan
 - **Canvas:** CSS `width: 100%`, `border: 1px solid #e0e0e0`, radius 4px. Intrinsic `width="720"` plus the per-chart height (330, 340, 320, 330). `setup(id)` caches the logical size in `dataset` on first call, sets `style.maxWidth`, computes `scale = (cssW/720) × devicePixelRatio`, sizes the backing store to `logical × scale` and `ctx.scale`s back to logical coordinates. Draws registered in `__charts`, re-run on a debounced 150ms resize.
 - **Canvas font sizes:** chart title bold 15px; in-chart header bold 12–13px; body and axis labels 12px floor; one big callout figure per chart at bold 19px; caption bold 13px.
 - **Palette** (shared `P`): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `yellow #c98500`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`.
-- **Determinism:** no `Math.random()`. Park–Miller LCG `s = (s × 16807) % 2147483647`. Seeds are **4472** for the price series (chosen because its first sixty fair days happen to trace a rise-and-fall a reader will read as a story), **101** for the season, **9** for the tilted series, **42** for the reference seasons. Every direction count, hit rate, percentage and band edge is computed in the draw function and printed from that variable.
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
+- **Determinism:** no `Math.random()`. Park–Miller LCG `s = (s × 16807) % 2147483647`. Seeds are **4472** for the price series (chosen because its first sixty fair days happen to trace a rise-and-fall a reader will read as a story), **101** for the season, **9** for the tilted series, **42** for the reference seasons. Every direction count, hit rate, percentage and band edge is computed in the draw function; the prose quotes those same computed values.
 - **`makeSeries` takes a down probability, not an up probability.** Flipping that test mirrors the series and silently invalidates every figure on charts 1, 2 and 4 — the story shape disappears and the eight story scores all change. Verified: with `pDown` the window holds 28 up days against 32 down, trough 94.7 on day 9, peak 108.6 on day 32.
 - **The page must prove the story predicts nothing, not assert it.** Section 2 exists for that reason: the same eight rules are scored on the days that produced them and on days they never saw, and the ranking inverts. A page that only asserts unpredictiveness has not made its case.
 - **The last section must not claim all explanation is fallacy.** The distinction it draws is order and refutability — stated before the data and forbidding some outcome, versus assembled afterwards to fit any outcome.

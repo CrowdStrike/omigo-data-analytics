@@ -12,13 +12,13 @@
 **Tags:** `core idea` (violet), `same eight items` (blue), `one thing added` (magenta)
 
 **Bullets:**
-- **The eight items** — really are different, but only just: appeal runs 0.45 to 0.55, so item 8 is best
+- **The eight items** — differ only just: appeal runs 0.45 to 0.55, so item 8 is best
 - **The adopters** — 120 people arrive one at a time and each picks exactly one item
-- **Choosing blind** — nobody sees earlier picks, so the counts land between 9 and 21, top item on 18%
+- **Choosing blind** — nobody sees earlier picks, so counts land between 9 and 21, top on 18%
 - **Now show the running counts** — same items, same tastes, nobody's preference is changed at all
 - **What happens** — item 1 takes 99 of the 120 picks, 83% of everything, from the same seed
 - **Item 1's appeal** — 0.45, the lowest of the eight, so the worst item won the whole market
-- **How it got there** — it happened to lead early, which made it more visible, which made it lead more
+- **How it got there** — it led early, which made it more visible, which made it lead more
 - **What the 83% measures** — the order the first few people arrived in, not anything about item 1
 
 **Key point:** Both runs held identical items and identical tastes. Adding a counter turned the least appealing of the eight into an 83% winner, so the counts now answer "who went first" rather than "which is best".

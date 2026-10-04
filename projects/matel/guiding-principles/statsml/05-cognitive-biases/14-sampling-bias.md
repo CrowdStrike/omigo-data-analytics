@@ -5,6 +5,32 @@
 
 **Subtitle:** You meant to ask the whole town. You asked whoever was standing where you handed out the forms, and they answered honestly.
 
+**Which sibling holds which half:** the town construction is split across the siblings and must not be re-merged. The reader-facing half — the unnumbered preamble, the chances and journey rule in words, the three reach rules, and the twelve-line derivation of every town-level figure — lives in `.txt.md`. The code-level half — `buildTown()`, the `channel()` cumulative-weight draw, `lcg()` and all per-chart seeds, and every drawing detail — lives in `.viz.md`. This combined spec keeps both.
+
+---
+
+## Preamble (unnumbered, before Section 1 — appears in `.txt.md` and in the html as a canvas-less `.card-section`)
+
+**Heading (`<h2>`):** The one town behind every figure on this page
+
+**The one town behind every figure on this page.** Every number here comes from one constructed town of **10,000 working adults**, built so the true answer is known and each figure can be redone by hand. Each person gets three independent facts — **travel by train with chance 0.30**, an **early shift with chance 0.20**, **left-handed with chance 0.11** — and a journey time of **42 minutes by train or 20 by road, plus 9 if they start early, plus a whole-minute wobble between −6 and +6**. A **gathering channel** is a rule saying what share of each kind of person it physically reaches; a pile is then the whole town re-weighted by that reach, never a slice of it. **Forms at the station** reach 50 in 100 train riders and 6 in 100 road users, ×1.8 for early shifts. **Forms on windscreens** reach 5 in 100 train riders and 45 in 100 road users. **Knocking on doors** reaches everybody equally, and is the honest reference throughout.
+
+**Bullets:**
+- **Counted: travel by train** — 2,950 of the 10,000, so the town is 29.5% train riders
+- **Counted: early shift** — 2,012 of the 10,000, so 20.1% of the town starts early
+- **Counted: left-handed** — 1,133 of the 10,000, so 11.3% of the town is left-handed
+- **A train rider's journey** — 42 + 9 × 0.199 early − 0.02 wobble = 43.8 minutes
+- **A road user's journey** — 20 + 9 × 0.202 early − 0.01 wobble = 21.8 minutes
+- **The gap between them** — 43.8 − 21.8 = 22.0 minutes, the one difference this page turns on
+- **The true average** — 0.295 × 43.8 + 0.705 × 21.8 = 28.3 minutes, the figure every chart marks
+- **Handedness does not sort** — 11.1% of train riders against 11.4% of road users, 0.3 apart
+- **Station reach per group** — 50 × (1 + 0.8 × 0.199) = 58 per 100 train, and 7 per 100 road
+- **What reach alone decides** — the station rule gives 77.7% train riders, windscreens give 4.4%
+- **The drawn piles land there** — station piles 77.2% and 77.7%, the windscreen pile 4.8%
+- **A door knock decides nothing** — it reaches everybody, so its pile tracks the town's 29.5%
+
+Every figure quoted below follows from those twelve lines. Section 1 draws station piles and door piles at 250, 1,000 and 4,000. Section 2 draws one 1,200-form pile from each of the two placements. Sections 3 and 4 work the same 1,000-form station pile, first explaining its error through the mix and then re-weighting it back. Section 5 asks one 250-form station pile two questions — the handedness one, where the two groups are 0.3 points apart, and the journey one, where they are 22.0 minutes apart.
+
 ---
 
 ## Section 1 — Sixteen Times the Forms, the Same Wrong Answer
@@ -14,16 +40,16 @@
 Tag classes in HTML: `magenta`, `violet`, `green`.
 
 **Bullets:**
-- **The town** — every working adult in it, whose real average journey nobody has measured yet
+- **The town** — 10,000 working adults, whose true average journey of 28.3 minutes must be found
 - **The method** — forms left at the railway station, filled in by whoever happens to walk past
-- **The small batch** — the answer comes out far longer than the truth, and wanders a bit run to run
-- **Sixteen times the forms** — the answer barely moves, it just stops wobbling around the wrong number
-- **What the extra data bought** — a steadier answer, and not one step closer to being right
-- **The error stayed put** — the same stretch too high at every size, never once shrinking
+- **The small batch** — 250 forms answer 40.3 minutes, a full twelve minutes above the town's 28.3
+- **Sixteen times the forms** — 4,000 forms answer 40.0, moving the answer three-tenths of a minute
+- **What the extra data bought** — the band narrowed 3.9× to ±0.3, and closed none of the error
+- **The error stayed put** — +12.0 minutes at 250 forms, +11.7 at 4,000, never once shrinking
 - **What the wobble measures** — how much this method's answer moves, not how close it lands
-- **Knocking on doors instead** — even the smallest batch lands near the truth, and stays there
+- **Knocking on doors instead** — 250 doors give 27.3 and 4,000 give 28.4, both within a minute
 
-**Key point:** Collecting more of the same thing makes an answer steadier, not truer. The station forms do settle down — they settle on the wrong number, and every extra form makes the report sound more certain about it.
+**Key point:** Collecting more of the same thing makes an answer steadier, not truer. The station forms do settle down — they settle on 40 minutes against a true 28.3, and every extra form makes the report sound more certain about it.
 
 **Source note (`.src`):** Illustrative Example — a constructed town of 10,000 where the true average is known; every band and error on the chart is computed from the drawn samples.
 
@@ -31,8 +57,8 @@ Tag classes in HTML: `magenta`, `violet`, `green`.
 
 Six horizontal wobble bands — station forms and door knocks at three sample sizes — against a vertical line marking the town's true average. The station bands visibly narrow down the page while sitting entirely to the right of the truth line; the door bands narrow around it.
 
-- **Town construction** (shared `buildTown()`, used by every chart on the page): seeded Park–Miller LCG, seed 42, 10,000 people. For each person: `train = rng() < 0.30`, `early = rng() < 0.20`, `wobble = round((rng()·2−1)·6)`, `mins = (train ? 42 : 20) + (early ? 9 : 0) + wobble`, floored at 5; `left = rng() < 0.11`. Two reach weights: `station = (train ? 0.50 : 0.06) · (early ? 1.8 : 1.0)` and `park = (train ? 0.05 : 0.45)`.
-- **Computed from the town array:** true average **28.3** min; 2,950 of 10,000 travel by train (**29.5%**); train riders average **43.8**, road users **21.8**, a gap of **22.0** min; 2,012 work an early shift (**20%**); 1,133 are left-handed (**11%**).
+- **Town construction — implementation of the preamble above** (shared `buildTown()`, used by every chart on the page): seeded Park–Miller LCG, seed 42, 10,000 people. For each person: `train = rng() < 0.30`, `early = rng() < 0.20`, `wobble = round((rng()·2−1)·6)`, `mins = (train ? 42 : 20) + (early ? 9 : 0) + wobble`, floored at 5; `left = rng() < 0.11`. Two reach weights: `station = (train ? 0.50 : 0.06) · (early ? 1.8 : 1.0)` and `park = (train ? 0.05 : 0.45)`. The preamble states the same rule in words and derives its figures; this bullet is the code that produces them.
+- **Computed from the town array** (the preamble quotes these, derived not asserted): true average **28.3** min; 2,950 of 10,000 travel by train (**29.5%**); train riders average **43.8**, road users **21.8**, a gap of **22.0** min; 2,012 work an early shift (**20%**); 1,133 are left-handed (**11%**). The floor at 5 never binds — the lowest journey in the town is 14 minutes — so the group means follow the stated rule exactly.
 - **Channels:** `channel(key)` builds a cumulative weight table over the town and draws by binary search, so a person's chance of appearing is proportional to that channel's reach. `channel(null)` gives the even door knock.
 - **Per row:** draw `n` people on a fresh seeded stream, take the mean, and set the band half-width to `1.645 · s / √n` where `s` is the standard deviation **of that drawn sample**. Both are printed from the drawn numbers.
 - **The six rows** (station seeds 101/102/103, door seeds 201/202/203):
@@ -63,15 +89,15 @@ Tag classes in HTML: `violet`, `blue`, `magenta`.
 
 **Bullets:**
 - **One question** — how long does the average person in this town take to get to work
-- **Forms left at the station** — the answer comes back long, from a crowd who all commute by train
-- **Forms left on windscreens** — the answer comes back short, from a crowd who all drive to work
-- **Both piles the same size** — so neither survey can blame the other for asking too few people
-- **The truth** — sits between the two answers, and neither survey came anywhere near it
-- **The spread** — the two answers land well over a quarter of an hour apart on the same question
+- **Forms left at the station** — 1,200 forms answer 39.7 minutes, from a pile 78% train riders
+- **Forms left on windscreens** — 1,200 forms answer 23.0 minutes, from a pile only 5% train riders
+- **Both piles the same size** — 1,200 forms each, so neither can blame the other for asking too few
+- **The truth** — 28.3 minutes, between the two answers, and neither came within five minutes of it
+- **The spread** — 16.7 minutes between the two answers, over a quarter of an hour apart
 - **Nobody lied** — every form was filled in truthfully and both piles were counted correctly
-- **Splitting the difference** — averaging the two still misses, because both were wrong in scale
+- **Splitting the difference** — the midpoint of the two is 31.3, still 3.1 minutes above the truth
 
-**Key point:** Two surveys of the same size, asking the same words, came back with answers that disagreed wildly. The only thing that differed was where the forms were placed — so the placement, not the question, produced the answer.
+**Key point:** Two surveys of 1,200 forms each, asking the same words, came back 16.7 minutes apart. The only thing that differed was where the forms were placed — so the placement, not the question, produced the answer.
 
 **Source note (`.src`):** Illustrative Example — the same constructed town; both survey answers and the shape of each pile are computed from the drawn samples.
 
@@ -100,14 +126,14 @@ Three overlaid journey-time histograms on one shared axis — the whole town in 
 Tag classes in HTML: `orange`, `yellow`, `red`.
 
 **Bullets:**
-- **What the station reaches** — more than half of all train riders, and barely a handful of drivers
-- **So the pile fills up** — mostly train riders, where the town itself is mostly drivers
+- **What the station reaches** — 58 of every 100 train riders, and 7 of every 100 road users
+- **So the pile fills up** — 77.2% train riders, where the town itself is only 29.5% train riders
 - **The channel's own shape** — a station is where train riders pass, so its forms are theirs
-- **Nobody in the pile is odd** — the train riders on the forms report what train riders really take
-- **Road users on the forms too** — they report about what road users out in the town report
+- **Nobody in the pile is odd** — train riders on the forms report 44.6 minutes, 43.8 out in the town
+- **Road users on the forms too** — they report 22.8 minutes against 21.8 for road users in the town
 - **Every group answers honestly** — the whole error lives in how many of each group turned up
-- **The arithmetic of it** — an excess of the slow group, times how much slower their trip is
-- **That covers nearly all of it** — almost the entire error is explained by the mix, not by the replies
+- **The arithmetic of it** — 47.7 excess points of train riders × 22.0 min longer per trip = 10.5 min
+- **That covers nearly all of it** — 10.5 of the pile's 11.4-minute error, 92%, is the mix alone
 
 **Key point:** Ask what kind of person your gathering method physically passes through, and you have already predicted your answer. The forms did not distort anybody's reply — the station simply decided how many of each kind of person got one.
 
@@ -130,22 +156,22 @@ Two hundred-square blocks showing what share of each group the station reaches, 
 
 ## Section 4 — Scaling the Train Riders Back Down
 
-**Tags:** `the partial repair` (aqua), `what you measured` (yellow), `what you did not` (mute)
+**Tags:** `the partial repair` (aqua), `what you measured` (yellow), `what you did not` (mute→green)
 
 Tag classes in HTML: `aqua`, `yellow`, `green`.
 
 **Bullets:**
-- **The repair** — the pile has too many train riders, so count each of them for less
-- **The sums** — every train rider counts for a fraction of a person, every road user for several
-- **Why those figures** — they pull each group's share in the pile back to its share in the town
-- **The result** — the answer walks most of the way home, closing nearly all of the error at once
+- **The repair** — the pile is 77.2% train riders against the town's 29.5%, so count each for less
+- **The sums** — every train rider counts for ×0.38 of a person, every road user for ×3.09
+- **Why those figures** — each is the town's share of that group divided by the pile's share of it
+- **The result** — the answer walks from 39.7 to 29.2 minutes, leaving 1.0 of the 11.4-minute error
 - **What you need to do it** — the town's true travel mix, from a census or a survey you trust
 - **The thing nobody recorded** — the forms never asked what shift the person works
-- **Why it mattered** — early starters travel longer, and the pile is stuffed with early starters
-- **Correct that too** — the answer lands exactly right, but only because that field was recorded
+- **Why it mattered** — an early start adds 9 minutes, and 31% of the pile start early to 20% in town
+- **Correct that too** — scaling shift as well brings the answer to 28.3, matching the town exactly
 - **The limit** — a repair reaches every imbalance you measured and not one you did not
 
-**Key point:** Weighting works, and it is worth doing. It only ever fixes the imbalances you thought to record — every unrecorded difference between your pile and the town survives the repair untouched, and nothing in the numbers tells you it is still there.
+**Key point:** Weighting works, and it is worth doing — scaling travel mode alone closed 92% of the error. It only ever fixes the imbalances you thought to record — every unrecorded difference between your pile and the town survives the repair untouched, and nothing in the numbers tells you it is still there.
 
 **Source note (`.src`):** Illustrative Example — the same 1,000-form pile; both scaled answers are computed by re-weighting that pile to the town's known group shares.
 
@@ -180,18 +206,18 @@ A four-step ladder of answers, each step a dot on a shared minutes axis with the
 Tag classes in HTML: `green`, `aqua`, `orange`.
 
 **Bullets:**
-- **The setting** — one small batch of station forms, the cheapest sample anybody could gather
-- **Safe question** — what share of the town is left-handed, where the forms come back a shade low
-- **The comparison** — even an honest small sample of that size wobbles by a few points anyway
-- **So it passed** — the error sits inside the wobble any small sample gives you for free
-- **Why it passed** — left-handers are just as common among train riders as among drivers
-- **Unsafe question** — the average journey, where the same forms come back far too long
-- **How far out** — about ten times the wobble an honest sample of that size would give you
-- **Why it failed** — a train rider's trip is worlds longer than a driver's, and the pile is train riders
+- **The setting** — one batch of 250 station forms, the cheapest sample anybody could gather
+- **Safe question** — what share of the town is left-handed: the forms say 9.2%, the town is 11.3%
+- **The comparison** — an honest 250 lands anywhere from 8.4% to 14.8%, a wobble of ±3.2 points
+- **So it passed** — the 2.1-point error sits well inside the wobble any 250 gives you for free
+- **Why it passed** — 11.1% of train riders are left-handed to 11.4% of drivers, 0.3 apart
+- **Unsafe question** — the average journey: the same forms say 39.6 minutes against the town's 28.3
+- **How far out** — 11.3 minutes off against a ±1.15-minute honest wobble, nearly ten times as far
+- **Why it failed** — a train rider averages 43.8 minutes against a driver's 21.8, 22.0 minutes apart
 - **The one test** — does what you are measuring differ between who you reach and who you miss
 - **Cost of getting it wrong** — demanding a perfect sample for the handedness question is waste
 
-**Key point:** A convenient sample is not a flaw in itself. It goes wrong only when the channel that gathered it sorts people by the very quantity you are measuring — so ask whether your groups would answer differently, and if they would not, take the cheap sample and move on.
+**Key point:** A convenient sample is not a flaw in itself — 250 station forms answered the handedness question to within 2.1 points. It goes wrong only when the channel that gathered it sorts people by the very quantity you are measuring — so ask whether your groups would answer differently, and if they would not, take the cheap sample and move on.
 
 **Source note (`.src`):** Illustrative Example — one seeded 250-form pile answering two questions; both errors and both honest-sample wobbles are computed from the town.
 
@@ -204,7 +230,7 @@ Two stacked panels, one per question. Each shows the wobble an honest 250-person
   | question | forms say | town | off by | honest wobble | verdict |
   |---|---|---|---|---|---|
   | share left-handed | 9.2% | 11.3% | 2.1 points | ±3.2 points | inside |
-  | average journey | 39.6 min | 28.3 min | 11.3 min | ±1.2 min | 10× outside |
+  | average journey | 39.6 min | 28.3 min | 11.3 min | ±1.15 min | 10× outside |
   Group split for each quantity: left-handedness **11.1%** among train riders against **11.4%** among road users (**0.3** points); journey **43.8** min against **21.8** min (**22.0** min).
 - **Title (bold 15px `P.ink`, centered, y=22):** "Two Questions, One Pile of Station Forms"
 - **Panels:** two blocks, the safe one at `y = 44` and the unsafe at `y = 176`, each 104px tall with its own axis so both bands are legible. Panel heading bold 13px in the panel's hue: "WHAT SHARE OF THE TOWN IS LEFT-HANDED" in `P.green`, "HOW LONG IS THE AVERAGE JOURNEY" in `P.orange`.
@@ -222,16 +248,16 @@ Two stacked panels, one per question. Each shows the wobble an honest 250-person
 - **Canvas placement:** `td.viz-col` gets `text-align: center` and the canvas `display: block; width: 100%; margin: 0 auto`. The canvas is capped at 720px, so a wide cell leaves slack.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>term</b>` → one `.key-point` callout → `.src` note. No paragraph blocks, no data tables, no `.example` boxes.
 - **Bullet form:** each is ONE line that does not wrap at 50% column width (≤95 characters), opening with a `<b>bold term</b>` then an em dash and the fact. Count follows the content: 8, 8, 8, 9, 10 across the five sections.
-- **Numbers live in the charts, not the prose — at most a couple of figures in bullets, and only where the figure is the argument.** Bullets and key points state the idea in plain words ("far longer than the truth", "nearly all of the error"); the computed figures appear on the canvases, and the `.src` notes carry the method. Never open a bullet with a count or a size.
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` in `#1a5276`. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no back/home links, no cross-page links, no `.nav` CSS.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue`, `.green`, `.red`, `.orange`, `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06c00`.
 - **Colour rotation, one hue family per section:** section 1 magenta bands against green truth with a violet shrink bracket; section 2 violet and blue histograms against a green truth line; section 3 orange and yellow reach grids; section 4 a magenta→yellow→aqua→green ladder; section 5 green reference bands with aqua and orange markers.
 - **Canvas:** CSS `width: 100%`, `border: 1px solid #e0e0e0`, radius 4px. Intrinsic `width="720"` plus the per-chart height (340, 340, 340, 330, 330). `setup(id)` caches the logical size in `dataset` on the first call, sets `style.maxWidth = 720px`, computes `scale = (cssW/720) × devicePixelRatio`, sizes the backing store to `logical × scale`, and `ctx.scale(scale, scale)` back to logical coordinates. Draws registered in `__charts`, re-run on debounced (150ms) resize.
 - **Canvas font sizes:** chart title bold 15px; in-chart header bold 12–13px; body/axis labels 12px floor; the big callout figure bold 19px; caption bold 13px.
 - **Palette** (shared `P` object): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `yellow #c98500`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`.
-- **One shared town, five charts.** `buildTown()` is called once and cached; every chart draws from that same 10,000-person array via `channel(key)`. This is what makes the figures reconcile across sections — the 28.3-minute truth, the 29% train share and the 22.0-minute group gap are the same numbers on every chart because they come from one array.
+- **One shared town, five charts.** `buildTown()` is called once and cached; every chart draws from that same 10,000-person array via `channel(key)`. This is what makes the figures reconcile across sections — the 28.3-minute truth, the 29% train share and the 22.0-minute group gap are the same numbers on every chart because they come from one array. The reader-facing statement of the same construction is the unnumbered preamble above, rendered in html as a canvas-less `.card-section` before section 1.
 - **Determinism:** no `Math.random()`. Seeded Park–Miller LCG (`s = (s × 16807) % 2147483647`), seed 42 for the town and distinct per-chart seeds for the draws. Every printed figure — sample means, band half-widths, group shares, reach counts, scale factors, the mix product and its percentage — is computed inside the draw function from the drawn data and printed from that variable.
 - **The lead chart is the counterintuitive result, deliberately.** Intuition says more data helps, so the page opens on six bands where the station rows narrow by 3.9× across a 16× increase in data while staying about twelve minutes wrong. A chart that merely showed a biased sample being wrong would not have made the point that the wrongness is immune to sample size.
 - **Bands are honest sampling wobble, not asserted error bars.** Each half-width is `1.645 · s / √n` computed from the drawn sample, checked against a 400-run simulation of the same channel: at n=250 the simulated 5th–95th range was 38.80–40.88 against the analytic 38.75–40.95, and at n=4000 39.60–40.13 against 39.57–40.13. The band describes run-to-run movement only, which is exactly why it cannot see the bias.
-- **Section 5's boundary case is verified in both directions, not asserted.** The left-handed answer is 2.1 points off against an honest wobble of ±3.2 points, so it genuinely passes; the journey answer is 11.3 minutes off against ±1.1, so it genuinely fails. The construction makes handedness independent of travel mode (11.1% against 11.4%) and journey time strongly dependent on it (43.8 against 21.8), which is why one question survives the channel and the other does not.
+- **Section 5's boundary case is verified in both directions, not asserted.** The left-handed answer is 2.1 points off against an honest wobble of ±3.2 points, so it genuinely passes; the journey answer is 11.3 minutes off against ±1.15, so it genuinely fails. The construction makes handedness independent of travel mode (11.1% against 11.4%) and journey time strongly dependent on it (43.8 against 21.8), which is why one question survives the channel and the other does not.
 - **Corrections applied to the earlier version of this page:** the old page was a four-topic list; this file now covers sampling bias alone. Its one sampling-bias figure — "10M biased samples are still wrong" — was asserted with no construction behind it, and is now the computed lead chart. Its Venn-diagram visualization showed a sample circle overlapping a population circle with no quantity attached to it, illustrating nothing measurable; it is replaced by charts whose every mark is a computed number. A named 1936 election survey has been dropped in favour of a constructed town where the true answer is known, so both methods' errors are measurable rather than described.

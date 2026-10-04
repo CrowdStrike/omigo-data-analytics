@@ -16,9 +16,9 @@
 - **Why we use it** — dearer things often are better, so the shortcut is right often enough
 - **Where it breaks** — the seller writes the price, and can raise it without touching the product
 - **The newer twist** — a fresh model number does the same job as a high price
-- **Two cameras** — same sensor, same lens mount, same ISO range, same burst rate, same screen
-- **What actually differs** — the model year printed on the box and $270 on the tag
-- **What the $270 buys** — a higher number, 52% more paid, no feature anyone can name
+- **Five identical specs** — 24 MP sensor, same lens mount, ISO 100–25600, 6 fps, 3.0 in screen
+- **What actually differs** — $520 on the two-year-old X200 against $790 on the new X300
+- **What the $270 gap buys** — 52% more paid, a higher model number, no feature anyone can name
 - **The tell** — if you cannot say what the extra money bought, it probably bought the tag
 
 **Key point:** Price is a claim the seller makes, not a measurement anyone took. The moment you cannot name the feature the extra money buys, the price has stopped being evidence and started being decoration.
@@ -50,10 +50,10 @@ Two camera models compared spec by spec: five identical pairs of bars, then the 
 - **The pattern** — the clearest cases are the ones where the contents are provably identical
 - **Table salt** — 80 cents a pound against $9.60 for the artisan jar, twelve times the price
 - **What is in both jars** — sodium chloride, the same compound, no difference to find
-- **Headache tablets** — a store box works out at 4 cents a tablet, the branded one at 28
-- **Same active ingredient** — printed on both boxes in the same milligram dose
+- **Headache tablets** — $4.00 for 100 works out at 4 cents each, $11.20 for 40 at 28 cents
+- **Same active ingredient** — the same milligram dose on both boxes, at seven times the price
 - **The camera again** — $520 against $790, the mildest of the three at 1.5 times
-- **Why the mild one fools more people** — a small premium sounds like it must buy something
+- **Why the mild one fools more people** — a 1.5× premium sounds like it must buy something
 - **The common thread** — you can name what changed on the label, never inside the package
 
 **Key point:** These are not close calls where quality is hard to judge. The contents are identical by their own labels, so the entire price difference is the tag. The twelve-times case is easy to spot; the 1.5-times case is the one that empties wallets.
@@ -84,16 +84,16 @@ Three pairs of everyday products with identical contents, shown as the multiple 
 **Tags:** `not just talk` (magenta), `same drink` (violet), `the control` (blue)
 
 **Bullets:**
-- **The obvious objection** — people say dearer things are better to look clever, not because they are
+- **The obvious objection** — people call dearer things better to look clever, not because they are
 - **The test** — thirty tasters, one drink, poured twice: plainly, then with a premium tag
 - **Same liquid both times** — the only thing that changed between the pours was the tag
-- **Poured plainly** — the room averaged 5.3 out of ten
+- **Poured plainly** — the room averaged 5.3 out of ten, with scores from 3.0 up to 8.1
 - **Poured with the tag** — 6.8, a jump of 1.5 points on a drink that did not change
-- **How widespread** — twenty-seven of the thirty scored the tagged pour above the plain one
-- **The control** — pour twice with no tag either time and the averages land 0.04 apart
+- **How widespread** — 27 of the 30 scored the tagged pour higher, 2 lower, 1 dead level
+- **The control** — two untagged pours land 0.04 apart: 12 up, 15 down, 3 level, no drift
 - **What that rules out** — the jump is not tasting twice, and it is not posturing either
 
-**Key point:** The control is what makes this worth showing. Two unlabelled pours land on top of each other, so the 1.5-point jump has nowhere to come from except the tag. The tasters were not pretending — the price genuinely changed what they tasted.
+**Key point:** The control is what makes this worth showing. Two unlabelled pours land 0.04 points apart, so the 1.5-point jump has nowhere to come from except the tag. The tasters were not pretending — the price genuinely changed what they tasted.
 
 **Source note (`.src`):** Illustrative Example — thirty constructed tasters, each with a seeded baseline and a fresh pour-to-pour wobble; both averages and all three tallies are computed in the draw function.
 
@@ -120,7 +120,8 @@ Two paired-dot panels side by side: the same drink poured plainly against poured
 ## Regeneration instructions
 
 - **Scope — read this first.** This page is about **price and newness standing in for quality**: the tag is read as a rating, and the seller writes the tag. Keep it concrete. Do **not** reintroduce version-number fault counts, release-age discovery curves, signalling-theory padding curves, or Monte Carlo hit-rate tables — earlier versions of this page carried all four, and they buried a simple idea under invented statistics.
-- **Explain before measuring.** Section 1 says what the bias is in plain words with one worked example. Section 2 gives everyday examples with arithmetic anyone can check in their head. Only section 3 uses generated data, and only because the claim there — that the tag changes perception rather than just talk — genuinely needs a control group to support it.
+- **Explain before measuring.** Section 1 says what the bias is in everyday vocabulary — no statistical terms, no significance talk — with one worked example that names its own figures. Section 2 gives everyday examples with arithmetic anyone can check in their head. Only section 3 uses generated data, and only because the claim there — that the tag changes perception rather than just talk — genuinely needs a control group to support it.
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
 - **Three sections. Do not add a fourth.** The earlier five-section version was unreadable and the extra sections were where the topic drift happened.
 - **Prefer arithmetic over simulation.** A ratio of two prices is checkable by the reader; a correlation coefficient from a seeded draw is not. If a new figure is needed, look for one that divides two numbers already on the page. An earlier draft of section 2 asserted the best product was "the eleventh most expensive of sixty" when its own code made it the thirty-fourth — the kind of error that is invisible when the number comes out of a simulation.
 - **Template:** the card-section layout from `cognitive-biases/05-clustering-illusion.html`. One `.card-section` per section, each holding an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) and a `table.layout` with a single row: `td.text-col` 50% / `td.viz-col` 50%.

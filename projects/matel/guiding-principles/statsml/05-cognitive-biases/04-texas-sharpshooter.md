@@ -17,9 +17,9 @@
 - **Step 2 — spot a cluster** — a few points happen to sit closer together than the rest
 - **Step 3 — invent a rule** — that cluster is treated as proof of a cause
 - **Step 4 — drop the rest** — the data that does not fit is left out of the write-up
-- **The barn wall** — a volley of shots at a blank wall, then a ring painted round wherever they landed thickest
-- **Its fair share** — a ring that small should have caught a couple of holes, and it is holding five times that
-- **The honest ring** — the same ring at a spot named before firing catches almost nothing
+- **The barn wall** — 40 shots at a blank wall, then a ring painted where they landed thickest
+- **Its fair share** — 4.9% of the wall earns 2 of 40 holes; the ring holds 10, five times its due
+- **The honest ring** — the same ring at a spot named before firing catches 1 hole of the 40
 - **Why it fools you** — ring and holes arrive in one picture, so the order is invisible
 - **The defense** — name the target before you look, and make it hold up on a second batch
 
@@ -51,14 +51,14 @@ The barn wall with 40 seeded holes, the after-the-fact ring drawn around the den
 
 **Bullets:**
 - **The claim** — "countries that drink our soda are healthier", with three countries as proof
-- **The three shown** — a light drinker doing poorly, a middling one, and the heaviest doing best
+- **The three shown** — 2 sodas scoring 47, then 3 scoring 79, then 14 scoring 88: a climb of 41
 - **Why it works** — every figure in the advert is real, and wellness rises at each step of the three
-- **The whole file** — a country per row, its sodas a week sitting beside its wellness score
-- **The check anyone can do** — split the file into heavy and light drinkers, count who lands in the healthier half
-- **The even split** — both groups land there in equal measure, so the soda makes no difference at all
-- **Cherry-picking** — showing the handful of countries that fit and never the many that do not
+- **The whole file** — 50 countries, one per row, sodas a week beside the wellness score
+- **The check anyone can do** — call 8 or more sodas heavy, then count who scores 65 or better
+- **The even split** — 13 of 25 heavy drinkers reach 65, and 13 of 25 light ones: no difference
+- **Cherry-picking** — showing the 3 countries that fit and never the 47 that do not
 
-**Key point:** Every figure in the claim is correct, so fact-checking those three countries confirms it. The claim only breaks when you ask what became of the rest of the file, and a reader handed three countries cannot tell how many were dropped.
+**Key point:** Every figure in the claim is correct, so fact-checking those three countries confirms it. The file holds 9,277 trios spanning 8 or more sodas a week, of which 1,979 climb step by step and 1,329 fall, so a trio arguing either case was always on offer — and the country drinking 3 sodas and scoring 79 sits in both of them.
 
 **Source note (`.src`):** Illustrative Example — 50 seeded countries with soda and wellness drawn independently; the shown trio, the opposite trio and both trio counts are found by searching the plotted points.
 
@@ -71,7 +71,7 @@ The three countries in the claim, drawn alone at the top as the reader would see
 - **The trio shown:** searched over trios whose soda counts span 8 or more and step strictly upward in wellness, keeping the largest total climb. Lands on `2 → 47`, `3 → 79`, `14 → 88` — a climb of **+41** wellness points.
 - **The trio that says the opposite:** the same search for the largest fall. Lands on `1 → 86`, `3 → 79`, `13 → 46` — a fall of **−40** points. The `3 → 79` country belongs to both trios: the same country is evidence for and against the soda, and the chart rings it in both colours with a bold 12px `P.ink` note "in both stories".
 - **Points:** radius 4.5. The **45** countries in neither trio `rgba(107,114,128,0.32)` stroked `P.mute`. The three shown `rgba(213,81,129,0.75)` stroked `P.magenta` 2px at radius 6.5, joined by a 2.5px `P.magenta` line. The opposite three ringed 6.5px in `P.aqua` 2px with no fill, joined by a 2px dashed (5/4) `P.aqua` line. The shared country gets both rings, drawn magenta then aqua at radius 8.
-- **Trio census:** of the trios spanning 8+ sodas, **1,979** climb step by step and **1,329** fall step by step. Both counts tallied in the draw function.
+- **Trio census:** **9,277** of the 19,600 possible trios span 8+ sodas with three distinct soda counts; of those, **1,979** climb step by step and **1,329** fall step by step. All three counts tallied in the draw function.
 - **Title (bold 15px `P.ink`, centered, y=22):** "The Three Countries in the Advert"
 - **Top strip — the claim as published** (y 40–130): just the three shown countries as large magenta dots on their own small axis, joined by a 2.5px `P.magenta` line, each labelled beneath in 12px `P.text` as "2 sodas / 47" style. Bold 12px `P.magenta` to the right: "more soda, higher wellness — three for three". This strip is what the reader is given.
 - **Divider:** a 1px `P.grid` horizontal rule at y=142 with 12px `P.mute` centered label above the lower half: "the file those three came from".
@@ -88,15 +88,15 @@ The three countries in the claim, drawn alone at the top as the reader would see
 **Tags:** `the same move, words` (violet), `read backwards` (blue), `120 verses` (magenta)
 
 **Bullets:**
-- **The book** — a long list of short verses, each naming three vague images: a tower, a river, a red sky
-- **The reading** — an event happens, then someone finds the verse whose images match it
-- **What you are shown** — that one verse beside that one event, and the fit looks uncanny
-- **What is not shown** — nearly every other verse in the book, none of which touch what happened
-- **Nothing was foretold** — almost all the verses fit some ordinary event, so fitting one is no feat
+- **The book** — 120 short verses, each naming three of 24 images: a tower, a river, a red sky
+- **The reading** — an event names four images, then someone finds a verse sharing at least two
+- **What you are shown** — one of the 8 verses that fit a typical event, and the fit looks uncanny
+- **What is not shown** — the 112 verses sharing fewer than two images with what happened
+- **Nothing was foretold** — 103 of the 120 verses fit one of 30 ordinary events, so a fit is no feat
 - **Why vagueness pays** — the fewer specifics a verse names, the more events it can be matched to
 - **A real prediction** — is written down before the event, and is wrong if it does not happen
 
-**Key point:** Circling the verse that fits is the barn-wall ring in words. The book is not predicting anything — the reader is picking, after the fact, from a whole shelf of attempts, and only the winner is ever quoted.
+**Key point:** Circling the verse that fits is the barn-wall ring in words. The book is not predicting anything — the reader is picking, after the fact, from 120 attempts, and across 30 ordinary events the fitting count never drops below 3 and reaches 18, so a quotable verse is never in short supply.
 
 **Source note (`.src`):** Illustrative Example — 120 seeded verses and 30 seeded events over a 24-image vocabulary; every match count is tallied in the draw function.
 
@@ -122,10 +122,10 @@ A grid of 120 verse tiles for one chosen event: the 8 that can be read as forete
 - **Canvas placement:** `td.viz-col` gets `text-align: center` and the canvas `display: block; width: 100%; margin: 0 auto`, capped at 720px so a wide cell leaves slack.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>term</b>` → one `.key-point` callout → `.src` note where the figures are constructed. No paragraph blocks, no data tables, no `.example` line restating a bullet.
 - **Bullet form:** each is ONE line at 50% column width (~90–105 characters including the bold label), opening with a `<b>bold label</b>` then an em dash and the idea. Bullet counts: 10 / 7 / 7. Seven is enough for a worked example — resist adding a bullet for every computed figure the chart already shows.
-- **Numbers live in the charts, not the prose — at most a couple of figures in bullets, and only where the figure is the argument.**
-- **Words, not digits, in the text column.** The bullets and key points say "about half", "nearly all", "five times that", "a couple" and "a handful". No decimal percentages, no precise averages, no counts opening a bullet. The chart beside them prints the exact tally, computed at render time, for a reader who wants it. The numbered `Step 1 … Step 4` labels are sequence markers, not data, and stay.
-- **Countable whole numbers only — in the charts.** No correlation coefficients, no fitted slopes, no conversion rates anywhere on the page. A claim is settled by counting things a reader can point at — one group's healthy count against the other's, the lit tiles against the grey — because "r = 0.00" and "4.0 points per serving" are unreadable to a non-statistician and cannot be checked by eye. Section 1's ring-area percentage lives in the chart's side panel so the deserved hole count is derivable rather than asserted, and the prose renders that comparison in words.
-- **Name the move in plain words.** The page uses "cherry-picking" for showing the few cases that fit, and "painted afterwards" for the ring. It does not use multiple comparisons, family-wise error, p-hacking, subgroup analysis or selection bias anywhere in the visible text.
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
+- **Countable whole numbers only.** No correlation coefficients, no fitted slopes, no conversion rates anywhere on the page. A claim is settled by counting things a reader can point at — one group's healthy count against the other's, the lit tiles against the grey — because "r = 0.00" and "4.0 points per serving" are unreadable to a non-statistician and cannot be checked by eye. The prose names the counts; the chart's side panel carries the ring-area percentage so the deserved hole count is derivable rather than asserted.
+- **Name the move in plain words.** The page uses "cherry-picking" for showing the few cases that fit, and "painted afterwards" for the ring. It does not use multiple comparisons, family-wise error, p-hacking, subgroup analysis or selection bias anywhere in the visible text. This governs vocabulary only — it is not a licence to withhold a figure.
+- **The numbered `Step 1 … Step 4` labels are sequence markers, not data, and stay.**
 - **Section titles name the content.** No role labels ("The Trap", "Pipeline Defense") and no phrasing that would fit another page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` in `#1a5276`. `.key-point` `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no back/home links, no cross-page links, no `.nav` CSS.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue`, `.green`, `.orange`, `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06a00`.
@@ -137,5 +137,5 @@ A grid of 120 verse tiles for one chosen event: the 8 that can be read as forete
 - **No simulation anywhere on this page.** Every figure is a direct tally over the plotted points, so a full redraw is a few milliseconds and nothing needs memoising. If a future edit wants a probability figure, derive it in closed form or leave it off — do not add a repeat-loop to the browser for a number no chart displays.
 - **Scope kept distinct from `05-clustering-illusion`.** That page argues that random points clump. This page takes the clumping as given and is about the *selection step* — the ring, the trio, the verse chosen after the fact. The disease-cluster-near-a-factory example belongs to that page and is deliberately absent here. No chart is shared: no dot grid, no coin strip, no shuffle, no street map.
 - **Nothing is presented as measured.** The soda-and-health scatter is seeded with independent axes and labelled Illustrative Example; the factory and prophecy examples are stated as shapes of argument, with no company, place or text named.
-- **No false-positive expectations.** Do not add figures of the form "200 subgroups × 0.05 = 10 significant results by chance" — that is an expected count, not the chance of finding one, and it reads as a discovery count. The selection argument is carried by counted objects instead: 10 holes against 1, and 204 rising trios against 176 falling out of 4,373.
+- **No false-positive expectations.** Do not add figures of the form "200 subgroups × 0.05 = 10 significant results by chance" — that is an expected count, not the chance of finding one, and it reads as a discovery count. The selection argument is carried by counted objects instead: 10 holes against 1, and 1,979 rising trios against 1,329 falling out of the 9,277 that span 8+ sodas.
 - **Layman vocabulary only.** No genome-wide thresholds, correction names, holdout or cross-validation terms. The same ideas appear as "name the group first" and "make it repeat on fresh visitors".

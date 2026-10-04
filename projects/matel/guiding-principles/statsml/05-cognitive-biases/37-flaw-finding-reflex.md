@@ -52,9 +52,9 @@
 - **The careful reviewer** — spends an hour, understands it, agrees with it, and writes "looks good"
 - **What that leaves behind** — one line that is indistinguishable from never having opened the file
 - **The edge-hunting reviewer** — spends ten minutes and files a specific, quotable objection
-- **What that leaves behind** — a comment with their name on it, and a visible contribution to point at
-- **How the two get read** — the second reviewer looks engaged and the first looks like a rubber stamp
-- **So the reflex is rational** — finding a flaw is the only reviewing that produces evidence of itself
+- **What that leaves behind** — a comment with their name on it, and a contribution to point at
+- **How the two get read** — the second reviewer looks engaged, the first a rubber stamp
+- **So the reflex is rational** — finding a flaw is the only review that evidences itself
 - **The part that is a bias** — the search stops once something is found, because the goal was met
 - **What it costs the author** — the main path goes unread by anyone, and nobody notices that it did
 

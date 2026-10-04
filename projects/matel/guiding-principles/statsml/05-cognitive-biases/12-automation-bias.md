@@ -12,13 +12,13 @@
 **Tags:** `core idea` (violet), `identical answers` (blue), `only the badge moved` (magenta)
 
 **Bullets:**
-- **The setup** — 240 suggestions land in a review queue, and a reviewer either accepts or rejects each one
-- **The suggestions** — 190 of them are right and 50 are wrong, and that split is the same for both reviewers
-- **The only difference** — one reviewer is told a colleague wrote them, the other that a tool produced them
-- **Told a colleague wrote it** — 31 of the 50 wrong ones get caught, so 19 slip through to the customer
+- **The setup** — 240 suggestions reach a review queue, and a reviewer accepts or rejects each
+- **The suggestions** — 190 are right and 50 wrong, the same split for both reviewers
+- **The only difference** — one reviewer is told a colleague wrote them, the other a tool
+- **Told a colleague wrote it** — 31 of the 50 wrong ones are caught, so 19 reach the customer
 - **Told a tool produced it** — only 8 get caught, and 42 wrong suggestions go out unchallenged
-- **The badge alone** — waves through 23 extra wrong answers, more than twice as many as the other reviewer
-- **It also lifts the good ones** — 98% of correct suggestions accepted against 87%, which looks like a win
+- **The badge alone** — waves through 23 more wrong answers, over twice the other reviewer
+- **It also lifts the good ones** — 98% of correct ones accepted against 87%, which looks like a win
 - **What that costs** — 18% of everything accepted is wrong, against 10% under the sceptical reviewer
 
 **Key point:** The suggestions were identical, so nothing about the accepting reviewer's higher throughput reflects better work arriving. The machine label bought agreement, and it bought it on the wrong answers just as readily as the right ones.
@@ -47,13 +47,13 @@ Two review outcomes for one identical pool of suggestions, with the 50 wrong one
 
 **Bullets:**
 - **The work** — a hundred cases a day, of which 85 are routine and 15 are unusual in some way
-- **What the tool does well** — 95 of every 100 routine cases right, because routine is what it was trained on
-- **What the tool does badly** — 40 of every 100 unusual cases right, worse than a coin on the hard ones
+- **What the tool does well** — 95 of 100 routine cases right, routine being what it trained on
+- **What the tool does badly** — 40 of 100 unusual cases right, worse than a coin on hard ones
 - **What a person does** — 80% on routine and 75% on unusual, steady but never brilliant at either
 - **Person handles everything** — 79.3 cases right a day, which is the mark the tool has to beat
 - **Tool handles everything** — 86.8 right, a real gain, and it is this gain that earns the trust
 - **Tool on routine, person on unusual** — 92.0 right, and no better arrangement of these two exists
-- **What blanket trust costs** — 9 wrong cases a day on unusual work against 3.8, all in the hard cases
+- **What blanket trust costs** — 9 wrong cases a day on unusual work against 3.8, all hard ones
 
 **Key point:** Handing everything to the tool genuinely beats doing everything by hand, which is why it feels right. The 5.2 cases a day lost to it are all in the small hard slice, so the arrangement that looks best in aggregate is the one that fails hardest exactly where failure matters.
 
@@ -81,10 +81,10 @@ Three arrangements of the same hundred cases, each bar split into the routine an
 **Tags:** `how it goes wrong` (orange), `nobody decided this` (yellow), `nothing watching` (red)
 
 **Bullets:**
-- **The arrangement** — 200 outputs a week get a spot check, and anything wrong that is spotted gets fixed
+- **The arrangement** — 200 outputs a week get a spot check, and whatever is spotted gets fixed
 - **The first twelve weeks** — the tool is right 95 times in 100, so almost every check finds nothing
-- **What that does to the checking** — it drifts from 60% of outputs in week one down to 4% by week 12
-- **Nobody decided to stop** — each week on its own felt like time spent looking at things that were fine
+- **What that does to the checking** — it drifts from 60% of outputs in week one to 4% by week 12
+- **Nobody decided to stop** — each week alone felt like time spent on things that were fine
 - **Week 13** — an upstream change drops the tool to 60% right, and weekly errors jump from 12 to 81
 - **What the faded checking catches** — 10 of the 651 errors made over the eight broken weeks
 - **So 641 bad outputs** — 98% of them, reach customers, and no week looks unusual from the inside
@@ -105,8 +105,8 @@ Weekly errors as bars with the catch line over them, the checking rate falling a
 - **Error bars:** one per week, `rgba(107,114,128,0.22)` stroked `rgba(107,114,128,0.45)`, labelled 12px `P.mute` "grey bars — errors the tool made" under the axis.
 - **Checking rate:** drawn as a filled area on its own 0–60% right-hand scale in `rgba(201,133,0,0.18)` with a 2px `P.yellow` top edge, labelled bold 12px `P.yellow` "share of outputs checked" with "60%" and "4%" printed at its two ends from the computed rates.
 - **Catch line:** 3px `P.orange` with 4px dots, one point per week, labelled bold 12px `P.orange` "errors actually caught".
-- **Break marker:** 2px `#e74c3c` dashed vertical at week 13, bold 12px `#e74c3c` "week 13 — the tool drops to 60% right" above it and 12px `P.mute` "errors a week: 11 → 80" beneath, both computed.
-- **Side panel** at `w−138`: bold 12px `P.ink` "OVER THE EIGHT / BROKEN WEEKS", bold 19px `#e74c3c` "631" over 12px `P.mute` "bad outputs out, / 98% of them", then bold 19px `P.orange` "11" over 12px `P.mute` "caught by the / faded checking".
+- **Break marker:** 2px `#e74c3c` dashed vertical at week 13, bold 12px `#e74c3c` "week 13 — the tool drops to 60% right" above it and 12px `P.mute` "errors a week: 12 → 81" beneath, both computed.
+- **Side panel** at `w−138`: bold 12px `P.ink` "OVER THE EIGHT / BROKEN WEEKS", bold 19px `#e74c3c` "641" over 12px `P.mute` "bad outputs out, / 98% of them", then bold 19px `P.orange` "10" over 12px `P.mute` "caught by the / faded checking".
 - **Caption (bold 13px `P.orange`, centered, `h−10`):** "The checking was abandoned during the calm, so the break arrived unwatched."
 
 ---
@@ -121,7 +121,7 @@ Weekly errors as bars with the catch line over them, the checking rate falling a
 - **Hue family per section:** 1 violet with a magenta spread, 2 aqua/green, 3 orange with a red alarm.
 - **Canvas:** intrinsic `width="720"` plus per-chart height (340, 330, 340). `setup(id)` caches the logical size in `dataset` on first call, sets `style.maxWidth = 720px`, computes `scale = (cssW/720) × devicePixelRatio`, sizes the backing store to `logical × scale`, and `ctx.scale(scale, scale)` back to logical coordinates. Draws registered in `__charts`, re-run on debounced (150ms) resize.
 - **Canvas fonts:** chart title bold 15px; in-chart header bold 12px; body and axis labels 12px floor; big callout figure bold 19px; caption bold 13px.
-- **Palette** (shared `P`): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `yellow #c98500`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`. Hard red `#e74c3c` reserved for the genuine alarms — the break week and the 956 that got out.
+- **Palette** (shared `P`): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `yellow #c98500`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`. Hard red `#e74c3c` reserved for the genuine alarms — the break week and the 641 that got out.
 - **Determinism:** no `Math.random()`. Seeded Park–Miller LCG (`s = (s × 16807) % 2147483647`), seed 42 in section 1, seed 2024 in section 3. Section 2 uses no PRNG at all — it is arithmetic on four stated rates.
 - **Every printed figure is computed in its draw function** — section 1's counts and shares from the review tallies, section 2's daily totals from the rate arithmetic with the best pairing found by scanning all four, section 3's weekly counts and both escape totals from the simulated stream.
 - **Section 3 was cut down from a two-team version.** It ran 26 weeks with a second team, a second PRNG stream and an alarm rule defined as the first post-break week beating that team's own worst quiet week. The numbers were sound but it was a simulation study, not a tutorial panel — one team and one fading line carry the same lesson. Do not reinstate the second arm.

@@ -19,8 +19,8 @@
 - **What changed** — only the load, since it is the same system with the same design
 - **So 9 of the 10 failures** — exist only because of the decision to push it, not the build
 - **What people remember** — the bad weeks, and nothing at all about the load at the time
-- **The name it gets** — unreliable, which is a fair description of the second column only
-- **Who chose the column** — whoever set the load, and that decision is nowhere in the story
+- **The name it gets** — unreliable, which is a fair description of the stretched load alone
+- **Who chose the load** — whoever pushed it past the rating, and that choice is nowhere in the story
 
 **Key point:** A reputation is formed from remembered failures, and failures come from the operating point rather than the design. Push a good system and it will earn the name of a bad one, because the load that caused the failures leaves no trace in anybody's memory of them.
 
@@ -49,10 +49,10 @@ A hundred week-squares per load, bad weeks marked, so the two grids sit side by 
 
 **Bullets:**
 - **The first push past the limit** — nothing goes wrong, because 9 weeks in 10 are fine anyway
-- **After a month past the limit** — still nothing wrong, and that is the likely outcome, not luck
+- **After a month past the limit** — still nothing wrong, and at 66% odds that is the likely outcome
 - **What that quiet is taken for** — proof the old limit was too cautious and there is room to spare
-- **What the quiet actually is** — the ordinary result of a 1-in-10 chance not landing yet
-- **What it would take to prove it** — many months of clean running, far more than anyone waits
+- **What the quiet actually is** — a 1-in-10 chance not landing yet, still 25% likely at three months
+- **What it would take to prove it** — six clean months still leaves a 6% chance it was only luck
 - **So the limit moves** — each quiet stretch makes the next push feel like the normal way to work
 - **Nobody ever decides this** — there is no meeting, no sign-off, just a limit that drifted outward
 - **When the bad week arrives** — it is read as the system failing, since the load now looks normal
@@ -72,7 +72,7 @@ The chance of still having seen no failure, week by week past the limit, so the 
 - **Layout:** `PX=62 … w−40`, baseline y=238, top y=62, y-axis 0% to 100% with gridlines every 25 labelled 12px `P.mute`. X-axis weeks 1 to 26 with ticks at 1, 4, 8, 13, 20, 26.
 - **The curve:** 3px `P.orange` with a `rgba(217,89,38,0.14)` fill beneath it, and a dot radius 5 at each labelled week with its value in bold 12px `P.orange`.
 - **The early band:** the first four weeks shaded `rgba(201,133,0,0.14)` and labelled bold 12px `P.yellow` "a month of quiet is the likely outcome, not evidence".
-- **The late marker:** a 2px dashed `#e74c3c` vertical line at week 13 labelled bold 12px `#e74c3c` "even here, a quarter of runs have still seen nothing".
+- **The late marker:** a 2px dashed `#e74c3c` vertical line at week 13 labelled bold 12px `#e74c3c` "even here, N% of runs have still seen nothing", where N is `Math.round(quiet(13) × 100)` = **25** — computed, not written as a word, so the label cannot drift from the curve it sits on.
 - **Note line** (12px `P.mute`, centered, `h−28`): "by the time this curve is low enough to prove anything, the stretched load is the normal one".
 - **Caption (bold 13px `P.orange`, centered, `h−8`):** "Quiet is what a 1-in-10 chance looks like most of the time."
 

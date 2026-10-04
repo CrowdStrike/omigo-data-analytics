@@ -5,6 +5,28 @@
 
 **Subtitle:** One complaint colours a whole review, while the twenty quiet successes that surround it average into nothing.
 
+**Which sibling holds which half:** the construction below is split across the siblings and must not be re-merged. The reader-facing half — the unnumbered preamble, the verdict rule in words, the derivation table — lives in `.txt.md`. The code-level half — the `LOG` literal, the `verdict()` helper, `R_FELT`, the `lcg()` jitter seeds and all drawing detail — lives in `.viz.md`. This combined spec keeps both.
+
+---
+
+## Preamble (unnumbered, before Section 1 — appears in `.txt.md` and in the html as a canvas-less `.card-section`)
+
+**Heading (`<h2>`):** The one construction behind every figure on this page
+
+**The one construction behind every figure on this page.** One supplier's log of **24 entries**, of which **20 went well and 4 went badly** — no entry is bigger than any other, each counts as one. A **verdict out of ten** is the good side's share of the weight: **10 × good ÷ (good + R × bad)**, where **R** is how many good entries one bad entry is priced at. **R = 1** is a fair tally. **R = 5** is the dial this page is about. Nothing else is needed to redo any number here by hand.
+
+| Quantity | Value | How it checks out |
+|---|---|---|
+| Entries on the log | 24 | 20 good + 4 bad |
+| Good side, counted once each | 83.3% | 20 ÷ 24 |
+| Bad side, counted once each | 16.7% | 4 ÷ 24 |
+| Weight on each side at R = 5 | 20 vs 20 | good 20 × 1; bad 4 × 5 |
+| Each side's share of that weight | 50% | 20 ÷ (20 + 20) |
+| The fair total | 8.3 | 10 × 20 ÷ (20 + 1×4) = 200 ÷ 24 |
+| The felt total | 5.0 | 10 × 20 ÷ (20 + 5×4) = 200 ÷ 40 |
+
+Section 1 reads that one log at R = 1 and at R = 5. Section 2 keeps R = 5 and moves the good and bad counts by one entry each. Section 3 drops the fixed dial and asks what a bad entry really costs, where **20 ÷ 4 = 5.0** is the price at which the two agree.
+
 ---
 
 ## Section 1 — One Log, Weighed Two Ways
@@ -29,12 +51,14 @@
 
 A row of entry tiles, then the same log drawn twice as a 100%-weight bar — once counted evenly, once weighted as it feels — and a verdict strip underneath carrying both totals.
 
-- **Shared construction (used by every chart on the page):** the log is the fixed literal array
+- **Shared construction — implementation of the preamble above:** the preamble carries the premise
+  and the derivation table in human-readable form; this bullet is the code that produces them. The
+  log is the fixed literal array
   `LOG = [1,1,1,1,0, 1,1,1,1,0, 1,1,1,1,1,1,0, 1,1,1,1,0, 1,1]` where `1` went well and `0` went
-  badly — 20 good, 4 bad, 24 entries. A verdict out of ten is the good side's share of the weight,
-  `verdict(g, b, R) = 10 · g / (g + R·b)`, where `R` is how many good entries one bad entry is
-  priced at. `R = 1` is a fair tally, `R_FELT = 5` is the dial this page is about. Counts are taken
-  from the array, never typed in, so every figure on the page follows from the tiles that are drawn.
+  badly — 20 good, 4 bad, 24 entries. The verdict helper is
+  `verdict(g, b, R) = 10 · g / (g + R·b)`, with `R = 1` the fair tally and `R_FELT = 5` the page's
+  dial. Counts are tallied from the array, never typed in, so every figure on the page follows from
+  the tiles that are drawn. Changing `LOG` or `R_FELT` invalidates the preamble table — re-derive it.
 - **Why there is no random draw:** the log is a fixed literal because the counts themselves carry
   the lesson, and every verdict is closed-form. The seeded `lcg()` helper is present and is used
   only to jitter the vertical position of the forty dots on the verdict strip so they do not
@@ -75,10 +99,10 @@ A row of entry tiles, then the same log drawn twice as a 100%-weight bar — onc
 - **Add one more good entry** — the verdict moves to 8.08, a gain of eight hundredths of a point
 - **Add one more bad entry instead** — it falls to 6.67, a drop of 1.33 points off the same start
 - **One step each way** — same size of entry, and the bad step moves the verdict 17 times as far
-- **Why the gap beats the dial** — the good side already holds twenty, so entry twenty-one adds little
+- **Why the gap beats the dial** — the good side already holds twenty, so entry 21 adds little
 - **The bad side holds one** — so a second bad entry doubles the entire weight pulling downward
 - **The repair bill** — twenty more good entries just to climb back to the 8.0 you already had
-- **Never all the way back** — with a bad entry on the log the verdict approaches ten, never reaches it
+- **Never all the way back** — with a bad entry on the log the verdict nears ten, never reaches it
 
 **Key point:** Good entries pile up with shrinking returns and bad ones do not, so the two sides never average. The small side sets the level and the big side can only dilute it, which is why a verdict full of good news still reads like the one complaint.
 
@@ -121,13 +145,13 @@ Four curves of verdict against the number of good entries, one curve per number 
 **Tags:** `the defence` (green), `cost of being wrong` (aqua), `the crossover` (violet)
 
 **Bullets:**
-- **The rule under test** — call the log bad once the weighted bad side matches the weighted good side
+- **The rule under test** — call the log bad once the weighted bad side matches the good
 - **On this log** — that rule fires exactly when one bad entry is priced at five good ones
-- **What settles whether it is right** — what it costs you to be wrong in each direction, nothing else
+- **What settles whether it is right** — what being wrong costs in each direction, nothing else
 - **A contaminated delivery** — worth about forty clean ones, so cutting the supplier off is correct
 - **A late shipment** — worth about eight on-time ones, past the line too, so alarm is right again
-- **A snappish reply from a colleague** — worth about a third of a helpful one, and the rule still bins them
-- **What that throws away** — 18.8 helpful acts' worth, and those acts were the thing you wanted to keep
+- **A snappish reply** — worth a third of a helpful one, and the rule still bins them
+- **What that throws away** — 18.8 helpful acts' worth, and those were what you wanted to keep
 - **The crossover** — break-even sits at 5.0, and one fixed dial cannot be right on both sides of it
 
 **Key point:** Leaning toward alarm is the correct call wherever missing a real problem costs far more than a false alarm, which covers most hazards — there, a dial of five is if anything too mild. It stops being correct where the good acts are the thing you were trying to sustain, because then the rule spends them to buy an alarm you did not need.

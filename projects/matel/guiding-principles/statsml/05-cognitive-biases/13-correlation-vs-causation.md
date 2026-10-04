@@ -15,12 +15,12 @@
 
 **Bullets:**
 - **What was counted** — 28 people, their vitamin pills a week, their days not sick
-- **What the chart shows** — the people taking more pills were sick on fewer days
+- **What came out** — the 14 heaviest pill takers were well 13 more days a year than the 14 lightest
 - **The obvious conclusion** — vitamins work, so hand them to everybody else
 - **The question nobody asks** — what kind of person buys vitamins in the first place
 - **The answer** — the same person who jogs, sleeps properly and eats their vegetables
 - **So who earned the healthy days** — the jogging and the sleeping, not the pills
-- **Why the chart still rises** — those habits bought the health and bought the pills too
+- **Why the two still move together** — those habits bought the health and bought the pills too
 - **What the pills were** — a marker of the kind of person, not the reason they were well
 
 **Key point:** The chart is an honest picture of the data. "Vitamins keep you well" is a story about a world nobody watched — and the very same picture gets drawn by six completely different worlds.
@@ -47,14 +47,14 @@ Left: the innocent-looking scatter. Right: the boxes-and-arrows picture that exp
 **Tags:** `the whole list` (orange), `six pictures` (yellow), `one shape` (red)
 
 **Bullets:**
-- **One shape, six reasons** — the dots slope up in all six, and only one is worth acting on
+- **One shape, six reasons** — all six worlds make pills and sick days slope up, only one pays
 - **It really works** — the pills do it, so handing them out delivers what was promised
 - **The cause runs backwards** — people who are never ill are the ones who bother with pills
 - **A third thing causes both** — the jogging buys the health and buys the vitamins too
 - **Somebody dropped rows** — the people who did not fit the story quietly left the data
 - **It is pure luck** — with a handful of people, a line through them means nothing
 - **Both simply grew** — pill sales and lifespans both drifted up over the decades
-- **What you cannot do** — pick between these six by staring harder at the dots
+- **What you cannot do** — pick between the six from pills against sick days, however long you look
 
 **Key point:** "Correlation is not causation" is the easy half that everyone can recite. The hard half is this list — and telling the six apart needs to know where the numbers came from, which is exactly what a chart leaves out.
 
@@ -84,11 +84,11 @@ One shared scatter at the top, then six small explanation pictures in a three-by
 
 **Bullets:**
 - **What a shop sees** — the products with the most shelf space are the ones selling most
-- **The tempting move** — give the slow products more space and watch them take off
+- **The tempting move** — give the ten slowest products three more slots each and watch them take off
 - **What actually happened** — last year's best sellers were handed the space to begin with
 - **So the arrow points the other way** — selling well won the space, not the reverse
-- **Why the plan disappoints** — space helps a little, nowhere near what the chart suggested
-- **The part people forget** — that space came off the best sellers, which now sell less
+- **Why the plan disappoints** — those 30 moved slots promise 120 more units a week and deliver 12
+- **The part people forget** — those 30 slots came off the best sellers, which now sell less
 - **Net effect on the shop** — roughly nothing, after weeks of shifting shelves around
 - **The tell** — ask what was decided first, and the whole picture flips
 
@@ -117,8 +117,8 @@ Left: the steep-looking scatter. Right: the assumed picture struck out, the real
 
 **Bullets:**
 - **Two counts in one town** — cafes on the high street, and dogs registered, over 24 years
-- **What the chart shows** — they rise together so neatly it looks like a law of nature
-- **The number you could quote** — around 50 extra dogs for every cafe that opened
+- **How neatly they rise** — cafes go 6 to 48 while dogs go 429 to 2482, like a law of nature
+- **The number you could quote** — about 54 extra dogs for every cafe that opened
 - **What connects them** — nothing whatsoever, and no dog has ever been in a cafe
 - **What is really happening** — the town filled up, and both counts rose with the people
 - **Why it feels convincing** — anything growing keeps step with anything else growing
@@ -179,7 +179,8 @@ Two halves split by a vertical `P.grid` rule: the safe act on the left, the unsa
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`. Five `.card-section` blocks, each an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) plus a `table.layout` with one `<tr>`: `td.text-col` 50% / `td.viz-col` 50%.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` callout → `.src` note. No paragraph blocks, no data tables.
 - **Bullet form:** ONE line each, ≤95 characters including the bold label, so nothing wraps at 50% column width.
-- **Register — the governing constraint.** This is one of the easiest concepts on the site and the page must read that way. Everyday examples, plain words, no statistical vocabulary in anything the reader sees: no fitted slopes, no correlation values, no percentages, no "typical miss", no invented metrics. The word "correlation" appears only in the page title and in the phrase being quoted and dismissed. "Slope" survives only as the everyday verb in "the dots slope up".
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
+- **Register — the governing constraint.** This is one of the easiest concepts on the site and the page must read that way. Everyday examples and plain words, and no statistical vocabulary in anything the reader sees: no fitted-slope or correlation values, no percentages, no "typical miss", no invented metrics. Plain counts in everyday units (days, units a week, dogs per cafe) are not vocabulary and belong in the prose. The word "correlation" appears only in the page title and in the phrase being quoted and dismissed. "Slope" survives only as the everyday verb in "slope up".
 - **Visual grammar — pictures first.** Every section leads with a boxes-and-arrows picture of who causes whom; any scatter is supporting evidence beside it, never the main event. The recurring motif is a dashed arrow struck through with a red cross, meaning *this is the link everyone assumes and it is not there*. It appears in `c1`, `c3`, `c4` and `c5`, which is what ties the page together.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse; td vertical-align top, padding 12px; `.viz-col` `text-align: center`. `ul` 0.92rem, margin `8px 0 8px 20px`; `li` 4px bottom margin; `li b` `#1a5276`. `.key-point` `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links, no cross-page links.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes: `.blue` `.green` `.red` `.orange` plus `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06c00`.

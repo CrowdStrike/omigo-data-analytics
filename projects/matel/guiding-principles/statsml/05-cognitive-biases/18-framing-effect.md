@@ -13,11 +13,11 @@
 
 **Bullets:**
 - **The measure** — the share of parcels a depot got there on time, one figure for each month
-- **What happened** — the year opened a little higher than it closed, drifting down in between
-- **The panel on the left** — its scale starts just under the worst month and stops just over the best
-- **What that does** — the line dives almost the whole height of the panel and reads as collapse
-- **The panel on the right** — the same months on a scale running from nothing at all up to perfect
-- **What that does** — the line barely leaves the flat, so the year reads as nothing happened
+- **What happened** — on-time ran 90.0% in January and 88.2% in December, drifting down between
+- **Cropped to the data** — a scale of 88.1 to 90.2 makes the 1.8-point fall cross 86% of the height
+- **How that reads** — a line falling nearly the full height of a plot reads as collapse
+- **Drawn from zero** — the same months on a 0-to-100 scale put the same fall under 2% of the height
+- **How that reads** — the line barely leaves the flat, so the year reads as nothing happened
 - **Nothing was faked** — both panels plot every point correctly from one identical list
 
 **Key point:** The reader is not measuring parcels, they are measuring how far the line moved down the page. Whoever picks the top and bottom of the scale picks how far that is, and so picks the conclusion.
@@ -47,12 +47,12 @@ Two line panels side by side plotting one identical twelve-value series, differi
 **Bullets:**
 - **The board** — eight branches, each bar its sales as a percent of last month
 - **The rule** — a branch under the target is painted red, one at or over it green
-- **Top row, target at 100** — hold last month's sales and you pass, so three go red
-- **Bottom row, target at 103** — the same eight bars, and now six of them go red
-- **The bars never changed** — both rows are drawn from one list, same heights, same labels
-- **What the room does** — reads the red count as how the region did, and panics at the second row
+- **At a target of 100** — hold last month's sales and you pass, so three of the eight go red
+- **At a target of 103** — the same eight figures, unchanged, and now six of the eight go red
+- **The bars never changed** — one list drawn twice, same heights, same labels, only the target moved
+- **What the room does** — reads the red count as the region's result, panicking at the harder target
 - **What red actually marks** — which side of somebody's chosen number a branch fell on
-- **The figure neither row shows** — the typical branch beat last month, a modest but real result
+- **What the colours hide** — the typical branch ran 100.5, half a point above last month
 
 **Key point:** A target is a choice, not a measurement, and colour hides that it was ever made. Red arrives as a verdict already reached, so the reader argues about branches instead of asking who set the number and why.
 
@@ -81,12 +81,12 @@ The same eight bars drawn twice, one row above the other. The bars are identical
 
 **Bullets:**
 - **A cropped scale is not automatically a lie** — sometimes the narrow band is the whole story
-- **A patient's temperature** — a run of readings taken across one illness, rising then easing off
-- **Drawn on a wide scale** — the fever is a faint wobble near the top and looks like nothing at all
-- **Drawn on a scale cropped to the fever** — the illness fills the panel, the picture a doctor needs
+- **A patient's temperature** — eight readings across one illness, 36.8 up to 38.9, easing to 37.9
+- **Drawn from 0 to 40 degrees** — the 2.1-degree fever is 5% of the height and looks like nothing
+- **Cropped to 36.5–39.2 degrees** — the same fever fills 78% of the height, what a doctor needs
 - **Why cropping is right here** — a couple of degrees separates resting at home from a hospital bed
 - **Where it turns** — a bar chart, because a reader takes bar height as how much there is
-- **Cut the base off a bar chart** — 100.5 beside 102.0 draws the second bar four times as tall
+- **Cut the base off a bar chart** — 102.0 beside 100.5 is 1.5% more, drawn 4.0 times as tall
 - **The working rule** — crop a line when the band is the story, never crop a bar the eye measures
 
 **Key point:** The test is not whether the scale starts at zero, it is what the reader's eye is being invited to measure. A line asks how the value moved, so cropping to the band it moved in is honest. A bar asks how much there is, so a cut base makes the eye read a ratio that does not exist.
@@ -119,7 +119,7 @@ Two blocks. On the left, one temperature series drawn on a full scale and on a c
 - **Canvas placement:** `td.viz-col` gets `text-align: center` and the canvas `display: block; width: 100%; margin: 0 auto`. The canvas is capped at 720px, so a wide cell leaves slack — centering puts the chart in the middle of the right half.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` callout → `.src` note. Every section on this page is a constructed example, so every section carries a `.src`. No paragraph blocks, no data tables, no philosophy box.
 - **Bullet form:** each is ONE line that does not wrap at 50% column width (≤105 characters including the bold label). Bullet counts follow the content: 7, 8, 8. No padding, no line that restates another.
-- **Numbers live in the charts, not the prose** — at most a couple of figures in bullets, and only where the figure is the argument. Bullets state the idea in plain words ("a slight slip", "most of the board goes red"); the exact values, shares, counts and ratios are computed and printed on the canvas. No bullet opens with a count, a size or a percentage, and no decimal percentages or precise averages appear in prose.
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
 - **Section titles name the content**, never a role. No index number appears anywhere on the page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` in `#1a5276`. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links, no cross-page links.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `.green` `.red` `.orange` `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`.

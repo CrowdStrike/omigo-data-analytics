@@ -5,6 +5,58 @@
 
 **Subtitle:** Ask for feedback and you get answers from whoever can afford to give them. The people the problem lands on hardest are usually the ones least able to say so out loud.
 
+**Which sibling holds which half:** the construction below is split across the siblings and must not be re-merged. The reader-facing half — the unnumbered preamble, the two private numbers and the push arithmetic in words, the table of who is surveyed on which form, and the derivation table — lives in `.txt.md`. The code-level half — the constant *names* `ROUGH` / `FINE` / `SPREAD` / `COST` / `RESID` / `THRESH`, the `bell()` / `panel()` / `form()` / `feltScores()` / `cnt()` / `pct()` helpers, the `lcg()` seed and all drawing detail — lives in `.viz.md`. This combined spec keeps both.
+
+---
+
+## Preamble (unnumbered, before Section 1 — appears in `.txt.md` and in the html as a canvas-less `.card-section`)
+
+**Heading (`<h2>`):** The one construction behind every figure on this page
+
+**The one construction behind every figure on this page.** Every respondent carries two private numbers. A **private opinion** out of ten — what they actually think — spread **1.6** around **4.6** for a poorly served population and around **6.9** for a well served one. And a **personal price of speaking up** between **0.7** and **1.3**, how heavily that cost falls on this particular person. What they **write on the form** is their private opinion pushed upward by **2.8 × dependence × their personal price**, where **dependence** runs from 0 (free to leave tomorrow) to 1 (no alternative at all). Take the name off the form and only **18%** of that upward push survives. A written score **under 5** counts as a complaint, so the raw value has to land under **4.5** before rounding.
+
+| Section | Who is being surveyed | Which form they fill in |
+|---|---|---|
+| 1 | two groups of 150, both privately around 4.6 — one at dependence 0.95, one at 0.10 | a named form, once |
+| 2 | 400 around 4.6 at dependence 0.95, and 400 around 6.9 at dependence 0.12 | named, then unnamed, same people both times |
+| 3 | one group of 400 around 4.6, surveyed six times at dependence 0.95, 0.85, 0.68, 0.48, 0.30, 0.14 | a named form every time |
+
+What the upward push does before a single answer is counted — this is the whole mechanism:
+
+| Situation | Upward push at an average price of 1.0 | Highest private opinion that still files |
+|---|---|---|
+| no alternative (0.95), named form | 2.66 = 2.8 × 0.95 × 1.0 | 1.0 to 2.6 |
+| no alternative (0.95), unnamed form | 0.48 = 2.66 × 0.18 | 3.9 to 4.2 |
+| three alternatives (0.10), named form | 0.28 = 2.8 × 0.10 × 1.0 | 4.1 to 4.3 |
+
+A captive respondent has to privately rate the service a 1 or a 2 before a complaint survives the push onto the form. A free one only has to think it is below about 4.2. Both ranges are **4.5 − 2.8 × dependence × price** at the two ends of the price range, 0.7 and 1.3.
+
+Every quantity the bullets and charts quote, and how it follows:
+
+| Quantity | Value | How it checks out |
+|---|---|---|
+| Section 1 pooled size | 300 | two panels of 150 |
+| Quietly unhappy, section 1 | 74 and 72, so 146 of 300 | 74 + 72 = 146; 146 ÷ 300 = 48.7% |
+| Complaints filed, section 1 | 4 and 64, so 68 of 300 | 4 + 64 = 68; 68 ÷ 300 = 22.7% |
+| Felt against filed, captive group | 49.3% against 2.7% | 74 ÷ 150 and 4 ÷ 150 |
+| What never reached the form | 46.7 points | 70 ÷ 150 = 46.67, printed to one decimal |
+| The 70 | 70 of the 74 | 74 quietly unhappy − 4 who filed |
+| Named forms, section 2 | 5.3% and 5.5% | 21 ÷ 400 = 5.25 and 22 ÷ 400 |
+| Unnamed forms, section 2 | 39.0% and 7.3% | 156 ÷ 400 and 29 ÷ 400 = 7.25 |
+| The two gaps | 33.8 and 1.8 points | 135 ÷ 400 = 33.75 and 7 ÷ 400 = 1.75 |
+| Who newly spoke up | 135 and 7 | 21 + 135 = 156 and 22 + 7 = 29 |
+| What the named form tells apart | 0.3 points | 1 ÷ 400 = 0.25, the gap between 22 and 21 |
+| What the unnamed form tells apart | 31.8 points | 127 ÷ 400 = 31.75, the gap between 156 and 29 |
+| Private rate, section 3 | 191 of 400 — 47.8% | 191 ÷ 400 = 47.75; one panel, so one count |
+| Reported across the six steps | 21, 26, 48, 79, 117, 162 | 5.3, 6.5, 12.0, 19.8, 29.3, 40.5% of 400 |
+| The rise end to end | 35.3 points | 141 ÷ 400 = 35.25 |
+| The multiple | 7.7× | 162 ÷ 21 |
+| Still hidden at step six | 7.3 points | 29 ÷ 400 = 7.25, the gap between 191 and 162 |
+
+Section 2's captive world and section 3's panel are the same 400 people, which is why 21 complaints and 191 privately below passing appear in both.
+
+One class of figure cannot be redone with a pen: every **count** above. The private opinions and personal prices come from a fixed seeded stream, so 74, 72, 4, 64, 21, 156, 22, 29, 191 and the six-step ladder are read off that draw rather than derived. The push arithmetic, the two filing ranges, and every sum, difference, percentage and ratio in the table close by hand once those counts are given.
+
 ---
 
 ## Section 1 — The Survey Everyone Answered Honestly
@@ -16,10 +68,10 @@
 - **The locked-in group** — this service is the only one they have, and leaving is not an option
 - **The free group** — three other providers will take them next week if they decide to ask
 - **What they went through** — the same service, and privately about as many were unhappy in each
-- **What reached the form** — a handful of complaints from the locked-in group, a flood from the free one
+- **What reached the form** — a few complaints from the locked-in group, a flood from the free
 - **Nobody lied about anything** — a complaint is something you do, and doing it had a price attached
-- **The people who stayed quiet** — thought it was bad and wrote a passing score, because passing is cheap
-- **What the aggregate said** — most customers were fine, out of a room where about half quietly were not
+- **The people who stayed quiet** — thought it was bad and wrote a passing score, passing being cheap
+- **What the aggregate said** — most customers were fine, from a room where half quietly were not
 
 **Key point:** Not one person in either group misjudged the service. The people with somewhere else to go filed their complaints; the people without one filed a passing score. The defect belongs to whoever averaged the two groups together and read the result as the population.
 
@@ -29,15 +81,17 @@
 
 Three pairs of bars — the two groups and then everyone pooled — each pair showing how many quietly held a low opinion against how many put a complaint on the form.
 
-- **Shared construction (used by every chart on the page):** each respondent carries a private
-  opinion `felt = base + noise` and a personal price of speaking up `pv = 0.7 + 0.6·rng()`. What they
-  write on a form is `round(clamp(felt + COST × dep × pv × (anonymous ? RESID : 1), 0, 10))`, where
-  `COST = 2.8` is how far a complaint gets softened when it is fully attributable, `dep` is how much
-  the respondent depends on the thing being rated (0 = free to leave, 1 = no alternative at all),
-  and `RESID = 0.18` is the little that survives once the name comes off the form. Noise is
-  `(rng()+rng()+rng()−1.5) × 2 × 1.6`. `ROUGH = 4.6` is the private opinion of a poorly served
-  population, `FINE = 6.9` that of a well served one. A score under **5** counts as a complaint.
-  Seeded Park–Miller LCG, seed 42, one fresh stream per chart.
+- **Shared construction — implementation of the reader-facing one in the preamble above:** the
+  preamble carries the premise, the push arithmetic in words and the derivation table for every figure
+  on the page; this block is only the code that produces them. In code the module-level constants are
+  `ROUGH`, `FINE`, `SPREAD`, `COST`, `RESID` and `THRESH`; `bell(rng, sd)` returns the noise generator
+  `(rng()+rng()+rng()−1.5) × 2 × sd`; `panel(rng, nz, n, base)` builds `n` records of
+  `{ felt: base + nz(), pv: 0.7 + 0.6·rng() }`; `form(p, dep, isAnon)` returns
+  `round(clamp10(felt + COST × dep × pv × (isAnon ? RESID : 1)))`; `feltScores(p)` returns
+  `round(clamp10(felt))`; `cnt()` and `pct()` count and rate everything below `THRESH`. Every chart
+  calls `panel()` and `form()`, differing only in `dep` and `isAnon`. Seeded Park–Miller LCG, seed 42,
+  one fresh stream per chart. Changing any of those six constants or the seed invalidates the
+  preamble tables as well as the bullets.
 - **Data:** two panels of 150 at `ROUGH`. Group one at `dep = 0.95`, group two at `dep = 0.10`,
   both on a named form. Quietly unhappy (private opinion under five): **74 of 150** and **72 of 150**,
   so **146 of 300 — 48.7%**. Complaints reaching the form: **4 of 150 (2.7%)** and **64 of 150
@@ -69,11 +123,11 @@ Three pairs of bars — the two groups and then everyone pooled — each pair sh
 
 **Bullets:**
 - **Two explanations, one number** — either nothing is wrong, or plenty is and nobody will say it
-- **The named form cannot separate them** — a badly served captive room and a well served free one score alike
+- **The named form hides both** — a badly served captive room and a well served free one score alike
 - **The test** — hand the same people the same questions again with no name attached to the answer
 - **If nothing was wrong** — anonymity has nothing to release, and the second form barely moves
-- **If it was being held back** — the complaints arrive in bulk from people who signed off an hour earlier
-- **The gap between the two forms** — is the measurement: 33.8 points in one world against 1.8 in the other
+- **If it was held back** — complaints arrive in bulk from people who signed off an hour earlier
+- **The gap between the forms** — is the measurement: 33.8 points in one world, 1.8 in the other
 - **Cheap to run** — the same questions, the same people, one column removed from the form
 - **What the gap does not tell you** — which complaint is right, only that they were being withheld
 
@@ -125,13 +179,13 @@ Four bars in two labelled worlds — the named form and the unnamed form for eac
 
 **Bullets:**
 - **The same panel** — surveyed again and again across a year, on the same named form every time
-- **What never changed** — their private opinion of the service, the same from the first survey to the last
+- **What never changed** — their private opinion, the same from the first survey to the last
 - **What did change** — how easily each of them could walk away from it if they decided to
 - **While there was nowhere to go** — the form came back almost spotless and the service looked fine
-- **As alternatives appeared** — a shorter notice period, a cheaper switch, and the complaints climb steeply
-- **Nearly eight times the complaints** — from the very same people, so silence was never a personality trait
+- **As alternatives appeared** — a shorter notice, a cheaper switch, and complaints climb steeply
+- **Nearly eight times the complaints** — from the same people, so silence was never a trait
 - **Read the rise backwards** — a jump in complaints can mean your people gained somewhere else to go
-- **Even wide open** — the form still lags what they privately think, so the door never opens all the way
+- **Even wide open** — the form still lags private opinion, so the door never fully opens
 
 **Key point:** Nothing about these people changed across the year except how expensive it was to leave. Treating a low complaint rate as a quality reading gets it exactly backwards: the rate is lowest precisely where the respondents have the least power, and it rises as they gain options rather than as the service gets worse.
 
@@ -175,12 +229,15 @@ A rising line of reported complaint rate across six steps of easier exit, drawn 
   object, the `__charts` array with its debounced resize tail, the `table.layout` /
   `td.text-col` / `td.viz-col` 50/50 structure, the `.tags` pills, `.key-point` and `.src`
   conventions. Only the content differs.
-- **Structure:** three `.card-section` blocks, each an `<h2>` plus a `table.layout` row of
+- **Structure:** a canvas-less `.card-section` for the unnumbered preamble — an `<h2>`, prose
+  paragraphs and three `table.layout` derivation tables, no `table.layout` text/viz row — then three
+  numbered `.card-section` blocks, each an `<h2>` plus a `table.layout` row of
   `td.text-col` (50%) then `td.viz-col` (50%). The 50/50 split is fixed; a chart is shrunk through
   canvas `max-width` / `height`, never by narrowing the viz column.
-- **Text column order:** `.tags` pill row of three → `<ul>` of 8–9 one-line bullets each opening
-  `<b>label</b>` then an em dash → one `.key-point` → the `.src` note. No paragraph blocks, no data
-  tables, no nav, no back/home links, no cross-page links.
+- **Text column order (numbered sections only):** `.tags` pill row of three → `<ul>` of 8–9 one-line
+  bullets each opening `<b>label</b>` then an em dash → one `.key-point` → the `.src` note. No
+  paragraph blocks, no data tables, no nav, no back/home links, no cross-page links. The preamble is
+  the one exception: it is prose and tables with no tags, key point or source note.
 - **Bullet form:** roughly 90–100 characters including the bold label. A slight wrap is acceptable;
   a fact is never dropped to hit a length — it becomes another bullet instead.
 - **Register: the prose states mechanisms, the charts carry the arithmetic.** No bullet opens with a

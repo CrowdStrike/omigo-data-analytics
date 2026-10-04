@@ -9,7 +9,7 @@
 
 ## The one dataset behind all three charts
 
-Every chart draws the same twenty-five bikes, written out as literal arrays so a reader can count them on screen and check every figure by hand. Nothing on this page is generated.
+Every chart draws the same twenty-five bikes, written out as literal arrays so a reader can count them on screen and check every figure by hand. Nothing on this page is generated. The arrays below are the page's single source of data; the sibling `.txt.md` carries a human-readable price table and derivation table read off them, and the sibling `.viz.md` carries the arrays themselves.
 
 ```js
 // 14 ordinary bikes for sale around town
@@ -20,19 +20,24 @@ var RESTORED = [180, 240, 280, 300, 320, 340, 360, 380, 400, 430, 450];
 var WINDOW   = [180, 280, 320, 340, 360, 380, 400, 430, 450];
 ```
 
-Derived in code, never typed in as prose:
+Every quantity the bullets quote, and how it follows from those arrays:
 
 | Quantity | Value | How it checks out |
 |---|---|---|
 | Bikes for sale in town | 25 | 14 plain + 11 restored |
+| Cheapest and dearest in town | $70, $450 | lowest and highest of the 25 |
 | Town middle | $190 | 13th of 25 sorted prices |
 | Window middle | $360 | 5th of 9 sorted prices |
 | The gap | $170 | $360 − $190 |
+| Town middle as a share of the window's | 53% | $190 ÷ $360 |
 | Restored middle | $340 | 6th of 11 sorted prices |
 | Window's miss on restored | $20 | $360 − $340 |
+| How much worse the town miss is | 8.5× | $170 ÷ $20 |
 | Alice's budget | $190 | set to the town middle in code |
-| In reach, in town | 13 of 25 | prices ≤ $190 |
+| In reach, in town | 13 of 25 | prices ≤ $190, just over half |
 | In reach, in the window | 1 of 9 | only the $180 bike |
+| Cheapest bike on show | $180 | lowest of the 9 displayed |
+| Bikes cheaper than anything on show | 11 | prices below $180 |
 | Restored but not on show | 2 | $240 and $300 |
 
 All twenty-five prices are distinct, so dots never collide and no vertical jitter is needed.
@@ -44,13 +49,13 @@ All twenty-five prices are distinct, so dots never collide and no vertical jitte
 **Tags:** `core idea` (violet), `a slice, not the whole` (blue), `every price is real` (magenta)
 
 **Bullets:**
-- **The town** — twenty-five second-hand bikes for sale, rusty runabouts up to restored ones
-- **The shop window** — nine bikes on display, and every one has been restored by the shop
+- **The town** — twenty-five bikes for sale, a $70 rusty runabout up to a $450 restoration
+- **The shop window** — nine bikes on display, every one restored, none priced under $180
 - **Nothing is hidden** — every price in the window is real, and not one of them is a lie
-- **What is left out** — eleven bikes cost less than the cheapest one on show
-- **Middle of the window** — walk past for a fortnight and that becomes "what a bike costs"
-- **Middle of the town** — far lower, and it is the price Alice needed to know
-- **The gap** — put there by the choosing, not by the market
+- **What is left out** — eleven bikes cost less than $180, the cheapest one on show
+- **Middle of the window** — $360, and walking past for a fortnight makes that "what a bike costs"
+- **Middle of the town** — $190, barely over half the window's, and the price Alice needed to know
+- **The gap** — $170, put there by the choosing, not by the market
 
 **Key point:** No false price was ever shown. The whole effect comes from which bikes the window had room for, and the sense of "normal" it installs is a fact about the window that gets stored as a fact about the town.
 
@@ -78,15 +83,15 @@ All twenty-five prices are distinct, so dots never collide and no vertical jitte
 **Tags:** `judging yourself` (magenta), `the median feels poor` (blue), `it feeds itself` (red)
 
 **Bullets:**
-- **Alice's budget** — exactly the middle price of every bike for sale in town
-- **Against the town** — about half are within reach, so she is a middling buyer
-- **Against the window** — one bike of nine is in reach, so she reads as nearly broke
+- **Alice's budget** — $190, exactly the middle price of every bike for sale in town
+- **Against the town** — 13 of the 25 are within reach, just over half, so she is a middling buyer
+- **Against the window** — only the $180 bike of the nine is in reach, so she reads as nearly broke
 - **What she concludes** — "I cannot afford a decent bike", which is false about her town
 - **Why it lands** — she is measuring herself against a crowd that was assembled for her
-- **The self-feeding part** — feeling short, she stretches up to the window and joins it
+- **The self-feeding part** — feeling short, she stretches $170 to the window's middle and joins it
 - **Nobody quoted her a price** — there is no figure she could have argued down from
 
-**Key point:** She has not misjudged her own budget — she has misjudged the crowd she is standing in. Swap the crowd and the identical budget goes from ordinary to inadequate, which is why the conclusion feels like self-knowledge rather than an error about the town.
+**Key point:** She has not misjudged her own budget — she has misjudged the crowd she is standing in. Swap the crowd and the identical $190 goes from 13 of 25 in reach to 1 of 9, from ordinary to inadequate, which is why the conclusion feels like self-knowledge rather than an error about the town.
 
 **Source note (`.src`):** Illustrative Example — the same 25 listed prices; both counts are tallied from the arrays in the draw function.
 
@@ -104,7 +109,7 @@ All twenty-five prices are distinct, so dots never collide and no vertical jitte
 - **Budget line:** solid 2.5px `P.ink` vertical at $190 from `y = 46` to the baseline, labelled bold 12px `P.ink` centred at `y = 38`: "Alice can spend $190".
 - **Per-row counts (left-aligned at `PR + 14` = 574, past the axis end):** bold 13px in the row's hue — "13 of 25" then "1 of 9" — each with 12px `P.mute` "in reach" on the line beneath. Both tallies computed in the draw function.
 - **Caption (bold 13px `P.magenta`, centered, `y = 260`):** "Her budget did not shrink. The crowd she was shown did the shrinking."
-- **Deliberately absent:** no percentages beside the counts (two small integers are already the comparison), and no "she stretches $170" arrow — that idea is a bullet, and drawing it added a third annotation layer to a chart whose whole point is one vertical line.
+- **Deliberately absent:** no percentage drawn beside the counts — the canvas prints "13 of 25" and "1 of 9" and the prose carries the "just over half" share — and no "she stretches $170" arrow, which belongs in a bullet rather than as a third annotation layer on a chart whose whole point is one vertical line.
 
 ---
 
@@ -114,15 +119,15 @@ All twenty-five prices are distinct, so dots never collide and no vertical jitte
 
 **Bullets:**
 - **One window, two questions** — the same nine bikes, asked to answer both of them
-- **What does a restored bike cost** — the window is close, and the miss does not matter
-- **What does a bike in town cost** — the window is out by the whole gap
-- **The window never changed** — the same prices answer one question well and one badly
+- **What does a restored bike cost** — the window says $360 against a true $340, so a $20 miss
+- **What does a bike in town cost** — the same $360 against a true $190, out by the whole $170 gap
+- **The window never changed** — one set of prices, 8.5 times further off one question than the other
 - **When it is the right reference** — when the group you asked about is the group on show
 - **When it quietly substitutes** — when you wanted the town and got its restored corner
 - **The test** — name the group your question is about, then ask who was left out
 - **Restored bikes are real** — eleven of the twenty-five really are restored, so this is no fiction
 
-**Key point:** A curated display is not a distortion by nature — asked what a restored bike costs, a window of restored bikes is the reference you want and lands near the truth. It becomes the bias only when it stands in for a group it was never drawn from, and the tell is that the substitution is silent: the window looks identical in both cases.
+**Key point:** A curated display is not a distortion by nature — asked what a restored bike costs, a window of restored bikes is the reference you want and lands $20 from the truth. It becomes the bias only when it stands in for a group it was never drawn from, and the tell is that the substitution is silent: the window looks identical in both cases.
 
 **Source note (`.src`):** Illustrative Example — the same 25 listed prices; both true middles and both misses are computed in the draw function.
 
@@ -152,7 +157,7 @@ All twenty-five prices are distinct, so dots never collide and no vertical jitte
 - **No PRNG on this page at all.** No `Math.random()` and no seeded LCG either — nothing is generated, so nothing needs seeding. Distinct prices mean dots never collide, so there is no jitter and therefore no jitter seeds. A future edit that adds a generated series must add the canonical `lcg()` helper rather than reaching for `Math.random()`.
 - **Dot radius is set by the price spacing, not by taste.** The prices step by $10 in the dense stretch, so each chart's radius is chosen against its own `$1 → px` scale to keep neighbours touching-but-distinct: radius 6 at 1.20px/$ on chart 1 (12px gap, 12px diameter), radius 4 at 0.84px/$ on chart 2 (8.4px gap, 8px diameter). Narrowing a plot box to make room for labels means rechecking the radius — that is exactly why chart 2 is radius 4 and not 5.
 - **Three sections only, and two were cut on purpose.** A five-section version added a "same excess two ways" chart (forty prices plus either one $1,510 bike or fifteen $320 bikes, three medians compared through an equality check) and a "which repair closes the gap" chart (four repairs as share-of-gap bars). Both asked the reader to hold several medians in their head to reach a point the three remaining sections already make. Do not reinstate them here; the volume-beats-intensity argument deserves its own page if it is wanted.
-- **Numbers live in the charts, not the prose.** Bullets name quantities in words — "about half", "one bike of nine", "the gap" — and the dollar figures appear on the canvas. The exceptions are counts small enough to check instantly ("eleven bikes cost less than the cheapest one on show").
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
 - **Bullet form:** each bullet is ONE line that does not wrap at 50% column width — verified at ≤95 characters including the bold label. Counts: 7, 7, 8. Nothing padded, nothing restated between a bullet and the key point.
 - **Language:** layman-first. No recommender, algorithm, feed-ranking, engagement, impression, ad-revenue or platform-incentive vocabulary — the page runs on a shop window, a town with twenty-five bikes for sale, and one buyer named Alice. "Reference class" appears in the title and nowhere in the body.
 - **Scope boundary against `02-anchoring-bias`:** that page covers a single salient number, consciously seen at one moment, pulling one estimate. This page is the accumulated-exposure version — no figure is ever quoted to Alice, which is why "nobody quoted her a price" is a load-bearing bullet in section 2 rather than an aside. The distinction is carried by that bullet and by the chart shapes, not by a comparison section. No cross-links of any kind.

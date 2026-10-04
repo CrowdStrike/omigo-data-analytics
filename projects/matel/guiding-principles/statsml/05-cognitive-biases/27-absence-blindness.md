@@ -5,6 +5,44 @@
 
 **Subtitle:** The thing that always works stops being noticed within a few weeks, and the work that keeps it working never shows up in any number anyone reports.
 
+**Which sibling holds which half:** the construction below is split across the siblings and must not be re-merged. The reader-facing half — the unnumbered preamble, the rule in words, the section-by-section table of what the weeks are, and the derivation table — lives in `.txt.md`. The code-level half — `ADAPT` / `NOTICE` / `PRIOR`, the `walk()` helper, the `lcg()` seeds and all drawing detail — lives in `.viz.md`. This combined spec keeps both.
+
+---
+
+## Preamble (unnumbered, before Section 1 — appears in `.txt.md` and in the html as a canvas-less `.card-section`)
+
+**Heading (`<h2>`):** The one rule behind every figure on this page
+
+**The one rule behind every figure on this page.** A **level** is what was actually delivered in a week. The **level people silently expect** starts at **70** — what the service was before any of this — and each week creeps **35% of the way** toward whatever it has just received: **new expected = old expected + 0.35 × (delivered − old expected)**. A week **registers** at all only when delivered sits **4 or more** away from that expected level: above it as a noticed-good week, below it as a complaint. Sections 2 and 3 both run that two-line rule. Section 1 is the special case where the bar is a written threshold instead of a felt one.
+
+| Section | What the weeks are | Which bar is applied |
+|---|---|---|
+| 1 | 52 weeks each: Team A one 260-minute stop in week 19, Team B 130 stops of 2 minutes | written — a single stop of 5 minutes or more gets an incident report |
+| 2 | 24 weeks each: steady hands in 82 every week, wobbling cycles 88, 88, 70, 76, 84, 86 | felt — register only at 4 or more from the expected level |
+| 3 | 48 weeks, four quarters aimed at 72 / 78 / 84 / 90 | both — a written bar at 72 and the same felt 4 |
+
+Every quantity the bullets quote, and how it follows from those weeks:
+
+| Quantity | Value | How it checks out |
+|---|---|---|
+| Minutes in a year | 525,600 | 365 × 24 × 60 |
+| Team A minutes offline | 260 | one stop of 260 minutes |
+| Team B minutes offline | 260 | 130 stops × 2 minutes each |
+| Uptime, either team | 99.95% | (525,600 − 260) ÷ 525,600 |
+| Incident reports | 1 and 0 | A's 260 clears the 5-minute bar; none of B's 2s do |
+| Both 24-week averages | 82.0 | 24 × 82 = 1968; (88+88+70+76+84+86) × 4 = 1968; 1968 ÷ 24 |
+| Steady team's noticed weeks | 3 | gaps 12.0, 7.8, 5.1 clear 4; week 4's is 3.3 and falling |
+| Steady weeks registering nothing | 21 | 24 − 3 noticed − 0 complaints |
+| Wobbling team's tally | 14 good, 6 bad | each climb reopens the gap past 4, each dip past −4 |
+| The perverse ratio | 4.7× | 14 ÷ 3 |
+| Quarter averages over 48 weeks | 71.4 up to 90.2 | mean of each quarter's 12 delivered levels |
+| The rise | 18.8 points | 90.2 − 71.4 |
+| Weeks under the written 72 | 7, 2, 1, 0 | the bar sits still while delivery climbs past it |
+| Weeks 4 or more below expectation | 3, 3, 3, 3 | expectation climbs 70 to 86.7 behind delivery |
+| Complaints logged all year | 12 | 3 + 3 + 3 + 3 |
+
+Two of those cannot be redone with a pen. Team B's placement of its 130 stops and the 48 weekly levels come from a fixed seeded stream, so the **47 of 52 weeks touched**, the **12-minute worst week** and the four quarter averages are read off that draw. Team B's 260-minute total holds whatever the placement, because 130 stops of 2 minutes is 260 by construction. Everything else above closes by arithmetic.
+
 ---
 
 ## Section 1 — The Service That Never Went Down
@@ -12,16 +50,16 @@
 **Tags:** `two teams` (violet), `same uptime` (blue), `nothing to point at` (magenta)
 
 **Bullets:**
-- **The setup** — two teams, a year each, one service agreement, and the same time offline in total
-- **The team that broke once** — a single visible outage, fixed that day, then a clean run to December
-- **The team that never broke** — a hiccup most weeks, none of them long enough for anyone to call it
-- **What the totals say** — 260 minutes offline each, so both years report the same uptime to the decimal
-- **The write-up rule** — a stop earns an incident report only once it runs on past a few minutes
-- **What that rule produced** — a report for the team that broke, and nothing for the team that didn't
-- **What the first team can point at** — a report, a fix, a recovery, a named project on somebody's slide
-- **What the second team can point at** — nothing, because a service that never stopped leaves no paper
+- **The setup** — Team A and Team B, a year each, one agreement, 260 minutes offline apiece
+- **Team A, which broke once** — one 260-minute outage in week 19, then a clean run to December
+- **Team B, which never broke** — 130 two-minute stops in 47 of 52 weeks, worst week 12 minutes
+- **What the totals say** — 99.95% uptime each on a 525,600-minute year, equal to the decimal
+- **The write-up rule** — one report per stop of 5 minutes or more, and B's longest ran 2 minutes
+- **What that rule produced** — 1 report for Team A, 0 for the team that never stopped at all
+- **What Team A can point at** — a report, a fix, a recovery, a named project on somebody's slide
+- **What Team B can point at** — nothing, because a service that never stopped leaves no paper
 
-**Key point:** Both teams lost the same 260 minutes. Only one of them lost them in a shape the write-up rule could see, and that shape — not the downtime — decided which team ended the year with something to show.
+**Key point:** Both teams lost the same 260 minutes and reported the same 99.95% uptime. Only one of them lost them in a shape the write-up rule could see — 1 report against 0 — and that shape, not the downtime, decided which team ended the year with something to show.
 
 **Source note (`.src`):** Illustrative Example — 52 seeded weeks per team; both totals, both uptime figures and both report counts are counted off the plotted bars in the draw function.
 
@@ -29,12 +67,14 @@
 
 Two 52-week downtime strips stacked over one week axis — Team A's single spike above, Team B's low scatter below — with a right-hand panel reporting what each year produced.
 
-- **Shared construction (used by every chart on the page):** a *level* is what the service or the team
-  actually delivered in a week. The *level everyone silently expects* starts at what came before and
-  then creeps toward whatever is being delivered: `E ← E + 0.35 × (L − E)`. What gets *noticed* in a
-  week is `L − E`, and it only registers at all when it is at least 4 units away from that expected
-  level. Charts 2 and 3 both run this same two-line rule; chart 1 is the special case where the rule
-  is a written threshold instead of a felt one.
+- **Shared construction — implementation of the reader-facing one in the preamble above:** the
+  preamble carries the premise, the rule in words and the derivation table for every figure on the
+  page; this block is only the code that produces them. In code the module-level constants are
+  `ADAPT = 0.35`, `NOTICE = 4` and `PRIOR = 70`, and `walk(levels, start)` returns one record per week
+  holding the delivered level `L`, the expected level `E` in force that week and their difference
+  `gap`, updating `E ← E + ADAPT × (L − E)` after each week. Charts 2 and 3 both call `walk()` and
+  count off `gap`; chart 1 applies a written `REPORT_MIN` instead. Changing `ADAPT`, `NOTICE` or
+  `PRIOR` invalidates the preamble table as well as the bullets.
 - **Data:** `MINUTES_YEAR = 525600`, 52 weeks. Team A: a single 260-minute stop in week 19, zero every
   other week. Team B: 130 stops of 2 minutes each, placed by a seeded stream (`lcg(2731)`), so the
   total is 260 by construction whatever the placement. Team B lands blips in **47** of the 52 weeks and
@@ -65,16 +105,16 @@ Two 52-week downtime strips stacked over one week axis — Team A's single spike
 **Tags:** `same average` (orange), `felt vs delivered` (yellow), `recovery pays` (blue)
 
 **Bullets:**
-- **Two teams, half a year** — both hand in exactly the same average quality, checked week by week
-- **The steady team** — delivers that level every single week, with no better week and no worse one
-- **The wobbling team** — dips and climbs back on a repeating cycle, landing on the same average
-- **What people carry** — a level they silently expect, which drifts toward whatever they keep getting
-- **What registers at all** — only a week that sits well clear of the level they had come to expect
-- **What happens to the steady team** — the expected level catches up, and then it stops being felt
-- **What happens to the wobbling team** — every climb back hands people a fresh gap to notice
-- **The perverse result** — the wobbling team is noticed as good several times as often, for equal work
+- **Two teams, half a year** — 24 weeks each, both landing on an average quality of exactly 82
+- **The steady team** — hands in 82 every single week, with no better week and no worse one
+- **The wobbling team** — cycles 88, 88, 70, 76, 84, 86 four times over, averaging 82 as well
+- **What people carry** — a level they silently expect, closing 35% of the gap to delivery each week
+- **What registers at all** — only a week sitting 4 or more clear of the level they now expect
+- **What happens to the steady team** — expectation reaches 82, and 21 of its 24 weeks go silent
+- **What happens to the wobbling team** — every climb reopens the gap: 14 good weeks, 6 complaints
+- **The perverse result** — 4.7× as many noticed-good weeks as the steady team, for equal work
 
-**Key point:** A steady level is felt only while it is still new (the effect psychologists call hedonic adaptation). Once the expected level catches up to it, holding that level forever registers as nothing at all — while a team that dips and climbs back keeps handing people something to notice, week after week, on identical average quality.
+**Key point:** A steady level is felt only while it is still new (the effect psychologists call hedonic adaptation). Once what people expect has climbed to 82 and met it, holding 82 forever registers as nothing at all — 21 of 24 weeks silent — while a team that dips and climbs back collects 14 noticed-good weeks on exactly the same average.
 
 **Source note (`.src`):** Illustrative Example — two hardcoded 24-week series, chosen so both averages are exactly 82; every count, both averages and the ratio are computed in the draw function.
 
@@ -116,18 +156,16 @@ Two panels over one 24-week axis. Above, both delivered levels with the level ea
 **Tags:** `the measurement` (aqua), `fixed bar` (green), `sliding bar` (red)
 
 **Bullets:**
-- **The system** — genuinely gets better across four quarters, and the raw weekly readings show it
+- **The system** — genuinely improves over 48 weeks, a quarterly average of 71.4 rising to 90.2
 - **The size of it** — a rise of 18.8 points, far too large to pass off as noise or a lucky quarter
-- **Counted against a written bar** — the bar stays put, so weeks that fall short of it thin out to none
-- **Counted against the felt bar** — a week only counts when it drops well below what people expect now
-- **What that second count gives** — a dead-flat line laid over a system that improved all year
-- **Why it stays flat** — the expected level rises along with delivery, so the gap never gets easier
-- **What the log therefore holds** — a steady drip of complaints and no trace of the climb at all
+- **Counted against a written bar** — weeks under 72 fall 7, 2, 1, 0 as the bar stays where it is
+- **Counted against the felt bar** — a week counts only when it lands 4 or more below expectation
+- **What that second count gives** — 3 complaints in every quarter, flat across an improving year
+- **Why it stays flat** — expectation climbs from 70 to 86.7 behind delivery, so the gap persists
+- **What the log therefore holds** — 12 complaints and no trace of the 18.8-point climb at all
 - **What a well-run year looks like** — exactly like a year in which nothing whatsoever happened
 
-**Key point:** If the only thing you log is a departure from what people currently expect, then the bar you are measuring against moves up whenever you improve. The improvement cancels itself out of the count, and the record of a system getting much better is indistinguishable from the record of a system standing still.
-
-**Key point:** If the only thing you log is a departure from what people currently expect, then the bar you are measuring against moves up whenever you improve. The improvement cancels itself out of the count, and the record of a system getting much better is indistinguishable from the record of a system standing still.
+**Key point:** If the only thing you log is a departure from what people currently expect, then the bar you are measuring against moves up whenever you improve. An 18.8-point rise cancels itself out of the count, leaving 3 complaints a quarter all year — a record indistinguishable from a system standing still.
 
 **Source note (`.src`):** Illustrative Example — 48 seeded weeks (`lcg(26640)`, spread 4.5 around quarterly targets of 72 / 78 / 84 / 90); all eight quarterly counts, both quarter averages and the rise are computed in the draw function.
 
@@ -175,11 +213,7 @@ A weekly level rising across four quarters with the silently expected level chas
   blocks, no data tables, no status badges.
 - **Bullet form:** roughly 90–100 characters including the label, aimed at one line at 50% column
   width. A fact is never dropped to hit the length; it goes in another bullet instead.
-- **Numbers live in the charts, not the prose.** At most two bullets per section may carry a figure,
-  and only where the figure itself is the point — the two teams losing the same 260 minutes, and the
-  size of the improvement in section 3. Everything else states the mechanism in words: no weekly
-  pattern spelled out, no quarter-by-quarter count ladders, no paired tallies, and no bullet opening
-  with a count or a duration. The charts already print all of those, computed at render time.
+- **Text stands alone; the chart adds clarity** — the text carries the argument and names every quantity it turns on; the canvas adds precision, intermediate values and per-point labels. No bullet points at a position on the canvas. See `ui-templates/README.md`.
 - **Canvas:** intrinsic `width="720"`, heights 360 / 380 / 400, CSS `width: 100%` capped at 720px by
   `setup()`. Charts registered in `__charts`, re-run on a 150ms debounced resize.
 - **Colour split across sections:** section 1 violet against blue, section 2 orange against blue with

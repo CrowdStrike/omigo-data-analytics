@@ -5,6 +5,43 @@
 
 **Subtitle:** Watch a result build up day by day and it swings hardest at the start — which is exactly when the room decides it is settled.
 
+**Sibling split — do not re-merge.** This file is the full spec and keeps both halves. The reader-facing construction below (the premise, the volumes, the race count and the figure table) lives in `09-overconfidence-in-small-samples.txt.md` as an unnumbered preamble; the code-level construction (LCG seed, variable names, `raceGaps`, loop structure, sign-flip mechanics) lives in `09-overconfidence-in-small-samples.viz.md` inside section 1's canvas brief. Edit the matching half, not both locations in one sibling.
+
+---
+
+## The one setup behind every figure on this page
+
+*Unnumbered preamble, before section 1. In the html this is a `.card-section` with an `<h2>` and prose plus two bullet lists, no `table.layout` and no canvas.*
+
+Nothing here is a real measurement. One race between two web pages is simulated two thousand times, and every figure the page quotes is a count or an average over those two thousand races. The setup is given in full so a reader can follow each figure without looking at a chart.
+
+**Bullets — the setup:**
+- **Two versions, one true rate** — both truly convert one visitor in ten, so the real gap is zero
+- **Each day** — sixty visitors land on each side, so six conversions a side are expected
+- **The morning report** — B's running rate minus A's, in percentage points, on each of thirty days
+- **The day-three leader** — whichever side is ahead on the third morning, followed to day thirty
+- **Sign convention** — the day-three leader's gap is read as positive, so below zero is a lost lead
+- **A whole race** — 1,800 visitors a side by the thirtieth morning: 30 days × 60 a day
+- **Two thousand races** — every share quoted below is a plain count out of those two thousand
+- **Section 4's pair** — the first race in each stream opening between 7 and 9 points on day three
+- **Only its second race differs** — there B truly converts 0.13 against A's 0.10, a real gain
+- **Section 5 is arithmetic** — its day counts come from a formula, not from any of the races
+
+**Lead-in:** Every figure the text quotes, and where it comes from.
+
+**Bullets — the figures:**
+- **Day-three leader behind at the finish** — 760 of the 2,000 races, which is 38%
+- **Widest gap on day one** — 1,008 races of 2,000; across days one to three, 1,586 of 2,000
+- **Widest gap in the final week** — 9 races of 2,000, days twenty-four to thirty together
+- **Average gap** — 5.4 points at its widest against 0.8 on day thirty, about seven times smaller
+- **One conversion is 1.7 points on day one** — and 0.06 on day thirty: 100 ÷ 60 against 100 ÷ 1,800
+- **A gap worth calling** — 2 × 100 × √(2 × 0.10 × 0.90 ÷ n) points, n the visitors a side so far
+- **That bar narrows** — 11.0 points on day one, 6.3 on day three, 4.1 on day 7, 2.0 on day 30
+- **Races clearing it** — 98 at one check, 169 at two, 241 weekly, 363 every third day, 534 daily
+- **Section 4's two paths** — 8.9 and 7.8 points on day three, 0.4 and 5.6 on day thirty
+- **Section 5's day counts** — 112 days for 1.5 points, 30 for 3, 9 for 6, at one wrong call in 20
+- **At one wrong call in 100** — 166, 44 and 13 days, about half again as long in each case
+
 ---
 
 ## Section 1 — Two Identical Pages, Thirty Days of Watching
@@ -28,8 +65,8 @@
 
 Six running-total lines over thirty days, each the gap between two identical versions, with the day-three leader marked at the moment it looked best and again where it finished.
 
-- **Shared simulation (`SIM`, computed once, reused by every chart):** seeded Park–Miller LCG, seed 42. `DAYS = 30`, `PER = 60` visitors per side per day, true rate `0.10` for **both** sides. Each race walks day by day, accumulating conversions for A and B, and records `gap[d] = 100 × (B/n − A/n)` where `n` is the running per-side total. 2,000 races.
-- **Sign alignment:** each race is flipped so the day-3 leader is the positive line. This makes "leader loses the lead" readable as "the line crosses below zero" instead of as two mirrored cases.
+- **Shared simulation (`SIM`, computed once, reused by every chart):** the implementation of the preamble's construction, not a second statement of it. Seeded Park–Miller LCG, seed 42; `DAYS = 30`, `PER = 60`, `RATE = 0.10`, `TRIALS = 2000`, `PEEK = 3`, `SHOW = 6`. `raceGaps(rng, lift)` walks day by day accumulating conversions for A (at `RATE`) and B (at `RATE + lift`) and records `g[d] = 100 × (cb/n − ca/n)` with `n` the running per-side total.
+- **Sign alignment:** each race is flipped (`sgn = g[PEEK−1] >= 0 ? 1 : −1`) so the day-3 leader is the positive line, giving `SIM.lead` alongside the unflipped `SIM.raw`. This makes "leader loses the lead" readable as "the line crosses below zero" instead of as two mirrored cases — the preamble states it as a sign convention.
 - **Display runs:** the first six aligned races. Their day-3 gaps are +1.1, +8.9, +4.4, **+10.6**, +6.7, +2.2 points; their day-30 gaps are −0.1, +0.4, +2.3, **−1.2**, +1.8, −0.1. All read from the arrays in the draw function.
 - **Marked run:** whichever display run has the largest day-3 lead — run index 3, at +10.6 points, finishing at −1.2. Chosen by a scan, not hardcoded.
 - **Computed figures:** spread of the six lines at day 3 is 9.4 points, at day 30 it is 3.5 points; across all 2,000 races the day-3 leader is behind on day 30 in **38%**.

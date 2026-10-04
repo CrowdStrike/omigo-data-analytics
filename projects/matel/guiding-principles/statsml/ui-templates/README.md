@@ -50,6 +50,10 @@ Pages include with a relative path (`<script src="../ui-templates/js/base.js">`)
 
 - **Color palette & accent themes:** see `THEMES.md`. Default accent pair `#1a5276`/`#2980b9`; pages may swap to a named accent theme (digital-theft pattern). Semantic red/green/orange and body text never theme.
 - **Colored labels are information** — category labels, semantic chips, colored bullet leads, pitfall labels are content; never strip or normalize them.
+- **`Tag colors:` and `Hue family:` are different fields and need not match.** In a `.viz.md`, `Tag colors:` names the pill classes in the text column (and must match the html's `<span class="tag …">`); `Hue family:` names the palette the *canvas* draws in. A section can carry violet/blue/magenta pills over an aqua-and-magenta chart with no contradiction.
+- **Text stands alone; the chart adds clarity.** A reader with no canvas must be able to follow the page end to end. Never point at the screen — no "the panel on the left", "the top row", "the second column", "as the chart shows", "the dots slope up in all six". Name the thing by the attribute that distinguishes it ("cropped to the data" / "drawn from zero", "at target 100" / "at target 103").
+- **A figure belongs in prose when it is the argument.** Supersedes the older "numbers live in the charts, not the prose" rule, which left text that could only be read beside its figure. State the quantity the sentence turns on; leave precision, every intermediate value, and per-point labels to the canvas. Prose rounding must not contradict the canvas — if the chart prints `2%` from 1.8, prose says "under 2%", never "2%".
+- **Objects the prose names must be named in the prose.** If text says "22 of the 25", the 25 is introduced; if it says "Broken Compass", that name appears in text, not only in a chart label.
 - **Canvas:** always devicePixelRatio-scaled (use `setupCanvas`); min width 720px full-col / 420px three-col; height 200-460px; `width: 100%`.
 - **Section headers:** h2 with `border-bottom: 2px solid` secondary accent.
 - **Fonts:** two type systems (A apple-em, B system-rem) — see `THEMES.md`; each template declares which it uses.

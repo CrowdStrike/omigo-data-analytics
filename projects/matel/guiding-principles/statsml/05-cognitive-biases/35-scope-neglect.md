@@ -48,13 +48,13 @@ Fifteen verdicts as a column of short bars against the system's true score, so t
 **Tags:** `how it spreads` (orange), `slice dropped` (yellow), `one voice left` (red)
 
 **Bullets:**
-- **What the person actually knows** — "3 of the 3 features I needed worked", which is true and narrow
+- **What the person actually knows** — "the 3 features I needed worked", which is true and narrow
 - **What gets said out loud** — "it works well", with the 3 features left out of the sentence
-- **What the harsh version becomes** — "it is broken", from someone whose 3 happened to include a weak one
+- **What the harsh version becomes** — "it is broken", from someone whose 3 included a weak one
 - **Both sentences lost the same thing** — the list of what was tried, which was the only qualifier
 - **Passed on once** — the hearer has a verdict on the system and no idea it came from 3 features
 - **Nobody is lying** — the slice is dropped because it feels irrelevant, not because it is hidden
-- **Which verdict travels** — the strong one, since "it is broken" is more worth repeating than "it is fine"
+- **Which verdict travels** — the strong one: "it is broken" repeats better than "it is fine"
 - **So the average never forms** — the 15 verdicts would balance out, but only the loud ones move
 - **What restores it** — saying which features you tried, which costs one clause and rarely happens
 

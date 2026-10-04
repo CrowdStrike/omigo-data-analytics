@@ -5,6 +5,48 @@
 
 **Subtitle:** Change a tool someone uses every day and they will tell you it got worse. Show the same change to a stranger and they prefer it on the spot.
 
+**Which sibling holds which half:** the construction below is split across the siblings and must not be re-merged. The reader-facing half — the unnumbered preamble, the score rule in words, the derivation table of expected scores, the 17-versus-25 reconciliation — lives in `.txt.md`. The code-level half — the constants, `relearn()`, `bell()`, `panel()`, the `lcg()` seeds and all drawing detail — lives in `.viz.md`. This combined spec keeps both.
+
+---
+
+## Preamble (unnumbered, before Section 1 — appears in `.txt.md` and in the html as a canvas-less `.card-section`)
+
+**Heading (`<h2>`):** The one construction behind every figure on this page
+
+**The one construction behind every figure on this page.** A rater gives the redesign a whole-number
+score out of ten, and the **old version scores 5** — the mark every panel on the page is read against.
+A rater's score is **5 + gain − habit cost + noise**, rounded and held inside 0–10. **Gain** is how much
+better the redesign genuinely is: **+1.2** for the good one, **−0.5** for the deliberately worse one in
+section 4. **Habit cost** is **0.85 × log10(1 + prior visits)** — what it costs that rater to unlearn
+their own fingers — scaled per rater by a factor between 0.75 and 1.25 that averages to one, and shrunk
+over the weeks as they retrain. **Noise** is a bell of spread 1.5 points from a seeded generator. That is
+the whole model: nothing on this page is asserted, and every figure follows from those four constants.
+
+| Quantity | Value | How it checks out |
+|---|---|---|
+| The old version's own score | 5 | the mark every panel is read against |
+| How much better the good redesign is | +1.2 | the worse one in section 4 is −0.5 |
+| Habit cost for a daily user | 2.47 points | 0.85 × log10(1 + 800) = 0.85 × 2.903 |
+| What a daily user is expected to score | 3.73 | 5 + 1.2 − 2.47 |
+| What a newcomer is expected to score | 6.20 | 5 + 1.2 − 0 |
+| The gap habit alone opens | 2.47 points | 6.20 − 3.73, the habit cost itself |
+| Prior visits at which the rule flips | about 25 | 0.85 × log10(1 + 25) = 1.20, equal to the gain |
+| Daily user on the worse redesign | 2.03 | 5 − 0.5 − 2.47 |
+| Newcomer on the worse redesign | 4.50 | 5 − 0.5 − 0 |
+| Habit cost still left in week 5 | 1.11 points | 2.47 × exp(−4/5); first week under the 1.2 gain |
+| Habit cost still left in week 10 | 0.41 points | 2.47 × exp(−9/5), so a score of 5.79 |
+
+Two reconciliations a reader should have. The rule's own flip point is **about 25 prior visits**, where
+the habit cost equals the 1.2 gain exactly; section 2's chart prints **17** because it interpolates its
+own sampled line, whose 25-visit group of 300 landed at 4.8 rather than 5.0. And small panels wobble
+around the rule: section 1's forty-a-side average **3.3 and 6.5** against an expected 3.7 and 6.2, while
+the panels of 300 and 400 in sections 2 to 4 all sit within 0.2 of it.
+
+Section 5 adds a second rule, the stopwatch, because opinion is being checked against an outcome. A task
+takes **42 × (1 − 0.09 + 0.22 × exp(−(week − 1) / 1.5))** seconds, so the old version's **42 seconds** is
+the mark, the redesign settles at **38.2** seconds (42 × 0.91) once learned, and it first comes in under
+42 in **week 3** — 42 × (0.91 + 0.22 × exp(−2/1.5)) = 40.7, against 43.0 in week 2.
+
 ---
 
 ## Section 1 — Two Rater Groups, One Redesign, Opposite Verdicts
@@ -29,12 +71,16 @@
 
 Two score distributions side by side over the same 0–10 axis, with the old version's own score drawn as the line both are read against, and the two averages marked underneath.
 
-- **Shared construction (used by every chart on the page):** a rater's whole-number score is
-  `round(clamp(OLD + gain − relearn(visits) × decay × (0.75 + 0.5·rng()), 0, 10))` where
-  `OLD = 5` is what the old version scores, `gain` is how much genuinely better the redesign is
-  (`GOOD = 1.2`, `WORSE = −0.5`), `relearn(visits) = 0.85 × log10(1 + visits)` is what habit costs
-  a rater with that many prior visits, `decay` shrinks that cost as they retrain, and the noise term
-  is `(rng()+rng()+rng()−1.5) × 2 × 1.5`. Seeded Park–Miller LCG, seed 42, in every chart.
+- **Shared construction — implementation of the reader-facing one in the preamble above:** the preamble
+  carries the premise, the rule in words and the derivation table; this bullet is only the code that
+  produces them. A rater's whole-number score is
+  `round(clamp(OLD + gain − relearn(visits) × decay × (0.75 + 0.5·rng()), 0, 10))` with constants
+  `OLD = 5`, `GOOD = 1.2`, `WORSE = −0.5`, `HABIT = 0.85`, `SPREAD = 1.5`, `REGULAR = 800`, where
+  `relearn(visits) = HABIT × log10(1 + visits)`, `decay` is the caller's retraining factor, and the
+  noise term is `bell(rng, SPREAD) = (rng()+rng()+rng()−1.5) × 2 × SPREAD`. One `panel()` helper, one
+  seeded Park–Miller LCG stream per chart, seed 42 in all five. Panel sizes are small on purpose in
+  section 1 (40 a side), so its two averages sit further off the rule's centres than the 300- and
+  400-rater panels do — the preamble states that reconciliation and must be kept in step.
 - **Data:** two panels of 40. Daily users at `visits = 800`, newcomers at `visits = 0`, both scoring
   the same genuinely-better redesign. Daily users average **3.3** with **34 of 40** below five;
   newcomers average **6.5** with **3 of 40** below five. All four figures counted in the draw function.
@@ -279,7 +325,9 @@ Two stacked panels over one week axis — task seconds above, score out of ten b
   `relearn(visits) = 0.85 × log10(1 + visits)`, noise spread 1.5, daily users at 800 prior visits.
   Every chart calls the same `panel()` helper, so section 1's split, section 2's slide, section 3's
   recovery, section 4's two cases and section 5's opinion line are all the same model under different
-  arguments. Changing a constant moves every figure on the page at once, which is the point.
+  arguments. Changing a constant moves every figure on the page at once, which is the point. The
+  reader-facing statement of this rule, with its derivation table, is the unnumbered preamble above and
+  in the sibling `.txt.md` — both halves move together.
 - **Determinism:** no `Math.random()`. Seeded Park–Miller LCG (`s = (s × 16807) % 2147483647`),
   seed 42, one fresh stream per chart. Every average, count, share, crossing week and turning point
   is computed inside the draw function and printed from that variable.
