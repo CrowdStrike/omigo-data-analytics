@@ -2725,7 +2725,7 @@ class DataFrame:
         # iterate and set the new name
         for h in self.get_header_fields():
             if (h in cols):
-                new_header_fields.append(h[0:-1*len(old_suffix) + new_suffix])
+                new_header_fields.append(h[0:-1*len(old_suffix)] + new_suffix)
             else:
                 new_header_fields.append(h)
 
@@ -2779,7 +2779,7 @@ class DataFrame:
 
         # validation
         if (old_prefix.endswith(":") == False):
-            old_prefix = new_prefix + ":"
+            old_prefix = old_prefix + ":"
 
         # check for matching cols
         for c in self.get_header_fields():
@@ -2969,7 +2969,7 @@ class DataFrame:
 
     def cap_min(self, col, value, newcol, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "cap_min")
-        return self.transform_inline(col, lambda x: str(x) if (float(value) < float(x)) else str(value), newcol, dmsg = dmsg)
+        return self.transform([col], lambda x: str(x) if (float(value) < float(x)) else str(value), newcol, dmsg = dmsg)
 
     def cap_max(self, col, value, newcol, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "cap_max")
@@ -4979,11 +4979,11 @@ class DataFrame:
         hashes = []
 
         # hash of header
-        hashes.append("{}".format(utils.compute_hash(self.header)))
+        hashes.append("{}".format(utils.compute_hash("\t".join(self.get_header_fields()))))
 
         # hash of data
         for fields in self.get_data_fields():
-            hashes.append("{}".format(utils.compute_hash(line)))
+            hashes.append("{}".format(utils.compute_hash("\t".join(fields))))
 
         # return as string
         return "{}".format(utils.compute_hash(",".join(hashes)))

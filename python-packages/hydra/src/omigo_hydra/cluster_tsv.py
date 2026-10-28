@@ -4,7 +4,7 @@ from omigo_hydra import cluster_common_v2
 from omigo_hydra import cluster_class_reflection
 from omigo_hydra.cluster_common_v2 import ClusterCapabilities
 import sys
-from omigo_ext.splunk_ext import SplunkTSV
+from omigo_ext.logscale_ext import LogScaleDF
 from omigo_hydra.cluster_shell_ext import SparkJobShellExecutorTSV
 from omigo_core.tsv import TSV
 
@@ -957,14 +957,14 @@ class HydraSparkJobShellExecutorTSV(HydraBaseTSV):
     def execute(self, *args, **kwargs):
         return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(SparkJobShellExecutorTSV.execute, self.requirements, *args, **kwargs))
 
-class HydraSplunkTSV(HydraBaseTSV):
+class HydraLogScaleDF(HydraBaseTSV):
     def __init__(self, header, data):
         super().__init__(header, data)
         super().set_hydra_requirements([ClusterCapabilities.SPLUNK])
 
     def get_events_par(self, *args, **kwargs):
-        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(SplunkTSV.get_events_par, self.requirements, *args, **kwargs))
+        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(LogScaleDF.get_events_par, self.requirements, *args, **kwargs))
 
     def get_events_parsed(self, *args, **kwargs):
-        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(SplunkTSV.get_events_parsed, self.requirements, *args, **kwargs))
+        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(LogScaleDF.get_events_parsed, self.requirements, *args, **kwargs))
 
