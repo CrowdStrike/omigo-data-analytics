@@ -1,0 +1,141 @@
+name: Refresh security floors
+
+# Re-locks security-constrained transitive dependencies across all six packages.
+#
+# Why this exists: the lockfiles record public PyPI URLs, but developers behind
+# the corporate proxy cannot reach pypi.org, so `uv lock` run locally rewrites
+# every artifact URL to the internal Artifactory mirror — which GitHub-hosted
+# runners cannot reach, breaking `uv sync --locked` in the publish workflows.
+# Re-locking has to happen here, on a runner with public PyPI access.
+#
+# The floors themselves live in each pyproject.toml under
+# [tool.uv] constraint-dependencies. This job only re-resolves against them;
+# to raise a floor, edit the pyproject and re-run.
+#
+# Reports only: uploads a patch artifact, never pushes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Space-separated dist names to re-resolve'
+        required: true
+        default: 'certifi pillow mmh3'
+
+jobs:
+  refresh:
+    name: refresh
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@85856786d1ce8acfbcc2f13a5f3fbd6b938f9f41 # v7.1.2
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Re-lock
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          upgrade_args=()
+          for name in $PACKAGES; do
+            upgrade_args+=(--upgrade-package "$name")
+          done
+          for pkg in core arjun extensions hydra lokki matel; do
+            echo "::group::$pkg"
+            uv lock --directory "python-packages/$pkg" "${upgrade_args[@]}"
+            echo "::endgroup::"
+          done
+
+      - name: Verify lockfiles are consistent and installable
+        run: |
+          for pkg in core arjun extensions hydra lokki matel; do
+            echo "::group::$pkg"
+            uv lock --directory "python-packages/$pkg" --check
+            uv sync --directory "python-packages/$pkg" --locked
+            echo "::endgroup::"
+          done
+
+      - name: Assert every floor is satisfied and all artifacts come from public PyPI
+        run: |
+          uv run --no-project --with packaging python - <<'PY'
+          import pathlib
+          import sys
+          import tomllib
+
+          from packaging.requirements import Requirement
+          from packaging.version import Version
+
+          failed = False
+          for lock_path in sorted(pathlib.Path("python-packages").glob("*/uv.lock")):
+              proj_path = lock_path.with_name("pyproject.toml")
+              with lock_path.open("rb") as fh:
+                  lock = tomllib.load(fh)
+              with proj_path.open("rb") as fh:
+                  proj = tomllib.load(fh)
+
+              locked = {p["name"].lower(): p for p in lock["package"]}
+              constraints = proj.get("tool", {}).get("uv", {}).get(
+                  "constraint-dependencies", []
+              )
+
+              for raw in constraints:
+                  req = Requirement(raw)
+                  entry = locked.get(req.name.lower())
+                  if entry is None:
+                      # Constraint is inert: the package is not in this closure.
+                      continue
+                  version = entry["version"]
+                  if not req.specifier.contains(Version(version), prereleases=True):
+                      print(f"FAIL {lock_path}: {req.name} locked at {version}, violates {raw}")
+                      failed = True
+
+              for entry in lock["package"]:
+                  urls = [w["url"] for w in entry.get("wheels", [])]
+                  if "sdist" in entry and "url" in entry["sdist"]:
+                      urls.append(entry["sdist"]["url"])
+                  for url in urls:
+                      if "files.pythonhosted.org" not in url:
+                          print(f"FAIL {lock_path}: {entry['name']} non-public URL {url}")
+                          failed = True
+
+              print(f"checked {lock_path}: {len(constraints)} constraints, {len(lock['package'])} packages")
+
+          sys.exit(1 if failed else 0)
+          PY
+
+      - name: Report resolved versions
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          for pkg in core arjun extensions hydra lokki matel; do
+            for name in $PACKAGES; do
+              version=$(uv export --directory "python-packages/$pkg" --no-hashes --no-annotate 2>/dev/null \
+                | grep -i "^$name==" || echo "$name: not in closure")
+              echo "$pkg: $version"
+            done
+          done | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Produce patch
+        run: |
+          git diff > security-floors.patch
+          {
+            echo '## Re-lock diff'
+            echo '```'
+            git diff --stat
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload patch
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-floors-patch
+          path: security-floors.patch
